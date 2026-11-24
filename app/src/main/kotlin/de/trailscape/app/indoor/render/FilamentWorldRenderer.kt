@@ -19,6 +19,7 @@ import de.trailscape.core.indoor.world.RenderDeviceInfo
 import de.trailscape.core.indoor.world.RenderFailure
 import de.trailscape.core.indoor.world.RenderSettings
 import de.trailscape.core.indoor.world.RenderStats
+import de.trailscape.core.indoor.sky.SkyClouds
 import de.trailscape.core.indoor.world.SkySetting
 import de.trailscape.core.indoor.world.WorldManifest
 import de.trailscape.core.indoor.world.WorldModels
@@ -85,6 +86,9 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     private var streamer: TileStreamer? = null
     private var track: WorldTrack? = null
     private var originLatDeg = 51.0
+
+    /** Sichtweite der Welt (`IndoorQuality.viewDistanceM`): Der Dunst reicht bis an ihren Rand. */
+    private var viewDistanceM: Double? = null
     private var skyLighting: SkyLighting? = null
     private var io: ExecutorService? = null
 
@@ -151,6 +155,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         }
         request = Request.World(worldDir, manifest)
         fallbackTrack = manifest.track
+        warmUpSky()
         // Ohne ausdrueckliche Einstellungen gilt die Voreinstellung der Qualitaet, mit der die Welt gebaut ist.
         if (!settingsExplicit) {
             settings = RenderSettings.forQuality(manifest.quality)
@@ -159,7 +164,26 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         applyRequestIfPossible()
     }
 
+    /**
+     * Rechnet das Wolkenrauschen der Himmels-Cubemap (einmal je Prozess, einige
+     * hundert Millisekunden) auf einem Hintergrund-Thread vor, waehrend Engine
+     * und Kacheln anlaufen — sonst taete es `applySky` auf dem Hauptthread.
+     */
+    private fun warmUpSky() {
+        if (skyWarmStarted) return
+        skyWarmStarted = true
+        runCatching {
+            Thread({ runCatching { SkyClouds.rawCube(SkyClouds.CUBE_SIZE) } }, "trailscape-sky").apply {
+                isDaemon = true
+                priority = Thread.MIN_PRIORITY
+            }.start()
+        }
+    }
+
+    private var skyWarmStarted = false
+
     override fun loadTestScene() = guardApi("loadTestScene") {
+        warmUpSky()
         if (destroyed || failure != null) return@guardApi
         request = Request.Test
         fallbackTrack = TestSceneModel.track()
@@ -374,16 +398,16 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     }
 
     private fun applySettings(c: FilamentCore) {
-        val l = skyLighting ?: SkyModel.lighting(sky, originLatDeg).also { skyLighting = it }
+        val l = skyLighting ?: SkyModel.lighting(sky, originLatDeg, viewDistanceM).also { skyLighting = it }
         // Die Schalter fuer Baeume, Gebaeude, Kleinteile prueft der Streamer in jedem Bild selbst.
-        c.applySettings(settings, l.fogDensity, l.horizon, fogHeight())
+        c.applySettings(settings, l.fogDensity, l.fogColor, fogHeight())
     }
 
     private fun applySky(c: FilamentCore) {
-        val l = SkyModel.lighting(sky, originLatDeg)
+        val l = SkyModel.lighting(sky, originLatDeg, viewDistanceM)
         skyLighting = l
         c.applySky(l, settings.sky)
-        c.applyFog(settings.fog, l.fogDensity, l.horizon, fogHeight())
+        c.applyFog(settings.fog, l.fogDensity, l.fogColor, fogHeight())
     }
 
     private fun fogHeight(): Double {
@@ -446,6 +470,10 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         originLatDeg = when (req) {
             is Request.Test -> 51.0
             is Request.World -> req.manifest.origin.lat
+        }
+        viewDistanceM = when (req) {
+            is Request.Test -> null
+            is Request.World -> req.manifest.quality.viewDistanceM
         }
         track = newTrack
         offset = startOffset(newTrack)
@@ -623,13 +651,13 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             if ((riderWorld - offset).length() > RECENTER_M) {
                 offset = V3(Math.round(riderWorld.x / 256.0) * 256.0, 0.0, Math.round(riderWorld.z / 256.0) * 256.0)
                 c.setWorldOffset(offset)
-                c.applyFog(settings.fog, skyLighting?.fogDensity ?: 1e-4, skyLighting?.horizon ?: Rgb(0.7, 0.75, 0.8), fogHeight())
+                c.applyFog(settings.fog, skyLighting?.fogDensity ?: 1e-4, skyLighting?.fogColor ?: Rgb(0.7, 0.75, 0.8), fogHeight())
             }
 
             // Dunsthoehe dem Fahrer nachfuehren (bei langen Anstiegen), alle 25 Hoehenmeter.
             if (kotlin.math.abs(here.u - fogBaseU) > 25.0) {
                 fogBaseU = here.u
-                c.applyFog(settings.fog, skyLighting?.fogDensity ?: 1e-4, skyLighting?.horizon ?: Rgb(0.7, 0.75, 0.8), fogHeight())
+                c.applyFog(settings.fog, skyLighting?.fogDensity ?: 1e-4, skyLighting?.fogColor ?: Rgb(0.7, 0.75, 0.8), fogHeight())
             }
 
             // Fahrer

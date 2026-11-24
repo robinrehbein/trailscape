@@ -106,6 +106,62 @@ internal object RouteTextures {
 
     fun fringeTexture(cache: TextureCache): EncodedTexture = cache.get("route_fringe", alpha = true) { fringe() }
 
+    /**
+     * Weiche Kante einer uebrigen Strasse (PNG, RGBA): `u` laengs (kachelnd, eine Belagslaenge),
+     * `v` quer (geklemmt) von der Fahrbahnkante (`v = 0`, deckend) nach aussen (`v = 1`, durchsichtig).
+     *
+     * Die Deckung steckt in der **Textur**, nicht in den Vertexfarben: Filament rechnet mit 4× MSAA in
+     * einen Float-Puffer und wertet den Shader am Pixelmittelpunkt aus, auch wenn der ausserhalb des
+     * Dreiecks liegt — eine Vertex-Deckung, die am Rand auf null faellt, wird dort negativ
+     * fortgeschrieben und hellt den Hintergrund auf (weisse gepunktete Linien auf dem Geraet). Ein
+     * Texturwert bleibt in 0..1, fortgeschriebene `v` > 1 landen am geklemmten, durchsichtigen Rand.
+     */
+    fun roadEdgeTexture(cache: TextureCache, kind: SurfaceKind): EncodedTexture =
+        cache.get("route_${kind.visual.textureKey}_edge", alpha = true) { edgeStrip(surface(kind.visual)) }
+
+    /**
+     * Auslauf des Uebergangsstreifens (PNG, RGBA, 256 × 32): `u` laengs (kachelnd, [Verge.sizeM]),
+     * `v` quer (geklemmt) mit der Deckung [VERGE_FADE_ALPHA0] → 0. Farbe: die Randtextur, stark
+     * weichgezeichnet (nur die grobe Fleckung) und auf dieselbe mittlere Farbe normiert — die
+     * Abtoenung der Vertexfarben passt also unveraendert. Warum die Deckung in der Textur steckt:
+     * [roadEdgeTexture].
+     */
+    fun vergeFadeTexture(cache: TextureCache, verge: Verge): EncodedTexture =
+        cache.get("${verge.key}_fade", alpha = true) { vergeFade(verge) }
+
+    /** Deckung des Auslaufs an seiner Innenkante (der deckende Streifen davor endet mit 0,92). */
+    const val VERGE_FADE_ALPHA0 = 0.92
+
+    internal fun edgeStrip(src: RgbaImage): RgbaImage {
+        val w = 512
+        val h = 16
+        val out = RgbaImage(w, h)
+        for (x in 0 until w) {
+            // Laengs: zwei Zeilen der Belagstextur je Pixel (1024 → 512), quer: die Spalten am Rand.
+            val sy = (x * src.height / w).coerceIn(0, src.height - 1)
+            for (y in 0 until h) {
+                val c = src[(4 + y * 2).coerceIn(0, src.width - 1), sy]
+                val t = y / (h - 1.0)
+                val a = 1.0 - smoothstep(0.0, 1.0, t)
+                out[x, y] = Argb.withAlpha(c, Argb.unitTo8(a.toFloat()))
+            }
+        }
+        return out
+    }
+
+    internal fun vergeFade(verge: Verge): RgbaImage {
+        val src = verge(verge, 256).resizeBox(32, 32).resizeBox(256, 256)
+        val w = 256
+        val h = 32
+        val out = RgbaImage(w, h)
+        for (x in 0 until w) for (y in 0 until h) {
+            val t = y / (h - 1.0)
+            val a = VERGE_FADE_ALPHA0 * (1.0 - smoothstep(0.0, 1.0, t))
+            out[x, y] = Argb.withAlpha(src[x, (y * 8) % 256], Argb.unitTo8(a.toFloat()))
+        }
+        return out
+    }
+
     // -----------------------------------------------------------------------
     // Erzeuger
     // -----------------------------------------------------------------------
@@ -653,19 +709,24 @@ internal object RouteTextures {
     }
 
     private fun sidewalk(c: Canvas) {
+        // Betonsteinpflaster im Laeuferverband: 12 Steine quer (21 cm) und 24 Reihen (10,7 cm) je 2,56 m.
+        // Vorher 32-cm-Platten mit zwei Pixel breiten, dunklen Fugen — aus Fahrerhoehe ein grobes Gitter.
         val w = c.w
         val h = c.h
-        val n = 8
-        val s = w / n
+        val nx = 12
+        val ny = 24
+        val sx = w.toFloat() / nx
+        val sy = h.toFloat() / ny
         c.each { x, y, i ->
-            val row = y / s
-            val xx = x + if (row % 2 == 0) 0 else s / 2
-            val col = Math.floorMod(xx / s, n)
-            val lx = Math.floorMod(xx, s)
-            val ly = y % s
-            val d = min(min(lx, s - 1 - lx), min(ly, s - 1 - ly))
-            val t = (Noise.hash01(col, row, 0xe1).toFloat() - 0.5f) * 0.07f
-            if (d == 0) c.set(i, 0.30f, 0.29f, 0.26f) else c.set(i, 0.60f + t - (if (d == 1) 0.05f else 0f), 0.595f + t - (if (d == 1) 0.05f else 0f), 0.575f + t - (if (d == 1) 0.05f else 0f))
+            val row = (y / sy).toInt()
+            val xx = x + if (row % 2 == 0) 0f else sx / 2
+            val col = Math.floorMod((xx / sx).toInt(), nx)
+            val lx = xx - floor(xx / sx) * sx
+            val ly = y - row * sy
+            val d = min(min(lx, sx - 1 - lx), min(ly, sy - 1 - ly))
+            val t = (Noise.hash01(col, row, 0xe1).toFloat() - 0.5f) * 0.08f
+            val joint = if (d < 0.6f) 0.13f else if (d < 1.5f) 0.035f else 0f
+            c.set(i, 0.60f + t - joint, 0.595f + t - joint, 0.575f + t - joint)
         }
         c.speckle(0.04f, 0xe2)
         c.mottle(4, 4, 0.035f, 0xe3)

@@ -119,6 +119,9 @@ private val PROFILE_STRIP_HEIGHT = 56.dp
  * @param onErgAdjust Prozentpunkte der FTP, `±5`.
  * @param onRideWithoutWorld wenn gesetzt, bietet die Fehlermeldung der 3D-Flaeche
  *   „Ohne Welt fahren" an; `null` = kein Angebot.
+ * @param onMoveStart / [onNudgeStart] / [onReleaseStart] Startpunkt waehlen
+ *   ([IndoorStartPanel], solange [IndoorRideUi.start] gesetzt ist): Stelle in
+ *   Metern, Feinschritt in Metern, „Losfahren".
  * @param onBack nur fuer die Fehlerseite (Start gescheitert).
  * @param initialChromeHidden nur fuer Screenshot-Tests: Nebensachen schon ausgeblendet.
  */
@@ -137,6 +140,9 @@ fun IndoorRideScreen(
     onRideWithoutWorld: (() -> Unit)? = null,
     onBack: () -> Unit = {},
     initialChromeHidden: Boolean = false,
+    onMoveStart: (Double) -> Unit = {},
+    onNudgeStart: (Double) -> Unit = {},
+    onReleaseStart: () -> Unit = {},
 ) {
     val session = ui.session
     if (session == null) {
@@ -161,6 +167,9 @@ fun IndoorRideScreen(
         onDismissNotice = onDismissNotice,
         onRideWithoutWorld = onRideWithoutWorld,
         onShowDevices = { showDevices = true },
+        onMoveStart = onMoveStart,
+        onNudgeStart = onNudgeStart,
+        onReleaseStart = onReleaseStart,
     )
 
     Box(
@@ -212,7 +221,35 @@ private class HudActions(
     val onDismissNotice: () -> Unit,
     val onRideWithoutWorld: (() -> Unit)?,
     val onShowDevices: () -> Unit,
+    val onMoveStart: (Double) -> Unit,
+    val onNudgeStart: (Double) -> Unit,
+    val onReleaseStart: () -> Unit,
 )
+
+/** Die Startpunkt-Karte, wenn sie gerade gilt (sonst `false`, dann zeigt das HUD Gang und Profil). */
+@Composable
+private fun StartPanelIfAny(
+    ui: IndoorRideUi,
+    session: IndoorSessionState,
+    actions: HudActions,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+): Boolean {
+    val start = ui.start ?: return false
+    val profile = ui.profile ?: return false
+    IndoorStartPanel(
+        start = start,
+        profile = profile,
+        phase = session.phase,
+        onMove = actions.onMoveStart,
+        onNudge = actions.onNudgeStart,
+        onRelease = actions.onReleaseStart,
+        onResume = actions.onTogglePause,
+        compact = compact,
+        modifier = modifier,
+    )
+    return true
+}
 
 /**
  * Helle Symbole in Status- und Navigationsleiste, solange die Fahransicht
@@ -357,7 +394,7 @@ private fun PortraitHud(
                     }
                 }
             }
-            PhaseCard(
+            if (ui.start == null) PhaseCard(
                 session = session,
                 onTogglePause = actions.onTogglePause,
                 modifier = if (showWorld) {
@@ -380,14 +417,17 @@ private fun PortraitHud(
                 .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            ShiftRow(ui = ui, session = session, actions = actions) { pill ->
-                pill()
-            }
-            if (showWorld && ui.profile != null) {
-                ChromeVisibility(visible = !chromeHidden) {
-                    Column(modifier = Modifier.padding(horizontal = 4.dp)) {
-                        HudProfileHeader(ui = ui, session = session)
-                        HudProfileCanvas(ui = ui, session = session, height = PROFILE_STRIP_HEIGHT)
+            // Vor dem ersten Tritt und in der Pause: Startpunkt waehlen statt Gang und Profil.
+            if (!StartPanelIfAny(ui = ui, session = session, actions = actions, compact = false)) {
+                ShiftRow(ui = ui, session = session, actions = actions) { pill ->
+                    pill()
+                }
+                if (showWorld && ui.profile != null) {
+                    ChromeVisibility(visible = !chromeHidden) {
+                        Column(modifier = Modifier.padding(horizontal = 4.dp)) {
+                            HudProfileHeader(ui = ui, session = session)
+                            HudProfileCanvas(ui = ui, session = session, height = PROFILE_STRIP_HEIGHT)
+                        }
                     }
                 }
             }
@@ -458,7 +498,9 @@ private fun LandscapeHud(
                     }
                 }
             }
-            PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = Modifier.align(Alignment.Center))
+            if (ui.start == null) {
+                PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = Modifier.align(Alignment.Center))
+            }
         }
 
         // Unten: −/+ an den Raendern, dazwischen Gang und Hoehenprofil.
@@ -471,7 +513,14 @@ private fun LandscapeHud(
                 )
                 .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
         ) {
-            ShiftRow(ui = ui, session = session, actions = actions) { pill ->
+            val startShown = StartPanelIfAny(
+                ui = ui,
+                session = session,
+                actions = actions,
+                compact = true,
+                modifier = Modifier.align(Alignment.Center).widthIn(max = 760.dp),
+            )
+            if (!startShown) ShiftRow(ui = ui, session = session, actions = actions) { pill ->
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,

@@ -27,6 +27,7 @@ node shots.mjs ../out/mock --serve --port 8123   # nur Server, Seite im Browser 
 | `--jpeg` | zusätzlich JPEG, 1280 px breit, unter 300 kB |
 | `--out <dir>` | Zielverzeichnis, sonst `<welt>/shots/` |
 | `--sun-az`, `--sun-el` | Sonnenazimut (0 = Nord, 90 = Ost) und -höhe in Grad; Vorgabe 235/40 |
+| `--sky <dir>` | Himmel der Darstellung aus `indoor-dev sky --out <dir>` (Seite: `skyDir`): Rundumbild mit Wolken, Sonnenstand, Sonnenfarbe, Lichtstärken und Dunst wie auf dem Gerät; `--sun-*` gehen vor |
 | `--models <dir>` | Verzeichnis mit `rider.glb`/`ghost.glb`; Vorgabe `app/src/main/assets/indoor/models`. Fehlt `rider.glb`, zeichnet der Betrachter Platzhalter-Quader |
 | `--no-rider`, `--no-attribution` | Fahrer bzw. Quellenangaben weglassen |
 | `--param k=v` | beliebiger URL-Parameter der Seite (mehrfach) |
@@ -49,6 +50,7 @@ Welt), `/models/` (die Modelle).
 | `models` | `../../../app/src/main/assets/indoor/models` | URL des Modellverzeichnisses; leer = Platzhalter ohne Ladeversuch |
 | `dist`, `camera` | `0`, `chase` | Stelle und Kamera beim Start |
 | `sunAz`, `sunEl` | `235`, `40` | Sonnenstand |
+| `skyDir` | – | URL eines Verzeichnisses mit `sky.json` + `sky.f32` (siehe `--sky`). Der Himmel geht dann durch eine GLSL-Nachbildung von Filaments `ACES_LEGACY` statt durch three.js' ACES; die Welt bleibt bei der Abbildung des Betrachters, die Dunstfarbe wird so umgerechnet, dass sie nach dieser Abbildung dem Horizont der Darstellung gleicht |
 | `rider` | `1` | `0` lässt den Fahrer weg |
 | `pedal`, `roll` | `0.15`, `0` | Phase 0..1 der Animationen `pedal` und `roll` |
 | `ghost` | – | Laufmeter des Geists (fährt links der Mitte); ohne Angabe kein Geist |
@@ -62,6 +64,8 @@ Welt), `/models/` (die Modelle).
 | `lookahead` | `60` | Vorlauf in Metern, für den zusätzlich geladen wird |
 | `exposure`, `near` | `0.62`, je Kamera | Belichtung, nahe Schnittebene |
 | `auto` | `1` | `0`: nichts zeichnen, bis `setView` gerufen wird |
+| `hdr` | `0` | `1`: Szene wie Filament in einen Float-Puffer (RGBA16F) mit 4× MSAA, Tonemapping danach — dort wird vor dem Mischen nicht auf 0..1 geklemmt |
+| `clampColor` | `0` | `1`: Vertexfarben im Shader auf 0..1 klemmen (so sähe es mit `centroid`-Interpolation aus); mit `hdr=1` zum Eingrenzen heller Nahtlinien. SwiftShader zeigt den Effekt nur an einzelnen Pixeln — maßgeblich ist `indoor-dev overlaps` (Zähler „durchsichtige Eckpunkte") |
 
 Tasten: ←/→ Strecke (mit Umschalt weiter), 1/2/3 Kamera, Q/E Sonnenazimut,
 R/F Sonnenhöhe, G Fahrer; Maus dreht die Kamera um ihren Blickpunkt.
@@ -99,7 +103,7 @@ Gezeichnet wird nur auf Anforderung, nicht in einer Schleife.
 - Schatten nach Knotennamen: `buildings` wirft und empfängt, `trees` wirft,
   `terrain`/`route`/`roads`/`water` empfangen, `props` und `x_…` nichts.
 - Formatprüfung je GLB (**Fehler**): andere Erweiterungen als
-  `KHR_materials_unlit`; Knoten, die weder in `WorldNames` stehen noch
+  `KHR_materials_unlit` und `KHR_materials_specular` (Vegetation ohne Glanz); Knoten, die weder in `WorldNames` stehen noch
   `terrain_sub_i_j` oder `x_…` heißen; doppelte Knoten; Kameras, Lichter,
   Animationen, Skins in Kacheln; ab Stufe 1 nicht genau 16 Teilflächen oder ein
   Netz direkt an `terrain`; `metallicFactor ≠ 0`, `roughnessFactor < 0,6`;

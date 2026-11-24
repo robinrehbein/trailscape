@@ -70,6 +70,7 @@ internal class RouteLayer : TileLayer {
         fun routeMaterialName(kind: SurfaceKind): String = WorldNames.MAT_ROUTE_PREFIX + kind.visual.textureKey
         fun fadeMaterialName(kind: SurfaceKind): String = "x_mat_route_${kind.visual.textureKey}_fade"
         fun vergeMaterialName(v: RouteTextures.Verge): String = "x_mat_route_${v.key}"
+        fun vergeFadeMaterialName(v: RouteTextures.Verge): String = "x_mat_route_${v.key}_fade"
         const val MAT_SHOULDER = "x_mat_route_shoulder"
         const val MAT_SIDEWALK = "x_mat_route_sidewalk"
         const val MAT_PLAIN = "x_mat_route_plain"
@@ -174,6 +175,13 @@ internal class RouteEnv(val ctx: TileContext) {
     val track = ctx.track
     val roads = RoadNet(ctx)
     val hood = RouteGeometry.Neighbourhood(ctx.track, ctx.spec)
+
+    /**
+     * Sperrflaechen fuer die Randgestaltung ([PlanMask]): die Baender der uebrigen Strassen genau so
+     * abgetastet wie [RoadsLayer] sie zeichnet (Schritt [RoadsLayer.STEP_M], Gehrung), dazu die
+     * Fahrbahn der anderen (nicht doppelten) Streckenteile mit ihrem Laufmeter-Bereich.
+     */
+    val mask: PlanMask by lazy { buildMask() }
     private val profiles = HashMap<Int, RouteProfile>()
     private val rawLand = HashMap<Int, LandClass>()
     private val tmp = DoubleArray(5)
@@ -277,6 +285,59 @@ internal class RouteEnv(val ctx: TileContext) {
         return p
     }
 
+    private fun buildMask(): PlanMask {
+        val m = PlanMask()
+        val s = ctx.spec
+        val margin = 30.0
+        for (r in RoadNet(ctx, marginM = margin, maxStepM = RoadsLayer.STEP_M).roads) {
+            if (r.maxE < s.minE - margin || r.minE > s.maxE + margin || r.maxN < s.minN - margin || r.minN > s.maxN + margin) continue
+            // Bahnen sperren nicht (wie frueher): Ihr Schotterbett liegt unter dem Rand, die Schienen darueber.
+            if (r.spec.rail) continue
+            val hw = r.halfWidth
+            for (i in 0 until r.size - 1) {
+                // Stuecke „auf der Strecke" zeichnet niemand als Strasse. Laufen sie schon neben der Fahrbahn
+                // auseinander (Kreiseleinfahrt, Gabelung: Mitte > 1,5 m von der Strecke — mehr, als die
+                // Glaettung der Strecke versetzt), liegt dort im Boden gemalter Asphalt: Sie sperren dann
+                // Gras und Gehweg, nicht aber Fransen, Bordstein und Linien.
+                val on = r.segOnTrack(i)
+                if (on && min(r.trackDist[i], r.trackDist[i + 1]) <= 1.5) continue
+                val w = hw
+                val oa = w * min(r.miter[i], 2.0)
+                val ob = w * min(r.miter[i + 1], 2.0)
+                m.addQuad(
+                    r.e[i] - r.re[i] * oa, r.n[i] - r.rn[i] * oa, r.e[i] + r.re[i] * oa, r.n[i] + r.rn[i] * oa,
+                    r.e[i + 1] - r.re[i + 1] * ob, r.n[i + 1] - r.rn[i + 1] * ob, r.e[i + 1] + r.re[i + 1] * ob, r.n[i + 1] + r.rn[i + 1] * ob,
+                    outerOnly = on,
+                )
+            }
+        }
+        // Andere Streckenteile: nur, wo die Strecke sich selbst nahe kommt.
+        val t = track.track
+        val c0 = DoubleArray(5)
+        val c1 = DoubleArray(5)
+        // Alle Streckenteile im Umkreis, auch solche, die eine Nachbarkachel zeichnet.
+        for (i in 0 until track.count - 1) {
+            val pe = t.e[i].toDouble()
+            val pn = t.n[i].toDouble()
+            if (pe < s.minE - margin || pe > s.maxE + margin || pn < s.minN - margin || pn > s.maxN + margin) continue
+            if (isDuplicate(i / 2)) continue
+            run {
+                for (h in 0 until 2) {
+                    RouteGeometry.centerAt(track, i, h * 0.5, c0)
+                    RouteGeometry.centerAt(track, i, h * 0.5 + 0.5, c1)
+                    val d0 = t.distAt(i)
+                    val hw0 = track.halfWidthAt(d0)
+                    m.addQuad(
+                        c0[0] - c0[4] * hw0, c0[1] + c0[3] * hw0, c0[0] + c0[4] * hw0, c0[1] - c0[3] * hw0,
+                        c1[0] - c1[4] * hw0, c1[1] + c1[3] * hw0, c1[0] + c1[4] * hw0, c1[1] - c1[3] * hw0,
+                        fromM = d0, toM = t.distAt(i + 1),
+                    )
+                }
+            }
+        }
+        return m
+    }
+
     /**
      * Einheit [k] liegt deckungsgleich auf einem frueheren Teil der Strecke
      * (Hin- und Rueckweg auf demselben Weg) und wird deshalb nicht gezeichnet.
@@ -342,10 +403,6 @@ private class Station(val x: Double) {
     val hE = DoubleArray(2)
     val a0 = DoubleArray(2)
 
-    /** Deckung des Streifens an den Ringen (Aussparung an Einmuendungen und anderen Streckenteilen). */
-    val c2 = doubleArrayOf(1.0, 1.0)
-    val cA = doubleArrayOf(1.0, 1.0)
-    val cB = doubleArrayOf(1.0, 1.0)
     val tint = arrayOf(FloatArray(3), FloatArray(3))
     val aerial = arrayOf(FloatArray(3), FloatArray(3))
     val hasAerial = BooleanArray(2)
@@ -388,6 +445,32 @@ private class RouteEmitter(
 
     private fun mesh(material: TileMaterial): MeshBuilder = out.mesh(node, material)
 
+    /**
+     * Randgestaltung (Gehweg, Bordstein, Bankett, Fransen, Uebergangsstreifen, Linien) entsteht je
+     * Stueck in Zwischennetzen und wird dann gegen die Sperrflaechen ([RouteEnv.mask]) geschnitten
+     * ([flush]) — sie endet genau an der Kante einmuendender Strassen und anderer Streckenteile.
+     */
+    private val temp = LinkedHashMap<String, Pair<TileMaterial, MeshBuilder>>()
+
+    private fun edgeMesh(material: TileMaterial): MeshBuilder = temp.getOrPut(material.name) { material to MeshBuilder() }.second
+
+    private fun flush(fromM: Double, toM: Double, lanes: Array<Lane>?) {
+        val mask = env.mask
+        for ((mat, mb) in temp.values) {
+            if (mb.isEmpty) continue
+            // Was in die eigene Fahrbahn hineinreicht (Fransen, Bordstein, Linien), schneidet die eigene
+            // Fahrbahn weiter vor und hinter dem Stueck nicht; was draussen liegt, schon ab wenigen Metern.
+            val inner = mat.name == RouteLayer.MAT_FRINGE || mat.name == RouteLayer.MAT_PLAIN
+            val own = if (inner) MASK_OWN_M else MASK_OWN_OUTER_M
+            clipInto(
+                mb, out.mesh(node, mat), mask, { x -> x + ctx.spec.anchorE }, { z -> ctx.spec.anchorN - z },
+                skipFrom = fromM - own, skipTo = toM + own, inner = inner,
+            )
+            mb.clear()
+        }
+        if (lanes != null) for (k in 3 until lanes.size) lanes[k].station = -1
+    }
+
     private fun roadMesh(kind: SurfaceKind): MeshBuilder = mesh(
         materials.getOrPut(RouteLayer.routeMaterialName(kind)) {
             TileMaterial(
@@ -401,34 +484,43 @@ private class RouteEmitter(
         materials.getOrPut(RouteLayer.fadeMaterialName(kind)) {
             TileMaterial(
                 RouteLayer.fadeMaterialName(kind), RouteTextures.surfaceTexture(ctx.textures, kind, ctx.quality == IndoorQuality.LOW),
-                roughness = if (kind.visual == SurfaceKind.ASPHALT) 0.86f else 0.95f, alphaMode = GlbAlphaMode.BLEND,
+                roughness = if (kind.visual == SurfaceKind.ASPHALT) 0.86f else 0.95f, alphaMode = GlbAlphaMode.MASK,
             )
         },
     )
 
     private fun vergePx(): Int = if (ctx.quality == IndoorQuality.LOW) 256 else 512
 
-    private fun vergeMesh(v: RouteTextures.Verge): MeshBuilder = mesh(
+    private fun vergeMesh(v: RouteTextures.Verge): MeshBuilder = edgeMesh(
         materials.getOrPut(RouteLayer.vergeMaterialName(v)) {
-            TileMaterial(RouteLayer.vergeMaterialName(v), RouteTextures.vergeTexture(ctx.textures, v, vergePx()), roughness = 1f, alphaMode = GlbAlphaMode.BLEND)
+            TileMaterial(RouteLayer.vergeMaterialName(v), RouteTextures.vergeTexture(ctx.textures, v, vergePx()), roughness = 1f)
         },
     )
 
-    private fun shoulderMesh(): MeshBuilder = mesh(
+    private fun vergeFadeMesh(v: RouteTextures.Verge): MeshBuilder = edgeMesh(
+        materials.getOrPut(RouteLayer.vergeFadeMaterialName(v)) {
+            TileMaterial(
+                RouteLayer.vergeFadeMaterialName(v), RouteTextures.vergeFadeTexture(ctx.textures, v),
+                roughness = 1f, alphaMode = GlbAlphaMode.BLEND, clampV = true,
+            )
+        },
+    )
+
+    private fun shoulderMesh(): MeshBuilder = edgeMesh(
         materials.getOrPut(RouteLayer.MAT_SHOULDER) {
             TileMaterial(RouteLayer.MAT_SHOULDER, RouteTextures.vergeTexture(ctx.textures, RouteTextures.Verge.SHOULDER), roughness = 1f)
         },
     )
 
-    private fun sidewalkMesh(): MeshBuilder = mesh(
+    private fun sidewalkMesh(): MeshBuilder = edgeMesh(
         materials.getOrPut(RouteLayer.MAT_SIDEWALK) {
             TileMaterial(RouteLayer.MAT_SIDEWALK, RouteTextures.vergeTexture(ctx.textures, RouteTextures.Verge.SIDEWALK), roughness = 0.95f)
         },
     )
 
-    private fun plainMesh(): MeshBuilder = mesh(materials.getOrPut(RouteLayer.MAT_PLAIN) { TileMaterial(RouteLayer.MAT_PLAIN, roughness = 0.85f) })
+    private fun plainMesh(): MeshBuilder = edgeMesh(materials.getOrPut(RouteLayer.MAT_PLAIN) { TileMaterial(RouteLayer.MAT_PLAIN, roughness = 0.85f) })
 
-    private fun fringeMesh(): MeshBuilder = mesh(
+    private fun fringeMesh(): MeshBuilder = edgeMesh(
         materials.getOrPut(RouteLayer.MAT_FRINGE) {
             TileMaterial(RouteLayer.MAT_FRINGE, RouteTextures.fringeTexture(ctx.textures), roughness = 1f, alphaMode = GlbAlphaMode.BLEND)
         },
@@ -451,10 +543,6 @@ private class RouteEmitter(
             }
             var sub = 1
             for (q in 0 until span) sub = max(sub, RouteGeometry.subdivisions(track, i + q, detail.maxSub))
-            // An Einmuendungen und wo die Strecke sich selbst nahe kommt, werden die Raender per Eckpunkt
-            // ausgeblendet — fein teilen, sonst zeigen sich die Dreiecke als eckige Loecher im Rand.
-            val pn = env.profile(i + 1)
-            if (span == 1 && (pa.nearRoad || pn.nearRoad || pa.nearOther || pn.nearOther)) sub = max(sub, detail.maxSub)
             for (p in 0 until sub) xs.add(i + span.toDouble() * p / sub)
             i += span
         }
@@ -462,8 +550,12 @@ private class RouteEmitter(
         runStartDist = track.track.distAt(a)
         stations = Array(xs.size) { station(xs[it]) }
         val lanes = Array(LANES) { Lane() }
-        for (j in 0 until stations.size - 1) piece(j, lanes)
+        for (j in 0 until stations.size - 1) {
+            piece(j, lanes)
+            flush(stations[j].dist, stations[j + 1].dist, lanes)
+        }
         if (detail.extras) centreDashes(a, b)
+        flush(track.track.distAt(a), track.track.distAt(b), null)
     }
 
     private fun station(x: Double): Station {
@@ -486,7 +578,6 @@ private class RouteEmitter(
             env.hood.other(st.e, st.n, st.dist, RouteEnv.OTHER_GAP_M, oth)
             if (oth[1] >= 0 && oth[1] < seg && oth[0] < st.hw + oth[2]) st.lift = 0.008
         }
-        val nearRoad = p0.nearRoad || p1.nearRoad
         for (side in 0..1) {
             val sgn = if (side == 0) -1.0 else 1.0
             fun mix(a: Double, b: Double) = a + (b - a) * f
@@ -502,9 +593,18 @@ private class RouteEmitter(
             st.tE[side] = st.t2[side] + end
             st.h1[side] = st.u - st.crown * st.hw + st.lift
             st.h2[side] = max(st.h1[side] + mix(p0.drop[side], p1.drop[side]) + st.kerb[side], groundAt(st, sgn * st.t2[side]) + 0.03)
-            st.hA[side] = groundAt(st, sgn * st.tA[side]) + 0.05
-            st.hB[side] = groundAt(st, sgn * st.tB[side]) + 0.04
             st.hE[side] = groundAt(st, sgn * st.tE[side]) + 0.03
+            // Der Streifen laeuft von der Aussenkante des Randstreifens gleichmaessig auf den Boden am Ende
+            // hinaus, statt der Mulde neben der Fahrbahn zu folgen (CarvedGround legt dort den Boden bis
+            // 25 cm unter die Fahrbahn, damit das 4-m-Netz nicht durchsticht): frueher fiel das Gras neben
+            // dem Gehweg auf 75 cm um bis zu 30 cm ab und stieg dahinter wieder an. Nie unter dem Boden.
+            val span = max(0.1, st.tE[side] - st.t2[side])
+            fun dressed(t: Double): Double {
+                val f = smoothstep(0.0, 1.0, ((t - st.t2[side]) / span).coerceIn(0.0, 1.0))
+                return st.h2[side] + (st.hE[side] - st.h2[side]) * f
+            }
+            st.hA[side] = max(groundAt(st, sgn * st.tA[side]) + 0.05, dressed(st.tA[side]))
+            st.hB[side] = max(groundAt(st, sgn * st.tB[side]) + 0.04, dressed(st.tB[side]))
             for (c in 0..2) {
                 st.tint[side][c] = (p0.tint[side][c] + (p1.tint[side][c] - p0.tint[side][c]) * f).toFloat()
             }
@@ -519,16 +619,6 @@ private class RouteEmitter(
             val w = st.vergeW[side]
             w[p0.verge[side]!!.ordinal] += (1 - f).toFloat()
             w[p1.verge[side]!!.ordinal] += f.toFloat()
-            if (nearRoad) {
-                st.c2[side] *= roadFactor(st, sgn * st.t2[side])
-                st.cA[side] *= roadFactor(st, sgn * st.tA[side])
-                st.cB[side] *= roadFactor(st, sgn * st.tB[side])
-            }
-            if (p0.nearOther || p1.nearOther) {
-                st.c2[side] *= otherFactor(st, sgn * st.t2[side])
-                st.cA[side] *= otherFactor(st, sgn * st.tA[side])
-                st.cB[side] *= otherFactor(st, sgn * st.tB[side])
-            }
         }
         return st
     }
@@ -542,14 +632,6 @@ private class RouteEmitter(
         val e = pointE(st, t)
         val n = pointN(st, t)
         return max(ctx.ground.heightAt(e, n), ctx.meshHeightAt(e, n, meshCell))
-    }
-
-    private fun roadFactor(st: Station, t: Double): Double =
-        smoothstep(0.2, 1.8, env.roads.clearance(pointE(st, t), pointN(st, t), withRail = false))
-
-    private fun otherFactor(st: Station, t: Double): Double {
-        env.hood.other(pointE(st, t), pointN(st, t), st.dist, RouteEnv.OTHER_GAP_M, oth)
-        return smoothstep(0.2, 1.8, oth[0] - oth[2])
     }
 
     // --- Eckpunkte -----------------------------------------------------------
@@ -610,9 +692,8 @@ private class RouteEmitter(
             val sgn = if (side == 0) -1.0 else 1.0
             val s0 = p0.style[side]!!
             val s1 = p1.style[side]!!
-            val blocked = a.c2[side] < 0.35 && b.c2[side] < 0.35
             val base = 3 + side * LANES_PER_SIDE
-            if (s0 == EdgeStyle.BANKETT && s1 == EdgeStyle.BANKETT && !blocked) {
+            if (s0 == EdgeStyle.BANKETT && s1 == EdgeStyle.BANKETT) {
                 val m = shoulderMesh()
                 strip(lanes[base], m, j, 2) { st ->
                     val col = roadColor(st)
@@ -630,16 +711,21 @@ private class RouteEmitter(
                 }
             }
             // Der Gehweg beginnt und endet mit einem kurzen Keil (Bordstein laeuft auf null aus).
-            val urban = (s0 == EdgeStyle.URBAN || s1 == EdgeStyle.URBAN) && !blocked
+            val urban = s0 == EdgeStyle.URBAN || s1 == EdgeStyle.URBAN
             if (urban) kerbAndSidewalk(j, side, lanes, base)
             val grassWay = sec.kind.visual == SurfaceKind.GRASS
             if (detail.extras && s0 == EdgeStyle.SOFT && s1 == EdgeStyle.SOFT && !grassWay) fringe(j, side, lanes[base + 3])
             if (detail.extras && RouteLayer.hasEdgeLines(sec) && RouteLayer.hasEdgeLines(p1.section)) edgeLine(j, side, lanes[base + 4])
+            // Ein Belag je Stueck (der staerkste): Der Streifen ist deckend, zwei Belaege koennen nicht mehr
+            // ueber Vertex-Deckung ineinander laufen (warum: RouteTextures.roadEdgeTexture).
+            var best: RouteTextures.Verge? = null
+            var bestW = 0f
             for (kind in RouteTextures.Verge.entries) {
                 if (kind == RouteTextures.Verge.SIDEWALK) continue
-                if (a.vergeW[side][kind.ordinal] <= 0f && b.vergeW[side][kind.ordinal] <= 0f) continue
-                verge(j, side, kind, lanes[base + 5 + kind.ordinal], urban)
+                val w = a.vergeW[side][kind.ordinal] + b.vergeW[side][kind.ordinal]
+                if (w > bestW) { bestW = w; best = kind }
             }
+            if (best != null) verge(j, side, best, lanes[base + 5 + best.ordinal], lanes[base + 5 + VERGE_FADE_LANE], lanes[base + 5 + VERGE_FADE_LANE + 1], urban)
         }
     }
 
@@ -664,9 +750,12 @@ private class RouteEmitter(
     }
 
     /**
-     * Ueberblendung am Belagswechsel: Liegt innerhalb von [RouteLayer.FADE_M]
-     * vor ([forward]) bzw. hinter diesem Stueck die Grenze zu einem Abschnitt,
-     * der „oben" liegt, wird dessen Belag mit auslaufender Deckung darueber gelegt.
+     * Uebergang am Belagswechsel: Liegt innerhalb von [RouteLayer.FADE_M] vor ([forward]) bzw. hinter
+     * diesem Stueck die Grenze zu einem Abschnitt, der „oben" liegt, greift dessen Belag mit einer
+     * unregelmaessigen Kante (`alphaMode = MASK`, Schwelle 0,5) in diesen hinein — je Spur verschieden
+     * weit (±1,5 m um 3 m). Frueher lief er mit Vertex-Deckung aus (BLEND); die wird von Filaments
+     * MSAA am Dreiecksrand negativ fortgeschrieben (helle Punkte). Bei MASK verwirft der Shader solche
+     * Stellen nur.
      */
     private fun fade(j: Int, seg: Int, own: Int, forward: Boolean, lane: Lane) {
         val reach = ceil(RouteLayer.FADE_M / track.stepM).toInt()
@@ -688,28 +777,30 @@ private class RouteEmitter(
         val bd = track.track.distAt(boundary)
         val a = stations[j]
         val b = stations[j + 1]
-        fun alphaAt(st: Station) = (1.0 - abs(st.dist - bd) / RouteLayer.FADE_M).coerceIn(0.0, 1.0)
-        if (alphaAt(a) <= 0.0 && alphaAt(b) <= 0.0) return
+        fun base(st: Station) = 1.0 - abs(st.dist - bd) / RouteLayer.FADE_M
+        if (base(a) <= 0.0 && base(b) <= 0.0) return
         val m = fadeMesh(sec.kind)
         val spec = RouteTextures.spec(sec.kind)
         val shift = if (spec.twoTrack && sec.effectiveWidthM < 2.2) RouteTextures.TRACK_OFFSET_M else 0.0
-        // Auch quer laeuft das Band zum Rand hin aus: Dort liegen Fransenkante und Randstreifen, die es sonst
-        // ueberdecken koennte (durchscheinende Flaechen haben untereinander keine verlaessliche Reihenfolge).
+        // Versatz der Kante je Spur, fest je Grenze (in jeder Kachel gleich).
+        val jitter = DoubleArray(5) { q -> (RouteGeometry.tone(bd * 0.37 + q * 1.7, bd * 0.11 - q * 2.3, 0x5f3) - 0.5) * 0.5 }
         strip(lane, m, j, 5) { st ->
             val v = (st.dist - floor(runStartDist / spec.lengthM) * spec.lengthM) / spec.lengthM
-            val inner = max(st.hw - 0.6, st.hw * 0.4)
+            // Seitlich endet das Band an der Innenkante der Fransen (sonst laegen beide 3 mm uebereinander: Flimmern).
+            val edge = max(st.hw - FRINGE_IN_M, st.hw * 0.4)
+            val inner = min(max(st.hw - 0.6, st.hw * 0.4), edge * 0.8)
             var first = -1
             for (q in 0..4) {
                 val t = when (q) {
-                    0 -> -st.hw
+                    0 -> -edge
                     1 -> -inner
                     2 -> 0.0
                     3 -> inner
-                    else -> st.hw
+                    else -> edge
                 }
-                val a = if (q == 0 || q == 4) 0.0 else alphaAt(st)
+                val al = (base(st) + jitter[q]).coerceIn(0.0, 1.0)
                 val slope = if (t < 0) st.crown else if (t > 0) -st.crown else 0.0
-                val idx = vert(m, st, t, roadH(st, kotlin.math.abs(t)) + RouteLayer.OVERLAY_LIFT_M, slope, 0.5 + (t + shift) / spec.widthM, v, roadColor(st, a))
+                val idx = vert(m, st, t, roadH(st, kotlin.math.abs(t)) + RouteLayer.OVERLAY_LIFT_M, slope, 0.5 + (t + shift) / spec.widthM, v, roadColor(st, al))
                 if (first < 0) first = idx
             }
             first
@@ -787,38 +878,41 @@ private class RouteEmitter(
         return RouteGeometry.linColor(min(1.0, r * tone), min(1.0, g * tone), min(1.0, b * tone), alpha.coerceIn(0.0, 1.0))
     }
 
-    private fun verge(j: Int, side: Int, kind: RouteTextures.Verge, lane: Lane, urban: Boolean) {
+    /**
+     * Uebergangsstreifen einer Seite: deckend vom Randstreifen bis `tB` (Randtextur in Weltkoordinaten),
+     * dann ein Auslauf bis `tE`, dessen Deckung in der Textur steckt ([RouteTextures.vergeFadeTexture]).
+     * Keine Vertex-Deckung: Filaments MSAA schreibt sie am Dreiecksrand negativ fort (weisse Punkte).
+     */
+    private fun verge(j: Int, side: Int, kind: RouteTextures.Verge, lane: Lane, fadeLane: Lane, fadeInLane: Lane, urban: Boolean) {
         val a = stations[j]
         val b = stations[j + 1]
-        // Am Gehweg beginnt der Streifen erst an dessen Aussenkante: kein Viereck V0–V1.
-        val skipFirst = urban || (abs(a.tV0[side] - a.t2[side]) < 1e-3 && abs(b.tV0[side] - b.t2[side]) < 1e-3)
+        // Am Gehweg beginnt der Streifen erst an dessen Aussenkante; am Bankett ebenso (frueher lief er
+        // durchsichtig ueber das Bankett ein — mit deckendem Streifen wuerde er es verdecken).
+        val skipFirst = urban || a.a0[side] < 0.5 || b.a0[side] < 0.5 ||
+            (abs(a.tV0[side] - a.t2[side]) < 1e-3 && abs(b.tV0[side] - b.t2[side]) < 1e-3)
         val m = vergeMesh(kind)
         val size = kind.sizeM
         val e0 = floor(ctx.spec.minE / size) * size
         val n0 = floor(ctx.spec.minN / size) * size
-        val rings = (if (skipFirst) 0 else 1) + (if (detail.vergeRings >= 3) 4 else 3)
+        val rings = (if (skipFirst) 0 else 1) + (if (detail.vergeRings >= 3) 3 else 2)
         val sgn = if (side == 0) -1.0 else 1.0
         strip(lane, m, j, rings) { st ->
-            val w = st.vergeW[side][kind.ordinal].toDouble()
             val ts = DoubleArray(rings)
             val hs = DoubleArray(rings)
-            val al = DoubleArray(rings)
             val strength = DoubleArray(rings)
             var k = 0
             if (!skipFirst) {
                 val span = max(0.05, st.t2[side] - st.hw)
                 ts[k] = st.tV0[side]
                 hs[k] = st.h1[side] + (st.h2[side] - st.h1[side]) * ((st.tV0[side] - st.hw) / span).coerceIn(0.0, 1.0) + RouteLayer.OVERLAY_LIFT_M
-                al[k] = st.a0[side] * st.c2[side]
                 strength[k] = 0.7
                 k++
             }
-            ts[k] = st.t2[side]; hs[k] = st.h2[side] + RouteLayer.OVERLAY_LIFT_M; al[k] = st.c2[side]; strength[k] = 0.7; k++
+            ts[k] = st.t2[side]; hs[k] = st.h2[side] + RouteLayer.OVERLAY_LIFT_M; strength[k] = 0.7; k++
             if (detail.vergeRings >= 3) {
-                ts[k] = st.tA[side]; hs[k] = st.hA[side]; al[k] = st.cA[side]; strength[k] = 0.85; k++
+                ts[k] = st.tA[side]; hs[k] = st.hA[side]; strength[k] = 0.85; k++
             }
-            ts[k] = st.tB[side]; hs[k] = st.hB[side]; al[k] = 0.92 * st.cB[side]; strength[k] = 0.95; k++
-            ts[k] = st.tE[side]; hs[k] = st.hE[side]; al[k] = 0.0; strength[k] = 1.0
+            ts[k] = st.tB[side]; hs[k] = st.hB[side]; strength[k] = 0.95
             var first = -1
             for (q in 0 until rings) {
                 // Links laeuft die Reihenfolge von aussen nach innen (Eckpunkte immer von links nach rechts).
@@ -829,10 +923,49 @@ private class RouteEmitter(
                 val t = sgn * ts[r]
                 val pe = pointE(st, t)
                 val pn = pointN(st, t)
-                val idx = vert(m, st, t, hs[r], slope, (pe - e0) / size, -(pn - n0) / size, vergeColor(st, side, kind, strength[r], al[r] * w))
+                val idx = vert(m, st, t, hs[r], slope, (pe - e0) / size, -(pn - n0) / size, vergeColor(st, side, kind, strength[r], 1.0))
                 if (first < 0) first = idx
             }
             first
+        }
+        // Auslauf: tB → tE, u laengs (Laufmeter), v quer 0 → 1.
+        val f = vergeFadeMesh(kind)
+        val uBase = floor(runStartDist / size) * size
+        if (!urban && (a.a0[side] < 0.5 || b.a0[side] < 0.5)) {
+            // Am Bankett laeuft der Streifen von V0 bis zum deckenden Teil ein (wie frueher, jetzt mit der
+            // Deckung aus der Textur: v = 1 an V0, v = 0 am Randstreifen).
+            strip(fadeInLane, f, j, 2) { st ->
+                val span = max(0.05, st.t2[side] - st.hw)
+                val h0 = st.h1[side] + (st.h2[side] - st.h1[side]) * ((st.tV0[side] - st.hw) / span).coerceIn(0.0, 1.0) + RouteLayer.OVERLAY_LIFT_M
+                val h2 = st.h2[side] + RouteLayer.OVERLAY_LIFT_M
+                val slope = sgn * (h2 - h0) / max(0.05, st.t2[side] - st.tV0[side])
+                val u = (st.dist - uBase) / size
+                val col = vergeColor(st, side, kind, 0.7, 1.0)
+                if (side == 0) {
+                    val i0 = vert(f, st, -st.t2[side], h2, slope, u, 0.0, col)
+                    vert(f, st, -st.tV0[side], h0, slope, u, 1.0, col)
+                    i0
+                } else {
+                    val i0 = vert(f, st, st.tV0[side], h0, slope, u, 1.0, col)
+                    vert(f, st, st.t2[side], h2, slope, u, 0.0, col)
+                    i0
+                }
+            }
+        }
+        strip(fadeLane, f, j, 2) { st ->
+            val slope = sgn * (st.hE[side] - st.hB[side]) / max(0.05, st.tE[side] - st.tB[side])
+            val u = (st.dist - uBase) / size
+            val cB = vergeColor(st, side, kind, 0.95, 1.0)
+            val cE = vergeColor(st, side, kind, 1.0, 1.0)
+            if (side == 0) {
+                val i0 = vert(f, st, -st.tE[side], st.hE[side], slope, u, 1.0, cE)
+                vert(f, st, -st.tB[side], st.hB[side], slope, u, 0.0, cB)
+                i0
+            } else {
+                val i0 = vert(f, st, st.tB[side], st.hB[side], slope, u, 0.0, cB)
+                vert(f, st, st.tE[side], st.hE[side], slope, u, 1.0, cE)
+                i0
+            }
         }
     }
 
@@ -855,11 +988,14 @@ private class RouteEmitter(
             }
             // Die Fransentextur ist im Mittel FRINGE_BASE hell; die Vertexfarbe bringt sie auf die Farbe des Rands.
             val k = FRINGE_SHADE / FRINGE_BASE
-            val col = RouteGeometry.linColor(min(1.0, r * k), min(1.0, g * k), min(1.0, b * k), st.c2[side])
+            val col = RouteGeometry.linColor(min(1.0, r * k), min(1.0, g * k), min(1.0, b * k))
+            // Die Fransen liegen nur auf der Fahrbahn und enden an ihrer Kante, wo der deckende Rand beginnt:
+            // Frueher reichten sie 28 cm ueber den Rand und lagen dort 0,3–0,8 cm ueber dem Gras — seit das
+            // Gras deckend ist, ein Z-Kampf (Flimmern am Fahrbahnrand). Jetzt stossen beide aneinander.
             val tout = st.hw + FRINGE_OUT_M
-            val tin = max(tout - RouteTextures.FRINGE_WIDTH_M, st.hw * 0.4)
+            val tin = max(st.hw - FRINGE_IN_M, st.hw * 0.4)
             val hin = roadH(st, tin) + 0.015
-            val hout = st.h1[side] + (st.h2[side] - st.h1[side]) * (FRINGE_OUT_M / max(0.3, st.t2[side] - st.hw)).coerceAtMost(1.0) + 0.02
+            val hout = roadH(st, tout) + 0.015
             val u = st.dist / RouteTextures.FRINGE_LENGTH_M - floor(runStartDist / RouteTextures.FRINGE_LENGTH_M) + side * 0.37
             val slope = sgn * (hout - hin) / (tout - tin)
             if (side == 0) {
@@ -932,7 +1068,19 @@ private class RouteEmitter(
     }
 
     private companion object {
-        const val LANES_PER_SIDE = 9
+        const val LANES_PER_SIDE = 11
+
+        /**
+         * Die eigene Fahrbahn bis zu so vielen Laufmetern vor und hinter einem Stueck sperrt dessen Rand
+         * nicht; weiter entfernte Streckenteile schon (enge Kurven, Kreisel, Hin- und Rueckweg nebeneinander).
+         */
+        const val MASK_OWN_M = 15.0
+
+        /** Dasselbe fuer Rand ausserhalb der Fahrbahn (Gehweg, Bankett, Uebergangsstreifen). */
+        const val MASK_OWN_OUTER_M = 4.0
+
+        /** Spur des Auslaufs im Seitenblock (hinter den Randtexturen). */
+        const val VERGE_FADE_LANE = 4
         const val LANES = 3 + 2 * LANES_PER_SIDE
         const val DASH_PERIOD_M = 12.0
         const val DASH_LENGTH_M = 4.0
@@ -944,6 +1092,9 @@ private class RouteEmitter(
         const val FRINGE_SHADE = 0.78
 
         /** So weit reicht die Fransenkante ueber den Fahrbahnrand hinaus. */
-        const val FRINGE_OUT_M = 0.28
+        const val FRINGE_OUT_M = 0.0
+
+        /** So weit reicht die Fransenkante vom Fahrbahnrand in die Fahrbahn hinein. */
+        const val FRINGE_IN_M = 0.52
     }
 }

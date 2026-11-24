@@ -16,6 +16,7 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 ./gradlew :indoor-dev:run --args="testworld --out tool/indoor-dev/out/testwelt --quality MEDIUM"
 ./gradlew :indoor-dev:run --args="check tool/indoor-dev/out/altenberg-kurz"
 ./gradlew :indoor-dev:run --args="models --out app/src/main/assets/indoor/models"
+./gradlew :indoor-dev:run --args="sky --time EVENING --lat 51.0 --lon 7.25 --out tool/indoor-dev/out/himmel/abend"
 ```
 
 | Befehl / Option | Bedeutung |
@@ -32,9 +33,10 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 | `plan --gpx …` | nur den Voranschlag zeigen (Kacheln, Anfragen, Datenmenge, Hosts, Luftbild-Dienste) — ohne Netz |
 | `testworld --out <dir>` | die erfundene Testwelt (Runde 3 km, alle Belagsklassen, ohne Netz, deterministisch) |
 | `check <dir>` | eine fertige Welt prüfen |
-| `overlaps <dir>` | koplanare, überlappende Flächen (Ursache für Flimmern) in den Kacheln der Stufe 0 je Materialpaar zählen |
+| `overlaps <dir> [--tol-cm c]` | koplanare, überlappende Flächen (Ursache für Flimmern; Höhenabstand unter `c` cm, Vorgabe 0,4) in den Kacheln der Stufe 0 je Materialpaar zählen; dazu je Material die durchsichtigen (BLEND) Eckpunkte mit Vertex-Deckung < 1 — auf dem Gerät helle Nahtlinien, soll 0 sein (`docs/indoor/world.md`, Abschnitt „Kreuzungen und Ortsdurchfahrten“) |
 | `catalog-routes [--only a,b]` | Strecken des Katalogs bekannter Strecken über BRouter neu herleiten (`catalog/routes/<id>.gpx` + Belag), siehe `docs/indoor/catalog.md` |
 | `catalog-build --out <dir> [--only a,b] [--app-catalog <datei>] [--keep-going] [--laser]` | Katalogwelten bauen, prüfen, packen (`<dir>/packages/*.zip`) und `<dir>/catalog.json` schreiben; `--app-catalog` schreibt den beigelegten Katalog der App (ohne Prüfsummen) |
+| `sky --time AUTO\|MORNING\|NOON\|EVENING --out <dir> [--lat --lon --epoch-ms --quality]` | Himmel der Darstellung für den Betrachter (`shots.mjs --sky <dir>`): `sky.json` (Sonne, Licht, Dunst), `sky.f32` (Rundumbild 1024 × 512, szenenlinear) und `preview.png` (durch eine Nachbildung von Filaments `ACES_LEGACY`). Rechnet mit `core/…/indoor/sky`, also genau wie das Gerät; siehe `docs/indoor/render.md`, „Himmel“ |
 | `models --out <dir>` | Fahrer und Geist schreiben (`writeIndoorModels` aus `RiderModel.kt` in `:core`; meldet sauber, wenn es die Funktion noch nicht gibt) |
 
 Exit-Codes: 0 in Ordnung, 1 Bau gescheitert / Verstöße, 2 falscher Aufruf.
@@ -97,6 +99,7 @@ Der Betrachter (`viewer/`, three.js) ist die Referenzleserin des Formats:
 cd tool/indoor-dev/viewer && npm install
 node shots.mjs ../out/altenberg-kurz --dists 200,1200,2400 --cameras chase,drone --no-rider --jpeg
 node shots.mjs ../out/altenberg-kurz --serve --port 8123
+node shots.mjs ../out/testwelt --count 8 --cameras chase --sky ../out/himmel/abend   # Himmel wie auf dem Gerät
 ```
 
 Bilder landen unter `<welt>/shots/`. Optionen und Abweichungen von Filament

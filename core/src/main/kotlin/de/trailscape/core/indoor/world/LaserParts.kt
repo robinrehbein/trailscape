@@ -216,6 +216,7 @@ internal fun laserTreeSpec(
         t.crownRadiusM / h < 0.11 && conifer >= 0.6 -> TreeModels.Species.CONIFER
         slim -> TreeModels.Species.TALL
         base.species == TreeModels.Species.CONIFER && conifer >= 0.5 -> TreeModels.Species.CONIFER
+        base.species == TreeModels.Species.PINE && conifer >= 0.5 -> TreeModels.Species.PINE
         else -> TreeModels.Species.BROAD
     }
     if (h < 7.0 && species != TreeModels.Species.CONIFER) species = TreeModels.Species.SMALL
@@ -225,9 +226,8 @@ internal fun laserTreeSpec(
         TreeModels.Species.TALL -> 0.165 to 0.22
         TreeModels.Species.CONIFER -> 0.22 to 0.06
         TreeModels.Species.SMALL -> 0.37 to 0.32
-        // Kiefer und Busch vergibt diese Funktion nicht selbst; Werte nur der Vollstaendigkeit halber.
-        TreeModels.Species.PINE -> 0.26 to 0.5
-        TreeModels.Species.BUSH -> 0.5 to 0.05
+        TreeModels.Species.PINE -> 0.2 to 0.5
+        TreeModels.Species.BUSH -> 0.62 to 0.05
     }
     var width = (t.crownRadiusM / (k * h)).coerceIn(0.6, 1.5)
     val free = roomM - CLEAR_STRIP_M

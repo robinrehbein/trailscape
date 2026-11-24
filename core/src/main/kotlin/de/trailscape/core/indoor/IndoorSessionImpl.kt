@@ -10,7 +10,7 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-/** Eine neue Sitzung in der Phase [IndoorPhase.READY] (Umsetzung von `createIndoorSession`). */
+/** Eine neue Sitzung in der Phase [IndoorPhase.READY] am Anfang der Strecke (Umsetzung von `createIndoorSession`). */
 internal fun indoorSession(config: IndoorSessionConfig): IndoorSession = IndoorSessionImpl(config)
 
 /** Hoechster Schrittabstand, der als gefahrene Zeit zaehlt (Vertrag [IndoorSession]). */
@@ -119,14 +119,26 @@ private const val NP_WINDOW_S = 30
  *    (fruehere Fahrt), die Zeitdifferenz an dieser Stelle; sonst Abstand durch
  *    das Tempo des Hinteren und, steht der (Pause vor [finish]), durch dessen
  *    Durchschnittstempo.
+ *  * Startpunkt ([MovableIndoorSession], IndoorStartPoint.kt): [moveTo] in
+ *    READY und PAUSED setzt den Laufmeter innerhalb der laufenden Runde. Die
+ *    Summen (`totals.distanceM`, Hoehenmeter, Schnitt) zaehlen nur gefahrene
+ *    Meter (`riddenM`), nie den Sprung. Vor dem Sprung wird die angefangene
+ *    Sekunde abgeschlossen; der naechste Punkt liegt an der neuen Stelle. Der
+ *    Geist beginnt an der neuen Stelle neu (Vergleich ab dort), der
+ *    Endabstand gilt fuer den Abschnitt seit dem letzten Versetzen.
  */
-internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : IndoorSession {
+internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : MovableIndoorSession {
     private val route = config.route
     private val rider = config.rider
     private val lengthM = route.lengthM
     private val workout: ErgWorkout? = config.workout?.takeIf { w -> w.steps.isNotEmpty() && w.steps.all { it.durationS > 0 } }
     private val mode: IndoorMode = if (config.mode == IndoorMode.ERG && workout != null) IndoorMode.ERG else IndoorMode.SIM
-    private val ghost: GhostRunner? = ghostRunner(config.ghost, route, rider, config.wind)
+    private val ghostCurve: GhostCurve? = (config.ghost as? GhostSpec.PastRide)?.let { pastRideCurve(route, it.points) }
+    private var ghost: GhostRunner? = makeGhost(0.0, 0L)
+
+    /** Wo und wann (Fahrzeit) der Geist zuletzt angesetzt wurde — Bezug seines Schnitts. */
+    private var ghostStartDistM = 0.0
+    private var ghostStartRunningMs = 0L
 
     // Zeit
     private var firstNowMs: Long? = null
@@ -141,6 +153,9 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
     private var pausedFrom = IndoorPhase.READY
     private var speed = 0.0
     private var dist = 0.0
+
+    /** Wirklich gefahrene Meter (ohne Spruenge durch [moveTo]). */
+    private var riddenM = 0.0
     private var idleMs = 0L
     private var notReadyMs = 0L
 
@@ -322,6 +337,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
             riderFinishS = (runningMs + dtMs * share) / 1000.0
             to = lengthM
         }
+        riddenM += to - from
         val (up, down) = climbM(from, to)
         ascentM += up
         descentM += down
@@ -537,11 +553,12 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
         if (gs.gapM >= 0) {
             g.passedAtS(dist)?.let { return runningS - it }
             gs.gapS?.let { return it }
-            val avg = if (runningS > 0) dist / runningS else 0.0
+            val avg = if (runningS > 0) riddenM / runningS else 0.0
             return if (avg >= GHOST_MIN_GAP_SPEED_MPS) gs.gapM / avg else null
         }
         gs.gapS?.let { return it }
-        val avg = if (runningS > 0) g.distM / runningS else 0.0
+        val ghostS = (runningMs - ghostStartRunningMs) / 1000.0
+        val avg = if (ghostS > 0) (g.distM - ghostStartDistM) / ghostS else 0.0
         return if (avg >= GHOST_MIN_GAP_SPEED_MPS) gs.gapM / avg else null
     }
 
@@ -552,7 +569,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
     private fun totals(): IndoorTotals {
         val runningS = runningMs / 1000.0
         return IndoorTotals(
-            distanceM = dist,
+            distanceM = riddenM,
             ascentM = ascentM,
             movingS = (runningMs / 1000).toInt(),
             avgPowerW = if (powerSeen && runningMs > 0) energyJ / runningS else null,
@@ -587,6 +604,37 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
             erg = ergState(),
             totals = totals(),
         )
+    }
+
+    /** Der Geist ab Laufmeter [startDistM] zur Fahrzeit [startRunningMs] (siehe IndoorGhost.kt). */
+    private fun makeGhost(startDistM: Double, startRunningMs: Long): GhostRunner? = when (val spec = config.ghost) {
+        GhostSpec.None -> null
+        is GhostSpec.ConstantPower -> ConstantPowerGhost(route, rider, config.wind, spec.watts, startDistM)
+        is GhostSpec.PastRide -> ghostCurve?.let { PastRideGhost.startingAt(it, route, startDistM, startRunningMs / 1000.0) }
+    }
+
+    override val canMove: Boolean
+        get() = phase == IndoorPhase.READY || phase == IndoorPhase.PAUSED
+
+    override fun moveTo(routeDistM: Double): Boolean {
+        if (!canMove) {
+            return false
+        }
+        val target = IndoorStartPoints.clamp(routeDistM, lengthM, route.isLoop)
+        if (started) {
+            flushPartialSecond(lastHr)
+        }
+        val lapBase = if (route.isLoop && lengthM > 0) (lapOf(dist) - 1) * lengthM else 0.0
+        dist = lapBase + target
+        speed = 0.0
+        idleMs = 0
+        ghostStartDistM = dist
+        ghostStartRunningMs = runningMs
+        ghost = makeGhost(dist, runningMs)
+        // Die naechste Vorgabe gilt der neuen Stelle, auch wenn sie sich kaum unterscheidet.
+        lastSim = null
+        state = buildState(state.nowMs)
+        return true
     }
 
     override fun shift(event: ShifterEvent) {

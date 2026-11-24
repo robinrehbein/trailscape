@@ -30,6 +30,7 @@ import kotlin.system.exitProcess
  * models --out <dir>
  * catalog-routes [--only a,b]
  * catalog-build --out <dir> [--only a,b] [--quality …] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline]
+ * sky --time AUTO|MORNING|NOON|EVENING [--lat 51.3] [--lon 9.5] [--epoch-ms …] [--quality …] --out <dir>
  * ```
  * Katalog bekannter Strecken: `Catalog.kt`, docs/indoor/catalog.md.
  * Relative Pfade gelten ab dem Projektverzeichnis (`:indoor-dev:run` startet dort).
@@ -57,7 +58,8 @@ private const val USAGE = """Aufruf:
   check <dir>
   models --out <dir>
   catalog-routes [--only a,b]
-  catalog-build --out <dir> [--only a,b] [--quality LOW|MEDIUM|HIGH] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline] [--laser]"""
+  catalog-build --out <dir> [--only a,b] [--quality LOW|MEDIUM|HIGH] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline] [--laser]
+  sky --time AUTO|MORNING|NOON|EVENING [--lat 51.3] [--lon 9.5] [--epoch-ms ms] [--quality LOW|MEDIUM|HIGH] --out <dir>"""
 
 /** Cache der Geodaten (git-ignoriert). */
 private const val CACHE_DIR = CACHE_DIR_TOOL
@@ -103,7 +105,9 @@ private fun run(all: List<String>): Int {
         "plan" -> plan(Args(rest, setOf("no-aerial", "offline", "laser")))
         "testworld" -> testworld(Args(rest, emptySet()))
         "check" -> check(File(Args(rest, emptySet()).positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")))
-        "overlaps" -> overlaps(File(Args(rest, emptySet()).positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")))
+        "overlaps" -> Args(rest, emptySet()).let { a ->
+            overlaps(File(a.positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")), a.opt("tol-cm")?.toDoubleOrNull()?.div(100.0) ?: 0.004)
+        }
         "models" -> models(Args(rest, emptySet()))
         "catalog-routes" -> catalogRoutes(Args(rest, emptySet()).opt("only"))
         "lod2-cut" -> lod2Cut(Args(rest, setOf("offline")))
@@ -117,6 +121,19 @@ private fun run(all: List<String>): Int {
                 noAerial = a.flag("no-aerial"),
                 offline = a.flag("offline"),
                 laser = a.flag("laser"),
+            )
+        }
+        "sky" -> Args(rest, emptySet()).let { a ->
+            skyExport(
+                time = a.opt("time")?.let { t ->
+                    de.trailscape.core.indoor.sky.IndoorTimeOfDay.entries.firstOrNull { it.name == t.uppercase() }
+                        ?: throw UsageError("--time: AUTO, MORNING, NOON oder EVENING")
+                } ?: de.trailscape.core.indoor.sky.IndoorTimeOfDay.AUTO,
+                latDeg = a.double("lat") ?: 51.3,
+                lonDeg = a.double("lon") ?: 9.5,
+                epochMs = a.opt("epoch-ms")?.toLongOrNull() ?: System.currentTimeMillis(),
+                quality = a.quality(),
+                out = File(a.req("out")),
             )
         }
         else -> throw UsageError("unbekannter Befehl: $cmd")
@@ -294,15 +311,22 @@ private fun testworld(a: Args): Int {
 }
 
 /** Koplanare, ueberlappende Flaechen (Ursache fuer Flimmern) in den Kacheln der Stufe 0 auflisten. */
-private fun overlaps(dir: File): Int {
+private fun overlaps(dir: File, tolM: Double = 0.004): Int {
     if (!dir.isDirectory) throw UsageError("Weltverzeichnis nicht gefunden: $dir")
     val m = WorldManifest.parse(File(dir, WorldManifest.FILE_NAME).readText())
     val total = HashMap<String, Int>()
     for (t in m.tiles.filter { it.level == 0 }) {
-        for ((k, v) in de.trailscape.core.indoor.world.coplanarOverlaps(File(dir, t.file).readBytes())) total[k] = (total[k] ?: 0) + v
+        for ((k, v) in de.trailscape.core.indoor.world.coplanarOverlaps(File(dir, t.file).readBytes(), tolM = tolM)) total[k] = (total[k] ?: 0) + v
     }
-    println("Koplanare Ueberlappungen (Stufe 0, ${m.tiles.count { it.level == 0 }} Kacheln): ${total.values.sum()}")
+    println("Koplanare Ueberlappungen unter ${"%.1f".format(tolM * 100)} cm (Stufe 0, ${m.tiles.count { it.level == 0 }} Kacheln): ${total.values.sum()}")
     for ((k, v) in total.entries.sortedByDescending { it.value }) println("  $v  $k")
+    // Weiche Raender mit Vertex-Deckung < 1 (BLEND): auf dem Geraet helle Nahtlinien (siehe translucentVertexAlpha).
+    val alpha = HashMap<String, Int>()
+    for (t in m.tiles.filter { it.level == 0 }) {
+        for ((k, v) in de.trailscape.core.indoor.world.translucentVertexAlpha(File(dir, t.file).readBytes())) alpha[k] = (alpha[k] ?: 0) + v
+    }
+    println("Durchsichtige Eckpunkte mit Vertex-Deckung < 1 (helle Naehte auf dem Geraet): ${alpha.values.sum()}")
+    for ((k, v) in alpha.entries.sortedByDescending { it.value }) println("  $v  $k")
     return 0
 }
 

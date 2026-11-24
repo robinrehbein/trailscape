@@ -4,6 +4,7 @@ import android.content.Context
 import de.trailscape.app.R
 import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.i18n.formatDateShort
+import de.trailscape.core.i18n.formatDecimal
 import java.time.Instant
 import java.time.ZoneId
 
@@ -15,6 +16,9 @@ import java.time.ZoneId
 interface IndoorTexts {
     /** Name der gespeicherten Indoor-Tour: „Indoor · <Strecke>". */
     fun rideName(routeName: String): String
+
+    /** Name einer Indoor-Tour, die nicht am Anfang begann: „Indoor · <Strecke> (ab km 7,4)". */
+    fun rideNameFrom(routeName: String, startKm: Double): String = rideName(routeName)
 
     /** Anzeigename der eingebauten Testwelt. */
     fun testWorldName(): String
@@ -42,6 +46,9 @@ class ContextIndoorTexts(
 ) : IndoorTexts {
     override fun rideName(routeName: String): String =
         context().getString(R.string.indoor_app_ride_name, routeName)
+
+    override fun rideNameFrom(routeName: String, startKm: Double): String =
+        context().getString(R.string.indoor_app_ride_name_from, routeName, formatDecimal(startKm, 1, language()))
 
     override fun testWorldName(): String = context().getString(R.string.indoor_app_route_testworld)
 

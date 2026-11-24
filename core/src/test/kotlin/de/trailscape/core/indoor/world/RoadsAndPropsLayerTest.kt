@@ -29,8 +29,9 @@ class RoadsAndPropsLayerTest {
         }
         val withCross = sceneWith(listOf(RouteTestScene.trackAsRoad(scene.track, "secondary"), RouteTestScene.crossRoad(scene.track, 250.0, "tertiary", "paved")))
         val total = withCross.tiles().sumOf { build(withCross, it, RoadsLayer()).second.triangles(WorldNames.NODE_ROADS) }
-        // Zweimal 70 m Querstrasse in je 18 Schritten, je Segment 2 Dreiecke Band + 4 Dreiecke Kanten.
-        assertEquals(36 * 6, total)
+        // Zweimal 70 m Querstrasse in je 18 Schritten, je Segment 2 Dreiecke Band + 4 Dreiecke Kanten — ausser in den
+        // 16 m neben der Streckenmitte (EDGE_FREE_TRACK_M: dort stoesst der Rand der Strecke an die Fahrbahn), je Seite 5 Segmente.
+        assertEquals(36 * 2 + 26 * 4, total)
     }
 
     @Test
@@ -78,9 +79,11 @@ class RoadsAndPropsLayerTest {
                         under++
                     } else if (hit == null || hit.distance > hw + 6.0) {
                         // Ueber dem gezeichneten Gelaendenetz (zwischen den Gitterpunkten hoeher als der wahre
-                        // Boden), plus Rang- und Richtungsversatz gegen Flimmern an Knoten.
+                        // Boden), plus Rang- und Richtungsversatz gegen Flimmern an Knoten. Bis JOIN_M neben der
+                        // Fahrbahn laeuft die Strasse ueber der Mulde neben der Strecke stetig auf ihre Hoehe aus.
                         val above = u - maxOf(scene.ground.heightAt(e, n), terrainMeshHeightAt(scene.ground, e, n, level0TerrainCellM(ctx.quality)))
-                        assertTrue(above in 0.03..0.22, "Strasse $above m ueber dem Boden")
+                        val joining = hit != null && hit.distance < hw + RoadsLayer.JOIN_M
+                        assertTrue(above in 0.03..(if (joining) 0.40 else 0.22), "Strasse $above m ueber dem Boden")
                         free++
                     }
                 }

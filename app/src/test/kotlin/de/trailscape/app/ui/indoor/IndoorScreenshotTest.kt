@@ -603,6 +603,86 @@ class IndoorScreenshotTest {
         )
     }
 
+    // ------------------------------------------------------------------ Startpunkt und Fortsetzen
+
+    /** Vor dem Losfahren an der gemerkten Stelle, Zahlen noch auf null. */
+    private fun startSession(phase: IndoorPhase, atM: Double) = session(phase = phase, ghost = null).copy(
+        elapsedS = if (phase == IndoorPhase.READY) 0 else 1_472,
+        distM = atM, routeDistM = atM, speedMps = 0.0,
+        powerW = if (phase == IndoorPhase.READY) null else 0,
+        totals = if (phase == IndoorPhase.READY) IndoorTotals(0.0, 0.0, 0, null, null, null, null, 0.0) else session().totals,
+    )
+
+    private fun startRide(phase: IndoorPhase, atM: Double, start: IndoorStartUi, render: IndoorRenderUi = IndoorRenderUi.Ready) =
+        ride(session = startSession(phase, atM), render = render, ghostLabel = null).copy(start = start)
+
+    private val resumeStart = IndoorStartUi(selectedM = 7_400.0, maxM = 11_900.0, resumeM = 7_400.0, held = true)
+
+    @Test
+    fun startWeiter() = shot("118-indoor-start-weiter") {
+        RideScreen(startRide(IndoorPhase.READY, 7_400.0, resumeStart))
+    }
+
+    @Test
+    fun startPauseVerschieben() = shot("119-indoor-start-pause") {
+        RideScreen(
+            startRide(
+                IndoorPhase.PAUSED,
+                9_200.0,
+                IndoorStartUi(selectedM = 9_200.0, maxM = 11_900.0, resumeM = null, held = false),
+                render = IndoorRenderUi.NoWorld,
+            ),
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w891dp-h411dp-xxhdpi")
+    fun startQuer() = shot("120-indoor-start-quer") {
+        RideScreen(startRide(IndoorPhase.READY, 7_400.0, resumeStart))
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w891dp-h411dp-xxhdpi")
+    fun startQuerPause() = shot("122-indoor-start-quer-pause") {
+        RideScreen(
+            startRide(
+                IndoorPhase.PAUSED,
+                3_000.0,
+                IndoorStartUi(selectedM = 3_000.0, maxM = 11_900.0, resumeM = null, held = false),
+            ),
+        )
+    }
+
+    @Test
+    fun startOhneGemerkteStelle() = shot("123-indoor-start-anfang") {
+        // Vor jeder Fahrt: Vorauswahl km 0, echter Trainer (Treten startet ebenso).
+        RideScreen(
+            startRide(
+                IndoorPhase.READY,
+                0.0,
+                IndoorStartUi(selectedM = 0.0, maxM = 11_900.0, resumeM = null, held = true, pedalStarts = true),
+            ),
+        )
+    }
+
+    @Test
+    fun auswertungAbKm() = shot("124-indoor-auswertung-ab-km") {
+        IndoorSummaryScreen(
+            summary.copy(routeName = "Hausrunde Ammersee", distanceKm = 4.6, startKm = 7.4, ghostLabel = null, ghostGapS = null),
+            {}, {}, {},
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun startEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        shot("121-indoor-start-en") { RideScreen(startRide(IndoorPhase.READY, 7_400.0, resumeStart)) }
+        val app = RuntimeEnvironment.getApplication()
+        compose.onNodeWithText(app.getString(R.string.indoor_app_start_go_action)).assertExists()
+        compose.onNodeWithText(app.getString(R.string.indoor_app_start_from_beginning_chip)).assertExists()
+    }
+
     // ------------------------------------------------------------------ Englisch
 
     @Test

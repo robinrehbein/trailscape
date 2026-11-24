@@ -7,6 +7,7 @@ import de.trailscape.core.indoor.IndoorSessionState
 import de.trailscape.core.indoor.ShifterConnection
 import de.trailscape.core.indoor.TrainerConnection
 import de.trailscape.core.indoor.VirtualGearTable
+import de.trailscape.core.indoor.sky.IndoorTimeOfDay
 import de.trailscape.core.indoor.world.CameraMode
 import de.trailscape.core.indoor.world.IndoorQuality
 import de.trailscape.core.indoor.world.RenderFailure
@@ -38,6 +39,7 @@ enum class IndoorStage { PAIR, ROUTE, WORLD, RIDE, SUMMARY }
  * @property chainringTeeth Kettenblatt am Trainer in Zaehnen (Ritzel: Zwift
  *   Cog, 14 Zaehne) — Bezug der virtuellen Gaenge.
  * @property gearTable Gangtabelle der virtuellen Gaenge (`RiderSetup.gearTable`).
+ * @property timeOfDay Tageszeit der 3D-Welt (Vorgabe: automatisch nach der Uhr).
  * @property canContinue Demo an oder ein Trainer gemerkt.
  */
 data class IndoorPairUi(
@@ -46,6 +48,7 @@ data class IndoorPairUi(
     val shifterName: String?,
     val chainringTeeth: Int = IndoorViewModel.CHAINRING_DEFAULT_TEETH,
     val gearTable: VirtualGearTable = VirtualGearTable.EVEN,
+    val timeOfDay: IndoorTimeOfDay = IndoorTimeOfDay.AUTO,
 ) {
     val canContinue: Boolean get() = demoTrainer || trainerName != null
 }
@@ -351,6 +354,28 @@ enum class IndoorNotice {
 }
 
 /**
+ * Startpunkt waehlen (docs/indoor/app.md, „Startpunkt und Fortsetzen") — nur
+ * gesetzt, solange sich der Fahrer versetzen laesst: vor dem ersten Tritt und
+ * in der Pause.
+ *
+ * @property selectedM Stelle des Fahrers in Metern innerhalb der Runde.
+ * @property maxM spaeteste waehlbare Stelle (auf einer Strecke ohne
+ *   Rundschluss bleibt bis zum Ziel ein Rest).
+ * @property resumeM die gemerkte Stelle der letzten Fahrt auf dieser Strecke —
+ *   angeboten als „Weiter bei km …" neben „Von vorn"; `null` = kein Angebot.
+ * @property held die Fahrt wartet auf „Losfahren".
+ * @property pedalStarts mit echtem Trainer, solange der Startpunkt nicht
+ *   angefasst wurde: der erste Tritt startet ebenso (sonst bewegt Treten nichts).
+ */
+data class IndoorStartUi(
+    val selectedM: Double,
+    val maxM: Double,
+    val resumeM: Double?,
+    val held: Boolean,
+    val pedalStarts: Boolean = false,
+)
+
+/**
  * Alles, was das HUD zeigt.
  *
  * @property session der letzte Zustand der Sitzung; `null`, solange sie nicht
@@ -376,6 +401,8 @@ data class IndoorRideUi(
     val attribution: List<WorldAttribution>,
     val startProblem: IndoorProblem? = null,
     val runtimeProblem: IndoorProblem? = null,
+    /** Startpunkt waehlen; `null` = gerade nicht moeglich (es wird gefahren). */
+    val start: IndoorStartUi? = null,
 )
 
 // ---------------------------------------------------------------------------
@@ -388,6 +415,8 @@ data class IndoorRideUi(
  *   Beenden) — nichts zu speichern; Grund in [recordProblem], falls bekannt.
  * @property ghostGapS Abstand zum Geist am Ende (positiv = Geist vorn), `null` ohne Geist.
  * @property savedRideId gesetzt, sobald gespeichert.
+ * @property startKm wo die Fahrt begann, wenn nicht am Anfang der Strecke
+ *   (fortgesetzt oder mittendrin gestartet); `null` = am Anfang.
  */
 data class IndoorSummaryUi(
     val routeName: String,
@@ -410,6 +439,7 @@ data class IndoorSummaryUi(
     val saving: Boolean = false,
     val savedRideId: String? = null,
     val saveFailed: Boolean = false,
+    val startKm: Double? = null,
 )
 
 // ---------------------------------------------------------------------------
