@@ -71,6 +71,17 @@ internal class LaserData(
     /** Das reine DGM1 ohne Ueberblendung (`NaN` ausserhalb des Korridors oder ohne Daten). */
     fun dgmAt(e: Double, n: Double): Double = blockAt(e, n)?.dgm(e, n) ?: Double.NaN
 
+    /**
+     * Messwerte an (`e`, `n`) fuer Profile im Werkzeug: DGM1, DOM1 (= DGM1 + nDOM, auf 0,2 m), Terrarium + [offsetM],
+     * ueberblendete Hoehe und Gewicht des DGM1 (alles Meter ueber dem Meer bzw. `0..1`; `NaN` ohne Daten).
+     */
+    fun probe(e: Double, n: Double): DoubleArray {
+        val dgm = dgmAt(e, n)
+        val nd = ndomAt(Math.round(e).toInt(), Math.round(n).toInt())
+        val b = blockAt(e, n)
+        return doubleArrayOf(dgm, dgm + nd, terrarium(e, n) + offsetM, heightAboveSea(e, n), b?.weight(e, n) ?: 0.0)
+    }
+
     /** Ob (`e`, `n`) im voll aufgeloesten Teil des Korridors liegt (Ueberblendung = 1). */
     fun fullAt(e: Double, n: Double): Boolean = (blockAt(e, n)?.weight(e, n) ?: 0.0) >= 0.999
 

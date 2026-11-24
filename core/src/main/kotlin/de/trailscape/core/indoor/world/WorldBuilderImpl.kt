@@ -302,11 +302,21 @@ internal class WorldBuilderImpl(
     @Volatile internal var lastLaser: LaserData? = null
         private set
 
+    /** Strecke (Zeichnung), Karte und Landnutzung des letzten Baus (fuer Auskuenfte im Werkzeug). */
+    @Volatile internal var lastDebug: Triple<TrackLine, MapData, LandMap>? = null
+        private set
+
+    /** Das Gelaende des letzten Baus (fuer Profile im Werkzeug), sonst `null`. */
+    @Volatile internal var lastGround: GroundSurface? = null
+        private set
+
     private fun assemble(inputs: WorldInputs, outDir: File, listener: WorldBuildListener, parts: WorldParts = this.parts): WorldManifest {
         val quality = inputs.quality
         val line = TrackLine.forDrawing(inputs.track)
         val land = parts.landMap(inputs.map, line) { spec -> inputs.aerial?.get(spec)?.rgba }
         val ground = parts.ground(inputs.rawHeightAt, line, inputs.map, land, quality)
+        lastGround = ground
+        lastDebug = Triple(line, inputs.map, land)
         val textures = TextureCache()
 
         val tilesDir = File(outDir, WorldManifest.TILES_DIR)
@@ -367,6 +377,10 @@ internal class WorldBuilderImpl(
             val spec = p.spec
             val aerial = inputs.aerial?.get(spec)
             aerialDone.incrementAndGet()
+            // Waldboden unter dichtem Bewuchs statt der Kronen von oben (Stufe 0). Die Kronenschaetzung aus dem
+            // Luftbild braucht das Original — sie wird vorher eingehaengt (TreesLayer rechnet dasselbe noch einmal).
+            if (aerial != null && spec.level == 0 && land is LandRaster) land.setCanopy(spec, canopyFromAerial(aerial.rgba))
+            val floor = if (aerial != null) ForestFloor.apply(aerial.rgba, spec, land) else null
             val anchorU = Math.round(ground.heightAt(spec.anchorE, spec.anchorN) * 100.0) / 100.0
             val ctx = TileContext(
                 spec = spec,
@@ -379,8 +393,9 @@ internal class WorldBuilderImpl(
                 land = land,
                 textures = textures,
                 budget = TileBudget.of(quality, spec.level),
-                aerial = aerial?.rgba,
-                aerialTexture = aerial?.texture,
+                aerial = floor?.first ?: aerial?.rgba,
+                aerialTexture = floor?.second ?: aerial?.texture,
+                aerialRaw = aerial?.rgba,
             )
             ctx.meshHeight = parts.terrainMesh(ctx)
             val out = TileOutput(spec)

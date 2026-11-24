@@ -53,7 +53,7 @@ fun main(args: Array<String>) {
 }
 
 private const val USAGE = """Aufruf:
-  build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>] [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--offline] [--laser [--laser-radius m] [--lod2-corridor <datei>]]
+  build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>] [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--offline] [--laser [--laser-radius m] [--lod2-corridor <datei>] [--laser-profile e0,n0,e1,n1[,schritt]]]
   lod2-cut --gpx <datei> --out <datei.tsl2> [--lod2-radius m] [--offline]
   plan --gpx <datei> [--quality LOW|MEDIUM|HIGH] [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--laser]
   testworld --out <dir> [--quality LOW|MEDIUM|HIGH]
@@ -297,6 +297,23 @@ private fun build(a: Args): Int {
     println("Anfragen: ${counting.summary()}")
     de.trailscape.core.indoor.world.laserBuildStats(builder).takeIf { it.isNotEmpty() }?.let { s ->
         println("Laser: " + s.entries.joinToString(", ") { "${it.key}=${it.value}" })
+    }
+    // --laser-profile e0,n0,e1,n1[,schritt]: Hoehenprofil quer durch eine Stelle (DGM1, DOM1, Terrarium, Netz).
+    // Mehrere Profile mit `;` getrennt.
+    a.opt("laser-profile")?.split(';')?.filter { it.isNotBlank() }?.forEach { p ->
+        val v = p.split(',').map { it.trim().toDoubleOrNull() ?: throw UsageError("--laser-profile: e0,n0,e1,n1[,schritt]") }
+        if (v.size < 4) throw UsageError("--laser-profile: e0,n0,e1,n1[,schritt]")
+        println("Profil $p")
+        de.trailscape.core.indoor.world.laserProfile(builder, v[0], v[1], v[2], v[3], v.getOrElse(4) { 1.0 }).forEach(::println)
+    }
+    // --roads-near e,n[,r]: Wege der Karte und Ecken an Einmuendungen um eine Stelle (Fehlersuche).
+    a.opt("roads-near")?.let { p ->
+        val v = p.split(',').map { it.trim().toDoubleOrNull() ?: throw UsageError("--roads-near: e,n[,r]") }
+        de.trailscape.core.indoor.world.roadsNear(builder, v[0], v[1], v.getOrElse(2) { 30.0 }).forEach(::println)
+    }
+    a.opt("trees-near")?.let { p ->
+        val v = p.split(',').map { it.trim().toDoubleOrNull() ?: throw UsageError("--trees-near: e,n[,r]") }
+        de.trailscape.core.indoor.world.laserTreesNear(builder, v[0], v[1], v.getOrElse(2) { 40.0 }).forEach(::println)
     }
     val rt = Runtime.getRuntime()
     println("Heap: belegt ${mb(rt.totalMemory() - rt.freeMemory())}, reserviert ${mb(rt.totalMemory())}, Grenze ${mb(rt.maxMemory())}")

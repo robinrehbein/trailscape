@@ -488,6 +488,8 @@ internal class TileContext(
     /** Das Luftbild dieser Kachel als Original-Bytes des Dienstes — die Bodentextur des Gelaendes ([WorldNames.MAT_TERRAIN], CLAMP). */
     val aerialTexture: EncodedTexture? = null,
     val seed: Int = Noise.seedOf(spec.id),
+    /** Das Luftbild, wie der Dienst es liefert (ohne Waldboden-Abtoenung, [ForestFloor]) — fuer die Kronenschaetzung. */
+    val aerialRaw: RgbaImage? = aerial,
 ) {
     val level: Int get() = spec.level
 

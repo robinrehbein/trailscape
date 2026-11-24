@@ -510,3 +510,63 @@ Die Laser-Stufe ist jetzt auch für eigene Strecken nutzbar — nicht auf dem
 Handy, sondern auf dem eigenen Selfhost-Server (`indoor-dev server-build`,
 Bau-Dienst `server/worlds`). Weltbau und Positivlisten unverändert; siehe
 [`serverbau.md`](serverbau.md).
+
+## 9 Fehlerbericht „solitude" (Welt-Version 9 → 10, 24.11.2026)
+
+Anlass: Fahrt des Gründers auf der Katalogstrecke `solitude` (Laser BW, Paket
+`solitude-v1.zip`, Welt-Version `indoor-world/9`): „teilweise ist das Mapping der
+Assets kaputt". Nachgestellt im Betrachter (three.js/SwiftShader, **nicht auf
+dem Gerät**) mit dem veröffentlichten Paket und einem lokalen Neubau
+(`build --laser --catalog-aerial`, gleiche Welt-ID wie das Paket). Bilder:
+`docs/indoor/bilder/laser-fixes/<befund>-vorher.jpg` / `-nachher.jpg`
+(vorher = Paket v1, nachher = dieser Stand; gleiche Blickpunkte).
+
+Neue Werkzeuge zur Fehlersuche (`build` mit `--laser`):
+`--laser-profile e0,n0,e1,n1[,schritt][;…]` (Höhenprofil: DGM1, DOM1,
+Terrarium + Versatz, überblendete Höhe, Gewicht, eingeebnetes Gelände),
+`--roads-near e,n[,r]` (Wege der Karte mit Abstand zur Strecke, Netz-Stationen
+„auf der Strecke", Ecken an Einmündungen), `--trees-near e,n[,r]` (nDOM-Bäume
+mit Höhe, Kronenradius, gewählter Art). Im Betrachter die freie Kamera
+`--cameras free --param eye=e,n,u --param at=e,n,u`.
+
+| # | Befund | Ursache (gemessen) | Änderung |
+|---|---|---|---|
+| 1 | Geländewand 40–50 m hinter dem Start, 6–10 m, glatte Oberkante, Bäume oben, graublaues Luftbild | **Echtes Gelände (Kandidat d).** Profil quer durch die Wand (n = 1095, e 1840 → 1940, Meter über dem Ursprung): DGM1 −3,4 (e 1872) → +1,4 (e 1884) → +1,3…1,5 bis e 1898 → −5,9 (e 1914). DOM1 = DGM1 auf der Krone (e 1882–1898: offen), daneben 12–25 m Bestand. Im Luftbild liegt dort eine asphaltierte Straße (OSM `tertiary`, e ≈ 1890), also ein **Straßendamm**, 5 m hoch, Flanken 22–27°. Überblendung = 1 (voll im Korridor), Terrarium + Versatz liegt 6–8 m tiefer und spielt hier keine Rolle; das fertige Netz (Paket, aus den GLB gelesen) folgt dem DGM1 auf ±5 cm, `CarvedGround` ebenso (±0,1 m). Kein Kachel-/Kilometerrand (Blöcke bei e 1792/2048, UTM-km 434 m östlich), keine DGM/DOM-Vertauschung. Unschön war nur die **Darstellung**: Die Flanke trug das Luftbild der Kronen von oben (graublau, Winter-DOP) — sah aus wie eine Betonwand | über Befund 4: Die Flanke liegt unter dem Bestand und bekommt Waldboden statt Kronen von oben; vom Weg aus jetzt eine erdige Böschung. Höhe und Form unverändert (sind echt) |
+| 2 | Kreuzung: Streifen übereinander, grüner Keil in der Fahrbahn, Wegflächen in Stufen | Die Strecke biegt am Knoten (e 1863,4 / n 1090,1) von Ost nach Nord ab, ein dritter Ast (`service`) geht nach Süden. Die geglättete Strecke schneidet die Ecke: Der Knoten liegt **2,0 m** neben ihr und quer zu ihrer Richtung. `RoadNet` stufte deshalb das Endstück **beider eigenen Wege** (je eine Station am Knoten) nicht als „auf der Strecke" ein — `RoadsLayer` zeichnete sie als Straßen über Fahrbahn und Rand, und `JunctionCorners` legte **vier** Eckflächen an (zwei davon an diesen Scheinabzweigen, mit spitzen Bögen in die Fahrbahn) | `RoadNet`: Eine Station neben einer Station auf der Strecke, die noch im Band der Strecke liegt (Abstand < halbe Breite + 1 m), gehört dazu. `JunctionCorners`: Stücke auf der Strecke verlassen sie nicht; Stationen auf der Strecke zählen als „innen". Jetzt zwei Ecken (nur am echten Südast). Test `LaserFixesTest` (alt: 4 Ecken, neu: 0 am Scheinabzweig). Betrifft **alle Welten** (auch ohne Laser) |
+| 3 | Laubbäume: lange dünne Stämme, kleine Krone oben, Kronenkarten als lange „Federn" | `--trees-near` (60 m um die Stelle, 78 Bäume): die Bäume sind **nicht** schmal gemessen — 65 × `BROAD`, Median Höhe 18,4 m, Kronenradius 8,0 m (Grenze der Erkennung), Breitenfaktor 0,9–1,5. Ursache ist das **Modell**: Bäume 40–70 m neben der Strecke (die man von ihr aus sieht) bekommen die ferne Stufe — acht Massekarten um den Kronenmittelpunkt mit Kante = Kronenradius (bis 9 m). Von der Strecke: Stamm bis zur Kronenmitte, darüber ein Schopf, schräg gesehene 9-m-Karten als „Federn". Auch nah: Zweigkarten 0,58 × Radius (bis 5 m, mittlere Stufe × 1,35 = 7 m) und Klumpen nur in einem schmalen Band um die Kronenmitte | `TreeModels`: Kartengröße absolut begrenzt (Zweig 3 m, Masse 4,5 m, fern 6,5 m, Kiefer ebenso); Laubklumpen abwechselnd in oberer und unterer Lage (Laubmasse vom Ansatz bis zum Wipfel); ferne Krone über die ganze Kronenhöhe verteilt, bei Kronenradius > 5 m vier Karten mehr (im Baumbudget mitgezählt, `TreeModels.cost(spec, lod)`). Gilt für **alle Welten**; ohne Laser sind die Bäume kleiner (≤ 24 m), dort greifen die Grenzen selten |
+| 4 | Waldboden zeigt das Luftbild (unbelaubte Kronen von oben, graublau) — wirkt wie Beton | Das Luftbild ist die Bodentextur, auch unter dem Kronendach | neu `ForestFloor.kt`: In Stufe 0 wird das Luftbild unter dichtem Bewuchs (`canopyAt`: mit Laser das nDOM, Kahlschläge ausgenommen; ohne Messung nur im Wald der Karte) zu Laubstreu/Moos/Erde abgetönt (bis 82 %, Helligkeit des Luftbilds bleibt als Modulation), neu als JPEG kodiert. Die Kronenschätzung aus dem Luftbild nimmt weiter das Original (`TileContext.aerialRaw`). Gilt für alle Welten mit Luftbild |
+| 5 | Rechteckige Flächen in abweichendem Grün mit harten Kanten links neben dem Weg | Die Runde fährt auf den ersten und letzten 45 m denselben Weg; der Start (Laufmeter 0) liegt mitten auf dem Weg. Dort endete das Band samt **7–8 m breitem, deckendem Grasstreifen** mit gerader Querkante — von oben ein Rechteck, das heller ist als das Luftbild (Schotterplatz) | `RouteLayer`: An offenen Enden (Strecke ohne Runde, oder eine Runde, die nicht in Fahrtrichtung geschlossen ist) läuft der Übergangsstreifen über 20 m auf den Randstreifen aus. Kein Kachel- oder Flächenfehler |
+
+**Weitere Stellen (Betrachter):** Solitude bei 1,0 / 2,5 / 4,0 / 5,5 / 7,0 /
+8,5 / 10,0 / 12,5 km und Maulbronn bei 0,3 / 2,0 / 4,5 / 7,0 / 10,0 / 13,0 km:
+Befund 4 (graublauer Boden unter Wald) an fast allen Waldstellen beider
+Strecken — jetzt Waldboden (Bild `maulbronn-km10-*`, `befund4-waldboden-km1-*`).
+Befund 1 nirgends sonst als unechte Wand gefunden (Böschungen an Hängen und
+Hohlwegen sind im DGM1 echt). Befund 2 und 5 an diesen Stellen nicht gesehen.
+Ohne Laser (Solitude km 0–1 ohne `--laser`): keine Wand (Terrarium ist
+glatt; Befund 1 betrifft nur Laserwelten), Befund 2 und 3 betreffen den Code
+aller Welten und sind dort mit behoben.
+
+**Messwerte Solitude (MEDIUM, Laser, Cache warm):** Dreiecke gleichzeitig
+513 256 → 514 701, Platte 171,7 → 173,8 MB (12,3 → 12,5 MB/km; neu kodierte
+Luftbilder unter Wald), Texturen 182,4 MB (gleich), Bau 38 → 42 s. Maulbronn
+436 434 Dreiecke, 11,7 MB/km. Beide bestehen `checkWorld`.
+
+### 9.1 Offen
+
+- [ ] Alles nur im Betrachter (SwiftShader) gesehen, **nicht auf dem Gerät**.
+- [ ] Die Grasstreifen neben Wegen über blassen Winterfeldern (Maulbronn km 7
+      und 13) sind satter grün als das Feld. Sie folgen der Farbe des
+      Luftbilds direkt am Weg (dort echter Grasrain); eine weitere
+      Farbspanne brachte im Bild nichts und ist nicht eingebaut.
+- [ ] Waldboden-Abtönung kostet je Kachel unter Wald eine JPEG-Neukodierung
+      (rund 2 % mehr Platte, wenige 100 ms Bauzeit je Kachel); auf dem Handy
+      (ohne Laser, nur im Wald der Karte) nicht gemessen.
+- [ ] Ferne Kronen (8–12 Karten) wirken aus der hohen Betrachter-Drohne
+      (85 m) weiter kartig; aus der App-Drohne (28 m) und vom Rad aus nicht
+      geprüft auf dem Gerät.
+- [ ] Am Knoten mit drei Ästen rechnet `JunctionCorners` die Kante der Strecke
+      als Gerade in Richtung der Strecke am Scheitel (45°); die Bögen passen
+      dort nur ungefähr an die gekrümmte Fahrbahnkante.
+- [ ] Weidezäune stehen an der Solitude teils im Wald (Landnutzung der Karte),
+      nicht untersucht.

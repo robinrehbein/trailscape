@@ -425,6 +425,24 @@ internal class RoadNet(ctx: TileContext, marginM: Double = 24.0, maxStepM: Doubl
         }
         // Einzelne Ausreisser glaetten: eine Station zwischen zwei Stationen auf der Strecke gehoert dazu.
         for (i in 1 until m - 1) if (!on[i] && on[i - 1] && on[i + 1] && td[i] < 6.0) on[i] = true
+        // Enden eines Laufs auf der Strecke: Im Scheitel einer Kurve (Knick der Karte an einer Einmuendung) schneidet
+        // die geglaettete Strecke die Ecke, der Knoten liegt bis ~2 m neben ihr und quer zu ihrer Richtung. Eine
+        // Station neben einer Station auf der Strecke, die noch im Band der Strecke liegt, gehoert dazu — sonst
+        // wurde das Endstueck der eigenen Wege als Strasse ueber die Fahrbahn gezeichnet und bekam Eckflaechen.
+        var grew = true
+        while (grew) {
+            grew = false
+            for (i in 0 until m) {
+                if (on[i] || td[i] >= 1e8) continue
+                val nb = (i > 0 && on[i - 1]) || (i < m - 1 && on[i + 1])
+                if (!nb) continue
+                val hit = track.nearest(e[i], n[i], 60.0) ?: continue
+                if (hit.distance < track.halfWidthAt(hit.distM) + 1.0) {
+                    on[i] = true
+                    grew = true
+                }
+            }
+        }
         return Road(r, spec, e, n, ss.toDoubleArray(), re, rn, miter, on, td)
     }
 }

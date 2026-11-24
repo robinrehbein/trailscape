@@ -22,7 +22,7 @@ node shots.mjs ../out/mock --serve --port 8123   # nur Server, Seite im Browser 
 | Option | Bedeutung |
 |---|---|
 | `--dists 0,500,…` | Laufmeter der Bilder; sonst `--count N` (Vorgabe 6) gleichmäßig über die Strecke |
-| `--cameras chase,handlebar,drone,overview` | Kameras je Stelle (`overview`: Übersicht aus ~650 m Höhe) |
+| `--cameras chase,handlebar,drone,overview,free` | Kameras je Stelle (`overview`: Übersicht aus ~650 m Höhe; `free`: feste Kamera aus `--param eye=e,n,u --param at=e,n,u`, Weltkoordinaten, optional `--param fov=50`) |
 | `--size 1600x900` | Bildgröße (deviceScaleFactor 1) |
 | `--jpeg` | zusätzlich JPEG, 1280 px breit, unter 300 kB |
 | `--jpeg-width N`, `--jpeg-max-kb K` | Breite und Obergrenze des JPEG (Vorgabe 1280 px, 300 kB; schaltet `--jpeg` ein). Vorschaubilder des Katalogs: `--size 960x540 --jpeg-width 640 --jpeg-max-kb 150` |

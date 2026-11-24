@@ -63,6 +63,9 @@ internal class RouteLayer : TileLayer {
         /** Hoehe, um die Ueberblend-Baender und Markierungen ueber der Fahrbahn liegen. */
         const val OVERLAY_LIFT_M = 0.012
 
+        /** Auf dieser Laenge laeuft der Uebergangsstreifen an offenen Enden der Strecke aus. */
+        const val END_TAPER_M = 20.0
+
         /** Laenge des weichen Belagswechsels in Metern. */
         const val FADE_M = 6.0
 
@@ -475,6 +478,36 @@ private class RouteEmitter(
     private var stations: Array<Station> = emptyArray()
     private var runStartDist = 0.0
 
+    /**
+     * Offene Enden der Strecke: Dort endet das Band mitten auf dem Weg (Start/Ziel einer Strecke ohne Runde,
+     * oder eine Runde, die auf demselben Weg zurueckkommt, auf dem sie losfuhr). Der breite, deckende
+     * Uebergangsstreifen endete dort mit einer geraden Querkante — im Luftbild ein Rechteck in anderem Gruen
+     * (Fehlerbericht Solitude, Befund 5). An offenen Enden laeuft er ueber [RouteLayer.END_TAPER_M] auf den Randstreifen aus.
+     */
+    private val openStart: Boolean
+    private val openEnd: Boolean
+
+    init {
+        val t = track.track
+        val n = t.sampleCount
+        val joined = t.loop && n > 3 && run {
+            val de = t.e[1] - t.e[0]; val dn = t.n[1] - t.n[0]
+            val ee = t.e[n - 1] - t.e[n - 2]; val en = t.n[n - 1] - t.n[n - 2]
+            val l = kotlin.math.hypot(de, dn) * kotlin.math.hypot(ee, en)
+            l > 1e-9 && (de * ee + dn * en) / l > 0.5 && kotlin.math.hypot(t.e[0] - t.e[n - 1], t.n[0] - t.n[n - 1]) < 30.0
+        }
+        openStart = !joined
+        openEnd = !joined
+    }
+
+    /** 0 am offenen Ende, 1 ab [RouteLayer.END_TAPER_M] davor bzw. dahinter. */
+    private fun endTaper(dist: Double): Double {
+        var k = 1.0
+        if (openStart) k = min(k, smoothstep(0.0, RouteLayer.END_TAPER_M, dist))
+        if (openEnd) k = min(k, smoothstep(0.0, RouteLayer.END_TAPER_M, track.lengthM - dist))
+        return k
+    }
+
     fun run(units: IntArray) {
         val keep = units.filter { !env.isDuplicate(it) }
         var a = 0
@@ -648,8 +681,10 @@ private class RouteEmitter(
             val sgn = if (side == 0) -1.0 else 1.0
             fun mix(a: Double, b: Double) = a + (b - a) * f
             val shoulder = mix(p0.shoulderW[side], p1.shoulderW[side])
-            val inner = mix(p0.inner[side], p1.inner[side])
-            val end = mix(p0.end[side], p1.end[side])
+            val innerRaw = mix(p0.inner[side], p1.inner[side])
+            val taper = endTaper(st.dist)
+            val inner = innerRaw * taper
+            val end = mix(p0.end[side], p1.end[side]) * taper
             st.kerb[side] = mix(p0.kerb[side], p1.kerb[side])
             st.a0[side] = mix(p0.v0Alpha[side], p1.v0Alpha[side])
             st.t2[side] = st.hw + shoulder

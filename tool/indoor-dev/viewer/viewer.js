@@ -1052,7 +1052,7 @@ function updateFog() {
   camera.far = visibility * 1.6;
 }
 
-const CAMERAS = ['chase', 'handlebar', 'drone', 'overview'];
+const CAMERAS = ['chase', 'handlebar', 'drone', 'overview', 'free'];
 
 /** Stellt die Kamera fuer die aktuelle Stelle; liefert den Punkt, auf den sie blickt. */
 function updateCamera(placement) {
@@ -1075,7 +1075,15 @@ function updateCamera(placement) {
   let fov = 50;
   let near = 0.5;
 
-  if (view.camera === 'handlebar') {
+  if (view.camera === 'free' && params.has('eye') && params.has('at')) {
+    // Freie Kamera fuer Belegbilder: eye=e,n,u und at=e,n,u in Weltkoordinaten (ENU, Meter ueber dem Ursprung)
+    const [ee, en, eu] = params.get('eye').split(',').map(Number);
+    const [ae, an, au] = params.get('at').split(',').map(Number);
+    toScene(ee, en, eu, pos);
+    toScene(ae, an, au, look);
+    fov = pNum('fov', 50);
+    near = 0.3;
+  } else if (view.camera === 'handlebar') {
     // wie CameraRig HANDLEBAR: Auge 1,45 m, 0,25 m voraus, Blick 25 m voraus auf 0,8 × Augenhoehe
     pos.copy(rider).addScaledVector(dir, 0.25).setY(rider.y + 1.45);
     const ahead = fwd(d + 25);
