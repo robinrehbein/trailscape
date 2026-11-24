@@ -150,3 +150,64 @@ fun coplanarOverlaps(
     }
     return out
 }
+
+/**
+ * # Auslaufende Vertex-Deckung in durchsichtigen Flaechen
+ *
+ * Zaehlt je Material mit `alphaMode = BLEND` die Eckpunkte, deren `COLOR_0`-Deckung unter 1 liegt.
+ *
+ * Warum das zaehlt: Filament zeichnet mit 4× MSAA in einen Float-Puffer und wertet den Shader eines
+ * Dreiecks am Pixelmittelpunkt aus, auch wenn nur einige Abtastpunkte im Dreieck liegen und der
+ * Mittelpunkt ausserhalb (keine `centroid`-Interpolation). Eine Vertex-Deckung, die zum Rand hin auf
+ * null faellt, wird dort **negativ** fortgeschrieben; beim Mischen (`ONE, ONE_MINUS_SRC_ALPHA`) hellt
+ * das den Hintergrund auf — auf dem Geraet weisse, gepunktete Linien an jeder Aussenkante weicher
+ * Raender. Der Betrachter zeichnet in einen 8-Bit-Puffer, der vor dem Mischen auf 0..1 klemmt, und
+ * zeigt das nicht. Weiche Raender muessen ihre Deckung deshalb aus der Textur holen (Werte bleiben in
+ * 0..1, fortgeschriebene UV landen am geklemmten Rand); `MASK` ist unkritisch (negativ = verworfen).
+ */
+fun translucentVertexAlpha(glb: ByteArray): Map<String, Int> {
+    val bb = ByteBuffer.wrap(glb).order(ByteOrder.LITTLE_ENDIAN)
+    val jsonLen = bb.getInt(12)
+    val json = Json.parseToJsonElement(String(glb, 20, jsonLen, Charsets.UTF_8)).jsonObject
+    val binStart = 20 + jsonLen + 8
+    val jMeshes = json["meshes"]?.jsonArray ?: return emptyMap()
+    val acc = json["accessors"]!!.jsonArray
+    val views = json["bufferViews"]!!.jsonArray
+    val mats = json["materials"]?.jsonArray ?: return emptyMap()
+    val out = HashMap<String, Int>()
+    for (mesh in jMeshes) {
+        for (p in mesh.jsonObject["primitives"]!!.jsonArray) {
+            val po = p.jsonObject
+            val mi = po["material"]?.jsonPrimitive?.int ?: continue
+            val mat = mats[mi].jsonObject
+            if (mat["alphaMode"]?.jsonPrimitive?.content != "BLEND") continue
+            val ci = po["attributes"]!!.jsonObject["COLOR_0"]?.jsonPrimitive?.int ?: continue
+            val a = acc[ci].jsonObject
+            val v = views[a["bufferView"]!!.jsonPrimitive.int].jsonObject
+            val off = binStart + (v["byteOffset"]?.jsonPrimitive?.int ?: 0) + (a["byteOffset"]?.jsonPrimitive?.int ?: 0)
+            val count = a["count"]!!.jsonPrimitive.int
+            val comps = if (a["type"]!!.jsonPrimitive.content == "VEC4") 4 else 3
+            if (comps < 4) continue
+            var low = 0
+            when (a["componentType"]!!.jsonPrimitive.int) {
+                5121 -> {
+                    val stride = v["byteStride"]?.jsonPrimitive?.int ?: 4
+                    for (i in 0 until count) if ((glb[off + i * stride + 3].toInt() and 0xFF) < 255) low++
+                }
+                5123 -> {
+                    val stride = v["byteStride"]?.jsonPrimitive?.int ?: 8
+                    for (i in 0 until count) if ((bb.getShort(off + i * stride + 6).toInt() and 0xFFFF) < 65535) low++
+                }
+                else -> {
+                    val stride = v["byteStride"]?.jsonPrimitive?.int ?: 16
+                    for (i in 0 until count) if (bb.getFloat(off + i * stride + 12) < 1f) low++
+                }
+            }
+            if (low > 0) {
+                val name = mat["name"]?.jsonPrimitive?.content ?: "?"
+                out[name] = (out[name] ?: 0) + low
+            }
+        }
+    }
+    return out
+}

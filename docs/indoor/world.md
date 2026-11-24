@@ -440,6 +440,77 @@ Fällt auf dem Gerät die Bildrate, in dieser Reihenfolge drehen:
 - PNG Grau+Alpha (Farbtyp 4) und normierte `UNSIGNED_SHORT`-UV in gltfio: nach
   den Quellen unterstützt, auf dem Gerät nicht gesehen.
 
+## Kreuzungen und Ortsdurchfahrten (24.11.2026, Branch `claude/indoor-junctions`)
+
+Anlass: erste Fahrt des Gründers in einer **auf dem Handy gebauten** Welt (eigene
+35,6-km-Strecke, Start im Ort, ohne Laser): „schon etwas besser, aber teilweise
+immer noch komisch". Gerätebilder: `docs/indoor/bilder/geraet/01–05`. Geändert:
+`RouteLayer.kt`, `RoadsLayer.kt`, `RouteTextures.kt`, `Ground.kt`,
+`GroundTexture.kt`, `Glb.kt`, `WorldInternals.kt`, `WorldBuilderImpl.kt`,
+`GlbOverlap.kt`, neu `PlanClip.kt`; Werkzeug `overlaps`, Betrachter `hdr`/`clampColor`.
+Keine Vertragsdatei geändert, `WORLD_BUILDER_ID` und Katalogversionen **nicht**
+angehoben (beim Zusammenführen nötig: Ränder, Straßen und Gelände ändern sich in
+jeder Welt).
+
+Bildpaare (gleicher Blickpunkt, Betrachter, Sonne 235°/40°):
+`docs/indoor/bilder/junctions/<welt>-<laufmeter>_<kamera>-vorher.jpg` / `-nachher.jpg` —
+Balkantrasse km 0–3, Kreisel Bergisch Gladbach und Altenberg km 0–4, alle drei
+**ohne Luftbild** (`--no-aerial`, wie die Gerätebilder: erzeugter Boden), dazu
+Altenberg kurz **mit** Luftbild (`altenberg-kurz-luftbild-…`).
+
+### Mängel, Ursache, Stand
+
+| # | Mangel (Gerät) | Ursache im Code | Stand |
+|---|---|---|---|
+| 1 | **Weiße gepunktete Linien** an allen Nähten zwischen Fahrbahn, Gehweg, Nebenstraßen und Gras (01, 02, 04, 05) | Keine Risse: Das Gelände ist lückenlos (jede Kachel ein geschlossenes Gitter mit Schürze). Die Linien liegen genau an den **Außenkanten der weichen Ränder** (Straßenkanten `x_mat_road_*_edge`, Übergangsstreifen `x_mat_route_verge_*`, Belagswechsel `*_fade`), deren Deckung als **Vertex-Alpha** zum Rand auf 0 fiel. Filament zeichnet mit 4× MSAA in einen Float-Puffer und wertet den Shader eines Dreiecks am **Pixelmittelpunkt** aus, auch wenn nur einige Abtastpunkte im Dreieck liegen (keine `centroid`-Interpolation). Dort wird die Deckung über die Kante hinaus **negativ** fortgeschrieben; beim Mischen (`ONE, ONE_MINUS_SRC_ALPHA`, bei FADE zusätzlich das Entmultiplizieren durch `max(a, ε)`) wird der Hintergrund dadurch aufgehellt, bis weiß. Der Betrachter zeichnet in einen 8-Bit-Puffer, der vor dem Mischen auf 0..1 klemmt — deshalb war es dort nie zu sehen | **behoben:** Kein durchsichtiges Primitiv hat mehr Vertex-Deckung < 1. Die Deckung weicher Ränder steckt in der **Textur** (Werte bleiben in 0..1; fortgeschriebene UV landen am geklemmten Rand): Straßenkante `route_<belag>_edge` (PNG 512 × 16, `u` längs kachelnd, `v` quer geklemmt — neuer Sampler `wrapS = REPEAT`, `wrapT = CLAMP_TO_EDGE`, `TileMaterial.clampV`), Auslauf des Übergangsstreifens `verge_<art>_fade` (PNG 256 × 32). Der Übergangsstreifen selbst ist bis `tB` **deckend**; der Belagswechsel ist `MASK` mit unregelmäßiger Kante (negative Werte werden dort nur verworfen). Messbar: `indoor-dev overlaps` zählt „durchsichtige Eckpunkte mit Vertex-Deckung < 1": Balkantrasse 52 930 → **0**, Altenberg kurz 21 188 → **0**; Test `QualityTest` verlangt 0 für die Testwelt |
+| 2a | **Gezackte Graskeile** ragen in Fahrbahn und Einmündungen (03, 05) | Der Rand der Strecke (Gras, Fransen, Gehweg, Bordstein, Bankett) wurde an Nebenstraßen **je Eckpunkt** ausgeblendet (`roadFactor`, Stationen 1–3 m) — dazwischen linear, also Keile; außerdem lag das Gras höher als die Nebenstraße | **behoben:** Die Randgestaltung entsteht je Stück in Zwischennetzen und wird im Grundriss **gegen die Bänder der übrigen Straßen geschnitten** (`PlanMask`/`clipInto`, Sutherland–Hodgman je Dreieck, Attribute linear interpoliert) — genau so abgetastet wie `RoadsLayer` sie zeichnet. Ebenso gegen die Fahrbahn anderer Streckenteile (Kreisel, enge Kurven, Hin- und Rückweg nebeneinander; die eigene Fahrbahn ±4 m bzw. ±15 m für Ränder innerhalb der Fahrbahn zählt nicht). Bahnen sperren nicht (wie vorher). Gras endet jetzt an der Straßenkante; Fransen, Randlinien und Bordstein enden an der Einmündung |
+| 2b | **Brauner Belagfleck mit Zickzackrand** quer auf der eigenen Strecke (03) | Geplante Routen haben an Kreuzungen Wegstücke von wenigen Metern mit anderem Belag/anderer Wegart; gezeichnet mit eigenem Belag, Fransen und Grasrand | **behoben:** `TrackLine.forDrawing` schlägt Belagsabschnitte unter 25 m dem längeren Nachbarn zu — nur für die Zeichnung, das Manifest (Rollwiderstand, Anzeige) bleibt unverändert |
+| 2c | **Nebenstraßen wellen sich**, stoßen mit Stufen/Rampen an (05) | `CarvedGround` legt neben der Fahrbahn eine flache Mulde an (Boden 25 cm unter der Fahrbahn über das Bankett von √2·Zelle + 0,3 m, damit das 4-m-Netz nicht durchsticht; dann Böschung über **mindestens 10 m**). Nebenstraßen folgten dem Boden und wurden nur auf 4,2 m an die Fahrbahn gezogen: Rampe, dann Mulde, dann wieder hoch | **behoben:** Nebenstraßen laufen über `JOIN_M` = 12 m stetig von der Fahrbahnkante auf ihre Höhe (über der Mulde; liegt die Strecke tiefer, bleibt der kurze Übergang, sonst tauchte die Straße unter die Böschung). Flache Böschungen (< 0,5 m) laufen auf 3–10 m aus statt auf ≥ 10 m |
+| 2d | Flächen verschiedener Straßen überlagern sich in verschiedener Höhe | Gras über der Nebenstraße (s. 2a), Straßenkanten über dem Gras | **behoben** mit 2a; die Rangstaffel der Straßen untereinander (1,2 cm) bleibt |
+| 3a | Gehwegpflaster sehr grob | 32-cm-Platten mit dunklen, zwei Pixel breiten Fugen | **behoben:** Betonsteinpflaster im Läuferverband (21 × 10,7 cm), schmale helle Fugen, gleiche Texturgröße |
+| 3b | Bordsteinverlauf an Ecken eckig und abgehackt | Gehweg und Bordstein brachen an Einmündungen ab, sobald die Deckung je Eckpunkt unter 0,35 fiel | **teilweise:** Gehweg und Bordstein enden jetzt genau an der Kante der Nebenstraße (2a). Ausgerundete Bordsteinecken (Radius in die Nebenstraße hinein) gibt es **nicht** |
+| 4 | Gelände am Straßenrand wellig-fleckig, harte Kanten Gras/Grau (04, 05) | (a) Gras folgte der Mulde neben der Fahrbahn: neben dem Gehweg fiel es auf 75 cm um bis zu 30 cm ab; (b) erzeugte Bodentextur: Beete und Hofflecken mit harter Kante (`smoothstep` über 6 % des Rauschens) | **behoben:** (a) Der deckende Übergangsstreifen läuft von der Außenkante des Randstreifens gleichmäßig auf den Boden am Ende hinaus (nie unter dem Boden), die Mulde ist schmaler (2c); (b) weichere Ränder (Beete 0,48–0,66, Hofflecken 0,66–0,80, 85 % Deckung). Jenseits des Übergangsstreifens bleibt die Mulde (max. 19 cm) über einige Meter sichtbar |
+
+**Nebenwirkungen, gesehen und in Kauf genommen:**
+
+- Der Übergangsstreifen hat je Stück **eine** Randtextur (die stärkere); wo Wiese
+  und Waldboden wechseln, ist das jetzt eine Kante statt eines Verlaufs über
+  eine Station.
+- Am Bankett liegt der Einlauf des Grases über dem Schotter weiter weich
+  (Auslauftextur umgekehrt), am Gehweg beginnt das Gras hart an dessen Außenkante.
+- Mit Luftbild sieht der deckende Streifen gegenüber dem Luftbild etwas
+  „gemalter" aus als der alte durchscheinende (Altenberg kurz, km 1,86).
+
+**Offen:**
+
+- **Kreiseleinfahrt** (Kreisel Bergisch Gladbach, km 0,77): Zwischen der
+  Strecke und der Mittelinsel bleibt ein Graskeil (vorher schien dort der in
+  den Boden gemalte Asphalt durch das durchscheinende Gras). Vermutlich ein
+  Stück des Rings, das `RoadNet` als „auf der Strecke" einstuft und deshalb
+  niemand als Straße zeichnet — nicht abschließend untersucht. Ringstücke, die
+  als „auf der Strecke" gelten, aber schon > 1,5 m neben ihr liegen, sperren
+  jetzt Gras und Gehweg; das reichte hier nicht.
+- Ausgerundete Bordsteinecken (3b).
+- Die Nahtlinien sind **nur rechnerisch** als behoben nachgewiesen (Zähler oben,
+  `QualityTest`). Der Betrachter kann sie nicht zeigen: Auch mit `hdr=1`
+  (Float-Puffer mit 4× MSAA, siehe `viewer/README.md`) interpoliert SwiftShader
+  fast überall innerhalb des Dreiecks — im Vergleich mit `clampColor=1` blieben
+  nur einzelne Pixel. **Auf dem Gerät prüfen.**
+
+### Messwerte (vorher = `aa0eb22`, nachher = dieser Branch)
+
+`-Xmx256m`, 2 Threads, MEDIUM, Geodaten aus dem Cache, ohne Laser; Heap = größter
+Wert nach GC im GC-Protokoll.
+
+| Welt | Dreiecke gleichzeitig | Texturen | Platte | Heap nach GC (max) |
+|---|---|---|---|---|
+| Altenberg kurz (3 km, Luftbild) | 467 902 → 466 739 | 177,7 → 179,3 MB | 17,8 → 18,3 MB/km (+2,8 %) | 212 → 214 MB |
+| Balkantrasse (7,7 km, `--no-aerial`) | 430 916 → 428 814 | 176,1 → 177,0 MB | 18,6 → 19,1 MB/km (+2,7 %) | 223 → 223 MB |
+
+Koplanare Überlappungen (`indoor-dev overlaps`, Stufe 0): Balkantrasse 1 134 → 399,
+Altenberg kurz 638 → 436 (der deckende Übergangsstreifen liegt nicht mehr auf
+Gras gleicher Höhe, die Keile über den Nebenstraßen sind weg).
+
 ## Abweichungen vom Vertrag
 
 1. ~~Laub `alphaMode = MASK` ohne Ausschnitte.~~ Seit „Vegetation" (oben)

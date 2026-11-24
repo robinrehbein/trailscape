@@ -64,6 +64,8 @@ Welt), `/models/` (die Modelle).
 | `lookahead` | `60` | Vorlauf in Metern, für den zusätzlich geladen wird |
 | `exposure`, `near` | `0.62`, je Kamera | Belichtung, nahe Schnittebene |
 | `auto` | `1` | `0`: nichts zeichnen, bis `setView` gerufen wird |
+| `hdr` | `0` | `1`: Szene wie Filament in einen Float-Puffer (RGBA16F) mit 4× MSAA, Tonemapping danach — dort wird vor dem Mischen nicht auf 0..1 geklemmt |
+| `clampColor` | `0` | `1`: Vertexfarben im Shader auf 0..1 klemmen (so sähe es mit `centroid`-Interpolation aus); mit `hdr=1` zum Eingrenzen heller Nahtlinien. SwiftShader zeigt den Effekt nur an einzelnen Pixeln — maßgeblich ist `indoor-dev overlaps` (Zähler „durchsichtige Eckpunkte") |
 
 Tasten: ←/→ Strecke (mit Umschalt weiter), 1/2/3 Kamera, Q/E Sonnenazimut,
 R/F Sonnenhöhe, G Fahrer; Maus dreht die Kamera um ihren Blickpunkt.

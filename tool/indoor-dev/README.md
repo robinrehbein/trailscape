@@ -33,7 +33,7 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 | `plan --gpx …` | nur den Voranschlag zeigen (Kacheln, Anfragen, Datenmenge, Hosts, Luftbild-Dienste) — ohne Netz |
 | `testworld --out <dir>` | die erfundene Testwelt (Runde 3 km, alle Belagsklassen, ohne Netz, deterministisch) |
 | `check <dir>` | eine fertige Welt prüfen |
-| `overlaps <dir>` | koplanare, überlappende Flächen (Ursache für Flimmern) in den Kacheln der Stufe 0 je Materialpaar zählen |
+| `overlaps <dir>` | koplanare, überlappende Flächen (Ursache für Flimmern) in den Kacheln der Stufe 0 je Materialpaar zählen; dazu je Material die durchsichtigen (BLEND) Eckpunkte mit Vertex-Deckung < 1 — auf dem Gerät helle Nahtlinien, soll 0 sein (`docs/indoor/world.md`, Abschnitt „Kreuzungen und Ortsdurchfahrten“) |
 | `catalog-routes [--only a,b]` | Strecken des Katalogs bekannter Strecken über BRouter neu herleiten (`catalog/routes/<id>.gpx` + Belag), siehe `docs/indoor/catalog.md` |
 | `catalog-build --out <dir> [--only a,b] [--app-catalog <datei>] [--keep-going] [--laser]` | Katalogwelten bauen, prüfen, packen (`<dir>/packages/*.zip`) und `<dir>/catalog.json` schreiben; `--app-catalog` schreibt den beigelegten Katalog der App (ohne Prüfsummen) |
 | `sky --time AUTO\|MORNING\|NOON\|EVENING --out <dir> [--lat --lon --epoch-ms --quality]` | Himmel der Darstellung für den Betrachter (`shots.mjs --sky <dir>`): `sky.json` (Sonne, Licht, Dunst), `sky.f32` (Rundumbild 1024 × 512, szenenlinear) und `preview.png` (durch eine Nachbildung von Filaments `ACES_LEGACY`). Rechnet mit `core/…/indoor/sky`, also genau wie das Gerät; siehe `docs/indoor/render.md`, „Himmel“ |

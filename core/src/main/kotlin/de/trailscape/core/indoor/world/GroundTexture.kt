@@ -348,14 +348,16 @@ private class GroundPainter(val spec: TileSpec, val land: LandMap, val size: Int
         // Befestigte Hofflaechen kommen von den Gebaeuden ([paintBuildings]).
         val lawn = Argb.scale(LAWN, 1.0 + 0.08 * p1 + 0.08 * bl(2.0) * Noise.gradient(e / 1.8, n / 1.8, SEED_TUFT))
         var c = lawn
-        val bed = smoothstep(0.5, 0.62, Noise.value(e / 6.0, n / 6.0, SEED_YARD))
+        // Weiche Raender (vorher 0,50–0,62 bzw. 0,66–0,72): aus Fahrerhoehe lasen sich Beete und Hofflecken
+        // als harte graue Kanten im Rasen.
+        val bed = smoothstep(0.48, 0.66, Noise.value(e / 6.0, n / 6.0, SEED_YARD))
         if (bed > 0) {
             val s = crown(e, n, 2.4, SEED_BUSH)
             c = Argb.mix(c, Argb.scale(GARDEN, 0.85 + bl(3.0) * 0.25 * s), bed * smoothstep(0.1, 0.45, s))
         }
         // Terrassen, Wege, Einfahrten: kleine befestigte Flecken.
-        val paved = smoothstep(0.66, 0.72, Noise.value(e / 4.0, n / 4.0, SEED_YARD + 3))
-        if (paved > 0) c = Argb.mix(c, Argb.scale(PAVED, 1.0 + 0.05 * p1), paved)
+        val paved = smoothstep(0.66, 0.80, Noise.value(e / 4.0, n / 4.0, SEED_YARD + 3))
+        if (paved > 0) c = Argb.mix(c, Argb.scale(PAVED, 1.0 + 0.05 * p1), paved * 0.85)
         val b = crown(e, n, 7.5, SEED_CROWN + 7)
         if (crownId < 0.3) c = Argb.mix(c, Argb.scale(BROADLEAF, 0.8 + 0.3 * b), smoothstep(0.05, 0.35, b))
         return Argb.scale(c, 1.0 + 0.03 * p2)

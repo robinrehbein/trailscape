@@ -162,8 +162,8 @@ internal class GlbScene(
     private val imageByContent = HashMap<ContentKey, Int>()
     private val textures = ArrayList<IntArray>() // (image, sampler)
     private val textureByKey = HashMap<Long, Int>()
-    private val samplers = arrayOfNulls<Int>(2) // [clamp, repeat] → Sampler-Index
-    private val samplerList = ArrayList<Boolean>() // repeat je Sampler
+    private val samplers = arrayOfNulls<Int>(3) // [clamp, repeat, nur u kachelnd] → Sampler-Index
+    private val samplerList = ArrayList<Int>() // Art je Sampler (Index in [samplers])
     private val materials = ArrayList<JsonObject>()
     private val materialNames = ArrayList<String>()
     private var anyUnlit = false
@@ -183,9 +183,10 @@ internal class GlbScene(
      * Bettet ein Bild ein und gibt den Texturindex zurueck. Gleiche Bytes
      * werden nur einmal eingebettet, gleiche Bytes mit gleichem Sampler
      * ergeben denselben Index. Verlangt PNG oder Baseline-JPEG mit
-     * Zweierpotenz-Kanten ≤ 2048 (docs/indoor.md 7.3).
+     * Zweierpotenz-Kanten ≤ 2048 (docs/indoor.md 7.3). [clampV] = nur `u` kachelt
+     * (`wrapT = CLAMP_TO_EDGE`): fuer Randstreifen, deren Deckung quer in der Textur steckt.
      */
-    fun addTexture(bytes: ByteArray, mime: String, repeat: Boolean): Int {
+    fun addTexture(bytes: ByteArray, mime: String, repeat: Boolean, clampV: Boolean = false): Int {
         val info = requireNotNull(imageInfo(bytes)) { "Textur ist weder PNG noch JPEG" }
         require(info.format.mime == mime) { "MIME-Typ $mime passt nicht zum Inhalt (${info.format.mime})" }
         require(info.baseline) { "JPEG ist nicht Baseline (progressiv oder erweitert)" }
@@ -201,9 +202,10 @@ internal class GlbScene(
             images.add(ImageEntry(view, mime, info.width, info.height))
             images.size - 1
         }
-        val sampler = samplers[if (repeat) 1 else 0] ?: run {
-            samplerList.add(repeat)
-            (samplerList.size - 1).also { samplers[if (repeat) 1 else 0] = it }
+        val kind = if (repeat && clampV) 2 else if (repeat) 1 else 0
+        val sampler = samplers[kind] ?: run {
+            samplerList.add(kind)
+            (samplerList.size - 1).also { samplers[kind] = it }
         }
         val tk = (image.toLong() shl 8) or sampler.toLong()
         return textureByKey.getOrPut(tk) {
@@ -482,12 +484,12 @@ internal class GlbScene(
             )
             putList(
                 "samplers",
-                samplerList.map { repeat ->
+                samplerList.map { kind ->
                     buildJsonObject {
                         put("magFilter", GL_LINEAR)
                         put("minFilter", GL_LINEAR_MIPMAP_LINEAR)
-                        put("wrapS", if (repeat) GL_REPEAT else GL_CLAMP_TO_EDGE)
-                        put("wrapT", if (repeat) GL_REPEAT else GL_CLAMP_TO_EDGE)
+                        put("wrapS", if (kind >= 1) GL_REPEAT else GL_CLAMP_TO_EDGE)
+                        put("wrapT", if (kind == 1) GL_REPEAT else GL_CLAMP_TO_EDGE)
                     }
                 },
             )

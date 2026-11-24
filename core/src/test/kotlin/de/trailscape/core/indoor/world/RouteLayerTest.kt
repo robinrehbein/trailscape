@@ -95,12 +95,14 @@ class RouteLayerTest {
         for (spec in scene.tiles()) {
             val (ctx, out) = build(scene, spec)
             for (v in RouteTextures.Verge.entries) {
-                val m = out.mesh(WorldNames.NODE_ROUTE, TileMaterial(RouteLayer.vergeMaterialName(v)))
+                // Der Auslauf traegt die Deckung in der Textur: v = 1 ist der durchsichtige Aussenrand.
+                val m = out.mesh(WorldNames.NODE_ROUTE, TileMaterial(RouteLayer.vergeFadeMaterialName(v)))
                 for (i in 0 until m.vertexCount) {
                     val e = m.x(i) + spec.anchorE
                     val n = spec.anchorN - m.z(i)
                     val hit = scene.line.nearest(e, n, 40.0)!!
-                    if (Argb.alpha(m.colors[i]) != 0 || hit.distance < scene.line.halfWidthAt(hit.distM) + 2.2) continue
+                    assertEquals(255, Argb.alpha(m.colors[i]), "Vertex-Deckung im Auslauf")
+                    if (m.uvs[i * 2 + 1] < 0.999f || hit.distance < scene.line.halfWidthAt(hit.distM) + 2.2) continue
                     // Boden = was gezeichnet wird: das Maximum aus wahrem Boden und 4-m-Gelaendenetz.
                     val floor = maxOf(scene.ground.heightAt(e, n), terrainMeshHeightAt(scene.ground, e, n, level0TerrainCellM(ctx.quality)))
                     val above = m.y(i) + ctx.anchorU - floor
