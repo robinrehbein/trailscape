@@ -216,3 +216,33 @@ private class LaserPipeline(
         const val MAX_AGE_MS = 365L * 24 * 3600 * 1000
     }
 }
+
+/**
+ * Der Weltbau mit der Datenstufe „Laser" (wie [createWorldBuilder], dazu
+ * DGM1, nDOM und LoD2, wo [options] eine Quelle fuer die Strecke kennt;
+ * sonst baut er genau wie ohne). Vorerst nur fuer das Entwicklerwerkzeug.
+ */
+fun createLaserWorldBuilder(options: LaserOptions): WorldBuilder = WorldBuilderImpl(FullWorldParts, laser = options)
+
+/**
+ * Kennzahlen der Laserdaten des letzten Baus von [builder] (aus
+ * [createLaserWorldBuilder]) als `Schluessel=Wert`, sonst leer.
+ */
+fun laserBuildStats(builder: WorldBuilder): Map<String, String> {
+    val l = (builder as? WorldBuilderImpl)?.lastLaser ?: return emptyMap()
+    val s = l.stats
+    return linkedMapOf(
+        "quelle" to l.source.id,
+        "bloecke" to s.blocks.toString(),
+        "anfragen" to s.requests.toString(),
+        "ausCache" to s.fromCache.toString(),
+        "rasterBytes" to s.bytes.toString(),
+        "lod2Kacheln" to s.lod2Tiles.toString(),
+        "lod2Bytes" to s.lod2Bytes.toString(),
+        "lod2Gebaeude" to l.buildings.size.toString(),
+        "ladenMs" to s.millis.toString(),
+        "versatzM" to "%.2f".format(java.util.Locale.ROOT, l.offsetM),
+        "versatzP05" to "%.2f".format(java.util.Locale.ROOT, s.offsetP05),
+        "versatzP95" to "%.2f".format(java.util.Locale.ROOT, s.offsetP95),
+    )
+}

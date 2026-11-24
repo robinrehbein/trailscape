@@ -63,29 +63,16 @@ internal class LaserBuilding(
 
 internal class Lod2Result(val buildings: List<LaserBuilding>, val tiles: Int, val bytes: Long)
 
-/** Laedt die LoD2-Kacheln, die die Bloecke beruehren; Gebaeude ausserhalb der Bloecke fallen weg. */
+/** Laedt die LoD2-Kacheln [kms] (Kilometer-Index als [LaserData.key]); Gebaeude ausserhalb der Bloecke fallen weg. */
 internal fun loadLod2(
     source: LaserSource,
     origin: GeoOrigin,
     fetcher: LaserFetcher,
     blocks: Collection<LaserBlock>,
+    kms: Set<Long>,
     threads: Int,
     isCancelled: () -> Boolean,
 ): Lod2Result {
-    val kms = LinkedHashSet<Long>()
-    for (b in blocks) {
-        val e0 = b.bx * LaserData.LASER_BLOCK_M
-        val n0 = b.by * LaserData.LASER_BLOCK_M
-        val frame = EnuUtmFrame(origin, source.utmZone, e0 + 128, n0 + 128)
-        var x0 = Double.MAX_VALUE; var x1 = -Double.MAX_VALUE; var y0 = Double.MAX_VALUE; var y1 = -Double.MAX_VALUE
-        for ((ce, cn) in listOf(e0 to n0, e0 + 256 to n0, e0 to n0 + 256, e0 + 256 to n0 + 256)) {
-            val x = frame.utmX(ce, cn); val y = frame.utmY(ce, cn)
-            x0 = min(x0, x); x1 = max(x1, x); y0 = min(y0, y); y1 = max(y1, y)
-        }
-        for (kx in floor(x0 / 1000).toInt()..floor(x1 / 1000).toInt()) {
-            for (ky in floor(y0 / 1000).toInt()..floor(y1 / 1000).toInt()) kms += LaserData.key(kx, ky)
-        }
-    }
     val blockKeys = blocks.map { LaserData.key(it.bx, it.by) }.toHashSet()
     val pool = Executors.newFixedThreadPool(max(1, threads)) { t -> Thread(t, "lod2").apply { isDaemon = true } }
     val out = ArrayList<LaserBuilding>()

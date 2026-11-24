@@ -82,7 +82,31 @@ internal class LandRaster(
         return 0.05 + 0.85 * smoothstep(-0.2, 0.3, f)
     }
 
+    /** Bewuchs aus Laserdaten; wo er Werte hat, gilt er vor Luftbild und Landnutzung. */
+    @Volatile var laser: LaserVegetation? = null
+
+    override fun canopyHeightAt(e: Double, n: Double): Double = laser?.canopyHeight?.invoke(e, n) ?: Double.NaN
+
+    /**
+     * Gemessene Baeume, ohne die, wo das Luftbild keine Krone mehr zeigt: Das
+     * DOM1 ist oft aelter als das Luftbild (Kahlschlaege nach dem Borkenkaefer).
+     */
+    override fun laserTrees(spec: TileSpec): List<LaserTree>? =
+        laser?.trees?.invoke(spec)?.filter { t -> (aerialCanopy(t.e, t.n) ?: 1.0) >= CLEARED_BELOW }
+
+    private fun aerialCanopy(e: Double, n: Double): Double? {
+        val spec = TileSpec.at(0, e, n)
+        val g = canopy[spec] ?: return null
+        return g.at((e - spec.minE) / spec.cellM, (spec.maxN - n) / spec.cellM)
+    }
+
     override fun canopyAt(e: Double, n: Double): Double {
+        laser?.canopy?.invoke(e, n)?.let { v ->
+            if (!v.isNaN()) {
+                val a = aerialCanopy(e, n) ?: return v
+                return if (a < CLEARED_BELOW) v * a / CLEARED_BELOW else v
+            }
+        }
         val spec = TileSpec.at(0, e, n)
         val g = canopy[spec]
         if (g != null) return g.at((e - spec.minE) / spec.cellM, (spec.maxN - n) / spec.cellM)
@@ -224,6 +248,9 @@ internal class LandRaster(
     }
 
     companion object {
+        /** Kronenbedeckung im Luftbild, unter der gemessene Baeume als gefaellt gelten. */
+        const val CLEARED_BELOW = 0.2
+
         /** 1024 Bloecke = 16 MB: reicht fuer die Kacheln, die gleichzeitig in Arbeit sind. */
         const val MAX_BLOCKS = 1024
         const val CLASS_MASK = 0x0F

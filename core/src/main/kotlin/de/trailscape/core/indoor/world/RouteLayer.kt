@@ -541,7 +541,7 @@ private class RouteEmitter(
     private fun groundAt(st: Station, t: Double): Double {
         val e = pointE(st, t)
         val n = pointN(st, t)
-        return max(ctx.ground.heightAt(e, n), terrainMeshHeightAt(ctx.ground, e, n, meshCell))
+        return max(ctx.ground.heightAt(e, n), ctx.meshHeightAt(e, n, meshCell))
     }
 
     private fun roadFactor(st: Station, t: Double): Double =

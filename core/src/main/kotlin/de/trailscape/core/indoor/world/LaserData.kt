@@ -56,9 +56,13 @@ internal class LaserData(
 ) {
     val blockCount: Int get() = blocks.size
 
-    /** Hoehe ueber dem Meer: DGM1 im Korridor, aussen Terrarium + [offsetM]. */
-    fun heightAboveSea(e: Double, n: Double): Double {
-        val b = blockAt(e, n) ?: return terrarium(e, n) + offsetM
+    /**
+     * Hoehe ueber dem Meer: DGM1 im Korridor, aussen Terrarium + [offsetM].
+     * [outside] ersetzt die Terrarium-Hoehen ausserhalb der Bloecke (die
+     * endgueltigen Hoehenkacheln decken mehr als die vorlaeufigen).
+     */
+    fun heightAboveSea(e: Double, n: Double, outside: (Double, Double) -> Double = terrarium): Double {
+        val b = blockAt(e, n) ?: return outside(e, n) + offsetM
         return b.height(e, n)
     }
 
@@ -134,6 +138,16 @@ internal class LaserData(
                 }
             }
         }
+    }
+
+    /** Umgebungsrechteck aller Bloecke (minE, minN, maxE, maxN) oder `null`. */
+    fun bounds(): DoubleArray? {
+        if (blocks.isEmpty()) return null
+        val v = blocks.values
+        return doubleArrayOf(
+            v.minOf { it.bx } * LASER_BLOCK_M, v.minOf { it.by } * LASER_BLOCK_M,
+            (v.maxOf { it.bx } + 1) * LASER_BLOCK_M, (v.maxOf { it.by } + 1) * LASER_BLOCK_M,
+        )
     }
 
     private fun blockAt(e: Double, n: Double): LaserBlock? {
@@ -328,6 +342,12 @@ class LaserOptions(
     val fadeM: Double = 60.0,
     /** LoD2-Gebaeude laden (sonst nur Gelaende und Bewuchs). */
     val buildings: Boolean = true,
+    /**
+     * LoD2 nur fuer 1-km-Kacheln, die dieser Streifen um die Strecke beruehrt
+     * (eine Stadtkachel hat 20–30 MB). Weiter draussen: Hoehe aus dem nDOM
+     * ueber dem OSM-Grundriss.
+     */
+    val lod2RadiusM: Double = 120.0,
     val threads: Int = 4,
 )
 
@@ -355,21 +375,7 @@ internal fun loadLaserData(
         .maxByOrNull { it.second }?.first ?: return null
     val line = PolylineDistance(lineE, lineN)
     val r = options.radiusM
-    // Bloecke im Korridor
-    val minE = lineE.min() - r
-    val maxE = lineE.max() + r
-    val minN = lineN.min() - r
-    val maxN = lineN.max() + r
-    val wanted = ArrayList<IntArray>()
-    for (by in floor(minN / LaserData.LASER_BLOCK_M).toInt()..floor(maxN / LaserData.LASER_BLOCK_M).toInt()) {
-        for (bx in floor(minE / LaserData.LASER_BLOCK_M).toInt()..floor(maxE / LaserData.LASER_BLOCK_M).toInt()) {
-            val cx = (bx + 0.5) * LaserData.LASER_BLOCK_M
-            val cy = (by + 0.5) * LaserData.LASER_BLOCK_M
-            // Abstand Blockrand–Strecke ≤ r  ⇔  Abstand Mitte ≤ r + halbe Diagonale (konservativ).
-            val d = line.distance(cx, cy, r + 182.0)
-            if (d <= r + 181.02) wanted += intArrayOf(bx, by)
-        }
-    }
+    val wanted = laserBlocksFor(lineE, lineN, r, line)
     val requests = java.util.concurrent.atomic.AtomicInteger()
     val cached = java.util.concurrent.atomic.AtomicInteger()
     val bytes = java.util.concurrent.atomic.AtomicLong()
@@ -431,7 +437,7 @@ internal fun loadLaserData(
         }
     }
     val lod2 = if (options.buildings && source.lod2UrlTemplate != null) {
-        loadLod2(source, origin, options.fetcher, blocks.values, options.threads, isCancelled)
+        loadLod2(source, origin, options.fetcher, blocks.values, lod2Tiles(source, origin, lineE, lineN, options.lod2RadiusM), options.threads, isCancelled)
     } else {
         Lod2Result(emptyList(), 0, 0L)
     }
@@ -447,6 +453,38 @@ internal fun loadLaserData(
         offsetP95 = pct(0.95) - offset,
     )
     return LaserData(source, origin, blocks, offset, lod2.buildings, stats) { e, n -> terrariumAboveSea(e, n) }
+}
+
+/** Die LoD2-Kacheln (Kilometer-Index Ost, Nord), die der Streifen [r] um den Polygonzug beruehrt. */
+internal fun lod2Tiles(source: LaserSource, origin: GeoOrigin, lineE: DoubleArray, lineN: DoubleArray, r: Double): Set<Long> {
+    val out = LinkedHashSet<Long>()
+    val frame = EnuUtmFrame(origin, source.utmZone, (lineE.min() + lineE.max()) / 2, (lineN.min() + lineN.max()) / 2)
+    for (i in lineE.indices) {
+        for ((de, dn) in listOf(0.0 to 0.0, r to 0.0, -r to 0.0, 0.0 to r, 0.0 to -r, r * 0.7 to r * 0.7, -r * 0.7 to r * 0.7, r * 0.7 to -r * 0.7, -r * 0.7 to -r * 0.7)) {
+            val x = frame.utmX(lineE[i] + de, lineN[i] + dn)
+            val y = frame.utmY(lineE[i] + de, lineN[i] + dn)
+            out += LaserData.key(floor(x / 1000).toInt(), floor(y / 1000).toInt())
+        }
+    }
+    return out
+}
+
+/** Die Bloecke (bx, by), deren Rechteck naeher als [r] am Polygonzug liegt. */
+internal fun laserBlocksFor(lineE: DoubleArray, lineN: DoubleArray, r: Double, line: PolylineDistance = PolylineDistance(lineE, lineN)): List<IntArray> {
+    val minE = lineE.min() - r
+    val maxE = lineE.max() + r
+    val minN = lineN.min() - r
+    val maxN = lineN.max() + r
+    val wanted = ArrayList<IntArray>()
+    val b = LaserData.LASER_BLOCK_M
+    for (by in floor(minN / b).toInt()..floor(maxN / b).toInt()) {
+        for (bx in floor(minE / b).toInt()..floor(maxE / b).toInt()) {
+            // Mitte plus halbe Diagonale: konservativ (nie ein Block zu wenig, am Rand gelegentlich einer mehr).
+            val d = line.distance((bx + 0.5) * b, (by + 0.5) * b, r + 182.0)
+            if (d <= r + 181.02) wanted += intArrayOf(bx, by)
+        }
+    }
+    return wanted
 }
 
 private fun fillBlock(

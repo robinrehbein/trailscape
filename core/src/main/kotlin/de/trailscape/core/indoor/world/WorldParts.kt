@@ -81,6 +81,12 @@ internal interface WorldParts {
 
     /** Die Schichten einer Kachel der Stufe [level], in Aufrufreihenfolge. */
     fun layers(level: Int): List<TileLayer>
+
+    /** Hoehe des Gelaendenetzes der Kachel, wenn es kein regelmaessiges Gitter ist ([TileContext.meshHeight]). */
+    fun terrainMesh(ctx: TileContext): ((Double, Double) -> Double)? = null
+
+    /** Die Kachel ist geschrieben; Zwischenstaende duerfen weg. */
+    fun tileDone(spec: TileSpec) = Unit
 }
 
 // ---------------------------------------------------------------------------

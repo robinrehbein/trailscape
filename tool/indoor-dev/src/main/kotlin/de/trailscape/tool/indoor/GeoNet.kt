@@ -57,6 +57,24 @@ class JavaHttpFetcher : GeoFetcher {
     }
 }
 
+/**
+ * Datenstufe „Laser" fuer `--laser`: roher Abruf wie [JavaHttpFetcher], darum
+ * die Huelle aus `:core` (eigene Positivliste, Cache unter [cacheDir]).
+ */
+fun toolLaserOptions(cacheDir: java.io.File, offline: Boolean, radiusM: Double?): de.trailscape.core.indoor.world.LaserOptions {
+    val http = JavaHttpFetcher()
+    val raw = de.trailscape.core.indoor.world.LaserFetcher { url ->
+        if (offline) throw IOException("offline (--offline): $url")
+        http.fetch(GeoRequest(GeoSourceKind.ELEVATION, url))
+    }
+    val pipe = de.trailscape.core.indoor.world.createLaserPipeline(raw, cacheDir, offline = offline)
+    return if (radiusM != null) {
+        de.trailscape.core.indoor.world.LaserOptions(pipe, radiusM = radiusM)
+    } else {
+        de.trailscape.core.indoor.world.LaserOptions(pipe)
+    }
+}
+
 /** Fuer `--offline`: jeder Netzabruf scheitert, die Huelle bedient dann aus dem Cache (auch Abgelaufenes). */
 class OfflineFetcher : GeoFetcher {
     override fun fetch(request: GeoRequest): GeoResponse = throw IOException("offline (--offline): ${request.url}")

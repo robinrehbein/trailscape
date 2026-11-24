@@ -60,6 +60,8 @@ internal class WorldBuilderImpl(
     private val aerialRegister: List<AerialSource> = aerialSources,
     private val clock: () -> Long = System::currentTimeMillis,
     private val threads: Int = defaultWorldThreads(),
+    /** Datenstufe „Laser" (DGM1, nDOM, LoD2; siehe [LaserWorldParts]); `null` = bisheriger Datensatz. */
+    private val laser: LaserOptions? = null,
 ) : WorldBuilder {
 
     // -----------------------------------------------------------------------
@@ -81,12 +83,14 @@ internal class WorldBuilderImpl(
             GeoSourceKind.VECTOR to 1 + sets.vectorNear.size + sets.vectorFar.size,
             GeoSourceKind.AERIAL to aerialTiles.size,
         )
+        val laserEstimate = laser?.let { estimateLaser(it, route, pre.origin) }
         val download = sets.elevationNear.size * WorldEstimates.ELEVATION_TILE_BYTES +
             sets.elevationFar.size * WorldEstimates.ELEVATION_TILE_BYTES +
             WorldEstimates.TILEJSON_BYTES +
             sets.vectorNear.size * WorldEstimates.VECTOR_TILE_NEAR_BYTES +
             sets.vectorFar.size * WorldEstimates.VECTOR_TILE_FAR_BYTES +
-            aerialTiles.sumOf { WorldEstimates.aerialBytes(quality.texturePx(it.level)) }
+            aerialTiles.sumOf { WorldEstimates.aerialBytes(quality.texturePx(it.level)) } +
+            (laserEstimate?.bytes ?: 0L)
         val aerialSet = aerialTiles.toSet()
         val disk = specs.sumOf { s ->
             val texture = if (s in aerialSet) {
@@ -100,6 +104,7 @@ internal class WorldBuilderImpl(
         hosts += GeoEndpoints.ELEVATION_HOST
         hosts += GeoEndpoints.VECTOR_HOST
         aerial.forEach { s -> java.net.URI(s.wmsUrl).host?.let { hosts += it.lowercase() } }
+        laserEstimate?.let { hosts += it.hosts }
         return WorldPlan(
             worldId = parts.worldId(route, quality),
             route = route,
@@ -142,7 +147,18 @@ internal class WorldBuilderImpl(
             val route = if (needsVectorSurfaces(route0)) withVectorSurfaces(route0, origin, map) else route0
             val isBridge = bridgeLookup(route, origin, map)
             val prelimHeights = heights0
-            val track = parts.fitTrack(route, origin, { e, n -> prelimHeights.aboveSea(e, n) - origin.eleM }, isBridge)
+            // Laser-Stufe: DGM1/DOM1 im Korridor um die Route (vor dem Einpassen — das Band liegt dann auf dem DGM1).
+            val laserData = laser?.let { opts ->
+                val line = routeLine(route, origin)
+                loadLaserData(opts, origin, line[0], line[1], { e, n -> prelimHeights.aboveSea(e, n) }, listener::isCancelled)
+            }
+            val parts = laserData?.let { LaserWorldParts(this.parts, it) } ?: this.parts
+            val fitRaw: (Double, Double) -> Double = if (laserData != null) {
+                { e, n -> laserData.heightAboveSea(e, n) - origin.eleM }
+            } else {
+                { e, n -> prelimHeights.aboveSea(e, n) - origin.eleM }
+            }
+            val track = parts.fitTrack(route, origin, fitRaw, isBridge)
             heights0 = null
             val planned = parts.planTiles(TrackLine(track), track.loop, quality)
             val specs = planned.map { it.spec }
@@ -159,6 +175,12 @@ internal class WorldBuilderImpl(
             val attribution = ArrayList<WorldAttribution>()
             attribution += WorldAttribution(GeoSourceKind.ELEVATION, ELEVATION_ATTRIBUTION, ELEVATION_LICENSE, ELEVATION_ATTRIBUTION_URL)
             if (loader.vectorUsed) attribution += WorldAttribution(GeoSourceKind.VECTOR, VECTOR_ATTRIBUTION, VECTOR_LICENSE, VECTOR_ATTRIBUTION_URL)
+            // Laserdaten zaehlen als Hoehenquelle (GeoSourceKind ist Vertrag und kennt keine eigene Art).
+            if (laserData != null && laserData.blockCount > 0) {
+                val s = laserData.source
+                attribution += WorldAttribution(GeoSourceKind.ELEVATION, s.attribution, s.license, s.licenseUrl)
+            }
+            lastLaser = laserData
 
             val inputs = WorldInputs(
                 worldId = plan.worldId,
@@ -168,15 +190,20 @@ internal class WorldBuilderImpl(
                 origin = origin,
                 track = track,
                 planned = planned,
-                rawHeightAt = { e, n -> heights.aboveSea(e, n) - origin.eleM },
+                rawHeightAt = if (laserData != null) {
+                    { e, n -> laserData.heightAboveSea(e, n) { a, b -> heights.aboveSea(a, b) } - origin.eleM }
+                } else {
+                    { e, n -> heights.aboveSea(e, n) - origin.eleM }
+                },
                 map = map,
                 degradedOf = loader::vectorMissing,
                 aerial = if (plan.aerial.isEmpty()) null else AerialStore(deps.fetcher, deps.decoder, origin, plan.aerial, quality),
                 aerialSources = plan.aerial,
                 baseAttribution = attribution,
                 createdAtMs = clock(),
+                laserId = laserData?.let { "${it.source.id}:${it.blockCount}:${it.buildings.size}" },
             )
-            return assemble(inputs, outDir, listener)
+            return assemble(inputs, outDir, listener, parts)
         } catch (e: WorldBuildCancelled) {
             throw e
         } catch (e: WorldBuildFailed) {
@@ -237,9 +264,15 @@ internal class WorldBuilderImpl(
         val aerialSources: List<AerialSource>,
         val baseAttribution: List<WorldAttribution>,
         val createdAtMs: Long,
+        /** Kennung der Laserdaten (Quelle, Bloecke, Gebaeude) fuer den Fingerabdruck; `null` ohne. */
+        val laserId: String? = null,
     )
 
-    private fun assemble(inputs: WorldInputs, outDir: File, listener: WorldBuildListener): WorldManifest {
+    /** Die Laserdaten des letzten Baus (fuer Messungen im Werkzeug), sonst `null`. */
+    @Volatile internal var lastLaser: LaserData? = null
+        private set
+
+    private fun assemble(inputs: WorldInputs, outDir: File, listener: WorldBuildListener, parts: WorldParts = this.parts): WorldManifest {
         val quality = inputs.quality
         val line = TrackLine(inputs.track)
         val land = parts.landMap(inputs.map, line) { spec -> inputs.aerial?.get(spec)?.rgba }
@@ -319,8 +352,10 @@ internal class WorldBuilderImpl(
                 aerial = aerial?.rgba,
                 aerialTexture = aerial?.texture,
             )
+            ctx.meshHeight = parts.terrainMesh(ctx)
             val out = TileOutput(spec)
             for (layer in parts.layers(spec.level)) layer.build(ctx, out)
+            parts.tileDone(spec)
             val bytes = out.toGlb().toBytes()
             val info = parseGlb(bytes)
             val metrics = TileMetrics(
@@ -418,6 +453,7 @@ internal class WorldBuilderImpl(
         sb.append('|').append(inputs.aerialSources.joinToString(",") { it.id })
         sb.append('|').append(sha256Hex(inputs.track.toJson().toString()))
         sb.append('|').append(inputs.origin.toJson().toString())
+        inputs.laserId?.let { sb.append("|laser=").append(it) }
         for (p in inputs.planned) sb.append(';').append(p.spec.id)
         return sha256Hex(sb.toString())
     }
@@ -464,6 +500,33 @@ internal class WorldBuilderImpl(
         return Preliminary(origin, parts.planTiles(TrackLine(track), route.isLoop, quality))
     }
 
+    /** Die Route als dichter ENU-Polygonzug (alle 10 m) — fuer den Korridor der Laserdaten. */
+    private fun routeLine(route: IndoorRoute, origin: GeoOrigin): Array<DoubleArray> {
+        val len = route.lengthM
+        val count = ceil(len / 10.0).toInt() + 1
+        val open = route.copy(isLoop = false)
+        val e = DoubleArray(count)
+        val n = DoubleArray(count)
+        for (i in 0 until count) {
+            val s = open.sampleAt(min(i * 10.0, len))
+            e[i] = origin.toEast(s.lon)
+            n[i] = origin.toNorth(s.lat)
+        }
+        return arrayOf(e, n)
+    }
+
+    private class LaserEstimate(val bytes: Long, val hosts: List<String>)
+
+    /** Voranschlag der Laser-Stufe ohne Netz: Bloecke im Korridor × Erfahrungswerte (docs/indoor/lidar.md). */
+    private fun estimateLaser(opts: LaserOptions, route: IndoorRoute, origin: GeoOrigin): LaserEstimate? {
+        val source = opts.sources.firstOrNull { s -> route.points.count { s.covers(it.lat, it.lon) } * 2 >= route.points.size } ?: return null
+        val line = routeLine(route, origin)
+        val blocks = laserBlocksFor(line[0], line[1], opts.radiusM)
+        val km = lod2Tiles(source, origin, line[0], line[1], opts.lod2RadiusM).size
+        val bytes = blocks.size * LASER_BLOCK_BYTES + if (opts.buildings && source.lod2UrlTemplate != null) km * LOD2_TILE_BYTES else 0L
+        return LaserEstimate(bytes, source.hosts)
+    }
+
     private fun validate(route: IndoorRoute) {
         val len = if (route.points.size >= 2) route.lengthM else 0.0
         if (route.points.size < 2 || !len.isFinite() || len < MIN_WORLD_ROUTE_M || len > MAX_WORLD_ROUTE_M) {
@@ -475,6 +538,12 @@ internal class WorldBuilderImpl(
     }
 
     companion object {
+        /** Erfahrungswert je Laser-Block (DGM1 LZW ≈ 150 kB + DOM1 unkomprimiert ≈ 265 kB). */
+        const val LASER_BLOCK_BYTES = 415_000L
+
+        /** Mittlere LoD2-Kachel in NRW (35 022 Kacheln, 219,6 GB). */
+        const val LOD2_TILE_BYTES = 6_270_000L
+
         /** Kuerzeste Strecke, fuer die eine Welt gebaut wird. */
         const val MIN_WORLD_ROUTE_M: Double = 200.0
 

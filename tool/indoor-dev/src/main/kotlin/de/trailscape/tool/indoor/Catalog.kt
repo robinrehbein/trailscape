@@ -283,6 +283,7 @@ fun catalogBuild(
     keepGoing: Boolean,
     noAerial: Boolean,
     offline: Boolean,
+    laser: Boolean = false,
 ): Int {
     val src = readCatalogSource()
     val register = aerialSources + catalogAerialSources
@@ -296,7 +297,7 @@ fun catalogBuild(
     for (e in selected(src.entries, only)) {
         println("== ${e.id} (v${e.version})")
         try {
-            built += buildOne(e, out, qualityOverride ?: e.quality, register, pipeline, noAerial)
+            built += buildOne(e, out, qualityOverride ?: e.quality, register, pipeline, noAerial, if (laser) toolLaserOptions(File(CACHE_DIR_TOOL), offline, null) else null)
         } catch (x: Exception) {
             System.err.println("${e.id}: gescheitert: ${x.message}")
             x.cause?.let { System.err.println("  Ursache: $it") }
@@ -328,13 +329,14 @@ private fun buildOne(
     register: List<AerialSource>,
     pipeline: de.trailscape.core.indoor.world.GeoFetcher,
     noAerial: Boolean,
+    laser: de.trailscape.core.indoor.world.LaserOptions? = null,
 ): CatalogEntry {
     check(e.gpx.isFile) { "${e.gpx} fehlt — erst catalog-routes" }
     val (_, points) = readGpx(e.gpx)
     val surfaces = e.surfaces.takeIf { it.isFile }?.let(::readSurfaceFile)
     val full = cumulative(points).last()
     val (route, _) = indoorRouteOf(e.name.de, points, surfaces, full, 0.0, full)
-    val builder = createWorldBuilder()
+    val builder = laser?.let { de.trailscape.core.indoor.world.createLaserWorldBuilder(it) } ?: createWorldBuilder()
     val plan = builder.plan(route, quality).let { p -> p.copy(aerial = if (noAerial) emptyList() else aerialFor(route, register)) }
     val worldDir = File(out, "worlds/${e.id}")
     // Ein Rest eines anderen Plans (andere Strecke/Stufe) wuerde den Bau verwirren.
@@ -348,6 +350,9 @@ private fun buildOne(
         builder.build(plan, WorldBuildDeps(pipeline, ImageIoDecoder), worldDir, ConsoleProgress())
     } catch (x: WorldBuildFailed) {
         throw IllegalStateException("Bau gescheitert: ${x.message}", x.cause)
+    }
+    de.trailscape.core.indoor.world.laserBuildStats(builder).takeIf { it.isNotEmpty() }?.let { s ->
+        println("  Laser: " + s.entries.joinToString(", ") { "${it.key}=${it.value}" })
     }
     val problems = checkWorld(worldDir)
     check(problems.isEmpty()) { "Pruefung: ${problems.size} Verstoesse: ${problems.take(5)}" }
