@@ -118,9 +118,12 @@ const val VITALS_WINDOW_DAYS: Int = 60
 const val VITALS_HISTORY_WINDOW_DAYS: Int = 120
 
 /**
- * Ziel-Rampenrate (CTL-Punkte pro Woche) fuer das empfohlene Wochenziel —
- * dieselbe Zahl, mit der auch `generatePlan` seine Wochen-Lastbudgets rechnet
- * (`:core`, [de.trailscape.core.defaultTargetRampPerWeek]).
+ * Ziel-Rampenrate (CTL-Punkte pro Woche) fuer das empfohlene Wochenziel
+ * (`:core`, [de.trailscape.core.defaultTargetRampPerWeek]); dieselbe Zahl nutzt
+ * die Zielprognose. `generatePlan` rechnet **keine** Wochen-Lastbudgets mehr
+ * mit dieser Rampe: Die Last jeder Planeinheit entsteht aus ihrer Struktur
+ * (`PlanWorkouts.kt`), und die Wochenlast ist auf das 1,30-Fache der Referenz
+ * (7 × CTL bzw. letzte Aufbauwoche) gedeckelt (`LOAD_RAMP_CAP`, `PlanWeeks.kt`).
  */
 const val DEFAULT_TARGET_RAMP_PER_WEEK: Double = de.trailscape.core.defaultTargetRampPerWeek
 

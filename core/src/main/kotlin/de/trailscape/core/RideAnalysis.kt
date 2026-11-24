@@ -280,13 +280,26 @@ private fun bandedEstimate(
     )
 }
 
-/** VO2max nach Uth-Sørensen-Overgaard-Pedersen: `15,3 × HFmax / HFruhe` (§7.3 A). */
+/** Proportionalitaetsfaktor der Uth-Formel, Maenner (Uth et al. 2004). */
+private const val UTH_FACTOR_MALE = 15.3
+
+/** Proportionalitaetsfaktor der Uth-Formel, Frauen (Uth 2005). */
+private const val UTH_FACTOR_FEMALE = 14.5
+
+/**
+ * VO2max nach Uth-Sørensen-Overgaard-Pedersen: `Faktor × HFmax / HFruhe` (§7.3 A).
+ *
+ * Der Faktor ist **15,3** (Uth et al. 2004, trainierte Maenner) und **14,5** fuer
+ * Frauen (Uth 2005, 27 trainierte Frauen) — also bei [Sex.WEIBLICH] 14,5, sonst
+ * 15,3 (auch bei unbekanntem Geschlecht).
+ */
 fun estimateVo2MaxFromHrRatio(profile: TrainingProfile, texts: CoreTexts): Vo2MaxEstimate {
     if (profile.restingHr <= 0) {
         return Vo2MaxEstimate.unavailable(texts.load.vo2MaxNoRestingHr())
     }
+    val factor = if (profile.sex == Sex.WEIBLICH) UTH_FACTOR_FEMALE else UTH_FACTOR_MALE
     return bandedEstimate(
-        15.3 * profile.hrMax / profile.restingHr,
+        factor * profile.hrMax / profile.restingHr,
         vo2MaxBandRatio,
         Vo2MaxMethod.UTH_RATIO,
         Confidence.LOW,

@@ -213,12 +213,25 @@ enum class HrvStatus {
     /** Innerhalb des Bands. */
     IM_BAND,
 
-    /** Ueber dem Band, Ruhepuls unauffaellig — gutes Zeichen. */
+    /**
+     * Ueber dem Band, Ruhepuls unauffaellig. Das ist **kein** sicheres gutes
+     * Zeichen: Bei funktionellem Overreaching kann die HRV ebenfalls steigen
+     * (Le Meur et al. 2013). Die Ampel bleibt deshalb gruen und neutral — es
+     * gibt weder Bonus noch Abzug.
+     */
     UEBER_BAND,
 
     /**
-     * Ueber dem Band **bei gleichzeitig erhoehtem Ruhepuls**: moegliche
-     * parasympathische Saettigung, kein Freibrief fuer harte Reize.
+     * Ueber dem Band **bei gleichzeitig erhoehtem Ruhepuls**: ein
+     * **uneinheitliches Signal** (die beiden Groessen zeigen nicht in dieselbe
+     * Richtung), beschreibend und keine Diagnose; Folge ist nur ein
+     * vorsichtigerer Trainingsvorschlag.
+     *
+     * Der Name „Saettigung" ist historisch und bleibt, weil der Enum-Wert in
+     * Tests und UI-Code verwendet wird. Er meint **nicht** die „Saettigung" bei
+     * Plews et al. (2013): Dort sinkt ln rMSSD *trotz sinkendem* Ruhepuls. Das
+     * hier erkannte Muster (HRV hoch, Ruhepuls hoch) ist eine eigene
+     * Festlegung der App ohne direkte Quelle.
      */
     SAETTIGUNG,
 }
@@ -226,8 +239,8 @@ enum class HrvStatus {
 /**
  * Bewertung der naechtlichen HRV (rMSSD) gegen die persoenliche Baseline.
  *
- * Methodik nach Plews & Laursen bzw. HRV4Training: Einzelwerte sind
- * rechtsschief verteilt, deshalb wird `ln(rMSSD)` verwendet; verglichen wird
+ * Methodik angelehnt an Plews et al. (2013) und Vesterinen et al. (2016):
+ * Einzelwerte sind rechtsschief verteilt, deshalb wird `ln(rMSSD)` verwendet; verglichen wird
  * nicht der Tageswert, sondern das [hrvRollingDays]-Tage-Rollmittel gegen ein
  * [hrvBaselineDays]-Tage-Mittel plus Normalband
  * `Baseline ± hrvBandFactor × SD`.
@@ -368,10 +381,13 @@ private fun stdDev(values: List<Double>): Double {
 /**
  * Bewertet die HRV-Tagesserie (rMSSD in ms) gegen die eigene Baseline.
  *
- * [restingHrFlag] wird nur fuer den Saettigungsfall gebraucht: Ein Wert **ueber**
- * dem Band ist fuer sich genommen ein gutes Zeichen — zusammen mit einem
- * erhoehten Ruhepuls ist er aber ein bekanntes Muster bei starker Ermuedung
- * (parasympathische Saettigung) und wird dann als Warnzeichen gefuehrt.
+ * [restingHrFlag] wird nur fuer den uneinheitlichen Fall ([HrvStatus.SAETTIGUNG])
+ * gebraucht: Ein Wert **ueber** dem Band ist nicht automatisch „gut" (bei
+ * funktionellem Overreaching kann die HRV steigen, Le Meur et al. 2013). Steht
+ * er zusammen mit einem erhoehten Ruhepuls, widersprechen sich die Signale; das
+ * wird vorsichtig als „uneinheitlich" gefuehrt — beschreibend, keine Diagnose
+ * und nicht die „Saettigung" nach Plews et al. 2013 (dort sinkt ln rMSSD trotz
+ * sinkendem Ruhepuls).
  *
  * ## Baseline und Rollfenster ueberlappen nicht
  * Die Baseline bildet sich aus den Tagen [hrvRollingDays] …
@@ -738,9 +754,10 @@ fun computeReadiness(
     }
 
     // HRV-Strafterm auf der Skala 0…100: greift ab dem unteren Bandrand
-    // (z = −0,75) und ist bei z ≈ −2,75 voll ausgereizt. Die parasympathische
-    // Saettigung kostet die Haelfte — sie ist ein Warnzeichen, aber ein deutlich
-    // unsichereres als ein echter Einbruch.
+    // (z = −0,75) und ist bei z ≈ −2,75 voll ausgereizt. Das uneinheitliche
+    // Signal (HRV hoch bei erhoehtem Ruhepuls) kostet die Haelfte —
+    // ein Hinweis zur Vorsicht, aber ein deutlich unsichereres als ein echter
+    // Einbruch. Ein Wert ueber dem Band allein kostet nichts und bringt nichts.
     val hrvZ = hrv.z
     val usesHrv = hrv.available && hrvZ != null
     var penaltyHrv = 0.0

@@ -14,7 +14,7 @@ Inhalt: 0 Lesehilfe · 1 Herzfrequenz-Anker · 2 Lastmessung · 3 Fitness, Ermü
 Form · 4 Belastungsverhältnis akut/chronisch · 5 Erholungssignale (HRV, Ruhepuls,
 Schlaf, Readiness) · 6 Intensitätsverteilung · 7 Intervallformen · 8 Belastungs-
 steigerung · 9 Entlastungswochen und Blockstruktur · 10 Taper · 11 Längste
-Vorbereitungsfahrt · 12 FTP und 20-min-Test · 13 Kalorien und Wirkungsgrad ·
+Vorbereitungsfahrt und Zieltypen · 12 FTP und 20-min-Test · 13 Kalorien und Wirkungsgrad ·
 14 VO2max-Schätzung · 15 Was die App bewusst nicht behauptet · 16 Literatur
 
 ---
@@ -169,8 +169,10 @@ mit der modifizierten CR-10-Skala bestätigen. Foster (1998) nutzte dieselbe Gr�
 für Monotonie und Strain.
 
 **Evidenz:** belegt (für die Methode). Der Umrechnungsfaktor 1/6 auf die 100er-Skala
-ist eine **Faustregel**; eine individuelle Kalibrierung, wie der Kommentar
-„sRPE-Kalibrierung" andeutet, ist im Code nicht umgesetzt — es gilt immer der Default.
+ist eine **Faustregel**. Eine individuelle Kalibrierung gibt es nicht: `computeRideLoad`
+nimmt den Faktor als Parameter, aber kein Aufrufer überschreibt ihn — es gilt immer
+der Default (der frühere Kommentar „sRPE-Kalibrierung" war irreführend und ist
+korrigiert).
 
 **Grenzen:** Subjektiv, abhängig von Tagesform und Erfahrung; Foster empfiehlt die
 Abfrage rund 30 Minuten nach der Einheit.
@@ -237,6 +239,10 @@ Vierwochenmittels und auf `Wochenstunden × 58` (`weeklyLoadTarget`,
 IF²-Normierung und einer pyramidalen Mischung hergeleitet (Kommentar an
 `weeklyLoadPerHour`) — **Faustregel**, sauber dokumentiert. Zum 130-%-Deckel siehe 8.
 
+Diese Rampenformel gilt für das **empfohlene Wochenziel** (und die Zielprognose), nicht
+mehr für den Trainingsplan: Dort entsteht die Last jeder Einheit aus ihrer Struktur
+(siehe 7 und 8), und die Rampe wirkt nur als Deckel.
+
 ---
 
 ## 4 Belastungsverhältnis akut/chronisch (§4.4)
@@ -250,7 +256,8 @@ Verhältnis = akut / chronisch, unterdrückt bei chronischer Wochenlast < 20
 ```
 
 Bänder (`classifyLoadRatio`, `loadRatioBandLow/High`): < 0,8 niedrig · 0,8–1,5 im
-Band · > 1,5 Belastungssprung. Ein Sprung erzeugt nur einen **weichen Hinweis**
+Band · > 1,5 Belastungssprung. Gabbett (2016) nennt 0,8–1,3 als günstigen Bereich und
+ab 1,5 als kritisch; das Band der App (obere Grenze 1,5) ist eine **eigene Konvention**. Ein Sprung erzeugt nur einen **weichen Hinweis**
 (`assessDeload` → `warnings`), keinen Deload-Auslöser.
 
 **Grundlage:** Das Verhältnis wurde vor allem durch Gabbett (2016) bekannt: Er
@@ -275,8 +282,9 @@ der Kritik vereinbar.
 
 **Evidenz:** Als Beschreibung eines Lastsprungs **gängige Praxis**; als
 Risikoprädiktor **nicht belegt** (und so auch nicht verwendet). Das Band 0,8–1,5 ist
-eine **eigene Konvention** — die Herkunftsangabe „Garmin-Konvention" im Code ließ
-sich nicht verifizieren (siehe Abweichungen).
+eine **eigene Konvention** — die frühere Herkunftsangabe „Garmin-Konvention" im Code ließ
+sich nicht verifizieren und wurde aus dem Kommentar entfernt; dort stehen jetzt Gabbett
+(2016) und die Kritik von Impellizzeri et al. (2020).
 
 **Grenzen:** Die Verschiebung des chronischen Nenners um 7 Tage nähert die
 „entkoppelte" Variante an, ist aber nicht identisch mit ihr.
@@ -296,7 +304,12 @@ sich nicht verifizieren (siehe Abweichungen).
 - **Normalband**: Baseline ± 0,75 σ (`hrvBandFactor`). Unter dem Band → GELB.
 - **Eskalation** zusätzlich auf der Standardfehler-Skala σ/√n: ORANGE ab z ≤ −1,0 und
   z_mean ≤ −3,0; ROT ab z ≤ −1,5 und z_mean ≤ −5,0.
-- **Über dem Band bei gleichzeitig auffälligem Ruhepuls** → Status „Sättigung", ORANGE.
+- **Über dem Band bei gleichzeitig auffälligem Ruhepuls** → Status `SAETTIGUNG`,
+  ORANGE; für den Nutzer ein **uneinheitliches Signal** (HRV hoch, Ruhepuls hoch),
+  beschreibend und keine Diagnose. Der Enum-Name ist historisch und bleibt (er wird in
+  Tests und UI verwendet), meint aber **nicht** die Sättigung nach Plews et al. (s. u.).
+- **Über dem Band bei unauffälligem Ruhepuls** → `UEBER_BAND`, GRÜN, ohne Bonus und ohne
+  Abzug im Readiness-Score; der Text bewertet es als „weder gut noch schlecht".
 
 **Grundlage:** Plews et al. (2013, IJSPP) zeigten, dass das **Wochenmittel** von
 ln rMSSD (und Ruhepuls) Trainingsanpassungen deutlich besser abbildet als ein
@@ -308,8 +321,13 @@ kleinste bedeutsame Veränderung (SWC) des Einzelnen zu werten und den
 Trainingskontext einzubeziehen.
 
 **Evidenz:** ln rMSSD und Wochenmittel: **belegt**. Die konkrete Bandbreite 0,75 σ,
-das 60-Tage-Fenster und die SEM-Eskalation: **Faustregel** (siehe 5.2 zum in Studien
-üblichen 0,5 σ).
+das 60-Tage-Fenster und die SEM-Eskalation: **Faustregel** — eine **eigene,
+bewusst konservativere Festlegung**. Die HRV-gesteuerten Studien (5.2) vergleichen ein
+7-Tage-Mittel mit einer 28-Tage-Baseline und ± 0,5 σ. Die App nimmt eine längere
+Baseline, die das Rollfenster ausschließt (ein anhaltender Einbruch zieht so seine
+eigene Referenz nicht mit), und ein breiteres Band. Frühere Kommentare, Plews & Laursen
+oder HRV4Training nutzten ein 60-Tage-Fenster, ließen sich nicht verifizieren und sind
+entfernt.
 
 **Grenzen:**
 - Bellenger et al. (2016, Meta-Analyse): Ruhe-HRV steigt bei positiver Anpassung
@@ -320,8 +338,10 @@ das 60-Tage-Fenster und die SEM-Eskalation: **Faustregel** (siehe 5.2 zum in Stu
   Puls. Ein Wert über dem Band ist daher nicht automatisch „gut".
 - „Sättigung" heißt bei Plews et al. (2013, Sports Med) etwas anderes: ln rMSSD
   **sinkt trotz sinkendem Ruhepuls** (bei sehr fitten Athleten mit niedrigem Puls).
-  Das Muster der App (HRV hoch, Ruhepuls hoch) ist damit nicht gemeint (siehe
-  Abweichungen).
+  Das Muster der App (HRV hoch, Ruhepuls hoch) ist damit nicht gemeint. Die App
+  schreibt es deshalb nicht dieser Quelle zu, sondern nennt es ein uneinheitliches
+  Signal und rät nur zur Vorsicht („beobachte die nächsten Tage"); eine eigene
+  Festlegung ohne direkte Quelle.
 - Messbedingungen (Uhr am Handgelenk, Schlafphase, Alkohol, Infekt) beeinflussen den
   Wert; die App misst nicht selbst, sondern übernimmt Plattformwerte.
 
@@ -405,10 +425,15 @@ Messwert beschrieben werden.
 
 **Was die App rechnet:** Zielverteilung LIT : MIT : HIT = 80 : 5 : 15 (polarisiert)
 bzw. 75 : 15 : 10 (pyramidal) (`intensityDistributionTarget`,
-`PerformanceManagement.kt`; derzeit nur in der Herleitung von `weeklyLoadPerHour`
-und in Kommentaren benutzt). Höchstens 2 harte Tage pro 7 Tage
-(`MAX_HARD_DAYS_PER_7D`, `app/…/TrainingInsights.kt`). Einsteiger bekommen im Plan
-keine Intervalle (`aufbauSessions`, `Training.kt`).
+`PerformanceManagement.kt`; nur in der Herleitung von `weeklyLoadPerHour` und in
+Kommentaren benutzt). Höchstens 2 harte Tage pro 7 Tage
+(`MAX_HARD_DAYS_PER_7D`, `app/…/TrainingInsights.kt`; im Plan `PLAN_MAX_HARD_DAYS_PER_7D`,
+`PlanWeeks.kt`), nie zwei harte Tage nebeneinander, nie ein harter Tag vor der langen
+Tour (`enforceHardDayRules`). Im Plan gibt es je Woche höchstens eine Qualitätseinheit
+bei bis zu vier Einheiten, ab fünf Einheiten zwei (`maxQualityFor`, grob 80/20 nach
+Einheiten, Seiler 2010). Einsteiger fahren die ersten 3 Aufbauwochen und die
+Grundlagenphase reine Grundlage (`BEGINNER_BASE_WEEKS`), danach einen sanften
+Tempo-Reiz.
 
 **Grundlage:**
 
@@ -447,13 +472,22 @@ deutlich höher). Die App sollte angeben, was sie zählt.
 
 ## 7 Intervallformen
 
-**Was die App heute baut** (`Training.kt`, `intervalShapeFortgeschritten`,
-`intervalShapeAmbitioniert`; Texte in `i18n/TrainingTextsDe.kt`):
+**Was die App baut** (`PlanWorkouts.kt`, `WorkoutKind`, `progressionSteps`;
+Auswahl je Stufe und Phase in `qualityKindsFor`, `PlanWeeks.kt`). Jede Qualitätseinheit
+hat 15 min Einfahren und 10 min Ausfahren; die Pause zwischen den Belastungen steht
+je Art fest:
 
-| Stufe | Struktur | Pause | Beschreibung im Text |
+| Art | Zone (Anteil FTP) | Pause | Progressionsstufen (Wdh. × min) |
 |---|---|---|---|
-| Fortgeschritten | 20 min ein, 3–5 × 8 min, 10 min aus | 4 min locker | „zügig im Schwellenbereich" |
-| Ambitioniert | 20 min ein, 4–6 × 6 min, 10 min aus | 3 min locker | „hart an der Schwelle" |
+| Tempo | 76–87 % | 4 min | 3×5 · 4×5 · 3×8 · 4×8 · 3×12 |
+| Sweet Spot | 88–94 % (keine formale Zone) | 5 min | 2×10 · 3×10 · 3×12 · 3×15 · 4×15 |
+| Schwelle | 95–105 % | 3 min | 3×8 · 4×8 · 5×8 · 4×12 |
+| VO2max | 106–120 %, Puls 90–95 % HFmax | 3 min | 3×4 · 4×4 · 5×4 · 6×4 |
+
+Ambitionierte steigen eine Stufe höher ein (`levelStepOffset`). Die Belastungszeit
+steigt streng monoton; die Schritte sind **Faustregeln** der Trainingspraxis. Die
+Leistungszonen folgen Allen & Coggan (2019), die Pulsgrenzen den Friel-Zonen der App
+(1.3).
 
 ### 7.1 4 × 8 min (Seiler et al. 2013)
 
@@ -487,12 +521,18 @@ Stöggl & Sperlich (2014) übernahmen das Protokoll (20 min Einfahren bei 75 % H
 Helgerud: plausibel, durch Seiler 2013 (Rad, 4 × 4 mit 2 min Pause bei 94 % HFpeak)
 gestützt.
 
-### 7.3 Was die heutige Umsetzung davon abweicht
+### 7.3 Wie weit die Umsetzung den Protokollen folgt
 
-Siehe Abweichungsliste: Die Pause der 4 × 8 ist doppelt so lang wie im Protokoll,
-und der Text beschreibt die Intensität als „Schwellenbereich", obwohl das Protokoll
-bei ~90 % HFmax deutlich darüber liegt. Für 5 × 6 / 3 min gibt es keine direkte
-Studienvorlage.
+- **VO2max** (3–6 × 4 min, 3 min Pause, 90–95 % HFmax) folgt Helgerud 2007 in Form,
+  Intensität und Pause; die Stufen 5 × 4 und 6 × 4 sind Faustregel, die 3 Wiederholungen
+  der Einstiegsstufe liegen unter dem Protokoll.
+- **Schwelle** (3–5 × 8 min, 3 min Pause, 95–105 % FTP) übernimmt von Seiler 2013 nur
+  die **Form** 4 × 8. Die Studie fuhr ~90 % HFpeak bei Laktat deutlich über der
+  Schwelle mit 2 min Pause; die App fährt an der Schwelle mit 3 min Pause. Die Studie
+  ist daher **Formvorbild, kein Beleg für Intervalle an der Schwelle**; Schwellen-
+  intensität und Pause sind Faustregeln der Praxis (so steht es im Code-Kommentar an
+  `WorkoutKind.THRESHOLD`).
+- **Tempo** und **Sweet Spot** sind verbreitete Praxisformen ohne direkte Studienvorlage.
 
 ---
 
@@ -500,13 +540,24 @@ Studienvorlage.
 
 **Was die App rechnet:**
 
-- Plan: Wochenvolumen einer Aufbauwoche höchstens **+15 %** gegenüber der letzten
-  Aufbauwoche (`MAX_WEEKLY_INCREASE`, `Training.kt`); dieselbe Grenze für die
-  Lastbudgets (`planWeekLoadBudgets`).
+- Plan: Wochenumfang einer Aufbauwoche höchstens **+15 %** gegenüber der **letzten
+  Aufbauwoche** (nicht der Vorwoche), mindestens aber +5 km, damit kleine Umfänge nicht
+  stehen bleiben (`MAX_WEEKLY_INCREASE`, `MIN_WEEKLY_STEP_KM`, `rampCapKm`,
+  `PlanWeeks.kt`). Nach einer deutlich verfehlten Woche bleibt die nächste Aufbauwoche
+  auf dem Erreichten (`holdNextBuild`).
+- Plan, Last: Mit bekanntem CTL ist die Last einer Aufbauwoche auf das **1,30-Fache** der
+  Referenz gedeckelt (`LOAD_RAMP_CAP`; Referenz = das Größere aus 7 × CTL und der
+  Last der letzten Aufbauwoche). Greift der Deckel oder das Zeitbudget, wird der
+  **Umfang** gekürzt und neu gebaut (`fitWeek`) — Zahlen werden nie skaliert. Die Last
+  jeder Einheit kommt aus ihrer Struktur: `Σ Dauer_h × IF² × 100` (`PlanWorkouts.kt`).
+  Die frühere Rechnung mit einem Wochen-Lastbudget aus der Zielrampe gibt es im Plan
+  nicht mehr.
 - Wochenziel ohne Plan: **+8 %**, höchstens +25 km (`aufbauFactor`, `aufbauMaxJumpKm`,
   `WeeklyGoal.kt`).
 - Warnung, wenn eine Woche **> 130 %** des Vierwochenmittels liegt (`assessDeload`),
-  und gleicher Deckel für das empfohlene Wochenziel (`weeklyLoadTarget`).
+  und gleicher Deckel für das empfohlene Wochenziel (`weeklyLoadTarget`) und für die
+  Plan-Last (`LOAD_RAMP_CAP`) — der Plan schreibt nie vor, was die Auswertung danach
+  anmahnt.
 
 **Grundlage und Evidenz — ehrlich:**
 
@@ -520,7 +571,8 @@ Studienvorlage.
 - Gabbett (2016) beschreibt ähnliche Größenordnungen für Mannschaftssport (siehe 4,
   samt Kritik).
 
-**Einstufung:** +15 % und +8 % sind **Faustregeln**; der 130-%-Deckel liegt in der
+**Einstufung:** +15 % und +8 % sind **Faustregeln** (der Kommentar im Code sagt das
+selbst); der 130-%-Deckel liegt in der
 Größenordnung von Nielsen et al. 2014, ist aber eine Übertragung von Laufanfängern
 auf Radfahrer (**gängige Praxis**). Radfahren ist als nicht stoßbelastende Sportart
 vermutlich toleranter; Daten dazu fehlen.
@@ -531,9 +583,13 @@ vermutlich toleranter; Daten dazu fehlen.
 
 **Was die App rechnet:**
 
-- Plan: jede **4. Woche Erholung** mit **60 %** des Vorwochenvolumens/-budgets,
-  derzeit **zwei lockere Einheiten** (`planWeekKinds`, `RECOVERY_FACTOR`,
-  `buildSessions`, `Training.kt`).
+- Plan: jede **4. Woche Erholung** (3:1), außer sie wäre die letzte Aufbauwoche vor
+  dem Taper (`planWeekKinds`, `PlanWeeks.kt`). Umfang **55 %** der letzten Aufbauwoche
+  (−45 %, `RECOVERY_FACTOR`; Mitte des −40-bis-50-%-Korridors von `assessDeload`).
+  Die Zahl der Einheiten sinkt um höchstens eine (mindestens zwei); die letzte
+  Qualitätseinheit bleibt mit halber Wiederholungszahl erhalten („Intensität bleibt"),
+  die lange Tour ist verkürzt. Vor dem Test eines Fitnessblocks ist eine Erholungswoche
+  erwünscht.
 - Deload-Empfehlung (`assessDeload`, `Readiness.kt`, §6.2/§8.2): ausgelöst durch
   TSB < −30 an 3 Tagen in Folge, Rampe > 8 an drei Wochenpunkten oder Readiness < 40
   an ≥ 3 von 7 Tagen. Empfehlung: **Volumen −40 bis −50 %, Intensität halten**
@@ -565,10 +621,21 @@ vermutlich toleranter; Daten dazu fehlen.
 
 ## 10 Taper
 
-**Was die App heute rechnet** (`Training.kt`): vorletzte Woche `TAPER` mit **50 %**
-des tatsächlich erreichten Spitzenvolumens bzw. -budgets (`TAPER_FACTOR`), als
-**zwei lockere Einheiten** (eine mit 3 × 30 s Antritten); die letzte Woche
-(`ZIELWOCHE`) enthält nur eine kurze Aktivierung (15 km) und das Event.
+**Was die App rechnet** (`PlanWeeks.kt`, `TWO_WEEK_TAPER_FACTORS`,
+`SINGLE_TAPER_FACTOR`, `TWO_WEEK_TAPER_MIN_WEEKS`, `buildTaperWeek`,
+`buildEventWeek`):
+
+- Ab **8 Wochen** Laufzeit zwei Taperwochen mit **65 %** und **45 %** des tatsächlich
+  erreichten Spitzenumfangs (−35 % / −55 %), kürzere Pläne eine Taperwoche mit 55 %
+  (Faustregel, keine Studienempfehlung).
+- **Intensität gehalten:** Die letzte Qualitätseinheit bleibt mit gekürzter
+  Wiederholungszahl (60 % bzw. 50 %, mindestens 2) erhalten.
+- **Häufigkeit gehalten:** Die Zahl der Einheiten bleibt wie in der letzten
+  Aufbauwoche; gekürzt wird jede Einheit, nicht ihre Zahl. Die lange Tour ist auf 60 %
+  bzw. 45 % (eine Taperwoche: 50 %) der längsten Aufbau-Tour begrenzt.
+- **Zielwoche:** eine kurze Qualitätseinheit mit höchstens 2 Wiederholungen 3–5 Tage
+  vorher, bei großem Raster eine lockere Ausfahrt (50 min), 1–2 Tage vorher eine
+  Aktivierung (40 min), dann das Event.
 
 **Verifizierte Kernzahlen:**
 
@@ -584,26 +651,48 @@ des tatsächlich erreichten Spitzenvolumens bzw. -budgets (`TAPER_FACTOR`), als
 **Evidenz:** belegt (wettkampforientierte Athleten; Übertragung auf Freizeitfahrer
 plausibel, aber nicht eigens geprüft).
 
-**Bewertung des heutigen Codes:** Volumen −50 % passt; Intensität und Häufigkeit
-werden aber gesenkt (nur noch zwei lockere Einheiten statt drei bis vier), und der
-Taper ist eine Stufe statt eines progressiven Abfalls. Die geplante Umstellung auf
-einen 2-Wochen-Taper mit gehaltener Intensität und Häufigkeit entspricht der
-Literatur (siehe Abweichungen).
+**Bewertung:** Dauer (2 Wochen), Intensität und Häufigkeit folgen Bosquet et al. 2007
+und Mujika & Padilla 2003; das Volumen (−35 % und −55 %, im Mittel rund −45 %) liegt
+am unteren Rand der −41 bis −60 % bei Bosquet und unter den −60 bis −90 % bei Mujika &
+Padilla. Der Abfall ist zweistufig statt exponentiell. Kurze Pläne (< 8 Wochen) haben
+nur eine Taperwoche und weichen damit von den zwei Wochen ab.
 
 ---
 
-## 11 Längste Vorbereitungsfahrt
+## 11 Längste Vorbereitungsfahrt und Zieltypen
 
-**Was die App rechnet:** Ein Plan „trägt", wenn die längste geplante Fahrt mindestens
-**60 %** der Zieldistanz erreicht (`minLongestRideShare`, `assessPlanFeasibility`,
-`Training.kt`); Spitzenvolumen-Absicht 1,3 × Zieldistanz (`PEAK_DISTANCE_FACTOR`).
+**Was die App rechnet:** Ein Plan „trägt", wenn die längste geplante Trainingsfahrt
+(ohne das Event) mindestens **60 %** der Zieldistanz erreicht (`minLongestRideShare`,
+`assessPlanFeasibility`, `Training.kt`). Der angestrebte Spitzenumfang ist
+**1,3 × Zieldistanz** (`PEAK_DISTANCE_FACTOR`, `peakKmFor`, `PlanWeeks.kt`). Die lange
+Tour wird in jeder Aufbauwoche auf mindestens `(0,6 + 0,05) × Zieldistanz` gezogen,
+aber höchstens auf die Hälfte des Wochenumfangs und 70 % des nach den Qualitäts-
+einheiten verteilbaren Umfangs (`LONG_RIDE_FLOOR_MARGIN`, `LONG_RIDE_MAX_WEEK_SHARE`,
+`LONG_RIDE_MAX_SHARE`). Reicht der Umfang nicht, sagt `assessPlanFeasibility` das ehrlich
+und schlägt eine machbare Distanz (auf 5 km abgerundet) bzw. Wochenzahl vor; ein
+Zeitbudget als Engpass wird getrennt benannt.
 
 **Grundlage:** Der Code-Kommentar beruft sich auf Trainingspraxis („rund zwei Drittel
 bis drei Viertel der Zieldistanz").
 
 **Evidenz:** **Praxisregel / Faustregel.** Eine wissenschaftliche Quelle für einen
-Mindestanteil wurde nicht gefunden. Die App sollte den Wert als Erfahrungswert
-kennzeichnen.
+Mindestanteil wurde nicht gefunden. Der Wert ist als Erfahrungswert gekennzeichnet.
+
+### 11.1 Zieltypen
+
+- **Event** (`GoalType.EVENT`, „Distanz X am Datum Y"): 3–52 Wochen
+  (`MIN_WEEKS`, `MAX_WEEKS`); Aufbau, Erholung im 3:1-Rhythmus, Taper (Abschnitt 10),
+  Zielwoche mit dem Event. Ab 1000 m Anstieg gilt der Plan als hügelig (Intervalle am
+  Berg, IF-Aufschlag +0,05 für Grundlagenfahrten, `CLIMB_HINT_THRESHOLD_M`,
+  `HILLY_IF_BONUS`). Mit Zielzeit oder bei einem Ziel unter dem heutigen Umfang kommen
+  Renntempo-Blöcke (2–3 Blöcke, 10–25 min bei IF 0,80) in die lange Tour, im
+  spezifischen Abschnitt immer (`racePaceSteps`, `RACE_PACE_IF`; Faustregel).
+- **Fitnessblock** (`GoalType.FITNESS`, „schneller werden"): 4–16 Wochen
+  (`FITNESS_MIN_WEEKS`, `FITNESS_MAX_WEEKS`), Umfang wächst höchstens auf das 1,2-Fache
+  (`FITNESS_PEAK_FACTOR`, Faustregel), 3:1 bis zur **Testwoche**: 20-min-Test
+  (FTP ≈ 95 % des 20-min-Mittels, Allen & Coggan 2019, siehe 12) und eine
+  Vergleichsrunde, beide ohne Event-Markierung. Der Plan hat keine Zieldistanz und
+  trägt immer.
 
 ---
 
@@ -646,9 +735,10 @@ Lorås (2009, Übersicht): Der Bruttowirkungsgrad hängt stark von der Leistung 
 Leistungsniveau. In der Literatur werden häufig 18–23 % genannt.
 
 **Evidenz:** Rechenweg **belegt**; der Wert 0,24 liegt **über** dem typischen
-Bereich (siehe Abweichungen). Die bekannte Faustregel „1 kJ Tretarbeit ≈ 1 kcal"
-entspricht genau einem Wirkungsgrad von ~24 % und ist damit eher eine untere
-Schätzung des Umsatzes.
+Bereich gemessener Werte (~18–23 %). Er entspricht der Faustregel „1 kJ Tretarbeit ≈
+1 kcal" und ist damit eher eine **untere Schätzung** des Umsatzes. Der Wert ist
+bewusst **nicht** geändert (das würde alle bisherigen kcal-Werte verschieben und ist
+eine Entscheidung des Nutzers); der Code-Kommentar sagt das jetzt offen.
 
 **Grenzen:** Ohne Leistungsmesser ist schon die Ø-Leistung geschätzt (±15–25 %).
 Kalorienangaben sind Orientierung, keine Ernährungsberatung.
@@ -659,8 +749,9 @@ Kalorienangaben sind Orientierung, keine Ernährungsberatung.
 
 **Was die App rechnet** (`RideAnalysis.kt`), Rangfolge Plattformwert > Regression > Uth:
 
-- **Uth-Methode** (`estimateVo2MaxFromHrRatio`): `VO2max = 15,3 × HFmax / HFruhe`,
-  Band ±15 % (`vo2MaxBandRatio`), Confidence LOW.
+- **Uth-Methode** (`estimateVo2MaxFromHrRatio`): `VO2max = Faktor × HFmax / HFruhe`
+  mit Faktor **15,3** (Männer und unbekanntes Geschlecht) bzw. **14,5** bei
+  `Sex.WEIBLICH` (Uth 2005), Band ±15 % (`vo2MaxBandRatio`), Confidence LOW.
 - **Regression** (`estimateVo2MaxFromSegments`): stabile Segmente (≥ 5 min,
   60–90 % HFmax, 50–200 W), Sauerstoffbedarf nach ACSM-Gleichung
   `VO2 = 10,8 × W / kg + 7`, lineare Regression gegen die HF und Extrapolation auf
@@ -679,7 +770,9 @@ Kalorienangaben sind Orientierung, keine Ernährungsberatung.
   Testing and Prescription; Formel und Gültigkeitsbereich in mehreren Sekundärquellen
   bestätigt, Leitlinientext nicht eingesehen). Der Filter 50–200 W im Code passt dazu.
 
-**Evidenz:** Uth: **belegt** für trainierte Männer, sonst gängige Praxis. Regression
+**Evidenz:** Uth: **belegt** für trainierte Männer und (Faktor 14,5) trainierte Frauen,
+sonst gängige Praxis; bei unbekanntem Geschlecht gilt 15,3 und die Schätzung kann bei
+Frauen um rund 5 % zu hoch liegen. Regression
 über Submaximalwerte: **gängige Praxis** (Prinzip der submaximalen Extrapolation),
 die Gates sind Faustregeln.
 

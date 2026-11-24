@@ -88,7 +88,7 @@ internal object ReadinessTextsEn : ReadinessTexts {
 
     override fun hrvAboveBand(currentMs: Int, lowMs: Int, highMs: Int) =
         "Your 7-day HRV average of $currentMs ms is above your normal range " +
-            "($lowMs–$highMs ms) — your nervous system looks well recovered."
+            "($lowMs–$highMs ms) — on its own that is neither good nor bad, and not a sure sign of recovery."
 
     override fun hrvSaturation(currentMs: Int, lowMs: Int, highMs: Int) =
         "Your 7-day HRV average of $currentMs ms is above your normal range " +
