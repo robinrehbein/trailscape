@@ -868,6 +868,11 @@ Volumen). Alle Welten bestehen `checkWorld`; Budgets eingehalten.
 - [ ] Eckbögen am Dreiast-Knoten (lidar.md 9.1) nicht angefasst.
 - [ ] Hecken, Strommasten, Mauern: keine Daten in den Vektorkacheln.
 - [ ] Grasstreifen über Winterfeldern nur leicht gedämpft.
+- [ ] Prüflauf 25.11.2026: `:core:test`, `:app:assembleRelease`, `:indoor-dev:test`
+      und `:app:compileDebugUnitTestKotlin` grün; `:app:testDebugUnitTest -Pscreenshots`
+      **nicht gelaufen** — Maven Central antwortete auf das Robolectric-JAR
+      (`android-all-instrumented-15`) mit 429 (`retry-after` ≈ 19 h). Diese Runde
+      ändert keinen App-Code; nachholen.
 
 ## Abweichungen vom Vertrag
 
