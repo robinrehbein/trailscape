@@ -831,6 +831,27 @@ Ferne Bäume sind teurer (Volumen statt Kreuzbild); der Deckel je Kachel
   haben weder `power` noch `barrier`; Laternen innerorts, Leitpfosten, Bänke
   gab es schon.
 
+### Brücken (Nachtrag aus den neuen Laserstrecken)
+
+- **Brückenbauwerk** (`PropsLayer.bridgeStructures`): Jede Brücke der Karte
+  (`brunnel = bridge`, 6–400 m), die mehr als 0,8 m über dem Gelände liegt,
+  bekommt einen Überbau als Betonplatte (0,8 m dick, 0,35 m breiter als die
+  Fahrbahn), Pfeiler etwa alle 22 m, wo der Boden mehr als 2,5 m tiefer liegt
+  (mit Pfeilerkopf), und neben der Strecke eine Brüstung (0,85 m); auf der
+  Strecke eine Randkappe, dazu die Geländer. Deckhöhe wie im Weltbau (Strecke:
+  ihre Höhe; sonst geradlinig zwischen dem Gelände an den Linienenden). Brücken,
+  deren Linie die geglättete Strecke nur knapp begleitet (≤ 2 m neben dem Rand,
+  gleich gerichtet), zählen als Streckenbrücken. Bild:
+  `bruecke-enztal-km5-3-drohne` (Talbrücke jetzt mit Pfeilern),
+  `bruecke-enztal-km5-2-fahrer`.
+- **LoD2 auf der Fahrbahn** (schoenbuch km 7,0, „Teufelsbrücke“): Die graue
+  Platte quer über dem Weg war kein Kartenweg, sondern ein LoD2-Körper (das
+  LoD2 führt Stege/Brückenteile teils als flache „Gebäude“). LoD2-Gebäude,
+  deren Grundriss die Mittellinie der Strecke überdeckt, entfallen jetzt
+  (`coversTrack` in `LaserParts.kt`). Bild: `bruecke-schoenbuch-km7-fahrer`.
+  Eine echte Brücke ist dort nicht gezeichnet (in den Vektorkacheln ist der Weg
+  nicht als Brücke markiert).
+
 ### Gebäude
 
 - **LoD2-Dächer** (`Lod2Mesher.roofColor`): vorher die (begrenzte)
@@ -873,6 +894,11 @@ Volumen). Alle Welten bestehen `checkWorld`; Budgets eingehalten.
 - [ ] Eckbögen am Dreiast-Knoten (lidar.md 9.1) nicht angefasst.
 - [ ] Hecken, Strommasten, Mauern: keine Daten in den Vektorkacheln.
 - [ ] Grasstreifen über Winterfeldern nur leicht gedämpft.
+- [ ] Aus dem Fehlerbericht der neuen Strecken nicht bearbeitet: bottwartal
+      km 27,0 (Querstraße nur als Luftbild), welzheimer-wald km 25,0 (graue
+      Rechteckfläche auf der Wiese, im Betrachter weiter zu sehen) und km 6,5
+      (Gehweg endet mit harter Querkante) — Straßen-/Geländeschichten, eigene
+      Untersuchung nötig.
 - [ ] Prüflauf 25.11.2026: `:core:test`, `:app:assembleRelease`, `:indoor-dev:test`
       und `:app:compileDebugUnitTestKotlin` grün; `:app:testDebugUnitTest -Pscreenshots`
       **nicht gelaufen** — Maven Central antwortete auf das Robolectric-JAR
