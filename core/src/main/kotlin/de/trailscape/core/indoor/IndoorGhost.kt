@@ -23,6 +23,13 @@ import kotlin.math.sqrt
  *  * [PastRideGhost]: eine fruehere Fahrt als Zeit-Weg-Kurve auf den Laufmetern
  *    dieser Strecke ([pastRideCurve]).
  *
+ * Start mittendrin (docs/indoor/app.md, „Startpunkt und Fortsetzen"): Beide
+ * Geister koennen an einer beliebigen Stelle beginnen. Der Konstant-Geist
+ * startet dort aus dem Stand; der fruehere Ritt wird zeitlich so verschoben,
+ * dass er die Stelle zur selben Fahrzeit erreicht wie der Fahrer — verglichen
+ * wird also genau der gefahrene Abschnitt. Wird der Fahrer in der Pause
+ * versetzt, beginnt der Vergleich dort neu (die Sitzung baut den Geist neu).
+ *
  * Auf einer Strecke ohne Rundschluss bleibt der Geist am Ziel stehen.
  */
 internal interface GhostRunner {
@@ -56,9 +63,10 @@ internal class ConstantPowerGhost(
     private val rider: RiderSetup,
     private val wind: IndoorWind,
     watts: Double,
+    startDistM: Double = 0.0,
 ) : GhostRunner {
     private val watts = if (watts.isFinite()) max(watts, 0.0) else 0.0
-    override var distM: Double = 0.0
+    override var distM: Double = startDistM
         private set
     override var speedMps: Double = 0.0
         private set
@@ -138,20 +146,31 @@ internal class GhostCurve(val timesS: DoubleArray, val distsM: DoubleArray) {
     }
 }
 
-/** Eine fruehere Fahrt (siehe [pastRideCurve]). */
-internal class PastRideGhost(private val curve: GhostCurve, private val route: IndoorRoute) : GhostRunner {
-    override var distM: Double = curve.distsM[0]
+/**
+ * Eine fruehere Fahrt (siehe [pastRideCurve]).
+ *
+ * Die Uhr des Geists ist die Fahrzeit des Fahrers, verschoben um [shiftS]:
+ * Kurvenzeit = Fahrzeit + [shiftS]. [baseM] wird zu den Kurvenmetern addiert
+ * (Start in einer spaeteren Runde). Ohne Start mittendrin sind beide 0.
+ */
+internal class PastRideGhost(
+    private val curve: GhostCurve,
+    private val route: IndoorRoute,
+    private val shiftS: Double = 0.0,
+    private val baseM: Double = 0.0,
+) : GhostRunner {
+    override var distM: Double = baseM + curve.at(shiftS).first
         private set
     override var speedMps: Double = 0.0
         private set
-    private val goalS: Double? = if (route.isLoop) null else curve.timeAt(route.lengthM)
+    private val goalS: Double? = if (route.isLoop) null else curve.timeAt(route.lengthM)?.let { it - shiftS }
     override var arrivalS: Double? = null
         private set
 
     override fun advance(runningMs: Long, dtS: Double) {
         val t = runningMs / 1000.0
-        val (d, v) = curve.at(t)
-        distM = d
+        val (d, v) = curve.at(t + shiftS)
+        distM = baseM + d
         speedMps = v
         if (goalS != null && t >= goalS) {
             arrivalS = goalS
@@ -160,7 +179,26 @@ internal class PastRideGhost(private val curve: GhostCurve, private val route: I
         }
     }
 
-    override fun passedAtS(distM: Double): Double? = curve.timeAt(distM)
+    override fun passedAtS(distM: Double): Double? =
+        curve.timeAt(distM - baseM)?.let { it - shiftS }?.takeIf { it >= 0.0 }
+
+    companion object {
+        /**
+         * Der fruehere Ritt ab Laufmeter [startDistM], zur Fahrzeit
+         * [startRunningS] des Fahrers dort; `null`, wenn die fruehere Fahrt die
+         * Stelle nie erreicht hat (dann faehrt kein Geist mit).
+         */
+        fun startingAt(curve: GhostCurve, route: IndoorRoute, startDistM: Double, startRunningS: Double): PastRideGhost? {
+            val len = route.lengthM
+            val inLap = if (route.isLoop && len > 0) startDistM - floor(startDistM / len) * len else startDistM
+            val base = startDistM - inLap
+            val t0 = curve.timeAt(inLap) ?: return null
+            return PastRideGhost(curve, route, shiftS = t0 - startRunningS, baseM = base).also {
+                // Stand zur Fahrzeit des Ansetzens (nicht zur Fahrzeit 0).
+                it.advance(Math.round(startRunningS * 1000.0), 0.0)
+            }
+        }
+    }
 }
 
 /** Der Geist zu [spec], `null` ohne Geist oder wenn die fruehere Fahrt unbrauchbar ist. */
