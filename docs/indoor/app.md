@@ -311,9 +311,15 @@ steht jetzt in einer Karte wie die übrigen.
 - `PRIVACY.md` nennt alle sechs Hosts der Positivliste; `OpenSourceNotices`
   die Luftbild-Lizenzen aller vier Länder.
 - `filament-utils-android` ist entfallen (die Darstellung braucht es nicht).
-- Offen: Tageszeit und Qualität der Darstellung sind nicht einstellbar
-  (`setSky`/`setSettings` werden nicht gerufen; es gilt `SkySetting.DEFAULT`
-  und die Qualität der Welt).
+- Tageszeit (seit 24.11.2026, Branch `claude/indoor-himmel`): Karte
+  „Tageszeit“ im Schritt Koppeln (Automatisch / Morgen / Mittag / Abend,
+  Vorgabe Automatisch, gemerkt unter `trailscape.indoor.time_of_day`). Beim
+  Start der Fahrt und bei jeder Änderung `setSky(IndoorDaylight.skySetting(…))`
+  mit dem Ursprung der Welt; „Automatisch“ wird während der Fahrt alle
+  10 Minuten der Uhr nachgeführt. Nachts helle Dämmerung. Rechnung und
+  Bilder: `docs/indoor/render.md`, „Himmel, Wolken, Tageszeit“.
+- Offen: Die Qualität der Darstellung ist nicht einstellbar (`setSettings`
+  wird nicht gerufen; es gilt die Qualität der Welt).
 
 ## Bekannte Strecken (23.11.2026)
 

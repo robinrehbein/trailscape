@@ -76,6 +76,15 @@
     <string name="indoor_app_pair_gears_even_body">24 Gänge in gleichmäßigen Schritten von ganz leicht bis ganz schwer.</string>
     <string name="indoor_app_pair_gears_bike_label">Wie am Rad (2 × 12)</string>
     <string name="indoor_app_pair_gears_bike_body">Die Übersetzungen eines Gravelrads mit 48/31 vorn und 11–34 hinten, von leicht nach schwer sortiert.</string>
+    <string name="indoor_app_pair_time_title">Tageszeit</string>
+    <string name="indoor_app_pair_time_auto_label">Automatisch</string>
+    <string name="indoor_app_pair_time_auto_body">Wie die Uhrzeit am Ort der Strecke – nachts als helle Dämmerung.</string>
+    <string name="indoor_app_pair_time_morning_label">Morgen</string>
+    <string name="indoor_app_pair_time_morning_body">Tiefe Sonne im Osten, frisches Licht.</string>
+    <string name="indoor_app_pair_time_noon_label">Mittag</string>
+    <string name="indoor_app_pair_time_noon_body">Hohe Sonne, kurze Schatten.</string>
+    <string name="indoor_app_pair_time_evening_label">Abend</string>
+    <string name="indoor_app_pair_time_evening_body">Warmes, flaches Licht aus dem Westen.</string>
     <string name="indoor_app_pair_continue_hint">Koppele einen Trainer oder schalte den Demo-Trainer ein, um weiterzumachen.</string>
     <string name="indoor_app_pair_diagnostics_action">Diagnose öffnen</string>
     <!-- IndoorRouteScreen.kt -->

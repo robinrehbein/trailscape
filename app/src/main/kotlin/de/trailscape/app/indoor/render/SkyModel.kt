@@ -1,9 +1,12 @@
 package de.trailscape.app.indoor.render
 
+import de.trailscape.core.indoor.sky.DaylightModel
+import de.trailscape.core.indoor.sky.IndoorDaylight
+import de.trailscape.core.indoor.sky.SkyClouds
+import de.trailscape.core.indoor.sky.SkyLook
+import de.trailscape.core.indoor.sky.SkyRgb
 import de.trailscape.core.indoor.world.SkySetting
 import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.pow
@@ -20,19 +23,24 @@ data class Rgb(val r: Double, val g: Double, val b: Double) {
 
 /**
  * Himmel, Sonne, Umgebungslicht und Dunst fuer einen [SkySetting] — reine
- * Rechnung, die Darstellung reicht die Zahlen an Filament weiter.
+ * Rechnung, die Darstellung reicht die Zahlen an Filament weiter. Die Werte
+ * kommen aus `core/…/indoor/sky` ([DaylightModel]); hier stehen nur die
+ * Richtung im glTF-Raum, die SH-Koeffizienten und die Cubemap.
  *
  * @property sunDirection Richtung **zur** Sonne im glTF-Raum (Einheitsvektor).
  * @property sunAltitudeDeg wirksame Sonnenhoehe (mindestens [MIN_SUN_ALTITUDE_DEG]).
  * @property sunColor Farbe des Sonnenlichts (linear, hellster Kanal 1).
  * @property sunLux Beleuchtungsstaerke der Sonne in Lux.
- * @property zenith Himmelsfarbe oben (linear, relativ zu [ambientLux]).
- * @property horizon Himmelsfarbe am Horizont — zugleich die Dunstfarbe.
+ * @property zenith Verlauf des **Umgebungslichts** oben (relativ zu [ambientLux]).
+ * @property horizon Verlauf des Umgebungslichts am Horizont.
  * @property ground Farbe des Bodens fuer das Umgebungslicht von unten.
  * @property ambientLux Staerke des Umgebungslichts (`IndirectLight.intensity`);
- *   Himmel (Skybox) und Dunst werden in Filament mit derselben Staerke
- *   multipliziert, deshalb passen Horizont und Dunst zusammen.
+ *   Himmel (Skybox) und Dunst werden in Filament mit `ambientLux × Belichtung`
+ *   ([skyScale]) multipliziert.
  * @property fogDensity Ausloeschung des Dunsts in 1/m.
+ * @property look der sichtbare Himmel (szenenlinear, vor der Tonwertabbildung).
+ * @property skyScale `ambientLux × Belichtung`.
+ * @property fogColor Dunstfarbe fuer `fogOptions.color` (sichtbarer Horizont / [skyScale]).
  */
 data class SkyLighting(
     val sunDirection: V3,
@@ -44,11 +52,14 @@ data class SkyLighting(
     val ground: Rgb,
     val ambientLux: Double,
     val fogDensity: Double,
+    val look: SkyLook,
+    val skyScale: Double,
+    val fogColor: Rgb,
 )
 
 object SkyModel {
     /** Unter dieser Sonnenhoehe bleibt das Licht auf dem Stand der tiefen Sonne (Vertrag `SkySetting`). */
-    const val MIN_SUN_ALTITUDE_DEG = 8.0
+    const val MIN_SUN_ALTITUDE_DEG = IndoorDaylight.DUSK_FLOOR_DEG
 
     /** Belichtung der Kamera (Sonnige-16-Regel): Blende 16, 1/125 s, ISO 100. */
     const val APERTURE = 16f
@@ -59,57 +70,32 @@ object SkyModel {
      * Richtung zur Sonne in ENU (`e`, `n`, `u`) fuer Ortszeit [hourOfDay]
      * (wahre Sonnenzeit, Naeherung), Tag [dayOfYear] und Breite [latDeg].
      */
-    fun sunEnu(hourOfDay: Double, dayOfYear: Int, latDeg: Double): Triple<Double, Double, Double> {
-        val decl = Math.toRadians(-23.44 * cos(2 * PI / 365.0 * (dayOfYear.coerceIn(1, 366) + 10)))
-        val hourAngle = Math.toRadians(15.0 * (hourOfDay.coerceIn(0.0, 24.0) - 12.0))
-        val lat = Math.toRadians(latDeg.coerceIn(-89.9, 89.9))
-        val east = -cos(decl) * sin(hourAngle)
-        val north = sin(decl) * cos(lat) - cos(decl) * cos(hourAngle) * sin(lat)
-        val up = sin(decl) * sin(lat) + cos(decl) * cos(hourAngle) * cos(lat)
-        return Triple(east, north, up)
-    }
+    fun sunEnu(hourOfDay: Double, dayOfYear: Int, latDeg: Double): Triple<Double, Double, Double> =
+        IndoorDaylight.sunEnu(hourOfDay, dayOfYear, latDeg)
 
-    fun lighting(sky: SkySetting, latDeg: Double): SkyLighting {
-        val (e, n, u) = sunEnu(sky.hourOfDay, sky.dayOfYear, latDeg)
-        val rawAlt = Math.toDegrees(asin(u.coerceIn(-1.0, 1.0)))
-        val alt = max(rawAlt, MIN_SUN_ALTITUDE_DEG)
-        // Waagrechte Richtung behalten, Hoehe auf mindestens 8° anheben.
-        val horiz = sqrt(e * e + n * n).takeIf { it > 1e-9 }
-        val (he, hn) = if (horiz != null) (e / horiz) to (n / horiz) else 0.0 to -1.0
-        val altR = Math.toRadians(alt)
-        val dir = enuToGltf(he * cos(altR), hn * cos(altR), sin(altR)).normalized()
-
-        // 0 bei tiefer Sonne, 1 ab etwa 35° Hoehe.
-        val high = ((alt - MIN_SUN_ALTITUDE_DEG) / 27.0).coerceIn(0.0, 1.0)
-        val haze = sky.haze.coerceIn(0.0, 1.0)
-        val sunColor = Rgb(1.0, 0.80, 0.58).lerp(Rgb(1.0, 0.97, 0.92), high)
-        val sunLux = (70_000.0 + 40_000.0 * high) * (1.0 - 0.35 * haze)
-
-        val clearZenith = Rgb(0.16, 0.34, 0.78).lerp(Rgb(0.10, 0.28, 0.75), high)
-        val hazyZenith = Rgb(0.45, 0.55, 0.70)
-        val zenith = clearZenith.lerp(hazyZenith, haze * 0.7)
-        val clearHorizon = Rgb(0.85, 0.72, 0.62).lerp(Rgb(0.62, 0.74, 0.90), high)
-        val horizon = clearHorizon.lerp(Rgb(0.78, 0.80, 0.82), haze * 0.6)
-        val ground = Rgb(0.20, 0.22, 0.14)
-
-        // Sichtweite 40 km (klar) .. 4 km (dicht); Koschmieder: Dichte ≈ 3,9 / Sichtweite.
-        val visibilityM = 40_000.0 * (1.0 - haze) + 4_000.0 * haze
+    /**
+     * Licht und Himmel fuer [sky] an der Breite [latDeg]; [viewDistanceM] ist
+     * die Sichtweite der Welt (Dunst reicht bis an ihren Rand).
+     */
+    fun lighting(sky: SkySetting, latDeg: Double, viewDistanceM: Double? = null): SkyLighting {
+        val d = DaylightModel.lighting(sky, latDeg, viewDistanceM)
         return SkyLighting(
-            sunDirection = dir,
-            sunAltitudeDeg = alt,
-            sunColor = sunColor,
-            sunLux = sunLux,
-            zenith = zenith,
-            horizon = horizon,
-            ground = ground,
-            // Unter dem Kronendach (Waldweg im Schatten) gibt es nur dieses Licht —
-            // Filament verdeckt das Umgebungslicht nicht durch Geometrie, nur die
-            // Sonne durch Schatten. Bei tiefer Sonne deshalb nicht unter 26 000:
-            // der Weg im Wald bleibt lesbar (Bitte aus docs/indoor/world.md).
-            ambientLux = 26_000.0 + 8_000.0 * high,
-            fogDensity = 3.9 / visibilityM,
+            sunDirection = enuToGltf(d.sunEast, d.sunNorth, d.sunUp).normalized(),
+            sunAltitudeDeg = d.sunAltitudeDeg,
+            sunColor = d.sunColor.toRgb(),
+            sunLux = d.sunLux,
+            zenith = d.iblZenith.toRgb(),
+            horizon = d.iblHorizon.toRgb(),
+            ground = d.iblGround.toRgb(),
+            ambientLux = d.ambientLux,
+            fogDensity = d.fogDensity,
+            look = d.look,
+            skyScale = d.skyScale,
+            fogColor = d.fogColor.toRgb(),
         )
     }
+
+    private fun SkyRgb.toRgb() = Rgb(r, g, b)
 
     /**
      * Strahldichte des Himmelsmodells in Richtung [d] (glTF, Einheitsvektor):
@@ -120,15 +106,6 @@ object SkyModel {
     } else {
         l.horizon.lerp(l.ground, (-d.y * 4.0).coerceIn(0.0, 1.0))
     }
-
-    /**
-     * Farbe der Himmels-Cubemap in Richtung [d]. Bewusst **symmetrisch** zur
-     * Waagrechten (haengt nur von `|y|` ab): Unter dem Horizont liegt ohnehin
-     * Gelaende, und so ist das Bild unabhaengig davon richtig, ob ein Treiber
-     * die Seitenflaechen der Cubemap senkrecht spiegelt. Die Sonnenscheibe
-     * zeichnet Filament selbst (`Skybox.showSun`).
-     */
-    fun skyboxColor(l: SkyLighting, d: V3): Rgb = l.horizon.lerp(l.zenith, abs(d.y).pow(0.5))
 
     /**
      * Die neun SH-Koeffizienten (drei Baender, je RGB) der Strahldichte fuer
@@ -216,40 +193,43 @@ object SkyModel {
     }
 
     /**
-     * Die sechs Flaechen der Himmels-Cubemap als RGBA8 in **sRGB**, eine nach
-     * der anderen in der OpenGL-Reihenfolge +X, −X, +Y, −Y, +Z, −Z, je
-     * [size]² Texel, Zeile fuer Zeile. Richtungen nach der OpenGL-Tabelle
-     * (Spezifikation, Abschnitt „Cube Map Texture Selection“).
+     * Die Himmels-Cubemap (Verlauf und weiche Wolken, siehe `SkyClouds`) als
+     * RGB-Halbfloats fuer eine `R11F_G11F_B10F`-Textur: sechs Flaechen +X, −X,
+     * +Y, −Y, +Z, −Z, je [size]² Texel. Durch [SkyLighting.skyScale] geteilt,
+     * weil Filament die Skybox damit multipliziert. HDR, damit der helle
+     * Horizont und die Wolken nicht bei 1 abgeschnitten werden.
      */
-    fun cubemapPixels(l: SkyLighting, size: Int): ByteArray {
-        val out = ByteArray(6 * size * size * 4)
-        var o = 0
-        for (face in 0 until 6) {
-            for (row in 0 until size) {
-                val tc = 2.0 * (row + 0.5) / size - 1.0
-                for (col in 0 until size) {
-                    val sc = 2.0 * (col + 0.5) / size - 1.0
-                    val d = cubeDirection(face, sc, tc).normalized()
-                    val c = skyboxColor(l, d)
-                    out[o++] = toSrgbByte(c.r)
-                    out[o++] = toSrgbByte(c.g)
-                    out[o++] = toSrgbByte(c.b)
-                    out[o++] = 0xFF.toByte()
-                }
-            }
+    fun cubemapHalfRgb(l: SkyLighting, size: Int): ShortArray = SkyClouds.cubemapHalfRgb(l.look, size, l.skyScale)
+
+    /**
+     * Rueckfall ohne Gleitkomma-Textur: dieselbe Cubemap als RGBA8 in sRGB
+     * (Werte ueber 1 abgeschnitten).
+     */
+    fun cubemapSrgbBytes(half: ShortArray): ByteArray {
+        val texels = half.size / 3
+        val out = ByteArray(texels * 4)
+        for (i in 0 until texels) {
+            out[i * 4] = toSrgbByte(halfToDouble(half[i * 3]))
+            out[i * 4 + 1] = toSrgbByte(halfToDouble(half[i * 3 + 1]))
+            out[i * 4 + 2] = toSrgbByte(halfToDouble(half[i * 3 + 2]))
+            out[i * 4 + 3] = 0xFF.toByte()
         }
         return out
     }
 
-    /** OpenGL-Cubemap: Richtung fuer Flaeche [face] und Flaechenkoordinaten `sc`, `tc` in −1..1. */
-    fun cubeDirection(face: Int, sc: Double, tc: Double): V3 = when (face) {
-        0 -> V3(1.0, -tc, -sc)
-        1 -> V3(-1.0, -tc, sc)
-        2 -> V3(sc, 1.0, tc)
-        3 -> V3(sc, -1.0, -tc)
-        4 -> V3(sc, -tc, 1.0)
-        else -> V3(-sc, -tc, -1.0)
+    /** IEEE 754 binary16 → Double (ohne Subnormale, wie `SkyClouds.toHalf` schreibt). */
+    fun halfToDouble(h: Short): Double {
+        val v = h.toInt() and 0xFFFF
+        val e = (v shr 10) and 0x1F
+        if (e == 0) return 0.0
+        val m = v and 0x3FF
+        val sign = if (v and 0x8000 != 0) -1.0 else 1.0
+        return sign * (1.0 + m / 1024.0) * 2.0.pow(e - 15)
     }
+
+    /** OpenGL-Cubemap: Richtung fuer Flaeche [face] und Flaechenkoordinaten `sc`, `tc` in −1..1. */
+    fun cubeDirection(face: Int, sc: Double, tc: Double): V3 =
+        SkyClouds.cubeDirection(face, sc, tc).let { V3(it[0], it[1], it[2]) }
 
     fun toSrgbByte(linear: Double): Byte {
         val c = linear.coerceIn(0.0, 1.0)

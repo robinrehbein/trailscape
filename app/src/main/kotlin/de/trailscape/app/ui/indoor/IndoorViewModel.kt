@@ -55,7 +55,10 @@ import de.trailscape.core.indoor.ShifterEvent
 import de.trailscape.core.indoor.TrainerCapabilities
 import de.trailscape.core.indoor.TrainerConnection
 import de.trailscape.core.indoor.VirtualGearTable
+import de.trailscape.core.indoor.sky.IndoorDaylight
+import de.trailscape.core.indoor.sky.IndoorTimeOfDay
 import de.trailscape.core.indoor.world.CameraMode
+import de.trailscape.core.indoor.world.GeoOrigin
 import de.trailscape.core.indoor.world.IndoorQuality
 import de.trailscape.core.indoor.world.RenderFailure
 import de.trailscape.core.indoor.world.WorldBuildCancelled
@@ -100,7 +103,8 @@ import kotlinx.coroutines.withContext
  * Fahrt wird nicht wiederhergestellt (ohne Vordergrunddienst pausiert sie im
  * Hintergrund ohnehin, docs/indoor.md 11.2 Nr. 4). Gemerkt wird allein der
  * Demo-Schalter ([KEY_DEMO_TRAINER]), das Kettenblatt am Trainer
- * ([KEY_CHAINRING_TEETH]) und die Gangtabelle ([KEY_GEAR_TABLE]), alle im [store].
+ * ([KEY_CHAINRING_TEETH]), die Gangtabelle ([KEY_GEAR_TABLE]) und die
+ * Tageszeit der 3D-Welt ([KEY_TIME_OF_DAY]), alle im [store].
  *
  * ## Fremde Teile
  * Alles aus anderen Slices kommt ueber [parts] und steckt in [indoorCatching]:
@@ -179,6 +183,7 @@ class IndoorViewModel(
             shifterName = null,
             chainringTeeth = readChainringTeeth(),
             gearTable = readGearTable(),
+            timeOfDay = readTimeOfDay(),
         ),
     )
     val pair: StateFlow<IndoorPairUi> = _pair.asStateFlow()
@@ -323,6 +328,16 @@ class IndoorViewModel(
         _pair.update { it.copy(gearTable = table) }
     }
 
+    /**
+     * Tageszeit der 3D-Welt — gemerkt in den Einstellungen (Enum-Name). Gilt ab
+     * der naechsten Fahrt; waehrend einer Fahrt sofort.
+     */
+    fun setTimeOfDay(choice: IndoorTimeOfDay) {
+        runCatching { store.setString(KEY_TIME_OF_DAY, choice.name) }
+        _pair.update { it.copy(timeOfDay = choice) }
+        applySky(force = true)
+    }
+
     /** Weiter zur Streckenwahl (nur wenn [IndoorPairUi.canContinue]). */
     fun continueFromPair() {
         if (!_pair.value.canContinue) return
@@ -336,6 +351,31 @@ class IndoorViewModel(
         runCatching { store.getString(KEY_CHAINRING_TEETH)?.trim()?.toIntOrNull() }.getOrNull()
             ?.coerceIn(CHAINRING_MIN_TEETH, CHAINRING_MAX_TEETH)
             ?: CHAINRING_DEFAULT_TEETH
+
+    private fun readTimeOfDay(): IndoorTimeOfDay =
+        runCatching { IndoorTimeOfDay.fromName(store.getString(KEY_TIME_OF_DAY)) }.getOrDefault(IndoorTimeOfDay.AUTO)
+
+    /** Wann der Himmel zuletzt gesetzt wurde (Wanduhr), fuer das Nachfuehren bei „Automatisch“. */
+    private var skySetAtMs = Long.MIN_VALUE
+    private var skyOrigin: GeoOrigin? = null
+
+    /**
+     * Setzt den Himmel der laufenden Darstellung aus der gewaehlten Tageszeit
+     * und dem Ort der Welt. Ohne [force] nur, wenn „Automatisch“ gewaehlt ist
+     * und der letzte Stand mindestens [SKY_REFRESH_MS] alt ist (die Sonne
+     * wandert waehrend langer Fahrten mit).
+     */
+    private fun applySky(force: Boolean) {
+        val r = _renderer.value ?: return
+        val origin = skyOrigin ?: return
+        val choice = _pair.value.timeOfDay
+        val now = wallClock()
+        if (!force && (choice != IndoorTimeOfDay.AUTO || now - skySetAtMs < SKY_REFRESH_MS)) return
+        skySetAtMs = now
+        indoorCatching(IndoorPart.RENDER) {
+            r.setSky(IndoorDaylight.skySetting(choice, now, origin.lat, origin.lon))
+        }
+    }
 
     private fun readGearTable(): VirtualGearTable =
         runCatching { store.getString(KEY_GEAR_TABLE)?.trim() }.getOrNull()
@@ -929,10 +969,12 @@ class IndoorViewModel(
                 r.setCamera(CameraMode.CHASE)
                 r.loadWorld(dir!!, manifest!!)
             }
+            skyOrigin = manifest?.origin
             loaded.exceptionOrNull()?.let { e ->
                 runtime.rendererListener.onFailure(RenderFailure.INTERNAL, problemOf(IndoorPart.RENDER, e).detail)
             }
             _renderer.value = r
+            applySky(force = true)
         }
         publishRide(runtime.state.value)
         rideCollectJob = scope.launch { runtime.state.collect { publishRide(it) } }
@@ -971,6 +1013,7 @@ class IndoorViewModel(
                 rideStartRouteM = d.coerceAtLeast(0.0)
             }
         }
+        applySky(force = false)
         _ride.value = IndoorRideUi(
             routeName = st.routeName,
             session = rs.session,
@@ -1284,6 +1327,7 @@ class IndoorViewModel(
     private fun destroyRenderer() {
         val r = _renderer.value ?: return
         _renderer.value = null
+        skyOrigin = null
         indoorCatching(IndoorPart.RENDER) {
             r.setListener(null)
             r.destroy()
@@ -1323,6 +1367,12 @@ class IndoorViewModel(
 
         /** Schluessel der Gangtabelle (Enum-Name von [VirtualGearTable]) im [KeyValueStore]. */
         const val KEY_GEAR_TABLE = "trailscape.indoor.gear_table"
+
+        /** Schluessel der Tageszeit der 3D-Welt (Enum-Name von [IndoorTimeOfDay]). */
+        const val KEY_TIME_OF_DAY = "trailscape.indoor.time_of_day"
+
+        /** „Automatisch“: Himmel waehrend der Fahrt alle 10 Minuten der Uhr nachfuehren. */
+        const val SKY_REFRESH_MS = 10 * 60_000L
 
         /** Annahme ueber den Trainer, bis er seine Faehigkeiten meldet. */
         val ASSUMED_CAPABILITIES = TrainerCapabilities(simulation = true, targetPower = true)

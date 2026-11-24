@@ -2,7 +2,7 @@
 //
 //   node shots.mjs <weltverzeichnis> [--dists 0,500,…|--count N] [--cameras chase,handlebar,drone]
 //                  [--size 1600x900] [--jpeg] [--out <dir>] [--sun-az 235] [--sun-el 40]
-//                  [--no-rider] [--no-attribution] [--models <dir>] [--param k=v …] [--serve [--port 8123]]
+//                  [--no-rider] [--no-attribution] [--models <dir>] [--sky <dir>] [--param k=v …] [--serve [--port 8123]]
 //
 // Startet einen kleinen HTTP-Server (nur 127.0.0.1), oeffnet den Betrachter und
 // macht je Stelle × Kamera ein Bild nach <welt>/shots/<laufmeter>_<kamera>.png.
@@ -25,7 +25,7 @@ const REPO = resolve(HERE, '..', '..', '..');
 function parseArgs(argv) {
   const a = {
     world: null, dists: null, count: 6, cameras: ['chase', 'handlebar', 'drone'], width: 1600, height: 900,
-    jpeg: false, out: null, serve: false, port: 0, rider: true, attribution: true, sunAz: null, sunEl: null,
+    jpeg: false, out: null, serve: false, port: 0, rider: true, attribution: true, sunAz: null, sunEl: null, sky: null,
     models: join(REPO, 'app', 'src', 'main', 'assets', 'indoor', 'models'), extra: [],
   };
   const need = (i, name) => {
@@ -48,6 +48,7 @@ function parseArgs(argv) {
       case '--sun-az': a.sunAz = Number(need(++i, k)); break;
       case '--sun-el': a.sunEl = Number(need(++i, k)); break;
       case '--models': a.models = resolve(need(++i, k)); break;
+      case '--sky': a.sky = resolve(need(++i, k)); break;
       case '--param': a.extra.push(need(++i, k)); break;
       case '-h': case '--help': a.help = true; break;
       default:
@@ -85,7 +86,7 @@ if (!existsSync(join(HERE, 'node_modules', 'three'))) {
 // Statischer Server: /viewer/ → dieses Verzeichnis, /world/ → Welt, /models/ → Modelle
 // ---------------------------------------------------------------------------
 
-const MOUNTS = { viewer: HERE, world: args.world, models: args.models };
+const MOUNTS = { viewer: HERE, world: args.world, models: args.models, sky: args.sky ?? HERE };
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8', '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg', '.css': 'text/css',
@@ -94,7 +95,7 @@ const MIME = {
 const server = http.createServer((req, res) => {
   try {
     const path = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
-    const m = /^\/(viewer|world|models)\/(.*)$/.exec(path);
+    const m = /^\/(viewer|world|models|sky)\/(.*)$/.exec(path);
     if (!m) { res.writeHead(path === '/' ? 302 : 404, path === '/' ? { Location: '/viewer/index.html' } : {}); res.end(); return; }
     const root = MOUNTS[m[1]];
     const file = normalize(join(root, m[2] || 'index.html'));
@@ -116,6 +117,7 @@ function pageUrl(extra = {}) {
   q.set('models', existsSync(join(args.models, 'rider.glb')) ? '/models' : '');
   if (!args.attribution) q.set('attribution', '0');
   if (!args.rider) q.set('rider', '0');
+  if (args.sky) q.set('skyDir', '/sky');
   for (const kv of args.extra) { const i = kv.indexOf('='); q.set(i < 0 ? kv : kv.slice(0, i), i < 0 ? '1' : kv.slice(i + 1)); }
   return `${base}/viewer/index.html?${q}`;
 }

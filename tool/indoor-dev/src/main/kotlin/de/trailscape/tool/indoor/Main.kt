@@ -30,6 +30,7 @@ import kotlin.system.exitProcess
  * models --out <dir>
  * catalog-routes [--only a,b]
  * catalog-build --out <dir> [--only a,b] [--quality …] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline]
+ * sky --time AUTO|MORNING|NOON|EVENING [--lat 51.3] [--lon 9.5] [--epoch-ms …] [--quality …] --out <dir>
  * ```
  * Katalog bekannter Strecken: `Catalog.kt`, docs/indoor/catalog.md.
  * Relative Pfade gelten ab dem Projektverzeichnis (`:indoor-dev:run` startet dort).
@@ -57,7 +58,8 @@ private const val USAGE = """Aufruf:
   check <dir>
   models --out <dir>
   catalog-routes [--only a,b]
-  catalog-build --out <dir> [--only a,b] [--quality LOW|MEDIUM|HIGH] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline] [--laser]"""
+  catalog-build --out <dir> [--only a,b] [--quality LOW|MEDIUM|HIGH] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline] [--laser]
+  sky --time AUTO|MORNING|NOON|EVENING [--lat 51.3] [--lon 9.5] [--epoch-ms ms] [--quality LOW|MEDIUM|HIGH] --out <dir>"""
 
 /** Cache der Geodaten (git-ignoriert). */
 private const val CACHE_DIR = CACHE_DIR_TOOL
@@ -117,6 +119,19 @@ private fun run(all: List<String>): Int {
                 noAerial = a.flag("no-aerial"),
                 offline = a.flag("offline"),
                 laser = a.flag("laser"),
+            )
+        }
+        "sky" -> Args(rest, emptySet()).let { a ->
+            skyExport(
+                time = a.opt("time")?.let { t ->
+                    de.trailscape.core.indoor.sky.IndoorTimeOfDay.entries.firstOrNull { it.name == t.uppercase() }
+                        ?: throw UsageError("--time: AUTO, MORNING, NOON oder EVENING")
+                } ?: de.trailscape.core.indoor.sky.IndoorTimeOfDay.AUTO,
+                latDeg = a.double("lat") ?: 51.3,
+                lonDeg = a.double("lon") ?: 9.5,
+                epochMs = a.opt("epoch-ms")?.toLongOrNull() ?: System.currentTimeMillis(),
+                quality = a.quality(),
+                out = File(a.req("out")),
             )
         }
         else -> throw UsageError("unbekannter Befehl: $cmd")

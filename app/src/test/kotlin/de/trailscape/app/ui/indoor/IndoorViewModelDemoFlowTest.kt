@@ -26,6 +26,8 @@ import de.trailscape.core.TrainingProfile
 import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.i18n.CoreTextsDe
 import de.trailscape.core.indoor.IndoorRouteSource
+import de.trailscape.core.indoor.sky.IndoorDaylight
+import de.trailscape.core.indoor.sky.IndoorTimeOfDay
 import de.trailscape.core.indoor.world.RenderFailure
 import de.trailscape.core.indoor.world.WorldBuildFailed
 import de.trailscape.core.indoor.world.WorldManifest
@@ -424,6 +426,38 @@ class IndoorViewModelDemoFlowTest {
         // Unbekannter Wert im Speicher → Vorgabe.
         store.setString(IndoorViewModel.KEY_GEAR_TABLE, "KASSETTE_11_50")
         assertEquals(de.trailscape.core.indoor.VirtualGearTable.EVEN, viewModel(FakeIndoorParts(), store = store).pair.value.gearTable)
+    }
+
+    @Test
+    fun tageszeitWirdGemerktUndGehtAnDieDarstellung() {
+        val store = MemoryKeyValueStore()
+        val first = viewModel(FakeIndoorParts(), store = store)
+        assertEquals(IndoorTimeOfDay.AUTO, first.pair.value.timeOfDay, "Vorgabe automatisch")
+        first.setTimeOfDay(IndoorTimeOfDay.EVENING)
+        assertEquals("EVENING", store.getString(IndoorViewModel.KEY_TIME_OF_DAY))
+
+        val parts = FakeIndoorParts()
+        val vm = viewModel(parts, store = store)
+        assertEquals(IndoorTimeOfDay.EVENING, vm.pair.value.timeOfDay)
+        vm.pairWithDemo()
+        vm.selectRoute(IndoorRouteOption.TestWorld)
+        vm.continueFromRoute()
+        vm.startRide(withWorld = true)
+        val renderer = parts.renderers.single() as FakeWorldRenderer
+        val evening = renderer.skies.last()
+        assertEquals(IndoorDaylight.PRESET_DAY_OF_YEAR, evening.dayOfYear)
+        assertTrue(evening.hourOfDay > 16.0, "Abendsonne: ${evening.hourOfDay}")
+
+        // Waehrend der Fahrt umgestellt: wirkt sofort; „Automatisch“ folgt der Uhr (Testuhr: 6.12.2025).
+        vm.setTimeOfDay(IndoorTimeOfDay.AUTO)
+        val auto = renderer.skies.last()
+        assertEquals(340, auto.dayOfYear)
+        vm.rideFor(2)
+        assertEquals(2, renderer.skies.size, "ohne Aenderung kein neuer Himmel (Nachfuehren erst nach 10 min)")
+
+        // Unbekannter Wert im Speicher → automatisch.
+        store.setString(IndoorViewModel.KEY_TIME_OF_DAY, "MITTERNACHT")
+        assertEquals(IndoorTimeOfDay.AUTO, viewModel(FakeIndoorParts(), store = store).pair.value.timeOfDay)
     }
 
     @Test

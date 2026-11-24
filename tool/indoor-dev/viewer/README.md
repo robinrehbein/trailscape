@@ -27,6 +27,7 @@ node shots.mjs ../out/mock --serve --port 8123   # nur Server, Seite im Browser 
 | `--jpeg` | zusätzlich JPEG, 1280 px breit, unter 300 kB |
 | `--out <dir>` | Zielverzeichnis, sonst `<welt>/shots/` |
 | `--sun-az`, `--sun-el` | Sonnenazimut (0 = Nord, 90 = Ost) und -höhe in Grad; Vorgabe 235/40 |
+| `--sky <dir>` | Himmel der Darstellung aus `indoor-dev sky --out <dir>` (Seite: `skyDir`): Rundumbild mit Wolken, Sonnenstand, Sonnenfarbe, Lichtstärken und Dunst wie auf dem Gerät; `--sun-*` gehen vor |
 | `--models <dir>` | Verzeichnis mit `rider.glb`/`ghost.glb`; Vorgabe `app/src/main/assets/indoor/models`. Fehlt `rider.glb`, zeichnet der Betrachter Platzhalter-Quader |
 | `--no-rider`, `--no-attribution` | Fahrer bzw. Quellenangaben weglassen |
 | `--param k=v` | beliebiger URL-Parameter der Seite (mehrfach) |
@@ -49,6 +50,7 @@ Welt), `/models/` (die Modelle).
 | `models` | `../../../app/src/main/assets/indoor/models` | URL des Modellverzeichnisses; leer = Platzhalter ohne Ladeversuch |
 | `dist`, `camera` | `0`, `chase` | Stelle und Kamera beim Start |
 | `sunAz`, `sunEl` | `235`, `40` | Sonnenstand |
+| `skyDir` | – | URL eines Verzeichnisses mit `sky.json` + `sky.f32` (siehe `--sky`). Der Himmel geht dann durch eine GLSL-Nachbildung von Filaments `ACES_LEGACY` statt durch three.js' ACES; die Welt bleibt bei der Abbildung des Betrachters, die Dunstfarbe wird so umgerechnet, dass sie nach dieser Abbildung dem Horizont der Darstellung gleicht |
 | `rider` | `1` | `0` lässt den Fahrer weg |
 | `pedal`, `roll` | `0.15`, `0` | Phase 0..1 der Animationen `pedal` und `roll` |
 | `ghost` | – | Laufmeter des Geists (fährt links der Mitte); ohne Angabe kein Geist |
