@@ -145,7 +145,14 @@ internal class RoadsLayer : TileLayer {
          * gerechnet — die Strecke steigt auch quer zur kreuzenden Strasse).
          */
         private fun heightAt(e: Double, n: Double, r: RoadNet.Road, nearTrack: Boolean, k: Int): Double {
-            val v = max(ctx.ground.heightAt(e, n), terrainMeshHeightAt(ctx.ground, e, n, meshCell)) + BASE_LIFT_M + r.spec.rank * RANK_LIFT_M + dirLift(r, k)
+            // Wie weit das Netz ueber dem wahren Boden liegt — an der Station und einen halben Schritt
+            // vor und zurueck (liegt ein Gitterpunkt zwischen zwei Stationen, woelbt es sich dort).
+            val te = r.rn[k] * STEP_M / 2
+            val tn = -r.re[k] * STEP_M / 2
+            fun bulge(x: Double, y: Double) = terrainMeshHeightAt(ctx.ground, x, y, meshCell) - ctx.ground.heightAt(x, y)
+            val g0 = ctx.ground.heightAt(e, n)
+            val mesh = g0 + max(0.0, max(bulge(e, n), max(bulge(e + te, n + tn), bulge(e - te, n - tn))))
+            val v = mesh + BASE_LIFT_M + r.spec.rank * RANK_LIFT_M + dirLift(r, k)
             if (!nearTrack) return v
             val hit = ctx.track.nearest(e, n, 30.0) ?: return v
             val hw = ctx.track.halfWidthAt(hit.distM)
@@ -263,7 +270,7 @@ internal class RoadsLayer : TileLayer {
 
         /** Abtastschritt der Strassen in Metern. */
         const val STEP_M = 4.0
-        const val BASE_LIFT_M = 0.04
+        const val BASE_LIFT_M = 0.05
         const val RANK_LIFT_M = 0.012
 
         /** Groesster Versatz nach der Richtung, kleiner als ein Rangschritt. */
@@ -273,10 +280,10 @@ internal class RoadsLayer : TileLayer {
         const val EDGE_DROP_M = 0.02
 
         /** So tief liegt eine einmuendende Strasse unter der Fahrbahn der Strecke. */
-        const val UNDER_TRACK_M = 0.035
+        const val UNDER_TRACK_M = 0.05
 
         /** So hoch liegt eine haertere Strasse ueber der Fahrbahn der Strecke, die sie quert. */
-        const val OVER_TRACK_M = 0.014
+        const val OVER_TRACK_M = 0.03
 
         /** Rangfolge der Belaege an einer Querung: Der haertere liegt oben. */
         fun hardness(kind: SurfaceKind): Int = when (kind.visual) {
