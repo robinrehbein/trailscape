@@ -113,4 +113,50 @@ class AerialTest {
         assertEquals("xx", img.source.id)
         assertEquals(listOf(nw.wmsUrl, "https://example.org/wms"), asked)
     }
+
+    private val bw = aerialSources.first { it.id == "bw" }
+    private val bwJpeg = resourceBytes("aerial_bw_256.jpg")
+    private val bwBlank = resourceBytes("aerial_bw_blank_256.jpg")
+
+    @Test
+    fun `Baden-Wuerttemberg steht im Register mit LGL-Dienst und Pflichtvermerk`() {
+        assertEquals("https://owsproxy.lgl-bw.de/owsproxy/ows/WMS_LGL-BW_ATKIS_DOP_20_C", bw.wmsUrl)
+        assertEquals("IMAGES_DOP_20_RGB", bw.layer)
+        assertEquals("dl-de/by-2-0", bw.license)
+        assertTrue(bw.attribution.contains("Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0"), bw.attribution)
+        assertTrue(Regex("""Datenbezug 20\d\d""").containsMatchIn(bw.attribution), bw.attribution)
+        // Strohgaeu, Schauinsland, Maulbronn, Bodensee (Konstanz) drin; NRW, Sachsen, Muenchen, Strassburg-Ost nicht
+        for ((lat, lon) in listOf(48.84 to 9.03, 47.91 to 7.90, 49.00 to 8.81, 47.66 to 9.17)) assertTrue(bw.covers(lat, lon), "$lat,$lon")
+        for ((lat, lon) in listOf(51.05 to 7.13, 51.05 to 13.74, 48.14 to 11.57)) assertFalse(bw.covers(lat, lon), "$lat,$lon")
+        // Kein anderer Dienst der App ueberlappt BW: dort fragt der Weltbau nur das LGL.
+        assertEquals(listOf("bw"), selectAerialSources(aerialSources, LatLonBox(48.83, 9.02, 48.85, 9.04)).map { it.id })
+        val others = aerialSources.filter { it.id != "bw" }
+        assertTrue(others.none { it.maxLat >= bw.minLat && it.minLat <= bw.maxLat && it.maxLon >= bw.minLon && it.minLon <= bw.maxLon })
+    }
+
+    @Test
+    fun `Luftbild Baden-Wuerttemberg wird abgerufen und eingebettet, Leerbild ausserhalb ergibt null`() {
+        val strohgaeu = GeoOrigin(48.8392, 9.0537, 300.0)
+        val urls = ArrayList<String>()
+        val fetcher = GeoFetcher { req ->
+            urls += req.url
+            assertTrue(isAllowedGeoUrl(req.url, aerialSources), req.url)
+            GeoResponse(200, "image/jpeg", bwJpeg)
+        }
+        val img = assertNotNull(fetchAerial(fetcher, imageIoDecoder, strohgaeu, -128.0, -128.0, 128.0, 128.0, 256, aerialSources))
+        assertEquals("bw", img.source.id)
+        assertEquals("image/jpeg", img.mimeType)
+        assertFalse(isProgressiveJpeg(bwJpeg))
+        assertContentEquals(bwJpeg, img.bytes)
+        assertEquals(1, urls.size)
+        assertTrue(urls.single().startsWith(bw.wmsUrl + "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=IMAGES_DOP_20_RGB&STYLES=&CRS=EPSG:4326&BBOX=48.83"), urls.single())
+        assertFalse(isBlankImage(imageIoDecoder.decode(bwJpeg)!!))
+        // Das LGL liefert ausserhalb der Landesgrenze (hier Strassburg) ein weisses Bild.
+        assertTrue(isBlankImage(imageIoDecoder.decode(bwBlank)!!))
+        val strassburg = GeoOrigin(48.571, 7.742, 140.0)
+        assertNull(fetchAerial(GeoFetcher { GeoResponse(200, "image/jpeg", bwBlank) }, imageIoDecoder, strassburg, 0.0, 0.0, 100.0, 100.0, 256, aerialSources))
+        // Nur der Dienstpfad ist erlaubt, nicht andere Pfade auf demselben Host.
+        assertFalse(isAllowedGeoUrl("https://owsproxy.lgl-bw.de/owsproxy/ows/WMS_LGL-BW_ATKIS_DGM?SERVICE=WMS", aerialSources))
+        assertFalse(isAllowedGeoUrl("http://owsproxy.lgl-bw.de/owsproxy/ows/WMS_LGL-BW_ATKIS_DOP_20_C?SERVICE=WMS", aerialSources))
+    }
 }

@@ -191,7 +191,8 @@ erlaubt). `Range`-Anfragen gehen dort (`206`). Jede Station wird gegen
 
 Luftbild außerhalb des App-Registers: Dienste, die nur das Vorbauen nutzt,
 stehen in `tool/indoor-dev/src/main/kotlin/de/trailscape/tool/indoor/CatalogAerial.kt`
-(Prüfung in `tool/indoor-dev/catalog/LUFTBILD.md`). Ein neuer Dienst braucht
+(Prüfung in `tool/indoor-dev/catalog/LUFTBILD.md`). Baden-Württemberg steht
+seit 24.11.2026 im Register der App (`world.md`). Ein neuer Dienst braucht
 eine echte `GetCapabilities`-/`GetMap`-Prüfung, Lizenz und Wortlaut der
 Namensnennung — wie im Register der App.
 
@@ -201,7 +202,7 @@ Namensnennung — wie im Register der App.
 |---|---|---|
 | Streckenverlauf (GPX, Belag) | OpenStreetMap über BRouter (`brouter.de`) zwischen eigenen Wegpunkten; keine fremden GPX-Dateien | ODbL 1.0, „© OpenStreetMap-Mitwirkende“ (steht in jeder GPX-Datei und in `OpenSourceNotices`) |
 | Höhen, Karteninhalt | wie jede Welt (`docs/indoor.md` 8.1) | im Manifest jeder Welt |
-| Luftbild DE (NRW, TH, HE, BW) | Register der App bzw. `CatalogAerial.kt` | dl-de/zero-2-0 (NRW, HE), CC BY 4.0 (TH), dl-de/by-2-0 mit Jahr (BW) |
+| Luftbild DE (NRW, TH, HE, BW) | Register der App (NRW, TH, BW) bzw. `CatalogAerial.kt` (HE) | dl-de/zero-2-0 (NRW, HE), CC BY 4.0 (TH), dl-de/by-2-0 mit Pflichtvermerk und Jahr (BW) |
 | Luftbild FR | IGN Géoplateforme, BD ORTHO® | Licence Ouverte Etalab 2.0, mit Jahr |
 | Luftbild Flandern | Digitaal Vlaanderen | Modellicentie gratis hergebruik v1.0 |
 | Luftbild ES | IGN, PNOA | CC BY 4.0, „PNOA CC-BY 4.0 scne.es <Jahr>“ |

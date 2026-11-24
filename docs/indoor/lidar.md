@@ -403,7 +403,8 @@ Manifest beider Strecken).
   kein Abfrageteil). Cache: ZIP gilt als plausible Antwort.
 - Voranschlag: ganze Archive (27 MB DGM+DOM, 8 MB LoD2 je Archiv).
 - Werkzeug: `build`/`plan --catalog-aerial` nimmt die Luftbilder des
-  Katalogbaus (BW-DOP20 kennt nur das Werkzeug).
+  Katalogbaus (damals kannte nur das Werkzeug das BW-DOP20; seit
+  24.11.2026 steht es im Register der App, `world.md`).
 
 **NRW unverändert:** Der NRW-Pfad ruft dieselben URLs in derselben
 Reihenfolge ab und rechnet gleich (Gruppierung mit je einem Kilometer, gleiche
@@ -496,10 +497,9 @@ Eine unabhängige Bewertung wie in NRW (5) habe ich für BW nicht gemacht.
       Rheinland-Pfalz, Hessen, Bayern, Frankreich und in die Schweiz; dort
       liefert das LGL 404 und der Weltbau bleibt bei Terrarium. Eine Strecke
       über die Landesgrenze bekommt Laser nur auf der BW-Seite.
-- [ ] Luftbild BW nur im Werkzeug (`catalogAerialSources`); ob es in das
-      Register der App kommt (Host `owsproxy.lgl-bw.de` in PRIVACY.md,
-      Schauinsland bekäme dann auch in der App ein Luftbild), entscheidet
-      der Gründer.
+- [x] Luftbild BW im Register der App (Entscheidung des Gründers,
+      24.11.2026; `world.md`, „Luftbild Baden-Württemberg“; Host
+      `owsproxy.lgl-bw.de` in PRIVACY.md).
 - [ ] Dachfarbe der LoD2-Gebäude in BW grau statt ziegelrot (7.4) prüfen.
 - [ ] Keine unabhängige Bewertung der BW-Bilder gegen Luftbild/Schummerung.
 - [ ] Nur im Betrachter gesehen, nicht auf dem Gerät.

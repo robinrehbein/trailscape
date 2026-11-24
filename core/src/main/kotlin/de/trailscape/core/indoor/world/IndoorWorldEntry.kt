@@ -13,7 +13,15 @@ import java.io.File
  */
 
 /**
- * Das Register der Luftbild-Dienste. Jeder Eintrag ist mit einer echten
+ * Jahr des Datenbezugs fuer Quellenvermerke, die eines verlangen (LGL-BW). Ein
+ * Weltbau holt seine Luftbilder zum Bauzeitpunkt; massgeblich ist das Jahr,
+ * in dem die App bzw. das Werkzeug gestartet wurde.
+ */
+private val AERIAL_FETCH_YEAR: Int = java.time.Year.now().value // vor [aerialSources]: Top-Level-Werte werden in Dateireihenfolge belegt
+
+/**
+ * Das Register der Luftbild-Dienste (NRW, Sachsen, Thueringen, Brandenburg/Berlin,
+ * Baden-Wuerttemberg). Jeder Eintrag ist mit einer echten
  * `GetCapabilities`- und `GetMap`-Anfrage geprueft (Datum im Kommentar am
  * Eintrag); ein Land ohne Eintrag bekommt den erzeugten Boden.
  *
@@ -82,6 +90,26 @@ val aerialSources: List<AerialSource> = listOf(
         maxLat = 53.62,
         maxLon = 15.01,
         attribution = "Luftbild: © GeoBasis-DE/LGB, dl-de/by-2-0; © Geoportal Berlin, dl-de/by-2-0",
+        license = "dl-de/by-2-0",
+        licenseUrl = "https://www.govdata.de/dl-de/by-2-0",
+    ),
+    // Geprueft am 24.11.2026: GetCapabilities + GetMap 1.3.0, EPSG:4326 lat/lon (Strohgaeu bei
+    // Ditzingen, Maulbronn, Kehl), nur diese eine Ebene mit Stil `default`; JPEG Baseline, JFIF ohne
+    // Farbprofil (sRGB), bis 15 000 px (4096 px in 6,5 s, 1024 px in 1–3 s). Grenzscharf: ausserhalb
+    // von BW weisses Leerbild, an der Grenze ein teils weisses Bild. PNG kaeme als Palettenbild
+    // (8 Bit) — wird nur bei progressivem JPEG angefragt, also nie. Lizenz dl-de/by-2-0;
+    // Pflichtvermerk laut lgl-bw.de/Produkte/Open-Data, die Capabilities verlangen dazu das Jahr
+    // des Datenbezugs.
+    AerialSource(
+        id = "bw",
+        label = "Baden-Württemberg",
+        wmsUrl = "https://owsproxy.lgl-bw.de/owsproxy/ows/WMS_LGL-BW_ATKIS_DOP_20_C",
+        layer = "IMAGES_DOP_20_RGB",
+        minLat = 47.53,
+        minLon = 7.50,
+        maxLat = 49.80,
+        maxLon = 10.50,
+        attribution = "Luftbild: Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 (Datenbezug $AERIAL_FETCH_YEAR)",
         license = "dl-de/by-2-0",
         licenseUrl = "https://www.govdata.de/dl-de/by-2-0",
     ),
