@@ -8,7 +8,8 @@ Terrarium-Höhen (~30 m, in Deutschland SRTM/EU-DEM — ein **Oberflächen**mode
 im Wald 10–20 m zu hoch), Gebäude als OSM-Grundrisse mit geschätzter Höhe und
 Standarddach, Bäume aus Landnutzung und Luftbildfarbe gewürfelt. Neu ist eine
 optionale Datenstufe „Laser" aus den amtlichen Laserscan-Produkten der Länder,
-zuerst für Nordrhein-Westfalen:
+zuerst für Nordrhein-Westfalen, seit 24.11.2026 auch für Baden-Württemberg
+(Abschnitt 7):
 
 | Was | Quelle | Wirkung in der Welt |
 |---|---|---|
@@ -85,7 +86,7 @@ Einbau mit echten Abrufen zu prüfen (wie in `tool/indoor-dev/catalog/LUFTBILD.m
 | Niedersachsen | opengeodata.lgln.niedersachsen.de | ja | DOM1 | ja | CC BY 4.0 |
 | Hessen | gds.hessen.de | ja | DOM1 | ja | dl-de/zero-2-0 (HVGG) |
 | Rheinland-Pfalz | geobasis-rlp.de | ja | DOM | ja | dl-de/by-2-0 |
-| Baden-Württemberg | opengeodata.lgl-bw.de | ja | DOM1 | ja | dl-de/by-2-0 |
+| Baden-Württemberg | opengeodata.lgl-bw.de | ja, ZIP-Kacheln (XYZ) | DOM1, nDOM1 | ja | dl-de/by-2-0 — **eingebaut** (Abschnitt 7) |
 | Bayern | geodaten.bayern.de/opengeodata | ja | DOM (bildbasiert) | ja | CC BY 4.0 |
 | Thüringen | geoportal-th.de (Offene Geodaten) | ja | DOM1, Laserpunkte | ja | dl-de/by-2-0 |
 | Sachsen | geocloud.landesvermessung.sachsen.de | ja | DOM1 | ja | dl-de/by-2-0 |
@@ -105,8 +106,9 @@ Reines Kotlin, ohne Android-Importe, ohne `ImageIO`.
 
 | Datei | Inhalt |
 |---|---|
-| `LaserSources.kt` | `LaserSource`, Register `laserSources` (NRW), eigene Positivliste `isAllowedLaserUrl`, Abruf-Schnittstelle `LaserFetcher` mit Hülle `createLaserPipeline` (Positivliste, Plattencache 365 Tage, 2 Anfragen je Host, 429/503-Wiederholung), Einstieg `createLaserWorldBuilder(LaserOptions)`, Kennzahlen `laserBuildStats` |
+| `LaserSources.kt` | `LaserSource`, `LaserTiles` (Kachel-Download), Register `laserSources` (NRW, BW), eigene Positivliste `isAllowedLaserUrl`, Abruf-Schnittstelle `LaserFetcher` mit Hülle `createLaserPipeline` (Positivliste, Plattencache 365 Tage, 2 Anfragen je Host, 429/503-Wiederholung), Einstieg `createLaserWorldBuilder(LaserOptions)`, Kennzahlen `laserBuildStats` |
 | `LaserUtm.kt` | ETRS89/UTM nach Krüger (Reihe bis n⁴, < 1 mm) und ein linearer ENU↔UTM-Rahmen je 256-m-Block (< 1 cm) |
+| `LaserZipTiles.kt` | Kachel-Download: ZIP-Einträge, XYZ-Leser, Füllen der Blöcke je Archiv und Kilometer, Voranschlag in ganzen Archiven |
 | `LaserTiff.kt` | GeoTIFF-Leser: Streifen und Kacheln, keine/LZW/Deflate-Kompression, Prädiktor 1/2/3, Float32/Int16/Int32, ModelTiepoint/PixelScale, GDAL_NODATA |
 | `LaserData.kt` | `LaserOptions`, `loadLaserData`: Blöcke im Korridor, Überblendung, nDOM, Einzelbaum-Erkennung, Kronenbedeckung/-höhe, Gebäudemaske |
 | `LaserLod2.kt` | CityGML-Leser (Text-Scanner, kein DOM), `LaserBuilding` |
@@ -332,3 +334,172 @@ Gebäude. Neu gefundene Fehler stehen unten in 6.
       Fichte im Hochwald am Kahlen Asten).
 - [ ] Übergang Korridor → außen: Terrarium bleibt ein Oberflächenmodell; der
       Median-Versatz gleicht die Höhe aus, nicht die Form (Waldkuppen außen).
+
+## 7 Baden-Württemberg (24.11.2026)
+
+Die Stufe ist jetzt regional: Eine Laser-Quelle hat entweder einen WCS (NRW)
+oder ein Kachelschema `LaserTiles` (BW). Welche gilt, entscheidet wie bisher
+die Lage der Strecke (`LaserSource.covers`, mindestens die Hälfte der
+Punkte); die Rechtecke von NRW (ab 50,30° N) und BW (bis 49,80° N)
+überlappen nicht. Ein weiteres Land mit Kachel-Download braucht nur einen
+Eintrag in `laserSources`.
+
+### 7.1 Quellen (geprüft mit echten Abrufen)
+
+Alle Hosts waren aus dieser Umgebung erreichbar. Das LGL bietet für Höhen
+**keinen WCS** an (auf lgl-bw.de/Produkte/Open-Data nur WCS für Sentinel-2
+und DOP20 INSPIRE; DGM als WMS nur als Bild). Abgerufen wird deshalb das
+Open GeoData Portal; die Produktliste steht in
+`https://opengeodata.lgl-bw.de/assets/config/local/odp-products.json`.
+
+| Produkt | Download | Inhalt des ZIP | Größe je ZIP |
+|---|---|---|---|
+| DGM1 | `https://opengeodata.lgl-bw.de/data/dgm/dgm1_32_<E>_<N>_2_bw.zip` | je km `dgm1_32_<e>_<n>_1_bw_<Jahr>.xyz` (Text `Rechtswert Hochwert Höhe`, Pixelmitten auf ,5 m, 1000 × 1000, 29 MB entpackt) + CSV-Metadaten + Lizenz-PDF | 13–14 MB |
+| DOM1 | `…/data/dom1/dom1_32_<E>_<N>_2_bw.zip` | je km `dom1_32_<e>_<n>_1_bw_<Jahr>.tif` (GeoTIFF Float32, LZW, Prädiktor 3, 512er-Kacheln, GDAL_NODATA) + TFW | 13 MB |
+| LoD2 | `…/data/lod2/LoD2_32_<E>_<N>_2_bw.zip` | je km `LoD2_32_<e>_<n>_1_BW.gml` (CityGML 1.0, AdV-Profil wie NRW; der Leser braucht keine Änderung) | 1–12 MB (Stuttgart-Rand 11 MB, Dorf/Wald 0,2–3 MB) |
+| nDOM1 | `…/data/ndom1/ndom1_32_<E>_<N>_2_bw.zip` | GeoTIFF, **bildbasiert** (bDOM20 aus Luftbildern 2025 − DGM1) | 10 MB — nicht genutzt |
+| DOP20 | WMS `https://owsproxy.lgl-bw.de/owsproxy/ows/WMS_LGL-BW_ATKIS_DOP_20_C`, Ebene `IMAGES_DOP_20_RGB` (Download-ZIP 250 MB je 2 km) | — | schon im Werkzeug-Register (`CatalogAerial.kt`) |
+
+- Koordinaten: ETRS89/UTM 32 (EPSG:25832), Höhen NHN (DHHN2016) — wie NRW.
+- Kachelschema: ZIP je 2 km × 2 km, Südwestecke bei ungeradem Rechtswert-km
+  und geradem Hochwert-km (geprüft: `501_5404`, `503_5404`, `501_5406` → 200;
+  `500_5404`, `501_5405` → 404). Im ZIP je Kilometer eine Datei, das
+  **Erfassungsjahr** steht im Dateinamen (am Stuttgarter Westrand 2019), im
+  Namen des ZIP nicht — der Weltbau sucht den Eintrag nach Anfang und Endung.
+- DOM1 ist laut Produktbeschreibung aus Laserscan **in unbelaubtem Zustand**
+  (höchste Punkte, 8 Punkte/m²); DGM1 und DOM1 derselben Kachel haben
+  dasselbe Jahr. Das nDOM rechnet der Weltbau wie in NRW selbst als
+  DOM1 − DGM1.
+- DOP20-WMS: `GetCapabilities` + `GetMap` 1.3.0 mit `CRS=EPSG:4326`
+  (Stuttgart-West): JPEG Baseline, bis 15 000 px, außerhalb weißes Bild.
+
+**Lizenz und Quellenvermerk:** Datenlizenz Deutschland – Namensnennung –
+Version 2.0 (`dl-de/by-2-0`). lgl-bw.de/Produkte/Open-Data verlangt den
+Vermerk „Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0“; die WMS-Capabilities
+nennen zusätzlich das Jahr des Datenbezugs („LGL-BW (2024) …“, so steht es
+schon beim Luftbild). Im Manifest (`attribution`, Art `ELEVATION`):
+„Gelände, Bewuchs und Gebäude: Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0
+(DGM1, DOM1, 3D-Gebäudemodell LoD2)“, Lizenz `dl-de/by-2-0`. Anders als in
+NRW ist der Vermerk **Pflicht**; er steht in jeder BW-Laserwelt (geprüft im
+Manifest beider Strecken).
+
+### 7.2 Umsetzung
+
+- `LaserSource` hat neu `tiles: LaserTiles?` und `lod2Entry` (beide mit
+  Vorgabe `null`); die WCS-Felder sind dafür null-bar. Der NRW-Eintrag ist
+  unverändert.
+- `fillBlocksFromTiles` (`LaserZipTiles.kt`): je Archiv beide Downloads
+  einmal, dann je benötigtem Kilometer DGM (XYZ) und DOM (TIFF) dekodieren
+  und alle Blöcke füllen, die ihn berühren; jede Probe nimmt den Kilometer,
+  in dem ihr UTM-Punkt liegt. Am Kilometerrand (ein halber Meter) gilt der
+  nächste Pixel statt der Mitte mit dem Nachbarn. Test
+  `kachelnFuellenDieBloeckeWieDerWcs`: dieselben künstlichen Höhen über WCS
+  und über Kacheln — mittlere Abweichung 0,2 mm, höchstens 0,12 m (am
+  Kilometerrand), nDOM gleich in 99,99 % der Proben.
+- LoD2: `lod2Downloads` gruppiert die Kilometer nach Download (NRW: einer je
+  km, BW: ein ZIP für bis zu vier km), `fetchLod2` holt einmal und packt die
+  GMLs aus. Ebenso in `lod2-cut`.
+- Positivliste: Kachel-Vorlagen wie LoD2 (Host und Pfadmuster, nur Ziffern,
+  kein Abfrageteil). Cache: ZIP gilt als plausible Antwort.
+- Voranschlag: ganze Archive (27 MB DGM+DOM, 8 MB LoD2 je Archiv).
+- Werkzeug: `build`/`plan --catalog-aerial` nimmt die Luftbilder des
+  Katalogbaus (BW-DOP20 kennt nur das Werkzeug).
+
+**NRW unverändert:** Der NRW-Pfad ruft dieselben URLs in derselben
+Reihenfolge ab und rechnet gleich (Gruppierung mit je einem Kilometer, gleiche
+Reihenfolge der LoD2-Gebäude vor dem Sortieren). Nur am Code geprüft und mit
+den bestehenden Tests (`LaserTest`, `LaserWorldTest`); einen NRW-Bau
+vorher/nachher habe ich nicht gemacht (die Kachel-Bytes schwanken schon
+zwischen zwei Läufen, siehe 4). Welten ohne `--laser` und die NRW-Strecken
+sind nicht betroffen; Schauinsland liegt in BW, hat aber kein `laser`.
+
+### 7.3 Strecken und Messungen
+
+Katalog (Version 1, `"laser": true`):
+
+- `solitude` — Schloss Solitude und Glemseck, 13,9 km, 128 Hm, Start am
+  öffentlichen Parkplatz „Schloss Solitude“ (48,7799° N, 9,0895° O), durch
+  den Glemswald zum Glemseck, oberes Glemstal, Mahdental, zurück zum Schloss.
+- `maulbronn` — Kloster Maulbronn und Stromberg, 15,4 km, 164 Hm, Start am
+  öffentlichen „Parkplatz am alten Friedhof“ beim Kloster (49,0009° N,
+  8,8098° O), über Freudenstein und Zaisersweiher zurück.
+
+Werkzeug mit `JAVA_OPTS=-Xmx2g`, MEDIUM, Luftbild BW (`--catalog-aerial`).
+Bauzeit „warm“ = alle Daten im Cache. Während der warmen Läufe lief parallel
+ein Gradle-Lauf; die Zeiten und RSS-Werte sind dadurch eher zu hoch.
+
+| | Solitude ohne → mit | Maulbronn ohne → mit |
+|---|---|---|
+| Dreiecke gleichzeitig | 529 343 → 512 898 | 449 576 → 433 296 |
+| Texturen (Budget 256 MB) | 179,9 → 182,6 MB | 182,7 → 181,0 MB |
+| fertige Welt | 12,8 → 12,3 MB/km | 12,0 → 11,5 MB/km |
+| Bauzeit warm | 39,9 → 50,9 s | 47,0 → 68,0 s |
+| Laden Laser kalt / warm | 107 s / 14,6 s | 150 s / 26,8 s |
+| Download Laser (erster Lauf) | 202,7 MB = 14,6 MB/km (Raster 198,9 MB in 16 ZIP, LoD2 3,8 MB) | 250,2 MB = 16,2 MB/km (Raster 235,5 MB in 18 ZIP, LoD2 14,6 MB) |
+| LoD2 | 12 km², 148 Gebäude | 21 km², 3 650 Gebäude |
+| Blöcke | 116 | 158 |
+| Versatz DGM1 − Terrarium (Median, P05/P95) | −9,6 m (−8,1 / +7,1) | −1,4 m (−10,0 / +3,6) |
+| Heap belegt am Ende (kalt) | 605 → 651 MB | 397 → 290 MB |
+| RSS höchstens (kalt) | 1,31 → 1,41 GB | 1,30 → 1,80 GB |
+
+Alle vier Welten bestehen `checkWorld`. Budgets (≤ 700 000 Dreiecke,
+≤ 256 MB Texturen) eingehalten. Der warme Bau mit Laser braucht 10–20 s mehr,
+vor allem für das Entpacken der XYZ-Texte (29 MB je km).
+
+Gegenüber NRW (WCS, nur der Korridor) ist der **erste Download etwa
+dreimal so groß** (NRW 3–5 MB/km Raster, BW 13–15 MB/km), weil immer ganze
+2-km-Archive kommen, auch wenn der Korridor nur eine Ecke berührt, und DGM1
+als Text. Für den Handy-Bau ist das zu viel; dort bräuchte BW einen eigenen
+Zuschnitt (wie `lod2-cut` für LoD2) auf einem Server oder als Release-Asset.
+
+**Katalog-Workflow:** `catalog-build` baut die Einträge mit Laser ohne neue
+Eingabe. Der Workflow läuft mit `-Xmx6g`; die Messung oben bleibt mit
+`-Xmx2g` unter 1,1 GB belegtem Heap — keine Anhebung nötig. Platz im Runner:
+rund 450 MB Laser-Cache für beide Strecken. Die App baut ohne Laser
+unverändert mit ihrem Heap von 256 MB (die Laser-Stufe ist dort nicht
+eingeschaltet).
+
+### 7.4 Bilder (Betrachter, nicht Gerät)
+
+Unter `docs/indoor/bilder/lidar-bw/`. Je Stelle zwei Dateien `<name>-vorher.jpg` (ohne Laser) und
+`<name>-nachher.jpg` (mit Laser), an denselben Laufmetern, ohne Fahrer.
+
+| Paar | Strecke, Laufmeter, Kamera | Was sich ändert |
+|---|---|---|
+| `kloster-maulbronn` | Maulbronn, 100 m, Drohne | Klosterkirche mit Dachreiter, Kreuzgang und Walmdächer aus LoD2 statt Kästen mit Standarddach; auf der Wiese keine gewürfelten Fichten mehr, nur die gemessenen Bäume |
+| `boeschung-maulbronn` | Maulbronn, 100 m, Fahrer | Weg in der Hangflanke über dem Ort, Böschung bergseits und Häuser tiefer am Hang (vorher flach) |
+| `ortseinfahrt-freudenstein` | Maulbronn, 4 500 m, Fahrer | Hohlweg mit Böschung vor dem Ort, Gebäude mit echter Dachform |
+| `zaisersweiher` | Maulbronn, 8 500 m, Drohne | Ortslage mit LoD2-Gebäuden (Grundrisse, Firstrichtung, Halle) |
+| `klosterhof-maulbronn` | Maulbronn, 15 250 m, Fahrer | Klosterhof: Wirtschaftsgebäude in echter Höhe, Kirchturm im Hintergrund |
+| `glemswald-solitude` | Solitude, 1 000 m, Drohne | Kronendach des Glemswalds aus dem nDOM (Lücken, Bestandshöhen) statt gleichmäßig gewürfelt |
+| `glemseck` | Solitude, 7 000 m, Drohne | Glemseck: Gelände der Talaue, Gebäude aus LoD2 |
+
+Aufgefallen: Die LoD2-Dächer in Maulbronn wirken grau-rosa statt
+ziegelrot wie im Luftbild (vorher, mit OSM-Gebäuden, rot). Die Dachfarbe
+kommt aus dem Luftbild über dem Grundriss mit begrenzter Helligkeit
+(Abschnitt 3.4); ob die Begrenzung in BW zu stark greift, ist offen (7.5).
+Eine unabhängige Bewertung wie in NRW (5) habe ich für BW nicht gemacht.
+
+### 7.5 Grenzen und offen
+
+- [ ] Download groß (ganze ZIP-Archive, DGM als Text): für das Handy einen
+      Korridor-Zuschnitt der Raster bauen (Server oder Release-Asset).
+- [ ] DOM1 ist eine Laser-Befliegung im unbelaubten Zustand (am Stuttgarter
+      Westrand 2019): Laubkronen sind gemessen, aber eher etwas niedriger
+      und lichter als im Sommer; Änderungen seit der Befliegung fehlen (wie
+      in NRW gleicht das Luftbild Kahlschläge aus). Das nDOM1 des LGL ist
+      bildbasiert (2025, belaubt) und neuer — eine Alternative für den
+      Bewuchs, nicht eingebaut.
+- [ ] Kilometerrand: nächster Pixel statt bilinearer Mitte (≤ 0,5 m breit);
+      ein Rand aus dem Nachbarkilometer würde das beheben.
+- [ ] Rechteck von BW (47,53–49,80° N, 7,50–10,50° O) reicht nach
+      Rheinland-Pfalz, Hessen, Bayern, Frankreich und in die Schweiz; dort
+      liefert das LGL 404 und der Weltbau bleibt bei Terrarium. Eine Strecke
+      über die Landesgrenze bekommt Laser nur auf der BW-Seite.
+- [ ] Luftbild BW nur im Werkzeug (`catalogAerialSources`); ob es in das
+      Register der App kommt (Host `owsproxy.lgl-bw.de` in PRIVACY.md,
+      Schauinsland bekäme dann auch in der App ein Luftbild), entscheidet
+      der Gründer.
+- [ ] Dachfarbe der LoD2-Gebäude in BW grau statt ziegelrot (7.4) prüfen.
+- [ ] Keine unabhängige Bewertung der BW-Bilder gegen Luftbild/Schummerung.
+- [ ] Nur im Betrachter gesehen, nicht auf dem Gerät.
