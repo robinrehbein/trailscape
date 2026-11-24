@@ -5,7 +5,7 @@
   "entries": [
     {
       "id": "alpe-dhuez",
-      "version": 7,
+      "version": 8,
       "name": { "de": "Alpe d'Huez", "en": "Alpe d'Huez" },
       "region": { "de": "Bourg-d'Oisans, Französische Alpen", "en": "Bourg-d'Oisans, French Alps" },
       "country": "FR",
@@ -19,7 +19,7 @@
     },
     {
       "id": "vlaamse-ardennen",
-      "version": 7,
+      "version": 8,
       "name": { "de": "Oude Kwaremont, Paterberg und Koppenberg", "en": "Oude Kwaremont, Paterberg and Koppenberg" },
       "region": { "de": "Flämische Ardennen bei Oudenaarde", "en": "Flemish Ardennes near Oudenaarde" },
       "country": "BE",
@@ -36,7 +36,7 @@
     },
     {
       "id": "arenberg",
-      "version": 7,
+      "version": 8,
       "name": { "de": "Wald von Arenberg", "en": "Arenberg Forest" },
       "region": { "de": "Wallers bei Valenciennes, Nordfrankreich", "en": "Wallers near Valenciennes, northern France" },
       "country": "FR",
@@ -50,7 +50,7 @@
     },
     {
       "id": "monte-sante-marie",
-      "version": 7,
+      "version": 8,
       "name": { "de": "Schotter von Monte Sante Marie", "en": "Monte Sante Marie gravel" },
       "region": { "de": "Crete Senesi bei Asciano, Toskana", "en": "Crete Senesi near Asciano, Tuscany" },
       "country": "IT",
@@ -64,7 +64,7 @@
     },
     {
       "id": "sa-calobra",
-      "version": 7,
+      "version": 8,
       "name": { "de": "Sa Calobra", "en": "Sa Calobra" },
       "region": { "de": "Serra de Tramuntana, Mallorca", "en": "Serra de Tramuntana, Majorca" },
       "country": "ES",
@@ -78,7 +78,7 @@
     },
     {
       "id": "flint-hills",
-      "version": 7,
+      "version": 8,
       "name": { "de": "Schotter der Flint Hills", "en": "Flint Hills gravel" },
       "region": { "de": "Cottonwood Falls, Kansas", "en": "Cottonwood Falls, Kansas" },
       "country": "US",
@@ -92,7 +92,7 @@
     },
     {
       "id": "grosser-feldberg",
-      "version": 7,
+      "version": 8,
       "name": { "de": "Großer Feldberg", "en": "Großer Feldberg" },
       "region": { "de": "Taunus bei Oberursel, Hessen", "en": "Taunus near Oberursel, Hesse" },
       "country": "DE",
@@ -106,7 +106,7 @@
     },
     {
       "id": "schauinsland",
-      "version": 7,
+      "version": 8,
       "name": { "de": "Schauinsland", "en": "Schauinsland" },
       "region": { "de": "Freiburg im Breisgau, Schwarzwald", "en": "Freiburg im Breisgau, Black Forest" },
       "country": "DE",
@@ -120,7 +120,7 @@
     },
     {
       "id": "kahler-asten",
-      "version": 7,
+      "version": 8,
       "name": { "de": "Waldwege am Kahlen Asten", "en": "Forest roads at Kahler Asten" },
       "region": { "de": "Winterberg, Sauerland", "en": "Winterberg, Sauerland" },
       "country": "DE",
@@ -135,7 +135,7 @@
     },
     {
       "id": "balkantrasse",
-      "version": 4,
+      "version": 5,
       "name": { "de": "Balkantrasse", "en": "Balkantrasse rail trail" },
       "region": { "de": "Wermelskirchen, Bergisches Land", "en": "Wermelskirchen, Bergisches Land" },
       "country": "DE",
@@ -150,7 +150,7 @@
     },
     {
       "id": "altenberg",
-      "version": 4,
+      "version": 5,
       "name": { "de": "Altenberger Dom und Dhünntal", "en": "Altenberg Cathedral and Dhünn valley" },
       "region": { "de": "Odenthal, Bergisches Land", "en": "Odenthal, Bergisches Land" },
       "country": "DE",
@@ -165,7 +165,7 @@
     },
     {
       "id": "rennsteig",
-      "version": 7,
+      "version": 8,
       "name": { "de": "Rennsteig bei Oberhof", "en": "Rennsteig near Oberhof" },
       "region": { "de": "Thüringer Wald", "en": "Thuringian Forest" },
       "country": "DE",
