@@ -532,7 +532,7 @@ internal class TileOutput(val spec: TileSpec) {
 
     /** Schreibt die Kachel als GLB nach den Regeln aus docs/indoor.md 7.3. */
     fun toGlb(): GlbScene {
-        val scene = GlbScene()
+        val scene = GlbScene(compactUv = true)
         val materials = HashMap<String, Int>()
         fun materialIndex(m: TileMaterial): Int = materials.getOrPut(m.name) {
             val tex = m.texture?.let { scene.addTexture(it.bytes, it.mime, m.repeat) }

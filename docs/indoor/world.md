@@ -85,7 +85,7 @@ beurteilt; seine Hauptpunkte (dunkle Fichtenwände, flache Waldscherben) sind
 als Nr. 11/12 eingearbeitet, die übrigen (Detailtextur über dem Luftbild,
 Laubkarten) brauchten eigene Shader bzw. eine Vertragsänderung.
 
-**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/4` (vorher `/3`, `/2`, `/1`). Sie geht
+**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/5` (vorher `/4`, `/3`, `/2`, `/1`). Sie geht
 in die Welt-ID ein — selbst gebaute Welten der alten Fassung werden nicht mehr
 gefunden und neu gebaut (die alten bleiben in der Weltverwaltung löschbar).
 Katalog: `version` aller Strecken in `catalog-src.json` auf 2.
@@ -174,29 +174,25 @@ Bildpaare (gleicher Blickpunkt, Betrachter, 1600 × 900 → JPEG):
 `altenberg-park-lenker`, `altenberg-waldrand-fichten`,
 `altenberg-offen-einzelbaeume`, `altenberg-laubwald-lenker`,
 `altenberg-hang-drohne`, `tharandt-forstweg`, `schauinsland-bergwald`,
-`schauinsland-tal-fernsicht`. Vorher = Stand `main` (6cd9387), beide mit
-demselben Betrachter gerendert.
+`schauinsland-tal-fernsicht`, seit der zweiten Runde auch `balkantrasse-laser-lenker`. Die Dateien zeigen den Stand der zweiten Runde
+(vorher = Stand nach dem Merge mit der Laser-Stufe, siehe unten); beide mit demselben
+Betrachter gerendert.
 
 ### Wie es gebaut ist
 
 - **Blattkarten.** Kronen sind viele kleine, verdrehte Vierecke mit einem Motiv
-  aus dem Atlas und Alpha-Ausschnitt (`mat_tree_leaves`: `MASK`, Schwelle 0,5,
-  doppelseitig — wie im Vertrag, jetzt mit echten Ausschnitten). Stamm und
+  aus dem Atlas und Alpha-Ausschnitt (`x_mat_tree_cards`: `MASK`, Schwelle 0,5,
+  **einseitig**, jede Karte mit beiden Wicklungen — siehe „Zweite Runde“). Stamm und
   (nah) die Hauptäste zu den Teilkronen sind Geometrie. Laubbaum nah: 104
   Zweigkarten auf 5 Teilkronen + 16 innere Laubmasse-Karten (≈ 300 Dreiecke,
   vorher ≈ 970 für den Kugelkörper).
 - **Licht ohne eigenen Shader.** Eckpunkt-Normalen sind zu 70–90 % die Richtung
-  vom Kronenmittelpunkt aus („gebogene Normalen"; senkrecht auf 45 % gestaucht,
-  weil die Kamera fast immer unter den Kronen ist — steil nach oben zeigende
-  Normalen ergaben von unten gesehene, schwarze Kronenoberseiten): Die
+  vom Kronenmittelpunkt aus („gebogene Normalen“, unten etwas abgeflacht): Die
   Krone schattiert wie ein weicher Körper, Karte für Karte flimmert nichts.
   Verschattung innen/unten steckt in den Vertexfarben (Bäume empfangen keine
-  Schatten). **Vorderseite = Richtung der gebogenen Normalen:** Filament
-  (`doubleSided`) und three.js drehen auf der Rückseite die Normale um; lag
-  eine Karte „falsch herum", zeigte die umgedrehte Normale zur Sonne, und
-  innere Karten erschienen als blasse Flächen (im Betrachter gesehen, per
-  Motiv-Einfärbung gefunden). Mit der Regel sieht man von unten/hinten die
-  dunkle Seite.
+  Schatten). Weil beide Wicklungen dieselben Eckpunkte und damit dieselbe
+  Normale haben, ist die Beleuchtung von beiden Seiten gleich — unabhängig von
+  `gl_FrontFacing`.
 - **Arten:** breiter Laubbaum, schlanker Laubbaum (Pappel/Birke, halb mit
   hellem Stamm), Feld-/Obstbaum, **Fichte** (Astquirle als „Schürzen": je Quirl
   ein Kranz schräger Trapezkarten mit hängendem Nadelrand, Quirle überlappen),
@@ -210,8 +206,9 @@ demselben Betrachter gerendert.
   Laubmasse-Karten; Fichte fern als Sternbild (drei senkrechte Karten mit dem
   ganzen Baum). Vergabe vom Weg nach außen (nächste Bäume zuerst voll).
 - **Waldkörper mit Kronen-Silhouette:** Kronendach mit eigenem, kachelndem
-  Kronenmosaik (`x_mat_tree_canopy`, JPEG 256², 30 m je Kachelung) statt
-  Sprenkeltextur; am Waldrand je Randzelle ein Kreuzbild eines ganzen Baums
+  Kronenmosaik (`mat_tree_leaves`, MASK, doppelseitig wie im Vertrag, deckende
+  JPEG 256², 30 m je Kachelung) statt Sprenkeltextur; am Waldrand je Randzelle
+  (Stufe 0: zwei) ein Kreuzbild eines ganzen Baums
   (Vorderseite nach draußen, verdeckt die Rampe des Kronendachs), in Stufe 0
   ragen aus 30 % der Innenzellen Kronenspitzen. Stufe 1 bekommt nur die
   Randbäume, aus einem kleinen Fern-Atlas (256²) statt des großen.
@@ -250,6 +247,8 @@ demselben Betrachter gerendert.
   den Stufen 1–3 mindestens 80 % der Deckung (Gras/Farn 55 %); gemessen
   0,97–1,05.
 - **Koplanar:** Karten sind zufällig verdreht, Büschel senkrecht.
+  Die beiden Wicklungen einer Karte sind zwar koplanar, aber nie gleichzeitig
+  sichtbar (einseitiges Material, Rückseiten verworfen) — kein Z-Kampf.
   `indoor-dev overlaps`: Altenberg kurz 638 → 638, Tharandt km 2–6 234 → 234,
   kein Paar mit Vegetation; `QualityTest` grün.
 
@@ -271,8 +270,7 @@ der Plattenbedarf nur mäßig steigt (+6 bis +10 %), sind die Einzelbäume auf
 13 000 Dreiecke je Kachel gedeckelt (vorher nahmen sie bis ≈ 25 000), der
 Bodenbewuchs auf 1 600, und die Atlanten sind Grau+Alpha. Mehr Dichte ginge mit
 normierten `UNSIGNED_SHORT`-Texturkoordinaten (Kern-glTF, −4 Byte je Eckpunkt)
-in `Glb.kt` — nicht gemacht, weil auf dem Gerät ungeprüft und außerhalb dieses
-Auftrags. Texturen +23 MB: Atlas 1,4 MB GPU je Kachel der Stufe 0, Kronendach
+in `Glb.kt` — in der zweiten Runde gemacht (siehe dort). Texturen +23 MB: Atlas 1,4 MB GPU je Kachel der Stufe 0, Kronendach
 0,35 MB je Kachel.
 
 ### Unabhängiges Gutachten (Unter-Agent, opus) und was daraus wurde
@@ -290,36 +288,88 @@ an Zwift `altenberg-waldrand-fichten` und `altenberg-laubwald-lenker`
 | grell orange Kiefernstämme, kalkweiße Birken | **behoben** (gedämpft) |
 | Fichten-„Segel" von unten | **teilweise:** 12 kleinere Quirle statt 10, am Waldweg höherer kahler Stamm |
 | eigene Mip-Stufen mit erhaltener Deckung | **nicht möglich** (PNG in GLB hat eine Stufe, gltfio erzeugt sie); stattdessen dicht gezeichnete Motive, Test |
-| Kronen zu licht / Stangenwald, wenig Mittelschicht | **offen:** Budget (Deckel 13 000 je Kachel); mehr Dichte kostet Platte |
+| Kronen zu licht / Stangenwald, wenig Mittelschicht | **verbessert** in der zweiten Runde (Deckel, `UNSIGNED_SHORT`-UV, Unterwuchs) |
 | Karte schneidet die Nahebene am Wegrand | **offen** (selten; Kronen am Weg kürzen) |
+
+### Zweite Runde (Rückmeldung der Integration)
+
+Nach dem Zusammenführen mit der Laser-Stufe (`main` 5406928). Vorher = dieser
+Stand nach dem Merge, nachher = jetzt; dieselben Blickpunkte, die Bildpaare in
+`docs/indoor/bilder/foliage/` sind ersetzt. Neu ist das Paar
+`balkantrasse-laser-lenker` (`--laser`, Bäume mit gemessener Lage und Höhe aus
+dem nDOM).
+
+| Rückmeldung | Ursache | Lösung |
+|---|---|---|
+| schwarze Kartenflächen und dunkle „Fahnen“ an Laubkronen in offener Landschaft, Fichten am Hang fast schwarz | Doppelseitiges Material: Filament (und three.js) drehen auf der Rückseite die Normale um; gebogene Normalen zeigen dann vom Licht weg. Fast kantenparallele, von hinten gesehene Karten werden zu dunklen Strichen | Karten in **`x_mat_tree_cards` einseitig**, jede mit **beiden Wicklungen auf denselben Eckpunkten** (kostet nur 6 Indizes je Karte); je Blickrichtung wird genau eine gezeichnet, beide mit derselben Normale. Fichten-Schürzen haben für die Unterseite eigene, dunklere Eckpunkte mit Normale nach außen-unten. Gras und Kreuzbilder bleiben einseitig mit Vorderseite zur Strecke bzw. nach draußen. `mat_tree_leaves` (MASK, doppelseitig, wie im Vertrag) trägt jetzt das deckende Kronendach |
+| Stangenwald, Kronen licht | Deckel 13 000 Dreiecke je Kachel, Kronen setzen bei 30 % der Höhe an | `Glb.kt`: **`TEXCOORD_0` als normierte `UNSIGNED_SHORT`**, wenn alle UV eines Primitivs in [0, 1] liegen (Kern-glTF 2.0; gltfio übernimmt das Flag: `AssetLoader.cpp` `vbb.normalized(semantic, accessor->normalized)`, `GltfEnums.h` `getElementType` kennt `r_16u`; three.js ebenso, im Betrachter geprüft). Spart 4 Byte je Eckpunkt in **allen** Kacheln (Gelände, Fahrbahn, Gebäude …). Damit Deckel 30 000 (beide Wicklungen gezählt). Laubbäume im Bestand setzen die Krone bei 20–26 % an (breiter, Kronendach schließt), mehr Unterholz (Büsche 24 % am Weg, 14 % dahinter) und junge Bäume (12 %) verdecken die Stämme im Mittelgrund |
+| Stämme hell und glatt wie Rohre | nur Vertexfarbe | **Rindentextur** (prozedural, JPEG 64 × 128, kachelnd, v 0,5 je Meter) auf `mat_tree_trunk`, Stammfuß auf 55 % abgedunkelt |
+| Fichten-„Segel“ von unten | Unterseite = beleuchtete Oberseite | eigene dunkle Unterseite (s. o.), am Waldweg höherer kahler Stamm |
+| Kronendach-Rampen am Steilhang | ein Randbaum je 8-m-Zelle reichte nicht | zwei Randbäume je Randzelle in Stufe 0, weiter nach außen gesetzt (am Schauinsland-Hang rechts weiterhin teils zu sehen) |
+
+Die Laser-Bäume (`laserTreeSpec`) kennen jetzt Kiefer und Busch und übernehmen
+kahlen Stammanteil und Farbton; `specFor` bekommt den Abstand zur Strecke.
+
+**Messwerte** (`-Xmx256m`, Cache; vorher = Stand nach dem Merge):
+
+| Welt | Dreiecke gleichzeitig | Texturen | Platte | Heap nach GC (max) |
+|---|---|---|---|---|
+| Schauinsland 15,7 km | 403 301 → 560 785 | 183,7 → 184,1 MB | 12,5 → 13,2 MB/km (+6 %) | 122 → 118 MB |
+| Altenberg kurz | 372 340 → 468 670 | 177,3 → 177,7 MB | 17,3 → 17,8 MB/km (+3 %) | 125 → 135 MB |
+| Tharandt km 2–6 | 369 626 → 466 472 | 160,5 → 160,9 MB | 13,2 → 13,8 MB/km (+5 %) | 110 → 125 MB |
+| Balkantrasse 7,7 km, `--laser` (mit `-Xmx2g`) | 375 483 → 453 111 | 178,5 → 178,8 MB | 18,6 → 18,6 MB/km | – |
+
+Gegenüber `main` vor der Vegetation (6cd9387): Schauinsland 11,8 → 13,2 MB/km.
+**Laser-Stufe und Heap:** Die Balkantrasse mit `--laser` bricht bei
+`-Xmx256m` schon im Stand nach dem Merge (ohne diese Runde) mit
+`OutOfMemoryError` ab (vor den Kacheln, beim Laden; mit 2 GB Heap nach GC bis
+343 MB). Das liegt in der Laser-Stufe, nicht in der Vegetation.
+
+### Bildrate: Overdraw und Stellschrauben
+
+Alpha-getestete Karten überlagern sich (Overdraw), und `discard` hebt Early-Z
+für diese Fragmente auf; die Rückseiten-Hälfte jeder Karte wird dagegen schon
+beim Rastern verworfen. Vorkehrungen: Karten nah klein und zahlreich, fern
+wenige große mit dichtem Motiv (Laubmasse ≥ 80 % Deckung); keine großen, fast
+leeren Karten (Fichte fern als Sternbild aus drei Karten, Laubbäume fern ohne
+Sternbild); Kronendach der Waldkörper deckend (kein Alpha-Verwurf); Gras nur
+bis 4,3 m neben der Fahrbahn.
+
+Fällt auf dem Gerät die Bildrate, in dieser Reihenfolge drehen:
+
+1. **`TreesLayer.DETAIL_M`** (volle Karten bis 16 m) auf 10 m und
+   **`SINGLE_TREE_MAX`** (30 000) auf 20 000 — weniger Karten nah, wo der
+   Overdraw entsteht.
+2. **`UNDERGROWTH_MAX`** (1 600) auf 800 oder 0.
+3. In der Darstellung: `RenderSettings.resolutionScale` senken bzw.
+   dynamische Auflösung; MSAA abschalten verliert Alpha-to-Coverage (Kanten
+   flimmern dann stärker).
 
 ### Offen
 
-- **Kronendichte im dichten Wald:** Je 256-m-Kachel reicht der Deckel für rund
-  40 volle Kronen; dahinter mittlere und ferne Stufe. Wirkt licht
-  („Stangenwald"). Hebel: Deckel anheben (Platte +), `UNSIGNED_SHORT`-UV.
+- **Kronendichte im dichten Wald:** besser, aber über dem Weg schließt das
+  Kronendach nicht überall; im Mittelgrund bleiben Stämme sichtbar.
 - **Waldboden dunkel:** Luftbild unter Kronen (Gelände/Darstellung, nicht hier).
-- **Kronendach der Waldkörper** am Steilhang aus der Nähe weiterhin als Rampe
-  mit Kanten zu sehen, wo keine Randbäume stehen (Schauinsland rechts oben).
-- **Von hinten gesehene Karten** sind grundsätzlich dunkler (Normalenumkehr
-  doppelseitiger Materialien) — die Regeln oben machen es selten, nicht unmöglich.
+- **Kronendach-Rampen am Steilhang:** am Schauinsland rechts weiterhin teils als
+  helle, kantige Flächen zu sehen.
+- **Karte schneidet die Nahebene** am Wegrand (selten).
 
 ### Nur im Betrachter geprüft (Gerät steht aus)
 
 - Alles Sichtbare: three.js mit nachgebildetem MASK (Alpha-to-Coverage,
   Filaments Schärfung), SwiftShader, `HemisphereLight` statt SH-Umgebungslicht.
-  Wie hell die Rückseiten und Kronenunterseiten unter Filaments `IndirectLight`
-  wirken, ist offen.
-- Bildrate: deutlich mehr Alpha-getestete Fläche (Overdraw, `discard` schaltet
-  Early-Z ab) bei weniger Dreiecken — auf dem Handy messen (MEDIUM, 4× MSAA).
-- PNG Grau+Alpha (Farbtyp 4) in gltfio: nach den Quellen (stb_image auf RGBA
-  erweitert) unkritisch, auf dem Gerät nicht gesehen.
+  Wie hell Schattenseiten und Kronenunterseiten unter Filaments
+  `IndirectLight` wirken, ist offen.
+- Bildrate (Overdraw, s. o.) — auf dem Handy messen (MEDIUM, 4× MSAA).
+- PNG Grau+Alpha (Farbtyp 4) und normierte `UNSIGNED_SHORT`-UV in gltfio: nach
+  den Quellen unterstützt, auf dem Gerät nicht gesehen.
 
 ## Abweichungen vom Vertrag
 
 1. ~~Laub `alphaMode = MASK` ohne Ausschnitte.~~ Seit „Vegetation" (oben)
-   Blattkarten mit echtem Alpha-Ausschnitt, also wie im Vertrag. Die
-   Waldkörper tragen ein eigenes, deckendes Material `x_mat_tree_canopy`.
+   Blattkarten mit echtem Alpha-Ausschnitt in `x_mat_tree_cards` (MASK,
+   **einseitig**, beide Wicklungen im Netz); `mat_tree_leaves` (MASK,
+   doppelseitig, wie im Vertrag) trägt das deckende Kronendach der Waldkörper.
 2. **Wasser nur als Flächen.** Schmale Wasserläufe (Linien `waterway`)
    bekommen keinen eigenen Spiegel; sie erscheinen nur im Luftbild bzw. in der
    erzeugten Bodentextur. Wasser liegt als Gitterzellen (4 m in Stufe 0) knapp

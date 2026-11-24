@@ -232,7 +232,7 @@ internal class TreesLayer : TileLayer {
             val topShare = if (coarse) 0.0 else 0.3
             val top = Noise.hash01(wi, wj, SEED_TOP)
             val per = when {
-                edge -> 1
+                edge -> if (coarse) 1 else 2 // nah zwei Randbaeume je Zelle: die Rampe des Kronendachs bleibt am Hang verdeckt
                 top < topShare -> 1
                 else -> 0
             }
@@ -246,8 +246,8 @@ internal class TreesLayer : TileLayer {
                 val ol = kotlin.math.hypot(oe, on)
                 if (edge) {
                     // nach aussen geschoben: deckt die Rampe des Kronendachs
-                    e += oe / ol * cell * 0.35
-                    n += on / ol * cell * 0.35
+                    e += oe / ol * cell * 0.45
+                    n += on / ol * cell * 0.45
                 }
                 val conifer = Noise.hash01(wi, wj, SEED_BB + 47 + k) < ctx.land.coniferShare(e, n)
                 val ch = canopyHeight(ctx, e, n) * (0.85 + 0.3 * r3)
@@ -373,7 +373,8 @@ internal class TreesLayer : TileLayer {
                 }
             }
         }
-        val trunkMat = TileMaterial(WorldNames.MAT_TREE_TRUNK, roughness = 0.95f)
+        val bark = ctx.textures.get("x_bark", jpegQuality = 84) { FoliageAtlas.barkImage() }
+        val trunkMat = TileMaterial(WorldNames.MAT_TREE_TRUNK, texture = bark, repeat = true, roughness = 0.95f)
         val trunks = out.mesh(WorldNames.NODE_TREES, trunkMat)
         val crowns = out.mesh(WorldNames.NODE_TREES, leaves)
         val scratchTrunk = MeshBuilder(64, 64)
@@ -400,7 +401,9 @@ internal class TreesLayer : TileLayer {
         val canopy = ctx.land.canopyAt(e, n)
         val species = if (inForest) {
             when {
-                trackDist < DENSE_M && r(8) < 0.14 -> TreeModels.Species.BUSH // Unterholz am Waldweg
+                // Unterholz und junge Baeume: verdecken im Mittelgrund die Staemme
+                r(8) < (if (trackDist < DENSE_M) 0.24 else 0.14) -> TreeModels.Species.BUSH
+                r(12) < 0.12 -> TreeModels.Species.SMALL
                 r(1) < ctx.land.coniferShare(e, n) -> if (r(9) < pineShare) TreeModels.Species.PINE else TreeModels.Species.CONIFER
                 r(2) < 0.22 -> TreeModels.Species.TALL
                 else -> TreeModels.Species.BROAD
@@ -433,7 +436,12 @@ internal class TreesLayer : TileLayer {
             seed = seed,
             turn = r(6) * 6.283,
             pale = species == TreeModels.Species.TALL && r(7) < 0.5,
-            bare = if (species == TreeModels.Species.CONIFER && inForest) (if (trackDist < DENSE_M) 0.26 else 0.14) + 0.2 * r(10) else 0.05,
+            // Fichte: kahler Stammanteil; Laubbaum im Bestand: Kronenansatz (tiefer und damit breiter als frei, Kronendach schliesst)
+            bare = when {
+                species == TreeModels.Species.CONIFER && inForest -> (if (trackDist < DENSE_M) 0.26 else 0.14) + 0.2 * r(10)
+                species == TreeModels.Species.BROAD && inForest -> 0.2 + 0.06 * r(10)
+                else -> 0.05
+            },
             hue = regional + (r(11) - 0.5) * 0.5,
         )
     }
@@ -566,17 +574,21 @@ internal class TreesLayer : TileLayer {
         return lin(Argb.rgb(ch(0), ch(1), ch(2)))
     }
 
-    /** Blattkarten: Atlas mit Alpha-Ausschnitt, `MASK` (Schwelle 0,5), doppelseitig. */
+    /**
+     * Blattkarten: Atlas mit Alpha-Ausschnitt, `MASK` (Schwelle 0,5), **einseitig** — jede Karte, die
+     * von beiden Seiten zu sehen ist, steht mit beiden Wicklungen im Netz ([TreeModels]). Nicht
+     * `mat_tree_leaves`, weil der Vertrag dafuer doppelseitig nennt; das traegt das Kronendach.
+     */
     private fun leavesMaterial(ctx: TileContext): TileMaterial {
         val tex = FoliageAtlas.atlasTexture
         return TileMaterial(
-            WorldNames.MAT_TREE_LEAVES,
+            MAT_CARDS,
             texture = tex,
             repeat = false,
             roughness = 0.95f,
             alphaMode = GlbAlphaMode.MASK,
             alphaCutoff = 0.5f,
-            doubleSided = true,
+            doubleSided = false,
         )
     }
 
@@ -584,20 +596,23 @@ internal class TreesLayer : TileLayer {
     private fun farLeavesMaterial(ctx: TileContext): TileMaterial {
         val tex = FoliageAtlas.farTexture
         return TileMaterial(
-            WorldNames.MAT_TREE_LEAVES,
+            MAT_CARDS,
             texture = tex,
             repeat = false,
             roughness = 0.95f,
             alphaMode = GlbAlphaMode.MASK,
             alphaCutoff = 0.5f,
-            doubleSided = true,
+            doubleSided = false,
         )
     }
 
-    /** Kronendach der Waldkoerper: kachelndes, deckendes Kronenmosaik (JPEG), einseitig. */
+    /** Kronendach der Waldkoerper: `mat_tree_leaves` wie im Vertrag (MASK, doppelseitig) mit deckendem, kachelndem Kronenmosaik (JPEG). */
     private fun canopyMaterial(ctx: TileContext): TileMaterial {
         val tex = ctx.textures.get("x_canopy", jpegQuality = 86) { FoliageAtlas.canopyImage() }
-        return TileMaterial(MAT_CANOPY, texture = tex, repeat = true, roughness = 0.95f)
+        return TileMaterial(
+            WorldNames.MAT_TREE_LEAVES, texture = tex, repeat = true, roughness = 0.95f,
+            alphaMode = GlbAlphaMode.MASK, alphaCutoff = 0.5f, doubleSided = true,
+        )
     }
 
     /** Waagrechte Richtung (glTF-Achsen) von (e, n) zur naechsten Stelle der Strecke (grob, Stuetzpunkte alle 50 m). */
@@ -639,14 +654,14 @@ internal class TreesLayer : TileLayer {
         const val ROAD_CLEARANCE_M = 2.0
         const val BUILDING_CLEARANCE_M = 3.0
 
-        /** Material des Kronendachs der Waldkoerper (nicht in [WorldNames], deshalb `x_`). */
-        const val MAT_CANOPY = "x_mat_tree_canopy"
+        /** Material der Blattkarten (einseitig, deshalb nicht `mat_tree_leaves`). */
+        const val MAT_CARDS = "x_mat_tree_cards"
 
         /** Abstand der Plaetze fuer Bodenbewuchs entlang der Strecke (je Seite). */
         const val UG_STEP_M = 2.2
 
-        /** Hoechstens so viele Dreiecke Einzelbaeume je Kachel (Stufe 0). */
-        const val SINGLE_TREE_MAX = 13_000
+        /** Hoechstens so viele Dreiecke Einzelbaeume je Kachel (Stufe 0), Blattkarten mit beiden Wicklungen gezaehlt. */
+        const val SINGLE_TREE_MAX = 30_000
 
         /** Hoechstens so viele Dreiecke Bodenbewuchs je Kachel. */
         const val UNDERGROWTH_MAX = 1_600
