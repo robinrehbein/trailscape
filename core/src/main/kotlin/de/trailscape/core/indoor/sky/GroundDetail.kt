@@ -91,9 +91,9 @@ object GroundDetail {
         val fine = DoubleArray(n * n) { i -> fbm(i % n, i / n, n, 32, 2, 202) }
         for (i in 0 until n * n) {
             val (f1, f2) = cells[i]
-            val edge = smooth(0.0, 0.18, f2 - f1) // 0 an der Fuge
+            val edge = smooth(0.0, 0.30, f2 - f1) // 0 an der Fuge (weich: Schollen, keine Risse)
             val dome = 1.0 - min(1.0, f1 * 1.4)
-            h[i] = 0.45 * edge + 0.30 * dome + 0.25 * fine[i]
+            h[i] = 0.22 * edge + 0.28 * dome + 0.50 * fine[i]
         }
         // Kleine Kluten
         val rnd = Rng(23)
