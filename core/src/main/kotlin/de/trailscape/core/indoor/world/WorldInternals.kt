@@ -77,6 +77,61 @@ internal class TrackHit(
  * Fahrbahnoberflaeche.
  */
 internal class TrackLine(val track: WorldTrack) {
+    companion object {
+        /** Kuerzere Belagsabschnitte werden fuer die Darstellung dem laengeren Nachbarn zugeschlagen. */
+        const val MIN_DRAWN_SECTION_M = 25.0
+
+        /**
+         * Die Strecke, wie der Weltbau sie zeichnet: Belagsabschnitte unter [MIN_DRAWN_SECTION_M]
+         * gehen im laengeren Nachbarn auf. Geplante Routen (BRouter) haben an Kreuzungen oft
+         * Wegstuecke von wenigen Metern mit anderem Belag oder anderer Wegart — gezeichnet als
+         * brauner Fleck mit Fransen und Grasrand quer auf der Ortsstrasse. Das Manifest behaelt
+         * die Abschnitte unveraendert (Rollwiderstand, Anzeige).
+         */
+        fun forDrawing(track: WorldTrack): TrackLine {
+            val merged = drawnSections(track.surfaces)
+            return TrackLine(if (merged == track.surfaces) track else track.copy(surfaces = merged))
+        }
+
+        internal fun drawnSections(input: List<SurfaceSection>): List<SurfaceSection> {
+            if (input.size < 2) return input
+            val list = input.toMutableList()
+            while (list.size > 1) {
+                var k = -1
+                var shortest = MIN_DRAWN_SECTION_M
+                for ((i, s) in list.withIndex()) {
+                    val len = s.toM - s.fromM
+                    if (len < shortest) { shortest = len; k = i }
+                }
+                if (k < 0) break
+                val prev = list.getOrNull(k - 1)
+                val next = list.getOrNull(k + 1)
+                val into = when {
+                    prev == null -> k + 1
+                    next == null -> k - 1
+                    prev.toM - prev.fromM >= next.toM - next.fromM -> k - 1
+                    else -> k + 1
+                }
+                val target = list[into]
+                list[into] = target.copy(fromM = minOf(target.fromM, list[k].fromM), toM = maxOf(target.toM, list[k].toM))
+                list.removeAt(k)
+                // Gleiche Nachbarn wieder zusammenlegen.
+                var i = 1
+                while (i < list.size) {
+                    val a = list[i - 1]
+                    val b = list[i]
+                    if (a.kind == b.kind && a.highway == b.highway && a.widthM == b.widthM) {
+                        list[i - 1] = a.copy(toM = b.toM)
+                        list.removeAt(i)
+                    } else {
+                        i++
+                    }
+                }
+            }
+            return list
+        }
+    }
+
     val lengthM: Double get() = track.lengthM
     val stepM: Double get() = track.stepM
     val count: Int get() = track.sampleCount
@@ -364,6 +419,8 @@ internal class TileMaterial(
     val alphaMode: GlbAlphaMode = GlbAlphaMode.OPAQUE,
     val alphaCutoff: Float = 0.5f,
     val doubleSided: Boolean = false,
+    /** Mit [repeat]: nur `u` kachelt, `v` wird geklemmt (Deckung quer in der Textur, siehe [GlbScene.addTexture]). */
+    val clampV: Boolean = false,
 )
 
 // ---------------------------------------------------------------------------
@@ -535,7 +592,7 @@ internal class TileOutput(val spec: TileSpec) {
         val scene = GlbScene(compactUv = true)
         val materials = HashMap<String, Int>()
         fun materialIndex(m: TileMaterial): Int = materials.getOrPut(m.name) {
-            val tex = m.texture?.let { scene.addTexture(it.bytes, it.mime, m.repeat) }
+            val tex = m.texture?.let { scene.addTexture(it.bytes, it.mime, m.repeat, m.clampV) }
             scene.addMaterial(
                 GlbMaterial(
                     name = m.name,

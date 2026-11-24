@@ -303,6 +303,13 @@ private fun overlaps(dir: File): Int {
     }
     println("Koplanare Ueberlappungen (Stufe 0, ${m.tiles.count { it.level == 0 }} Kacheln): ${total.values.sum()}")
     for ((k, v) in total.entries.sortedByDescending { it.value }) println("  $v  $k")
+    // Weiche Raender mit Vertex-Deckung < 1 (BLEND): auf dem Geraet helle Nahtlinien (siehe translucentVertexAlpha).
+    val alpha = HashMap<String, Int>()
+    for (t in m.tiles.filter { it.level == 0 }) {
+        for ((k, v) in de.trailscape.core.indoor.world.translucentVertexAlpha(File(dir, t.file).readBytes())) alpha[k] = (alpha[k] ?: 0) + v
+    }
+    println("Durchsichtige Eckpunkte mit Vertex-Deckung < 1 (helle Naehte auf dem Geraet): ${alpha.values.sum()}")
+    for ((k, v) in alpha.entries.sortedByDescending { it.value }) println("  $v  $k")
     return 0
 }
 

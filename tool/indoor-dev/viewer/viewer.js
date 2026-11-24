@@ -12,6 +12,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SunLight } from 'three/addons/lights/SunLight.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 // ---------------------------------------------------------------------------
 // Parameter
@@ -41,6 +44,10 @@ const CONFIG = {
   haze: pNum('haze', 0.3),
   exposure: pNum('exposure', 0.62),
   near: pNum('near', 0),
+  // Wie Filament: Szene in einen Float-Puffer (RGBA16F) mit 4× MSAA, Tonemapping danach. Dort wird die
+  // Ausgabe vor dem Mischen NICHT auf 0..1 geklemmt — negative Deckung (Vertexfarben, die MSAA ueber die
+  // Dreieckskante hinaus fortschreibt) hellt den Hintergrund auf, wie auf dem Geraet.
+  hdr: pFlag('hdr', false),
 };
 
 /** Zustand der Ansicht; `setView` aendert nur, was uebergeben wird. */
@@ -131,6 +138,14 @@ THREE.ShaderChunk.tonemapping_fragment = /* glsl */ `
 #if defined( TONE_MAPPING )
   gl_FragColor.rgb = toneMapping( gl_FragColor.rgb );
 #endif`;
+// Vergleich: `clampColor=1` klemmt die (ggf. fortgeschriebene) Vertexfarbe auf 0..1 — so saehe es mit
+// `centroid`-Interpolation aus. Nur zum Eingrenzen der hellen Nahtlinien (mit `hdr=1`).
+if (pFlag('clampColor', false)) {
+  THREE.ShaderChunk.color_fragment = /* glsl */ `
+#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )
+  diffuseColor *= clamp( vColor, 0.0, 1.0 );
+#endif`;
+}
 // … und entfaellt an der alten Stelle.
 THREE.ShaderChunk.fog_fragment = '';
 
@@ -981,10 +996,25 @@ function renderNow() {
   }
   renderer.info.reset();
   const t0 = performance.now();
-  renderer.render(scene, camera);
+  if (CONFIG.hdr) hdrRender();
+  else renderer.render(scene, camera);
   renderer.getContext().finish(); // sonst misst die Zeit nur das Absetzen der Befehle
   lastRender = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, ms: performance.now() - t0 };
   updateHud();
+}
+
+let composer = null;
+function hdrRender() {
+  const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+  if (!composer) {
+    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+    composer = new EffectComposer(renderer, rt);
+    composer.addPass(new RenderPass(scene, camera));
+    composer.addPass(new OutputPass());
+  }
+  composer.setPixelRatio(1);
+  composer.setSize(size.x, size.y);
+  composer.render();
 }
 
 function requestRender() {

@@ -78,9 +78,11 @@ class RoadsAndPropsLayerTest {
                         under++
                     } else if (hit == null || hit.distance > hw + 6.0) {
                         // Ueber dem gezeichneten Gelaendenetz (zwischen den Gitterpunkten hoeher als der wahre
-                        // Boden), plus Rang- und Richtungsversatz gegen Flimmern an Knoten.
+                        // Boden), plus Rang- und Richtungsversatz gegen Flimmern an Knoten. Bis JOIN_M neben der
+                        // Fahrbahn laeuft die Strasse ueber der Mulde neben der Strecke stetig auf ihre Hoehe aus.
                         val above = u - maxOf(scene.ground.heightAt(e, n), terrainMeshHeightAt(scene.ground, e, n, level0TerrainCellM(ctx.quality)))
-                        assertTrue(above in 0.03..0.22, "Strasse $above m ueber dem Boden")
+                        val joining = hit != null && hit.distance < hw + RoadsLayer.JOIN_M
+                        assertTrue(above in 0.03..(if (joining) 0.40 else 0.22), "Strasse $above m ueber dem Boden")
                         free++
                     }
                 }
