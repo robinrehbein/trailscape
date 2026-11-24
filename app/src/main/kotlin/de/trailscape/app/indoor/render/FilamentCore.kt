@@ -53,7 +53,8 @@ internal class FilamentCore {
     val camera: Camera
     val sunEntity: Int
     val worldRoot: Int
-    private val materialProvider: UbershaderProvider
+    /** Ubershader plus eigene Materialien fuer Gelaende, Laub und Belaege ([WorldMaterialProvider]). */
+    val worldMaterials: WorldMaterialProvider
     val assetLoader: AssetLoader
     var resourceLoader: ResourceLoader
         private set
@@ -128,8 +129,8 @@ internal class FilamentCore {
             worldRoot = EntityManager.get().create()
             engine.transformManager.create(worldRoot)
 
-            materialProvider = UbershaderProvider(engine)
-            assetLoader = AssetLoader(engine, materialProvider, EntityManager.get())
+            worldMaterials = WorldMaterialProvider(engine, UbershaderProvider(engine), { materialPackages }, { ensureCloudTexture() })
+            assetLoader = AssetLoader(engine, worldMaterials, EntityManager.get())
             resourceLoader = ResourceLoader(engine)
         } catch (t: Throwable) {
             runCatching { engine.destroy() }
@@ -300,7 +301,7 @@ internal class FilamentCore {
     }
 
     /** Laedt einmal die Wolken-/Wellentextur (R8, kachelbar, mit Mipmaps). */
-    private fun ensureCloudTexture(): Texture {
+    fun ensureCloudTexture(): Texture {
         cloudTexture?.let { return it }
         val n = SkyClouds.CLOUD_TEX_SIZE
         val px = SkyClouds.cloudTexture(n)
@@ -597,6 +598,7 @@ internal class FilamentCore {
 
     fun destroyAsset(asset: FilamentAsset) {
         runCatching { scene.removeEntities(asset.entities) }
+        runCatching { worldMaterials.forget(asset.instance.materialInstances) }
         runCatching { assetLoader.destroyAsset(asset) }
     }
 
@@ -626,9 +628,8 @@ internal class FilamentCore {
         // Wasser erst nach den Kacheln (die es noch benutzen koennten) freigeben.
         waterInstance?.let { runCatching { engine.destroyMaterialInstance(it) } }
         waterMaterial?.let { runCatching { engine.destroyMaterial(it) } }
+        runCatching { worldMaterials.destroy() }
         cloudTexture?.let { runCatching { engine.destroyTexture(it) } }
-        runCatching { materialProvider.destroyMaterials() }
-        runCatching { materialProvider.destroy() }
         runCatching { engine.lightManager.destroy(sunEntity) }
         runCatching { engine.transformManager.destroy(worldRoot) }
         runCatching { engine.destroyCameraComponent(cameraEntity) }
@@ -692,6 +693,10 @@ internal class FilamentCore {
         const val SKY_CUBE_PX = de.trailscape.core.indoor.sky.SkyClouds.CUBE_SIZE
         const val SKY_MATERIAL = "sky"
         const val WATER_MATERIAL = "water"
+
+        /** Alle eigenen Materialien in `assets/indoor/materials` (`<name>.filamat`). */
+        val MATERIALS = listOf(SKY_MATERIAL, WATER_MATERIAL) +
+            WorldMaterialRules.Kind.entries.mapNotNull { it.asset }
 
         /** Die Uhr der Materialien springt alle zwei Stunden zurueck (Float-Genauigkeit im Shader). */
         const val MATERIAL_TIME_WRAP_S = 7200.0

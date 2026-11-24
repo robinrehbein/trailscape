@@ -85,6 +85,8 @@
     <string name="indoor_app_pair_time_noon_body">High sun, short shadows.</string>
     <string name="indoor_app_pair_time_evening_label">Evening</string>
     <string name="indoor_app_pair_time_evening_body">Warm, low light from the west.</string>
+    <string name="indoor_app_pair_other_riders_title">Show other riders</string>
+    <string name="indoor_app_pair_other_riders_body">A few riders and oncoming cyclists on the route – scenery only, no effect on resistance or drafting.</string>
     <string name="indoor_app_pair_continue_hint">Pair a trainer or switch on the demo trainer to continue.</string>
     <string name="indoor_app_pair_diagnostics_action">Open diagnostics</string>
     <!-- IndoorRouteScreen.kt -->

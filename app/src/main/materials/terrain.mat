@@ -1,0 +1,116 @@
+// Gelaende der Indoor-Darstellung: ersetzt das gltfio-Material `mat_terrain` der Kacheln
+// (WorldMaterialProvider in der App, derselbe Tausch in filarender). Grundfarbe bleibt das
+// Luftbild der Kachel (`baseColorMap`, von gltfio gebunden). Nahe am Fahrer kommt kachelbares
+// Detail dazu (GroundDetail, 4 Bodenarten in RGBA): die Bodenart je Pixel aus der Farbe des
+// Luftbilds und der Hangneigung, das Detail moduliert nur die Helligkeit (Mittel bleibt) und
+// liefert eine Detail-Normale aus Differenzen. Ab `detailRange` Metern weich aus — dort ist
+// das Material so teuer wie das gltfio-Material (ein Texturzugriff).
+//
+// Detail-UV aus der Kachel-UV (0..1 ueber 256 m, mit halbem Texel Einzug), nicht aus
+// Weltkoordinaten: klein und genau, nahtlos ueber Kachelgrenzen (ganzzahlige Wiederholungen).
+//
+// Die Parameter baseColorFactor … aoStrength setzt gltfio (AssetLoader.cpp) auf jede
+// Materialinstanz — sie muessen existieren, auch wenn sie kaum etwas tun.
+//
+// Kompilieren: tool/indoor-dev/filament/materials.sh (matc 1.75.1).
+material {
+    name : TrailscapeTerrain,
+    requires : [ uv0 ],
+    parameters : [
+        { type : sampler2d, name : baseColorMap },
+        { type : float4, name : baseColorFactor },
+        { type : float3, name : emissiveFactor },
+        { type : float, name : metallicFactor },
+        { type : float, name : roughnessFactor },
+        { type : float, name : normalScale },
+        { type : float, name : aoStrength },
+        { type : sampler2d, name : detailMap, precision : medium },
+        { type : sampler2d, name : macroMap, precision : medium },
+        { type : float, name : detailRange },
+        { type : float, name : detailRepeat },
+        { type : float, name : macroRepeat },
+        { type : float, name : detailStrength },
+        { type : float, name : bumpStrength },
+        { type : float, name : macroStrength },
+        { type : float, name : forestWarmth },
+        { type : float, name : warmRange }
+    ],
+    shadingModel : lit,
+    blending : opaque,
+    flipUV : false,
+    featureLevel : 1
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        highp vec2 uv = getUV0();
+        vec3 aerial = texture(materialParams_baseColorMap, uv).rgb * materialParams.baseColorFactor.rgb;
+        vec3 base = aerial;
+
+        highp vec3 toCam = getWorldPosition() - getWorldCameraPosition();
+        float dist = length(toCam);
+
+        // Bodenart aus der Luftbildfarbe (linear): Wiese gruen, Acker/Erde braun-beige,
+        // Waldboden dunkel, Schotter/Fels grau oder steil.
+        float mx = max(aerial.r, max(aerial.g, aerial.b));
+        float mn = min(aerial.r, min(aerial.g, aerial.b));
+        float inv = 1.0 / max(mx, 0.004);
+        float lum = dot(aerial, vec3(0.2126, 0.7152, 0.0722));
+        float sat = (mx - mn) * inv;
+        float green = (aerial.g - max(aerial.r, aerial.b)) * inv;
+        float brown = (aerial.r - aerial.b) * inv;
+        vec3 nGeo = normalize(getWorldTangentFrame()[2]);
+        float steep = smoothstep(0.80, 0.62, abs(nGeo.y));
+
+        float wGrass = smoothstep(-0.03, 0.10, green) * smoothstep(0.012, 0.03, lum);
+        float wLitter = smoothstep(0.075, 0.035, lum) * (1.0 - 0.7 * wGrass) * smoothstep(0.75, 0.45, sat);
+        float wStone = max(smoothstep(0.22, 0.06, sat) * smoothstep(0.04, 0.10, lum), steep);
+        float wSoil = smoothstep(0.02, 0.22, brown) * (1.0 - wGrass);
+        vec4 wts = vec4(wGrass, wSoil, wLitter, wStone) + vec4(0.02);
+        wts /= (wts.x + wts.y + wts.z + wts.w);
+
+        // Waldboden waermer ziehen (Laubstreu statt Blaugruen), in einem weiteren Umkreis als
+        // das Detail, damit am Rand des Details keine Farbkante entsteht; die Ferne (Kronendach
+        // von oben in den groben Stufen) bleibt unveraendert.
+        float warm = materialParams.forestWarmth * wts.z * (1.0 - smoothstep(materialParams.warmRange * 0.6, materialParams.warmRange, dist));
+        base = mix(base, vec3(lum) * vec3(1.42, 1.0, 0.62) * 1.08, warm);
+
+        vec3 nTs = vec3(0.0, 0.0, 1.0);
+        float range = materialParams.detailRange;
+        float fade = range > 0.0 ? 1.0 - smoothstep(range * 0.55, range, dist) : 0.0;
+        if (fade > 0.001) {
+            // Kachelkoordinate 0..1 genau aus der UV (halber Texel Einzug wie im Weltbau)
+            highp vec2 ts = vec2(textureSize(materialParams_baseColorMap, 0));
+            highp vec2 inset = 0.5 / ts;
+            highp vec2 local = (uv - inset) / (1.0 - 2.0 * inset);
+            highp vec2 duv = local * materialParams.detailRepeat;
+            const float texel = 1.0 / 256.0;
+            vec4 h0 = texture(materialParams_detailMap, duv);
+            vec4 hx = texture(materialParams_detailMap, duv + vec2(texel, 0.0));
+            vec4 hy = texture(materialParams_detailMap, duv + vec2(0.0, texel));
+            float h = dot(h0, wts);
+            float gx = dot(hx - h0, wts);
+            float gy = dot(hy - h0, wts);
+            float m = texture(materialParams_macroMap, local * materialParams.macroRepeat).r;
+
+            // Helligkeit: Mittel 0,5 → Faktor 1 (Farbe des Luftbilds bleibt im Mittel)
+            float k = 1.0 + materialParams.detailStrength * fade * (h - 0.5) * 2.0;
+            k *= 1.0 + materialParams.macroStrength * fade * (m - 0.5) * 2.0;
+            base *= max(k, 0.0);
+
+            // Detail-Normale in Weltrichtung (u nach Osten = +x, v nach Sueden = +z),
+            // dann in den Tangentenraum der Flaeche (dessen Drehung beliebig ist).
+            float b = materialParams.bumpStrength * fade;
+            vec3 p = -(gx * vec3(1.0, 0.0, 0.0) + gy * vec3(0.0, 0.0, 1.0)) * b;
+            p -= dot(p, nGeo) * nGeo;
+            vec3 nW = normalize(nGeo + p);
+            nTs = vec3(dot(nW, getWorldTangentFrame()[0]), dot(nW, getWorldTangentFrame()[1]), dot(nW, getWorldTangentFrame()[2]));
+        }
+        material.normal = nTs;
+        prepareMaterial(material);
+        material.baseColor = vec4(base, 1.0);
+        material.metallic = 0.0;
+        material.roughness = materialParams.roughnessFactor;
+        material.emissive = vec4(materialParams.emissiveFactor * 0.0, 0.0);
+    }
+}

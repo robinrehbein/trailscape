@@ -40,6 +40,7 @@ enum class IndoorStage { PAIR, ROUTE, WORLD, RIDE, SUMMARY }
  *   Cog, 14 Zaehne) — Bezug der virtuellen Gaenge.
  * @property gearTable Gangtabelle der virtuellen Gaenge (`RiderSetup.gearTable`).
  * @property timeOfDay Tageszeit der 3D-Welt (Vorgabe: automatisch nach der Uhr).
+ * @property otherRiders andere Radfahrer in der 3D-Welt anzeigen (rein dekorativ, Vorgabe an).
  * @property canContinue Demo an oder ein Trainer gemerkt.
  */
 data class IndoorPairUi(
@@ -49,6 +50,7 @@ data class IndoorPairUi(
     val chainringTeeth: Int = IndoorViewModel.CHAINRING_DEFAULT_TEETH,
     val gearTable: VirtualGearTable = VirtualGearTable.EVEN,
     val timeOfDay: IndoorTimeOfDay = IndoorTimeOfDay.AUTO,
+    val otherRiders: Boolean = true,
 ) {
     val canContinue: Boolean get() = demoTrainer || trainerName != null
 }

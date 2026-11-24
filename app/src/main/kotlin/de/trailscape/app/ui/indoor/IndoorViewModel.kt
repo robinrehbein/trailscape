@@ -217,6 +217,7 @@ class IndoorViewModel(
             chainringTeeth = readChainringTeeth(),
             gearTable = readGearTable(),
             timeOfDay = readTimeOfDay(),
+            otherRiders = readOtherRiders(),
         ),
     )
     val pair: StateFlow<IndoorPairUi> = _pair.asStateFlow()
@@ -420,6 +421,18 @@ class IndoorViewModel(
         _pair.update { it.copy(timeOfDay = choice) }
         applySky(force = true)
     }
+
+    /**
+     * Andere Radfahrer in der 3D-Welt anzeigen — gemerkt in den Einstellungen. Rein dekorativ;
+     * waehrend einer Fahrt sofort.
+     */
+    fun setOtherRiders(enabled: Boolean) {
+        runCatching { store.setString(KEY_OTHER_RIDERS, enabled.toString()) }
+        _pair.update { it.copy(otherRiders = enabled) }
+        _renderer.value?.let { r -> indoorCatching(IndoorPart.RENDER) { r.setOtherRidersEnabled(enabled) } }
+    }
+
+    private fun readOtherRiders(): Boolean = runCatching { store.getString(KEY_OTHER_RIDERS) != "false" }.getOrDefault(true)
 
     /** Weiter zur Streckenwahl (nur wenn [IndoorPairUi.canContinue]). */
     fun continueFromPair() {
@@ -1357,6 +1370,7 @@ class IndoorViewModel(
             }
             _renderer.value = r
             applySky(force = true)
+            indoorCatching(IndoorPart.RENDER) { r.setOtherRidersEnabled(_pair.value.otherRiders) }
         }
         publishRide(runtime.state.value)
         rideCollectJob = scope.launch { runtime.state.collect { publishRide(it) } }
@@ -1772,6 +1786,7 @@ class IndoorViewModel(
 
         /** Schluessel der Tageszeit der 3D-Welt (Enum-Name von [IndoorTimeOfDay]). */
         const val KEY_TIME_OF_DAY = "trailscape.indoor.time_of_day"
+        const val KEY_OTHER_RIDERS = "trailscape.indoor.other_riders"
 
         /** „Automatisch“: Himmel waehrend der Fahrt alle 10 Minuten der Uhr nachfuehren. */
         const val SKY_REFRESH_MS = 10 * 60_000L

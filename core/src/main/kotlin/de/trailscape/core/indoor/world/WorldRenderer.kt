@@ -81,6 +81,10 @@ data class SkySetting(val hourOfDay: Double, val dayOfYear: Int, val haze: Doubl
  *
  * @property resolutionScale feste Skalierung der Zeichenflaeche 0,5..1 (vor der dynamischen Aufloesung).
  * @property maxFps Obergrenze der Bildrate (30 oder 60).
+ * @property groundDetail Boden-Detail nah am Fahrer und schaerfere Belaege (Software-Anisotropie).
+ * @property wind Laub und Gras wiegen im Wind.
+ * @property birds gelegentlich Voegel am Himmel.
+ * @property otherRiders hoechstens so viele andere Radfahrer auf der Strecke (rein dekorativ; 0 = keine).
  */
 data class RenderSettings(
     val shadows: Boolean,
@@ -96,6 +100,10 @@ data class RenderSettings(
     val props: Boolean,
     val resolutionScale: Double,
     val maxFps: Int,
+    val groundDetail: Boolean = true,
+    val wind: Boolean = true,
+    val birds: Boolean = true,
+    val otherRiders: Int = 3,
 ) {
     companion object {
         /** Voreinstellung je Qualitaetsstufe. */
@@ -104,16 +112,19 @@ data class RenderSettings(
                 shadows = false, ambientOcclusion = false, bloom = false, fog = true,
                 antiAliasing = true, dynamicResolution = true, postProcessing = true, sky = true,
                 trees = true, buildings = true, props = false, resolutionScale = 0.75, maxFps = 30,
+                groundDetail = false, wind = false, birds = true, otherRiders = 2,
             )
             IndoorQuality.MEDIUM -> RenderSettings(
                 shadows = true, ambientOcclusion = false, bloom = false, fog = true,
                 antiAliasing = true, dynamicResolution = true, postProcessing = true, sky = true,
                 trees = true, buildings = true, props = true, resolutionScale = 1.0, maxFps = 60,
+                groundDetail = true, wind = true, birds = true, otherRiders = 3,
             )
             IndoorQuality.HIGH -> RenderSettings(
                 shadows = true, ambientOcclusion = true, bloom = true, fog = true,
                 antiAliasing = true, dynamicResolution = true, postProcessing = true, sky = true,
                 trees = true, buildings = true, props = true, resolutionScale = 1.0, maxFps = 60,
+                groundDetail = true, wind = true, birds = true, otherRiders = 5,
             )
         }
 
@@ -122,6 +133,7 @@ data class RenderSettings(
             shadows = false, ambientOcclusion = false, bloom = false, fog = false,
             antiAliasing = false, dynamicResolution = false, postProcessing = false, sky = false,
             trees = false, buildings = true, props = false, resolutionScale = 0.75, maxFps = 30,
+            groundDetail = false, wind = false, birds = false, otherRiders = 0,
         )
     }
 }
@@ -236,6 +248,12 @@ interface WorldRenderer {
     fun setCamera(mode: CameraMode)
 
     fun setSky(sky: SkySetting)
+
+    /**
+     * Andere Radfahrer anzeigen (Einstellung des Nutzers, Vorgabe an). Die Zahl begrenzt
+     * [RenderSettings.otherRiders]; rein dekorativ, ohne Einfluss auf Physik oder Windschatten.
+     */
+    fun setOtherRidersEnabled(enabled: Boolean) {}
 
     fun setSettings(settings: RenderSettings)
 
