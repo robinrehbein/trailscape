@@ -786,15 +786,17 @@ private class RouteEmitter(
         val jitter = DoubleArray(5) { q -> (RouteGeometry.tone(bd * 0.37 + q * 1.7, bd * 0.11 - q * 2.3, 0x5f3) - 0.5) * 0.5 }
         strip(lane, m, j, 5) { st ->
             val v = (st.dist - floor(runStartDist / spec.lengthM) * spec.lengthM) / spec.lengthM
-            val inner = max(st.hw - 0.6, st.hw * 0.4)
+            // Seitlich endet das Band an der Innenkante der Fransen (sonst laegen beide 3 mm uebereinander: Flimmern).
+            val edge = max(st.hw - FRINGE_IN_M, st.hw * 0.4)
+            val inner = min(max(st.hw - 0.6, st.hw * 0.4), edge * 0.8)
             var first = -1
             for (q in 0..4) {
                 val t = when (q) {
-                    0 -> -st.hw
+                    0 -> -edge
                     1 -> -inner
                     2 -> 0.0
                     3 -> inner
-                    else -> st.hw
+                    else -> edge
                 }
                 val al = (base(st) + jitter[q]).coerceIn(0.0, 1.0)
                 val slope = if (t < 0) st.crown else if (t > 0) -st.crown else 0.0
@@ -987,10 +989,13 @@ private class RouteEmitter(
             // Die Fransentextur ist im Mittel FRINGE_BASE hell; die Vertexfarbe bringt sie auf die Farbe des Rands.
             val k = FRINGE_SHADE / FRINGE_BASE
             val col = RouteGeometry.linColor(min(1.0, r * k), min(1.0, g * k), min(1.0, b * k))
+            // Die Fransen liegen nur auf der Fahrbahn und enden an ihrer Kante, wo der deckende Rand beginnt:
+            // Frueher reichten sie 28 cm ueber den Rand und lagen dort 0,3–0,8 cm ueber dem Gras — seit das
+            // Gras deckend ist, ein Z-Kampf (Flimmern am Fahrbahnrand). Jetzt stossen beide aneinander.
             val tout = st.hw + FRINGE_OUT_M
-            val tin = max(tout - RouteTextures.FRINGE_WIDTH_M, st.hw * 0.4)
+            val tin = max(st.hw - FRINGE_IN_M, st.hw * 0.4)
             val hin = roadH(st, tin) + 0.015
-            val hout = st.h1[side] + (st.h2[side] - st.h1[side]) * (FRINGE_OUT_M / max(0.3, st.t2[side] - st.hw)).coerceAtMost(1.0) + 0.02
+            val hout = roadH(st, tout) + 0.015
             val u = st.dist / RouteTextures.FRINGE_LENGTH_M - floor(runStartDist / RouteTextures.FRINGE_LENGTH_M) + side * 0.37
             val slope = sgn * (hout - hin) / (tout - tin)
             if (side == 0) {
@@ -1087,6 +1092,9 @@ private class RouteEmitter(
         const val FRINGE_SHADE = 0.78
 
         /** So weit reicht die Fransenkante ueber den Fahrbahnrand hinaus. */
-        const val FRINGE_OUT_M = 0.28
+        const val FRINGE_OUT_M = 0.0
+
+        /** So weit reicht die Fransenkante vom Fahrbahnrand in die Fahrbahn hinein. */
+        const val FRINGE_IN_M = 0.52
     }
 }

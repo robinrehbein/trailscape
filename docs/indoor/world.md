@@ -471,6 +471,8 @@ Altenberg kurz **mit** Luftbild (`altenberg-kurz-luftbild-…`).
 | 3b | Bordsteinverlauf an Ecken eckig und abgehackt | Gehweg und Bordstein brachen an Einmündungen ab, sobald die Deckung je Eckpunkt unter 0,35 fiel | **teilweise:** Gehweg und Bordstein enden jetzt genau an der Kante der Nebenstraße (2a). Ausgerundete Bordsteinecken (Radius in die Nebenstraße hinein) gibt es **nicht** |
 | 4 | Gelände am Straßenrand wellig-fleckig, harte Kanten Gras/Grau (04, 05) | (a) Gras folgte der Mulde neben der Fahrbahn: neben dem Gehweg fiel es auf 75 cm um bis zu 30 cm ab; (b) erzeugte Bodentextur: Beete und Hofflecken mit harter Kante (`smoothstep` über 6 % des Rauschens) | **behoben:** (a) Der deckende Übergangsstreifen läuft von der Außenkante des Randstreifens gleichmäßig auf den Boden am Ende hinaus (nie unter dem Boden), die Mulde ist schmaler (2c); (b) weichere Ränder (Beete 0,48–0,66, Hofflecken 0,66–0,80, 85 % Deckung). Jenseits des Übergangsstreifens bleibt die Mulde (max. 19 cm) über einige Meter sichtbar |
 
+| 5 | **„Manchmal flackert es noch am Rand der Straße"** (Nachtrag des Gründers) | Fast deckungsgleiche Flächen am Fahrbahnrand. (a) Die Fransenkante reichte 28 cm über den Fahrbahnrand und lag dort 0,3–0,8 cm über dem Gras — seit das Gras deckend ist, ein Z-Kampf; (b) weiche Kanten der Nebenstraßen lagen 0,35 m über dem Gras der Strecke bzw. über anderen Straßen an Knoten, Millimeter darüber; (c) das Band des Belagswechsels lag 3 mm unter den Fransen | **behoben durch Aneinanderstoßen, nicht durch mehr Versatz:** (a) Die Fransen liegen nur noch auf der Fahrbahn (von 0,52 m innen bis zur Kante), das Gras beginnt genau dort. (b) Nebenstraßen haben im Randbereich der Strecke (Mitte < 16 m, `EDGE_FREE_TRACK_M`) keine weichen Kanten mehr — das geschnittene Gras stößt direkt an ihre Fahrbahn; sonst werden ihre Kanten an den Bändern anderer Straßen geschnitten (`PlanMask`). (c) Das Belagswechsel-Band endet seitlich an der Innenkante der Fransen. Gemessen mit `indoor-dev overlaps --tol-cm …` (neue Option), Paare mit Rand der Strecke (`route:`) ohne Gelände: Balkantrasse unter 4 mm **675 → 5**, unter 1 cm 908 → 35; Altenberg kurz unter 4 mm **294 → 28**, unter 1 cm 493 → 83. Übrig: einzelne Stellen Gehweg/Gras und Bordstein/Gehweg in engen Innenkurven, Fransen über der Fahrbahn in Kurven (sonst 1,5 cm), dazu Kreuzungen zweier Nebenstraßen untereinander (Rangstaffel 1,2 cm, unverändert) |
+
 **Nebenwirkungen, gesehen und in Kauf genommen:**
 
 - Der Übergangsstreifen hat je Stück **eine** Randtextur (die stärkere); wo Wiese
@@ -504,12 +506,14 @@ Wert nach GC im GC-Protokoll.
 
 | Welt | Dreiecke gleichzeitig | Texturen | Platte | Heap nach GC (max) |
 |---|---|---|---|---|
-| Altenberg kurz (3 km, Luftbild) | 467 902 → 466 739 | 177,7 → 179,3 MB | 17,8 → 18,3 MB/km (+2,8 %) | 212 → 214 MB |
-| Balkantrasse (7,7 km, `--no-aerial`) | 430 916 → 428 814 | 176,1 → 177,0 MB | 18,6 → 19,1 MB/km (+2,7 %) | 223 → 223 MB |
+| Altenberg kurz (3 km, Luftbild) | 467 902 → 466 553 | 177,7 → 179,2 MB | 17,8 → 18,3 MB/km (+2,8 %) | 212 → 206 MB |
+| Balkantrasse (7,7 km, `--no-aerial`) | 430 916 → 428 897 | 176,1 → 177,0 MB | 18,6 → 19,1 MB/km (+2,7 %) | 223 → 231 MB |
 
-Koplanare Überlappungen (`indoor-dev overlaps`, Stufe 0): Balkantrasse 1 134 → 399,
-Altenberg kurz 638 → 436 (der deckende Übergangsstreifen liegt nicht mehr auf
-Gras gleicher Höhe, die Keile über den Nebenstraßen sind weg).
+Koplanare Überlappungen (`indoor-dev overlaps`, Stufe 0, unter 4 mm, alle Paare):
+Balkantrasse 1 134 → 265, Altenberg kurz 638 → 336 (der Rest liegt überwiegend
+zwischen Gelände und dem auslaufenden, dort fast durchsichtigen Übergangsstreifen,
+an Wasserufern und an Brücken). Bildpaare zeigen den Stand vor Punkt 5; die
+Fransen enden seitdem an der Fahrbahnkante (im Bild kaum zu unterscheiden).
 
 ## Abweichungen vom Vertrag
 
