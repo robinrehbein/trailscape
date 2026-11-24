@@ -48,18 +48,6 @@ internal class RoadsLayer : TileLayer {
         if (segs.isEmpty() && corners.isEmpty()) return
         segs.sortBy { it.dist }
         // Budget: nah mit Kanten (und Schienen), fern ohne; was dann noch nicht passt, entfaellt von aussen her.
-        // Ecken an Einmuendungen zuerst (sie liegen an der Strecke): 8 Dreiecke, im Ort 32 fuer den Bordstein dazu.
-        var used = 0
-        val drawCorners = ArrayList<JunctionCorners.Corner>()
-        for (c in corners) {
-            val cost = 8 + (if (c.urban) 32 else 0)
-            if (used + cost > ctx.budget.roads) break
-            used += cost
-            drawCorners.add(c)
-        }
-        var edgeLimit = Double.MAX_VALUE
-        fun cost(s: Seg, edges: Boolean) = 2 + (if (edges) 4 else 0) + (if (s.road.spec.rail) 4 else 0)
-        if (used + segs.sumOf { cost(it, true) } > ctx.budget.roads) edgeLimit = EDGE_NEAR_M
         // Sperrflaechen fuer die weichen Kanten: die Baender aller Strassen, je Strasse eine Nummer — eine Kante
         // laeuft nicht ueber eine andere Strasse (dort lag sie Millimeter ueber deren Fahrbahn: Flimmern).
         val mask = PlanMask()
@@ -78,7 +66,18 @@ internal class RoadsLayer : TileLayer {
         }
         val index = HashMap<RoadNet.Road, Int>()
         for ((ri, r) in net.roads.withIndex()) index[r] = ri
+        // Ecken an Einmuendungen zuerst (sie liegen an der Strecke): 8 Dreiecke, im Ort 32 fuer den Bordstein dazu —
+        // das Abschneiden an Fahrbahn, Strassen und Nachbarecken teilt sie hoechstens vierfach; gezaehlt wird, was entsteht.
+        var used = 0
         val emitter = Emitter(ctx, out, mask)
+        for (c in corners) {
+            val reserve = 4 * (8 + (if (c.urban) 32 else 0))
+            if (used + reserve > ctx.budget.roads) break
+            used += emitter.corner(c, index.getValue(c.road))
+        }
+        var edgeLimit = Double.MAX_VALUE
+        fun cost(s: Seg, edges: Boolean) = 2 + (if (edges) 4 else 0) + (if (s.road.spec.rail) 4 else 0)
+        if (used + segs.sumOf { cost(it, true) } > ctx.budget.roads) edgeLimit = EDGE_NEAR_M
         for (s in segs) {
             // Im Randbereich der Strecke (Gras, Gehweg, Bankett) keine weichen Kanten: Der Rand der Strecke stoesst
             // dort genau an die Fahrbahn der Strasse (RouteLayer schneidet ihn an deren Band), eine Kante darueber
@@ -89,7 +88,6 @@ internal class RoadsLayer : TileLayer {
             used += c
             emitter.segment(s.road, s.i, edges, index.getValue(s.road))
         }
-        for (c in drawCorners) emitter.corner(c)
     }
 
     /**
@@ -285,11 +283,51 @@ internal class RoadsLayer : TileLayer {
          * Ausgerundete Ecke an einer Einmuendung ([JunctionCorners]): Faecher vom Eckpunkt zum Bogen im Belag der
          * Strasse, Hoehe wie die Strasse dort; im Ort ein Bordstein entlang des Bogens.
          */
-        fun corner(c: JunctionCorners.Corner) {
+        /** Bereits gezeichnete Ecken: eine weitere wird an ihnen abgeschnitten (dicht benachbarte Einmuendungen). */
+        private val cornerMask = PlanMask().also { m ->
+            // Die Fahrbahn der Strecke selbst: Die Ecke rechnet mit der Tangente der Fahrbahnkante, in Kurven
+            // ragte sie sonst Zentimeter in die (gekruemmte) Fahrbahn.
+            val t = ctx.track
+            val s = ctx.spec
+            val c0 = DoubleArray(5)
+            val c1 = DoubleArray(5)
+            for (i in 0 until t.count - 1) {
+                val pe = t.track.e[i].toDouble()
+                val pn = t.track.n[i].toDouble()
+                if (pe < s.minE - 40 || pe > s.maxE + 40 || pn < s.minN - 40 || pn > s.maxN + 40) continue
+                val hw = t.halfWidthAt(t.track.distAt(i))
+                for (h in 0 until 2) {
+                    RouteGeometry.centerAt(t, i, h * 0.5, c0)
+                    RouteGeometry.centerAt(t, i, h * 0.5 + 0.5, c1)
+                    m.addQuad(
+                        c0[0] - c0[4] * hw, c0[1] + c0[3] * hw, c0[0] + c0[4] * hw, c0[1] - c0[3] * hw,
+                        c1[0] - c1[4] * hw, c1[1] + c1[3] * hw, c1[0] + c1[4] * hw, c1[1] - c1[3] * hw,
+                    )
+                }
+            }
+        }
+        private val tempB = MeshBuilder()
+        private val tempK = MeshBuilder()
+
+        /** [src] → [dst]: an den Baendern anderer Strassen und an frueheren Ecken abgeschnitten (aneinanderstossen statt ueberlagern). */
+        private fun clipCorner(src: MeshBuilder, dst: MeshBuilder, roadIndex: Int): Int {
+            val before = dst.triangleCount
+            val toE: (Double) -> Double = { x -> x + ctx.spec.anchorE }
+            val toN: (Double) -> Double = { z -> ctx.spec.anchorN - z }
+            tempB.clear()
+            clipInto(src, tempB, mask, toE, toN, roadIndex.toDouble(), roadIndex.toDouble())
+            clipInto(tempB, dst, cornerMask, toE, toN)
+            src.clear()
+            return dst.triangleCount - before
+        }
+
+        /** Zeichnet die Ecke und gibt die Zahl der entstandenen Dreiecke zurueck. */
+        fun corner(c: JunctionCorners.Corner, roadIndex: Int): Int {
             val r = c.road
             val kind = r.spec.kind
             val tex = RouteTextures.spec(kind)
-            val m = mesh(kind, false)
+            val dstSurface = mesh(kind, false)
+            val m = tempK
             val k = c.station.coerceIn(0, r.size - 1)
             fun h(e: Double, n: Double) = heightAt(e, n, r, true, k)
             fun col(e: Double, n: Double): Int {
@@ -308,9 +346,14 @@ internal class RoadsLayer : TileLayer {
                 m.vertex(ctx.x(e), ctx.y(h(e, n)), ctx.z(n), 0.0, 1.0, 0.0, e / tex.widthM, n / tex.lengthM, col(e, n))
             }
             for (q in 0 until cnt - 1) if (area > 0) m.tri(p, first + q, first + q + 1) else m.tri(p, first + q + 1, first + q)
-            if (!c.urban) return
+            var tris = clipCorner(m, dstSurface, roadIndex)
+            if (!c.urban) {
+                c.addTo(cornerMask)
+                return tris
+            }
             // Bordstein: Ansicht vom Bogen bis 2 cm dahinter auf 12 cm, Oberseite bis zur Hinterkante.
-            val kerb = out.mesh(WorldNames.NODE_ROADS, materials.getOrPut(MAT_KERB) { TileMaterial(MAT_KERB, roughness = 0.85f) })
+            val kerbDst = out.mesh(WorldNames.NODE_ROADS, materials.getOrPut(MAT_KERB) { TileMaterial(MAT_KERB, roughness = 0.85f) })
+            val kerb = tempK
             val b = c.arcBack
             val g = 0.30
             val top = RouteGeometry.linColor(g, g, g * 0.97)
@@ -342,6 +385,9 @@ internal class RoadsLayer : TileLayer {
                     kerb.quad(i1 + 2, i0 + 2, i0 + 3, i1 + 3)
                 }
             }
+            tris += clipCorner(kerb, kerbDst, roadIndex)
+            c.addTo(cornerMask)
+            return tris
         }
 
         /**
