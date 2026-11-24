@@ -50,8 +50,13 @@ fun IndoorWorldScreen(
     onRetry: () -> Unit,
     onBack: () -> Unit,
     onContinue: () -> Unit,
+    server: IndoorServerUi = IndoorServerUi.Hidden,
+    onServerBuild: () -> Unit = {},
+    onServerCancel: () -> Unit = {},
+    onServerRetry: () -> Unit = {},
 ) {
     val building = ui is IndoorWorldUi.Building
+    val serverBusy = server is IndoorServerUi.Working
     IndoorPage(
         title = stringResource(R.string.indoor_app_world_title),
         overline = stepOverline(3),
@@ -61,12 +66,15 @@ fun IndoorWorldScreen(
             when (ui) {
                 IndoorWorldUi.Preparing -> Unit
                 is IndoorWorldUi.Plan -> {
-                    Button(onClick = onLoad, modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            stringResource(
-                                if (ui.resumable) R.string.indoor_app_world_resume_action else R.string.indoor_app_world_load_action,
-                            ),
-                        )
+                    // Waehrend der Server baut, nicht zugleich auf dem Geraet bauen.
+                    if (!serverBusy) {
+                        Button(onClick = onLoad, modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                stringResource(
+                                    if (ui.resumable) R.string.indoor_app_world_resume_action else R.string.indoor_app_world_load_action,
+                                ),
+                            )
+                        }
                     }
                     NeutralButton(onClick = onRideWithoutWorld, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.indoor_app_world_without_action))
@@ -111,9 +119,17 @@ fun IndoorWorldScreen(
     ) {
         when (ui) {
             IndoorWorldUi.Preparing -> PreparingContent()
-            is IndoorWorldUi.Plan -> PlanContent(ui)
+            is IndoorWorldUi.Plan -> {
+                // Die zweite Wahl steht oben, sobald sie laeuft — dann ist sie das Wichtigste.
+                if (serverBusy) IndoorServerSection(server, onServerBuild, onServerCancel, onServerRetry)
+                PlanContent(ui)
+                if (!serverBusy) IndoorServerSection(server, onServerBuild, onServerCancel, onServerRetry)
+            }
             is IndoorWorldUi.Building -> BuildingContent(ui)
-            is IndoorWorldUi.Ready -> ReadyContent(ui)
+            is IndoorWorldUi.Ready -> {
+                ReadyContent(ui)
+                IndoorServerSection(server, onServerBuild, onServerCancel, onServerRetry)
+            }
             is IndoorWorldUi.Failed -> FailedContent(ui)
             is IndoorWorldUi.RouteUnavailable -> RouteUnavailableContent(ui)
         }
@@ -226,6 +242,17 @@ private fun ReadyContent(ready: IndoorWorldUi.Ready) {
         title = stringResource(R.string.indoor_app_world_ready_title),
         text = stringResource(R.string.indoor_app_world_ready_body, ready.routeName),
     )
+    if (ready.fromServer) {
+        NoticeBox(
+            icon = Icons.Filled.Info,
+            color = MaterialTheme.colorScheme.primary,
+            text = listOfNotNull(
+                ready.serverLaser?.let { stringResource(R.string.indoor_app_server_ready_laser, serverRegionName(it)) }
+                    ?: stringResource(R.string.indoor_app_server_ready_no_laser),
+                if (ready.replacedDeviceWorld) stringResource(R.string.indoor_app_server_ready_replaced) else null,
+            ).joinToString(" "),
+        )
+    }
     Eyebrow(stringResource(R.string.indoor_app_attribution_eyebrow))
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(IndoorCardPadding)) {

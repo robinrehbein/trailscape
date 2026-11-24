@@ -365,6 +365,30 @@ object AppServices {
     }
 
     /**
+     * Bau auf dem eigenen Server (docs/indoor/serverbau.md): Adresse und Token
+     * des Sync-Servers (`getSyncConfig`), Download nur von genau dieser Adresse,
+     * Installation ueber den Katalog-Installationsweg, angefangene Downloads
+     * unter `<filesDir>/indoor/server` (vom Backup ausgenommen wie ganz `indoor/`).
+     */
+    val indoorServerDeps: de.trailscape.app.ui.indoor.IndoorServerDeps by lazy {
+        de.trailscape.app.ui.indoor.IndoorServerDeps(
+            client = {
+                de.trailscape.core.getSyncConfig(keyValueStore)
+                    ?.let { de.trailscape.core.indoor.server.WorldServerClient(httpClient, it) }
+            },
+            downloader = { serverUrl ->
+                CatalogDownloader(CatalogDownloader.createClient(), "Trailscape/${BuildConfig.VERSION_NAME}") {
+                    de.trailscape.app.ui.indoor.isSameOrigin(it, serverUrl)
+                }
+            },
+            store = indoorCatalogStore,
+            keyValue = keyValueStore,
+            downloadsDir = File(appContext.filesDir, "indoor/server"),
+            serverUrl = { de.trailscape.core.getSyncConfig(keyValueStore)?.url },
+        )
+    }
+
+    /**
      * Die Teile der anderen Indoor-Slices hinter einer Schnittstelle (siehe
      * [IndoorParts]). Der rohe Abruf ist [OkHttpGeoFetcher] mit
      * `User-Agent: Trailscape/<versionName>` ohne Geraetekennung; die Huelle
