@@ -91,9 +91,10 @@ class SkyModelTest {
         // +Y (Zenit) und −Y spiegelbildlich gleich: die Flaechen-Spiegelung eines Treibers aendert nichts.
         val face = size * size * 3
         assertEquals(half.copyOfRange(2 * face, 3 * face).sorted(), half.copyOfRange(3 * face, 4 * face).sorted())
-        // Horizont (Mitte der Seitenflaeche) heller als 1: deshalb Gleitkomma-Textur.
+        // Horizont (Mitte der Seitenflaeche) hell; mit der Belichtung je Tageszeit liegt er je
+        // nach Stunde unter oder ueber 1 (Wolkenraender darueber) — Gleitkomma-Textur bleibt.
         val mid = ((size / 2) * size + size / 2) * 3
-        assertTrue(SkyModel.halfToDouble(half[mid + 2]) > 1.0, "Horizont blau ${SkyModel.halfToDouble(half[mid + 2])}")
+        assertTrue(SkyModel.halfToDouble(half[mid + 2]) > 0.3, "Horizont blau ${SkyModel.halfToDouble(half[mid + 2])}")
         // Zenit blau: Blau deutlich ueber Rot.
         val z = 2 * face + mid
         assertTrue(SkyModel.halfToDouble(half[z + 2]) > 2.0 * SkyModel.halfToDouble(half[z]))

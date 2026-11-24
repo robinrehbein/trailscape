@@ -4,25 +4,28 @@ name: Indoor-Welten (Katalog)
 # Assets an das feste Release-Tag `indoor-worlds-v1` (docs/indoor/catalog.md).
 #
 # Nur manuell (workflow_dispatch): Ein Lauf dauert lange, laedt Geodaten von
-# den Quellen des Weltbaus (Hoehen, OpenFreeMap, amtliche Luftbilder) und
-# ersetzt veroeffentlichte Pakete. Die App laedt ein Paket erst, wenn jemand
-# in der App „Laden" tippt; vorher fragt sie `catalog.json` aus demselben
-# Release ab (Version, Groesse, SHA-256).
+# den Quellen des Weltbaus (Hoehen, OpenFreeMap, amtliche Luftbilder, Laser-
+# Daten NRW/BW) und ersetzt veroeffentlichte Pakete. Die App laedt ein Paket
+# erst, wenn jemand in der App „Laden" tippt; vorher fragt sie `catalog.json`
+# aus demselben Release ab (Version, Groesse, SHA-256).
 #
-# Ablauf:
-#  1. `catalog.json` des Release holen (falls vorhanden), damit ein Lauf mit
-#     `only` die uebrigen Eintraege behaelt.
-#  2. `:indoor-dev:installDist`, dann `catalog-build` (Bau, checkWorld, Paket).
-#     Mit `preview_only` statt dessen die vorhandenen Pakete aus dem Release
-#     holen (kein Neubau, keine Geodaten).
-#  3. Vorschau je Strecke: `catalog-preview --prepare` legt die Welten bereit,
-#     der Betrachter (`viewer/shots.mjs`, headless Chromium) rendert je Welt
-#     ein JPEG (640 × 360, Ziel ≤ 150 kB), `catalog-preview` traegt Bild,
-#     ausgeduenntes Hoehenprofil und Laser-Kennzeichen in catalog.json ein.
-#     Scheitert ein Bild, bleibt die Strecke ohne Bild (die App zeigt dann
-#     das Profil); der Lauf geht weiter.
-#  4. Release anlegen, falls es fehlt, und Pakete, Vorschaubilder und
-#     catalog.json hochladen (`--clobber` ersetzt gleichnamige Assets).
+# Seit 24.11.2026 in drei Jobs aufgeteilt (20 Strecken, rund 330 km; ein
+# einzelner Runner kaeme mit Welten, Paketen und Laser-Cache an seine
+# Plattengrenze, und die Laufzeit naeherte sich der Frist):
+#  1. `plan`: verteilt die Strecken (alle oder `only`) reihum auf hoechstens
+#     drei Gruppen und legt das Release an, falls es fehlt.
+#  2. `worlds` (Matrix, eine Gruppe je Runner, parallel): Platz schaffen,
+#     `:indoor-dev:installDist`, `catalog.json` des Release holen,
+#     `catalog-build --only <Gruppe>` (Bau, checkWorld, Paket) bzw. mit
+#     `preview_only` die Pakete der Gruppe aus dem Release holen; Vorschau
+#     (`catalog-preview --prepare`, Betrachter `viewer/shots.mjs`,
+#     `catalog-preview`); Pakete und Bilder der Gruppe hochladen
+#     (`--clobber`, die Dateinamen der Gruppen ueberschneiden sich nicht);
+#     den Katalog der Gruppe als Artefakt weitergeben.
+#  3. `publish`: den aktuellen `catalog.json` des Release holen, je Gruppe die
+#     Eintraege ihrer Strecken daraus uebernehmen, nach `catalog-src.json`
+#     ordnen und hochladen. Fehlt der Katalog einer Gruppe (Job gescheitert),
+#     bleiben deren Eintraege, wie sie im Release stehen.
 #
 # Wer eine Strecke neu veroeffentlicht, erhoeht vorher ihre `version` in
 # tool/indoor-dev/catalog/catalog-src.json (neuer Paketname, „Update
@@ -55,10 +58,66 @@ env:
   TAG: indoor-worlds-v1
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.groups.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Strecken auf Gruppen verteilen
+        id: groups
+        env:
+          ONLY: ${{ inputs.only }}
+        run: |
+          src=tool/indoor-dev/catalog/catalog-src.json
+          if [ -n "$ONLY" ]; then
+            ids=$(jq -c --arg only "$ONLY" '$only | split(",") | map(gsub("^ +| +$"; "")) | map(select(length > 0))' <<< 'null')
+            # Unbekannte Kennungen gleich hier melden (catalog-build bricht sonst je Gruppe ab).
+            unknown=$(jq -r --argjson ids "$ids" '[.entries[].id] as $all | $ids - $all | join(",")' "$src")
+            if [ -n "$unknown" ]; then echo "::error::unbekannte Strecke(n): $unknown"; exit 1; fi
+          else
+            ids=$(jq -c '[.entries[].id]' "$src")
+          fi
+          # Reihum statt in Bloecken: Die Laser-Strecken (gross, lange Downloads)
+          # stehen in catalog-src.json beieinander und sollen sich verteilen.
+          matrix=$(jq -c --argjson ids "$ids" -n '
+            ([3, ($ids | length)] | min) as $n
+            | if $n == 0 then error("keine Strecken") else . end
+            | {include: [range($n) as $g | {gruppe: ($g + 1), only: ([$ids | to_entries[] | select(.key % $n == $g) | .value] | join(","))}]}')
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          jq . <<< "$matrix"
+
+      - name: Release anlegen, falls es fehlt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            gh release create "$TAG" --prerelease --title "Indoor-Welten: bekannte Strecken" \
+              --notes "Vorgebaute 3D-Welten fuer das Indoor-Training (Katalog bekannter Strecken). Die App laedt sie nur nach „Laden“. Quellenangaben stehen im manifest.json jeder Welt; Streckenverlauf © OpenStreetMap-Mitwirkende (ODbL). Siehe docs/indoor/catalog.md."
+          fi
+
   worlds:
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    name: worlds (Gruppe ${{ matrix.gruppe }})
+    env:
+      ONLY: ${{ matrix.only }}
     steps:
+      # Gemessen 24.11.2026: eine Laser-Strecke BW belegt je km rund 13 MB Welt,
+      # 9 MB Paket und 17 MB Laser-Cache (ganze 2-km-Archive). Die vorinstallierten
+      # SDKs, die der Bau nicht braucht, machen gut 20 GB frei.
+      - name: Platz schaffen
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
       # Das Modul :brouter uebersetzt das Submodul third_party/brouter; ohne es
       # bricht schon die Gradle-Konfiguration ab.
       - uses: actions/checkout@v7
@@ -80,27 +139,26 @@ jobs:
         run: |
           mkdir -p out
           gh release download "$TAG" --pattern catalog.json --dir out --clobber || echo "noch kein Release-Katalog"
+          echo "Gruppe ${{ matrix.gruppe }}: $ONLY"
 
       - name: Welten bauen, pruefen, packen
         if: ${{ !inputs.preview_only }}
         env:
-          ONLY: ${{ inputs.only }}
           QUALITY: ${{ inputs.quality }}
         run: |
-          args=(catalog-build --out out --keep-going)
-          if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
+          args=(catalog-build --out out --keep-going --only "$ONLY")
           if [ -n "$QUALITY" ]; then args+=(--quality "$QUALITY"); fi
           JAVA_OPTS="-Xmx6g" tool/indoor-dev/build/install/indoor-dev/bin/indoor-dev "${args[@]}"
+          df -h /
 
       - name: Pakete des Release fuer die Vorschau holen
         if: ${{ inputs.preview_only }}
         env:
           GH_TOKEN: ${{ github.token }}
-          ONLY: ${{ inputs.only }}
         run: |
           test -f out/catalog.json || { echo "kein Katalog im Release"; exit 1; }
           mkdir -p out/packages
-          jq -r --arg only "$ONLY" '.entries[] | select($only == "" or (.id as $i | $only | split(",") | map(gsub("^ +| +$"; "")) | any(.[]; . == $i))) | .packageFile' out/catalog.json |
+          jq -r --arg only "$ONLY" '.entries[] | select(.id as $i | $only | split(",") | any(.[]; . == $i)) | .packageFile' out/catalog.json |
             while read -r pkg; do
               gh release download "$TAG" --pattern "$pkg" --dir out/packages --clobber || echo "::warning::$pkg fehlt im Release"
             done
@@ -116,12 +174,8 @@ jobs:
         id: preview_prepare
         if: ${{ !cancelled() }}
         continue-on-error: true
-        env:
-          ONLY: ${{ inputs.only }}
         run: |
-          args=(catalog-preview --out out --prepare)
-          if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
-          tool/indoor-dev/build/install/indoor-dev/bin/indoor-dev "${args[@]}"
+          tool/indoor-dev/build/install/indoor-dev/bin/indoor-dev catalog-preview --out out --prepare --only "$ONLY"
           cd tool/indoor-dev/viewer
           npm ci
           # shots.mjs findet Playwright ueber require() vom Betrachter aus.
@@ -149,38 +203,83 @@ jobs:
       - name: Vorschau in den Katalog eintragen
         if: ${{ !cancelled() && steps.preview_prepare.outcome == 'success' }}
         continue-on-error: true
-        env:
-          ONLY: ${{ inputs.only }}
-        run: |
-          args=(catalog-preview --out out)
-          if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
-          tool/indoor-dev/build/install/indoor-dev/bin/indoor-dev "${args[@]}"
+        run: tool/indoor-dev/build/install/indoor-dev/bin/indoor-dev catalog-preview --out out --only "$ONLY"
 
       - name: Uebersicht
         if: always()
         run: |
+          df -h / || true
           ls -l out/packages || true
-          cat out/catalog.json || true
 
       # Auch wenn einzelne Strecken scheiterten (--keep-going): die fertigen hochladen.
-      - name: Release anlegen und Pakete hochladen
+      # catalog.json laedt erst `publish` hoch, nachdem alle Gruppen fertig sind.
+      - name: Pakete und Bilder der Gruppe hochladen
         if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
           PREVIEW_ONLY: ${{ inputs.preview_only }}
         run: |
-          files=(out/catalog.json)
-          if [ "$PREVIEW_ONLY" = "true" ]; then
-            # Die Pakete liegen schon im Release; nur Bilder und Katalog.
-            if ls out/packages/*.jpg > /dev/null 2>&1; then files+=(out/packages/*.jpg); fi
-            gh release upload "$TAG" "${files[@]}" --clobber
-            exit 0
+          files=()
+          if [ "$PREVIEW_ONLY" != "true" ]; then
+            if ! ls out/packages/*.zip > /dev/null 2>&1; then echo "keine Pakete gebaut"; exit 1; fi
+            files+=(out/packages/*.zip)
           fi
-          if ! ls out/packages/*.zip > /dev/null 2>&1; then echo "keine Pakete gebaut"; exit 1; fi
-          files+=(out/packages/*.zip)
           if ls out/packages/*.jpg > /dev/null 2>&1; then files+=(out/packages/*.jpg); fi
-          if ! gh release view "$TAG" > /dev/null 2>&1; then
-            gh release create "$TAG" --prerelease --title "Indoor-Welten: bekannte Strecken" \
-              --notes "Vorgebaute 3D-Welten fuer das Indoor-Training (Katalog bekannter Strecken). Die App laedt sie nur nach „Laden“. Quellenangaben stehen im manifest.json jeder Welt; Streckenverlauf © OpenStreetMap-Mitwirkende (ODbL). Siehe docs/indoor/catalog.md."
+          if [ ${#files[@]} -gt 0 ]; then gh release upload "$TAG" "${files[@]}" --clobber; fi
+          mkdir -p teil
+          cp out/catalog.json teil/catalog.json
+          echo "$ONLY" > teil/ids.txt
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: katalog-gruppe-${{ matrix.gruppe }}
+          path: teil/
+          retention-days: 7
+
+  publish:
+    needs: [plan, worlds]
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: katalog-gruppe-*
+          path: teile
+
+      - name: Kataloge der Gruppen zusammenfuehren
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          src=tool/indoor-dev/catalog/catalog-src.json
+          mkdir -p out
+          ls teile/*/catalog.json > /dev/null 2>&1 || { echo "::error::kein Gruppenkatalog"; exit 1; }
+          # Ausgangspunkt: der Katalog, wie er jetzt im Release steht (sonst der erste Gruppenkatalog).
+          if gh release download "$TAG" --pattern catalog.json --dir out --clobber; then
+            cp out/catalog.json cur.json
+          else
+            cp "$(ls teile/*/catalog.json | head -1)" cur.json
           fi
-          gh release upload "$TAG" "${files[@]}" --clobber
+          for d in teile/*/; do
+            ids=$(cat "$d/ids.txt")
+            echo "uebernehme aus $d: $ids"
+            jq --arg ids "$ids" --slurpfile p "$d/catalog.json" '
+              ($ids | split(",")) as $I
+              | .entries = ([.entries[] | select(.id as $x | $I | index($x) | not)]
+                            + [$p[0].entries[] | select(.id as $x | $I | index($x))])' cur.json > next.json
+            mv next.json cur.json
+          done
+          # Reihenfolge wie catalog-src.json, Strecken ohne Quelle fallen weg (wie catalog-build).
+          jq --slurpfile s "$src" '
+            ($s[0].entries | map(.id)) as $o
+            | .entries |= (map(select(.id as $x | $o | index($x))) | sort_by(.id as $x | $o | index($x)))
+            | .generatedAtMs = (now * 1000 | floor)' cur.json > out/catalog.json
+          jq -r '.entries[] | "\(.id)\tv\(.version)\t\(.packageFile)\t\(.packageBytes)\t\(.preview.file // "-")"' out/catalog.json
+
+      - name: Katalog hochladen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" out/catalog.json --clobber

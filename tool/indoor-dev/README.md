@@ -112,6 +112,25 @@ node shots.mjs ../out/testwelt --count 8 --cameras chase --sky ../out/himmel/abe
 Bilder landen unter `<welt>/shots/`. Optionen und Abweichungen von Filament
 stehen in `viewer/README.md`.
 
+**Wie auf dem Gerät** (echtes Filament 1.75.1 ohne GPU, Mesa llvmpipe unter
+Xvfb; braucht clang mit libc++, siehe `filament/build.sh`):
+
+```
+tool/indoor-dev/filament/build.sh                 # einmal: Filament-Release laden, filarender bauen
+./gradlew :indoor-dev:run --args="sky --time EVENING --lat 48.77 --lon 9.06 --out tool/indoor-dev/out/himmel/abend"
+./gradlew :app:testDebugUnitTest --tests '*CockpitAndHandlebarTest'   # schreibt app/build/indoor/cockpit.glb
+cd tool/indoor-dev/viewer
+node filashots.mjs ../out/<welt> --sky ../out/himmel/abend --dists 2200,5500 --cameras "chase;handlebar" --size 900x1200
+```
+
+`filashots.mjs` rechnet Kacheln, Teilflächen, Fahrer und Kameras wie die App
+(`camerarig.mjs`) und ruft `filament/build/filarender`; Materialien kommen aus
+`app/src/main/assets/indoor/materials` (neu bauen mit
+`filament/materials.sh`). Der Bildsatz „Licht und Kamera“:
+`filament/licht-kamera.sh`, Gegenüberstellungen `filament/vergleich.py`.
+Einzelheiten in `docs/indoor/render.md`, „Licht, Himmel, Wasser,
+Lenkerperspektive“.
+
 ## Hinweis zum Stand
 
 `createWorldBuilder()` baut mit allen Erzeugern (`FullWorldParts`): Gelände
