@@ -26,6 +26,7 @@ import kotlin.system.exitProcess
  *       [--from-km a --to-km b] [--no-aerial] [--offline] [--laser [--laser-radius m]]
  * plan  --gpx <datei> [--quality …] [--from-km a --to-km b] [--no-aerial]
  * testworld --out <dir> [--quality …]
+ * generated --profile <vorlage|datei.json|kurz> [--seed n] --out <dir> [--quality …] [--name text]
  * check <dir>
  * models --out <dir>
  * catalog-routes [--only a,b]
@@ -55,6 +56,7 @@ private const val USAGE = """Aufruf:
   lod2-cut --gpx <datei> --out <datei.tsl2> [--lod2-radius m] [--offline]
   plan --gpx <datei> [--quality LOW|MEDIUM|HIGH] [--from-km a --to-km b] [--no-aerial] [--laser]
   testworld --out <dir> [--quality LOW|MEDIUM|HIGH]
+  generated --profile <grundlage60|intervalle4x8|erholung30|berg|datei.json|3km:f,2.4km@6:c,…> [--seed n] --out <dir> [--quality LOW|MEDIUM|HIGH] [--name text]
   check <dir>
   models --out <dir>
   catalog-routes [--only a,b]
@@ -104,6 +106,7 @@ private fun run(all: List<String>): Int {
         "build" -> build(Args(rest, setOf("no-aerial", "offline", "laser")))
         "plan" -> plan(Args(rest, setOf("no-aerial", "offline", "laser")))
         "testworld" -> testworld(Args(rest, emptySet()))
+        "generated" -> generated(Args(rest, emptySet()))
         "check" -> check(File(Args(rest, emptySet()).positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")))
         "overlaps" -> Args(rest, emptySet()).let { a ->
             overlaps(File(a.positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")), a.opt("tol-cm")?.toDoubleOrNull()?.div(100.0) ?: 0.004)
@@ -307,6 +310,35 @@ private fun testworld(a: Args): Int {
     val start = System.nanoTime()
     val m = createWorldBuilder().buildTestWorld(out, a.quality())
     summary(m, out, (System.nanoTime() - start) / 1e9)
+    return checkAndReport(out)
+}
+
+/** Welt aus einem Zielprofil ohne Netz (docs/indoor/generiert.md). */
+private fun generated(a: Args): Int {
+    val out = File(a.req("out"))
+    val profile = try {
+        parseGeneratedProfile(a.req("profile"), a.opt("seed")?.toLongOrNull())
+    } catch (e: IllegalArgumentException) {
+        throw UsageError(e.message ?: "Profil unlesbar")
+    }
+    val quality = a.quality()
+    val start = System.nanoTime()
+    de.trailscape.core.indoor.generated.describeGeneratedProfile(profile).forEach { println("  $it") }
+    val plan = de.trailscape.core.indoor.generated.generatedWorldPlan(profile, quality, a.opt("name") ?: "")
+    println("Plan: ${plan.tileCount} Kacheln, Platz ~${mb(plan.diskBytes)}, Anfragen ${plan.requests.values.sum()}, Hosts ${plan.hosts}")
+    val manifest = try {
+        de.trailscape.core.indoor.generated.buildGeneratedWorld(plan, profile, out, ConsoleListener())
+    } catch (e: WorldBuildFailed) {
+        System.err.println("Bau gescheitert: ${e.message}")
+        e.cause?.let { c ->
+            System.err.println("  Ursache: $c")
+            c.stackTrace.take(12).forEach { System.err.println("    at $it") }
+        }
+        return 1
+    }
+    summary(manifest, out, (System.nanoTime() - start) / 1e9)
+    val rt = Runtime.getRuntime()
+    println("Heap: belegt ${mb(rt.totalMemory() - rt.freeMemory())}, reserviert ${mb(rt.totalMemory())}, Grenze ${mb(rt.maxMemory())}")
     return checkAndReport(out)
 }
 

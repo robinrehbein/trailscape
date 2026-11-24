@@ -18,14 +18,14 @@ import java.io.File
 
 /** Die Strecke zum Profil — deterministisch aus [GeneratedProfile.seed]. Laenge = [GeneratedProfile.lengthM]. */
 fun generatedIndoorRoute(profile: GeneratedProfile, name: String = ""): IndoorRoute =
-    TODO("generierte Strecke")
+    generatedRouteImpl(profile, name)
 
 /**
  * Voranschlag ohne Netzanfragen (`requests` leer, `hosts` leer). Die
  * `worldId` haengt nur von Profil und Stufe ab.
  */
 fun generatedWorldPlan(profile: GeneratedProfile, quality: IndoorQuality, name: String = ""): WorldPlan =
-    TODO("generierter Voranschlag")
+    generatedPlanImpl(profile, quality, name)
 
 /**
  * Baut die Welt nach [outDir] — wie `WorldBuilder.build`, fortsetzbar,
@@ -35,4 +35,11 @@ fun generatedWorldPlan(profile: GeneratedProfile, quality: IndoorQuality, name: 
  * @throws de.trailscape.core.indoor.world.WorldBuildCancelled nach Abbruch
  */
 fun buildGeneratedWorld(plan: WorldPlan, profile: GeneratedProfile, outDir: File, listener: WorldBuildListener): WorldManifest =
-    TODO("generierte Welt")
+    buildGeneratedImpl(plan, profile, outDir, listener)
+
+/**
+ * Beschreibung der erfundenen Landschaft zu [profile] fuer Werkzeug und
+ * Fehlersuche (Landschaftstyp, Orte, Serpentinen, Seen, gekappte Legs) —
+ * eine Zeile je Angabe, kein fester Aufbau.
+ */
+fun describeGeneratedProfile(profile: GeneratedProfile): List<String> = describeGeneratedImpl(profile)
