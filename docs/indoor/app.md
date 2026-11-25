@@ -931,3 +931,12 @@ vorbereitet, `-09` Einstellungen, `-10`/`-11` englisch, `-12` Pause mit
 - [ ] Pause → „Fahrt beenden“ → Auswertung → Speichern/Verwerfen
 - [ ] TalkBack: Trainer-Karte, Status der Strecken und der gesperrte
       „Fahren“-Knopf werden verständlich vorgelesen
+
+**Nachtrag 25.11.2026 (Entscheidungen des Inhabers)**
+
+- „Bekannte Strecken“ sind auf der Startseite eingeklappt (eine Zeile mit
+  Anzahl); offen, sobald eine bekannte Strecke gewählt ist oder man die Zeile
+  antippt (`IndoorHomeScreen`, `initialCatalogOpen` nur für Bildtests).
+- Das Wort „Welt“ kommt in sichtbaren Texten nicht mehr vor: „Strecke“, wo das
+  Ganze gemeint ist, „3D-Ansicht“, wo es um die Darstellung geht; „Testwelt“
+  heißt „Teststrecke“. Bezeichner im Code bleiben (`World…`).

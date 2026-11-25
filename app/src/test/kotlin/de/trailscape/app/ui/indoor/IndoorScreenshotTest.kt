@@ -308,10 +308,11 @@ class IndoorScreenshotTest {
         catalog: IndoorCatalogUi = IndoorCatalogUi(emptyList()),
         day: IndoorDayUi? = null,
         optionsOpen: Boolean = false,
+        catalogOpen: Boolean = false,
     ) = IndoorHomeScreen(
         route = route, pair = pair, trainerIssue = issue,
         onSelect = {}, onModeChange = {}, onGhostChange = {}, onRide = {}, onBack = {}, onOpenPair = {}, onOpenSettings = {},
-        catalog = catalog, day = day, initialOptionsOpen = optionsOpen,
+        catalog = catalog, day = day, initialOptionsOpen = optionsOpen, initialCatalogOpen = catalogOpen,
     )
 
     @Test
@@ -495,14 +496,14 @@ class IndoorScreenshotTest {
     @Test
     @Config(qualifiers = "${TestLocales.DE}-w411dp-h2600dp-xxhdpi")
     fun streckeBekannteStrecken() = shot("116-indoor-strecke-katalog") {
-        Home(route = routeCatalog, catalog = catalogUi)
+        Home(route = routeCatalog, catalog = catalogUi, catalogOpen = true)
     }
 
     @Test
     @Config(qualifiers = "+en-rGB")
     fun streckeBekannteStreckenEnglisch() {
         TestLocales.assertTestLocale(AppLanguage.EN)
-        shot("117-indoor-strecke-katalog-en") { Home(route = routeCatalog, catalog = catalogUi) }
+        shot("117-indoor-strecke-katalog-en") { Home(route = routeCatalog, catalog = catalogUi, catalogOpen = true) }
         compose.onNodeWithText("Known routes").assertExists()
     }
 
@@ -592,7 +593,7 @@ class IndoorScreenshotTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Neu").fetchSemanticsNodes().isNotEmpty() }
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Herunterladen · 106,0 MB").fetchSemanticsNodes().isNotEmpty() }
         compose.waitUntil(10_000) {
-            compose.onAllNodesWithContentDescription("Vorschaubild der 3D-Welt von Alpe d'Huez").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithContentDescription("Vorschaubild der Strecke Alpe d'Huez").fetchSemanticsNodes().isNotEmpty()
         }
     }
 

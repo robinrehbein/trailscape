@@ -175,7 +175,7 @@ class IndoorStartFlowTest {
         vm.saveRide()
         val ride = assertNotNull(rideStorage.loadRide(assertNotNull(vm.summary.value?.savedRideId)))
         assertEquals(summary.distanceKm, ride.stats.distanceKm, 1e-9)
-        assertEquals("Indoor · Testwelt (ab km 1,2)", ride.name)
+        assertEquals("Indoor · Teststrecke (ab km 1,2)", ride.name)
         val saved = assertNotNull(IndoorResumePoint.fromJson(store.getString(resumeKey)))
         assertTrue(saved.routeDistM > 1_200.0, "neue Stelle ${saved.routeDistM}")
     }

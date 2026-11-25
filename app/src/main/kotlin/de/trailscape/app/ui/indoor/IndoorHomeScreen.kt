@@ -49,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -116,6 +117,7 @@ fun IndoorHomeScreen(
     onDayGenerated: () -> Unit = {},
     onDayPath: (IndoorDayPath) -> Unit = {},
     initialOptionsOpen: Boolean = false,
+    initialCatalogOpen: Boolean = false,
 ) {
     val lang = LocalAppFormats.current.language.tag
     val readiness = indoorRouteReadiness(
@@ -189,9 +191,39 @@ fun IndoorHomeScreen(
             }
         }
 
-        Eyebrow(stringResource(R.string.indoor_app_route_tab_catalog))
-        MutedText(stringResource(R.string.indoor_app_catalog_intro))
-        IndoorCatalogList(catalog = catalog, selectedKey = route.selected?.key, onSelect = onSelect)
+        // Bekannte Strecken: eingeklappt, damit die Seite kurz bleibt — offen, sobald eine davon gewaehlt ist.
+        val catalogSelected = route.selected is IndoorRouteOption.Catalog
+        var catalogOpen by rememberSaveable { mutableStateOf(catalogSelected || initialCatalogOpen) }
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(role = Role.Button) { catalogOpen = !catalogOpen }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Eyebrow(stringResource(R.string.indoor_app_route_tab_catalog))
+                    Text(
+                        text = if (catalog.items.isEmpty()) {
+                            stringResource(R.string.indoor_app_catalog_intro)
+                        } else {
+                            pluralStringResource(R.plurals.indoor_app_home_catalog_summary, catalog.items.size, catalog.items.size)
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                Icon(
+                    if (catalogOpen) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (catalogOpen || catalogSelected) {
+            MutedText(stringResource(R.string.indoor_app_catalog_intro))
+            IndoorCatalogList(catalog = catalog, selectedKey = route.selected?.key, onSelect = onSelect)
+        }
     }
 }
 
