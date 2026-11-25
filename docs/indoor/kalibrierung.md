@@ -62,7 +62,7 @@ markiert), auf 5 % gerundet; nur ein Unterschied ≥ 2,5 Prozentpunkte gilt als
 | zu wenige Werte | < 90 brauchbare Sekunden |
 | Leistung zu niedrig | Median < 100 W |
 | Trittfrequenz | Median außerhalb 60–110 U/min |
-| unruhig | robuste Streuung Leistung > 8 % oder Trittfrequenz > 6 % oder Drift der Hälften > 6 % |
+| unruhig | robuste Streuung (größeres von MAD und 10–90-%-Spanne) Leistung > 8 % oder Trittfrequenz > 6 %, oder Drift der Hälften-Mittelwerte > 6 % |
 | Geschwindigkeit passt nicht | simulierte v weicht > 15 % vom Gleichgewichtstempo der Median-Leistung ab |
 | Gang gewechselt | mehr als ein Gang im Fenster |
 | unplausibel | roher Faktor < 0,5 oder > 2 |

@@ -149,11 +149,27 @@ private fun median(v: List<Double>): Double {
     return if (n % 2 == 1) s[n / 2] else (s[n / 2 - 1] + s[n / 2]) / 2
 }
 
-/** Robuste Streuung: Median der Abweichungen vom Median, relativ zum Median. */
+/** Quantil [q] (0..1) der aufsteigend sortierten Werte, linear interpoliert. */
+private fun quantile(sorted: List<Double>, q: Double): Double {
+    val pos = q * (sorted.size - 1)
+    val lo = pos.toInt()
+    val hi = min(lo + 1, sorted.size - 1)
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo)
+}
+
+/**
+ * Relative Streuung als das Größere von zwei robusten Maßen: MAD (Median der
+ * Abweichungen, ×1,4826) und die Spanne zwischen 10- und 90-%-Quantil (÷2,563,
+ * das ist σ für Normalverteilung). Die MAD allein übersieht zweigipfelige Daten
+ * (Intervalle: halb hoch, halb niedrig → MAD kann 0 sein).
+ */
 private fun relSpread(v: List<Double>): Double {
     val m = median(v)
     if (m <= 0) return Double.POSITIVE_INFINITY
-    return median(v.map { abs(it - m) }) * 1.4826 / m
+    val mad = median(v.map { abs(it - m) }) * 1.4826 / m
+    val s = v.sorted()
+    val q = (quantile(s, 0.9) - quantile(s, 0.1)) / 2.563 / m
+    return max(mad, q)
 }
 
 /**
@@ -182,7 +198,8 @@ fun evaluateFeel(samples: List<FeelSample>, rider: RiderSetup): FeelResult {
     val pSpread = relSpread(powers)
     val cSpread = relSpread(cadences)
     val half = clean.size / 2
-    val drift = abs(median(powers.take(half)) - median(powers.drop(clean.size - half))) / pMed
+    // Mittelwerte der Hälften (nicht Mediane: bei zweigipfeligen Daten springt der Median einer Hälfte).
+    val drift = abs(powers.take(half).average() - powers.drop(clean.size - half).average()) / pMed
     if (pSpread > FEEL_MAX_POWER_SPREAD || cSpread > FEEL_MAX_CADENCE_SPREAD || drift > FEEL_MAX_DRIFT) {
         return FeelResult.Reject(FeelRejection.UNSTEADY)
     }
