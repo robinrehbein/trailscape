@@ -22,7 +22,6 @@
     <string name="training_notice_profile_action">Open profile</string>
 
     <!-- TrainingScreen.kt -->
-    <string name="training_screen_title">Training</string>
     <string name="training_screen_goal_eyebrow">Your goal</string>
     <string name="training_screen_week_eyebrow">This week</string>
     <string name="training_screen_form_eyebrow">Your form</string>
