@@ -127,11 +127,26 @@ Platte: Instanzliste ~12 B je Baum (Lage, Drehung, Maßstab, Vorlage, Ton) →
 ## Bilder
 
 `docs/indoor/bilder/baeume/`, je Bild links **alt** (heute), rechts **neu**
-(Prototyp), gleiche Kamera, gleiche Sonne, 960 × 600 je Hälfte:
+(Prototyp), gleiche Kamera, gleiche Sonne; gerendert mit 960 × 600 je Hälfte,
+als JPEG auf 1280 px Breite verkleinert:
 
 | Datei | Szene | Renderer |
 |---|---|---|
-BILDERTABELLE
+| `einzel-05m-gegenlicht-filament.jpg` | Einzelbaum (Eiche), 5 m, Gegenlicht | filarender |
+| `einzel-05m-auflicht-filament.jpg` | Einzelbaum, 5 m, Auflicht | filarender |
+| `einzel-05m-auflicht-three.jpg` | Einzelbaum, 5 m, Auflicht | three.js |
+| `einzel-15m-gegenlicht-filament.jpg` | Einzelbaum, 15 m, Gegenlicht | filarender |
+| `einzel-15m-auflicht-filament.jpg` | Einzelbaum, 15 m, Auflicht | filarender |
+| `einzel-40m-gegenlicht-filament.jpg` | Einzelbaum, 40 m (neu: mittlere Stufe), Gegenlicht | filarender |
+| `einzel-40m-auflicht-filament.jpg` | Einzelbaum, 40 m, Auflicht | filarender |
+| `allee-gegenlicht-filament.jpg` | Allee (Buchen alle 9,5 m), Gegenlicht | filarender |
+| `allee-auflicht-filament.jpg` | Allee, Auflicht | filarender |
+| `allee-auflicht-three.jpg` | Allee, Auflicht | three.js |
+| `waldrand-auflicht-filament.jpg` | Waldrand (Buche/Fichte/Birke/Eiche, Strauchmantel), Auflicht | filarender |
+| `waldrand-gegenlicht-three.jpg` | Waldrand, Gegenlicht | three.js |
+| `mediterran-gegenlicht-filament.jpg` | Aleppo-Kiefern und Sträucher (Sa Calobra), Gegenlicht | filarender |
+| `typenschau-filament-neu.jpg` | nur neu: alle Arten, Varianten 0–3 (Buche/Eiche · Birke/Pappel/Fichte · Kiefer/Aleppo) | filarender |
+| `atlanten.jpg` | Laubatlas (auf Blau) und Rindenatlas | — |
 
 Sonne: Gegenlicht = Sonne in Blickrichtung 22–25° hoch; Auflicht = Sonne im
 Rücken 40–50° hoch. Himmel/Licht aus `indoor-dev sky --time NOON` (für
@@ -146,9 +161,10 @@ filarender mit verschobener Sonnenrichtung, Himmelsbild unverändert).
 - **15 m:** echte Kronenstruktur, Äste zwischen den Laubbüscheln.
 - **40 m:** neu (mittlere Stufe) etwas lichter als heute; die Silhouette hält
   (getestet), die Krone wirkt bei 40 m weniger „voll“.
-- **Allee:** heute helle, glatte „Masten“; neu Buchen mit Borke, Astansätzen,
-  tieferem Kronenansatz. Kronen schließen das Dach über der Straße weniger als
-  heute (Kronenansatz/Breite wären noch zu justieren).
+- **Allee:** heute helle, gefleckte „Masten“ unter einem Dach aus großen
+  Karten; neu Buchenstämme mit Wurzelanlauf und Astansätzen, das Kronendach
+  über der Straße schließt sich, mit Licht zwischen den Büscheln. Buchenrinde
+  bleibt (wie in der Natur) glatt-grau.
 - **Waldrand:** dichter Strauchmantel, Fichten mit Quirlen, helle Birken.
 - **Mediterran:** Aleppo-Kiefern mit schiefem Stamm und offener Krone.
 - **Typenschau:** alle Arten in Variante 0–3.
