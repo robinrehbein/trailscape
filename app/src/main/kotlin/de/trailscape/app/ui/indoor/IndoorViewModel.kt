@@ -1438,6 +1438,8 @@ class IndoorViewModel(
         )
         val session = indoorCatching(IndoorPart.CORE) { parts.createSession(config) }.getOrElse {
             feelController.endRide()
+            feelController.endCalibration()
+            calibrationRequested = false
             indoorCatching(IndoorPart.CORE) { trainer.stop() }
             shifter?.let { s -> indoorCatching(IndoorPart.CORE) { s.stop() } }
             // Noch nicht gestartet: stop() schliesst ein Rohr dann nicht selbst.

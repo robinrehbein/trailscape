@@ -211,8 +211,8 @@ fun evaluateFeel(samples: List<FeelSample>, rider: RiderSetup): FeelResult {
         return FeelResult.Reject(FeelRejection.IMPLAUSIBLE)
     }
     val clampedValue = raw.coerceIn(RideFeel.RESISTANCE_MIN, RideFeel.RESISTANCE_MAX)
-    // Unsicherheit: Leistungsfehler (Streuung, mindestens 1 %) wird über den Rollanteil an Widerstand verstärkt.
-    val relPowerErr = max(pSpread / Math.sqrt(clean.size.toDouble()), 0.01) + 0.01
+    // Unsicherheit: Leistungsfehler (Streuung plus 1 % Gerätefehler, bewusst nicht durch √n geteilt: Drift und Autokorrelation) wird über den Rollanteil an Widerstand verstärkt.
+    val relPowerErr = pSpread + 0.01
     val uncertainty = min(100.0, 100.0 * relPowerErr * fMeasured / excess)
     val rounded = Math.round(clampedValue / RideFeel.STEP) * RideFeel.STEP
     return FeelResult.Suggest(
