@@ -27,6 +27,7 @@ import com.google.android.filament.gltfio.ResourceLoader
 import com.google.android.filament.gltfio.UbershaderProvider
 import de.trailscape.core.indoor.sky.SkyClouds
 import de.trailscape.core.indoor.sky.SkyShading
+import de.trailscape.core.indoor.water.WaterShading
 import de.trailscape.core.indoor.world.RenderSettings
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -227,6 +228,7 @@ internal class FilamentCore {
             maxScale = 1.0f
         }
         applyFog(s.fog, fogDensity, fogColor, fogHeight)
+        setWaterDetail(s.groundDetail)
         val hz = runCatching { renderer.displayInfo.refreshRate }.getOrDefault(60f).takeIf { it > 1f } ?: 60f
         renderer.frameRateOptions = renderer.frameRateOptions.apply {
             // In Einheiten der Anzeigerate: bei 60 Hz und 30 Bildern ist das 2 (fuer die dynamische Aufloesung).
@@ -412,6 +414,11 @@ internal class FilamentCore {
             val m = buildMaterial(bytes).also { waterMaterial = it }
             val mi = m.createInstance()
             mi.setParameter("waves", ensureCloudTexture(), cloudSampler)
+            // Wellenkarte binden, bevor die Instanz an ein Renderable geht (ungebundener Sampler = Abbruch)
+            if (m.hasParameter(WaterSurface.WAVE_NORMALS)) {
+                val wn = waveNormals ?: WaterSurface.buildWaveNormals(engine).also { waveNormals = it }
+                mi.setParameter(WaterSurface.WAVE_NORMALS, wn, cloudSampler)
+            }
             waterInstance = mi
             lastLighting?.let { applyWaterParameters(it) }
             mi
@@ -422,11 +429,22 @@ internal class FilamentCore {
     }
 
     private var lastLighting: SkyLighting? = null
+    private var waveNormals: Texture? = null
+
+    /** Qualitaet des Wassers: `true` drei Wellenlagen und gespiegelte Wolken, `false` eine Lage (niedrige Stufe). */
+    private var waterDetail = true
+
+    private fun setWaterDetail(full: Boolean) {
+        if (full == waterDetail) return
+        waterDetail = full
+        lastLighting?.let { applyWaterParameters(it) }
+    }
 
     private fun applyWaterParameters(l: SkyLighting) {
         lastLighting = l
         val mi = waterInstance ?: return
-        runCatching { setParameters(mi, SkyShading.water(l.daylight)) }
+        // nur deklarierte Parameter (WaterSurface.declared): ein aelteres water.filamat stuerzt so nie ab
+        runCatching { setParameters(mi, WaterSurface.declared(waterMaterial, WaterShading.params(l.daylight, if (waterDetail) 1.0 else 0.0))) }
     }
 
     /** Uhr der Materialien (Wolkenzug, Wellen) in Sekunden; je Bild. */
@@ -628,6 +646,7 @@ internal class FilamentCore {
         // Wasser erst nach den Kacheln (die es noch benutzen koennten) freigeben.
         waterInstance?.let { runCatching { engine.destroyMaterialInstance(it) } }
         waterMaterial?.let { runCatching { engine.destroyMaterial(it) } }
+        waveNormals?.let { runCatching { engine.destroyTexture(it) } }
         runCatching { worldMaterials.destroy() }
         cloudTexture?.let { runCatching { engine.destroyTexture(it) } }
         runCatching { engine.lightManager.destroy(sunEntity) }

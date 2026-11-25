@@ -540,12 +540,35 @@ int main(int argc, char** argv) {
         waterMi = waterMat->createInstance();
         const json& M = L["water"];
         for (auto it = M.begin(); it != M.end(); ++it) {
+            // nur deklarierte Parameter (Stimmung und Material koennen verschiedene Staende haben)
+            if (!waterMat->hasParameter(it.key().c_str())) continue;
             if (it.value().is_array() && it.value().size() == 3) waterMi->setParameter(it.key().c_str(), f3(it.value()));
             else if (it.value().is_array() && it.value().size() == 2) waterMi->setParameter(it.key().c_str(), float2{ it.value()[0].get<float>(), it.value()[1].get<float>() });
             else if (it.value().is_number()) waterMi->setParameter(it.key().c_str(), it.value().get<float>());
         }
         waterMi->setParameter("time", float(timeS));
         waterMi->setParameter("waves", cloudTex, cloudSampler);
+        // Wellen-Normalenkarte (WaterWaves, RGBA8): $WATER_WAVES oder <sky>/water_waves.bin;
+        // fehlt sie, eine flache Karte (ruhiges Wasser) statt eines ungebundenen Samplers.
+        if (waterMat->hasParameter("waveNormals")) {
+            const char* env = std::getenv("WATER_WAVES");
+            std::string path = env ? std::string(env) : skyDir + "/water_waves.bin";
+            std::vector<uint8_t> raw;
+            if (std::ifstream(path)) raw = readFile(path);
+            if (raw.empty()) { fprintf(stderr, "water_waves.bin fehlt (%s): flaches Wasser\n", path.c_str()); raw.assign(4 * 4 * 4, (uint8_t)128); }
+            int n = (int)std::lround(std::sqrt((double)raw.size() / 4.0));
+            auto* buf = new uint8_t[raw.size()];
+            memcpy(buf, raw.data(), raw.size());
+            Texture* wn = Texture::Builder().width(n).height(n).levels(0xff).sampler(Texture::Sampler::SAMPLER_2D)
+                              .usage(Texture::Usage::DEFAULT | Texture::Usage::GEN_MIPMAPPABLE)
+                              .format(Texture::InternalFormat::RGBA8).build(*engine);
+            wn->setImage(*engine, 0, Texture::PixelBufferDescriptor(buf, raw.size(), Texture::Format::RGBA, Texture::Type::UBYTE,
+                                     [](void* b, size_t, void*) { delete[] (uint8_t*)b; }));
+            wn->generateMipmaps(*engine);
+            waterMi->setParameter("waveNormals", wn, cloudSampler);
+        }
+        // niedrige Stufe (ohne Boden-Detail): eine Wellenlage, keine gespiegelten Wolken — wie FilamentCore
+        if (waterMat->hasParameter("detail") && !opt(settings, "groundDetail", true)) waterMi->setParameter("detail", 0.f);
     }
 
     const std::string world = S["world"];
