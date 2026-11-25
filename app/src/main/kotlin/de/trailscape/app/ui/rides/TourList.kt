@@ -23,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -141,8 +142,13 @@ fun TourListContent(
     // einmal gemerkt genuegt, ein Jahreswechsel bei offener App ist egal.
     val today = remember { LocalDate.now() }
     val language = LocalAppLanguage.current
-    val sections = remember(rides, query, today, language) {
-        splitHistory(rides, query, today, ::localOfEpochMs, language)
+    // Art-Filter (Alle / Draussen / Indoor); die Auswahl erscheint erst, wenn
+    // es eine Indoor-Fahrt gibt. Verschwindet die letzte, gilt wieder „Alle".
+    val hasIndoor = remember(rides) { rides.any { it.indoor && !it.planned } }
+    var kindName by rememberSaveable { mutableStateOf(RideKindFilter.ALL.name) }
+    val kind = if (hasIndoor) RideKindFilter.valueOf(kindName) else RideKindFilter.ALL
+    val sections = remember(rides, query, today, language, kind) {
+        splitHistory(rides, query, today, ::localOfEpochMs, language, kind)
     }
 
     LazyColumn(
@@ -152,6 +158,12 @@ fun TourListContent(
         contentPadding = contentPadding,
     ) {
         header()
+
+        if (hasIndoor) {
+            item(key = "art-filter") {
+                RideKindFilterRow(selected = kind, onSelect = { kindName = it.name })
+            }
+        }
 
         when {
             loading && rides.isEmpty() -> item(key = "laden") {
@@ -206,7 +218,13 @@ fun TourListContent(
                     }
 
                     RiddenPart.KEIN_TREFFER -> item(key = "keine-fahrt-treffer") {
-                        NoMatchText(stringResource(R.string.rides_list_no_ridden_match, query.trim()))
+                        NoMatchText(
+                            if (query.isBlank()) {
+                                stringResource(R.string.idee03_filter_empty)
+                            } else {
+                                stringResource(R.string.rides_list_no_ridden_match, query.trim())
+                            },
+                        )
                     }
 
                     RiddenPart.LISTE -> sections.months.forEach { group ->
@@ -224,6 +242,36 @@ fun TourListContent(
                     }
                 }
             }
+        }
+    }
+}
+
+/** Die Wahl „Alle · Draussen · Indoor" ueber der Verlaufsliste (siehe [RideKindFilter]). */
+@Composable
+private fun RideKindFilterRow(selected: RideKindFilter, onSelect: (RideKindFilter) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = CardPadding, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for (option in RideKindFilter.entries) {
+            FilterChip(
+                selected = option == selected,
+                onClick = { onSelect(option) },
+                label = {
+                    Text(
+                        stringResource(
+                            when (option) {
+                                RideKindFilter.ALL -> R.string.idee03_filter_all
+                                RideKindFilter.OUTDOOR -> R.string.idee03_filter_outdoor
+                                RideKindFilter.INDOOR -> R.string.idee03_filter_indoor
+                            },
+                        ),
+                    )
+                },
+            )
         }
     }
 }
@@ -583,6 +631,16 @@ fun RideDetailHost(
         onRename = { renameTarget = summary },
         onShare = { shareOpen = true },
         onDelete = { onDelete(loaded.id) },
+        // „Indoor fahren" (ui/indoor/IndoorFromRide.kt): wie „nochmal fahren"
+        // schliesst das Detail, dann oeffnet der Indoor-Ablauf mit dieser Strecke.
+        onRideIndoor = {
+            onBack()
+            appViewModel.requestIndoorRide(loaded.id)
+        },
+        onPreview3d = {
+            onBack()
+            appViewModel.requestIndoorPreview(loaded.id)
+        },
     )
 
     renameTarget?.let { target ->

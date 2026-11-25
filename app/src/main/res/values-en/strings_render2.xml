@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Image formation of the 3D view: graphics levels and frame-rate measurement. -->
+<resources>
+    <string name="render2_graphics_title">Graphics level</string>
+    <string name="render2_graphics_body">High and Ultra look more natural and need more performance and battery.</string>
+    <string name="render2_graphics_standard">Standard</string>
+    <string name="render2_graphics_high">High</string>
+    <string name="render2_graphics_ultra">Ultra</string>
+    <string name="render2_graphics_standard_body">As before – runs smoothly on most devices.</string>
+    <string name="render2_graphics_high_body">Depth in the foliage, sheen from the sky, light glow, warm colours.</string>
+    <string name="render2_graphics_ultra_body">Plus calm edges and shadows from slopes and mountains. For very powerful devices.</string>
+
+    <string name="render2_diag_preset_high">High</string>
+    <string name="render2_diag_preset_ultra">Ultra</string>
+    <string name="render2_diag_switch_reflections">Sky reflections</string>
+    <string name="render2_diag_switch_taa">Temporal anti-aliasing (TAA)</string>
+    <string name="render2_diag_switch_terrain_shadows">Terrain casts shadows</string>
+    <string name="render2_diag_switch_stable_shadows">Stable shadows (4 cascades)</string>
+    <string name="render2_diag_switch_white_balance">White balance by time of day</string>
+    <string name="render2_diag_switch_vignette">Vignette</string>
+    <string name="render2_diag_switch_effects_high">High-quality effects</string>
+
+    <string name="render2_diag_bench_title">Frame rate per level</string>
+    <string name="render2_diag_bench_start">Measure (Standard, High, Ultra, 30 s each)</string>
+    <string name="render2_diag_bench_cancel">Cancel measurement</string>
+    <string name="render2_diag_bench_hint">Loads the test world, rides by itself and measures each level for 30 seconds (after a 3 s warm-up). Keep the screen on. Please note down or photograph the values.</string>
+    <string name="render2_diag_bench_running">Measuring: %1$s (%2$d %%)</string>
+    <string name="render2_diag_bench_row">%1$s: avg %2$.1f ms (%3$.0f fps) · 1 %% low %4$.1f ms (%5$.0f fps) · GPU %6$s</string>
+    <string name="render2_diag_bench_gpu_unknown">–</string>
+    <string name="render2_diag_bench_note">Frame time is capped at 60 fps; the GPU time shows the headroom (below 16.7 ms = 60 fps possible).</string>
+    <string name="render2_diag_res_title">Render resolution</string>
+    <string name="render2_diag_res_surface">Drawing surface</string>
+    <string name="render2_diag_res_dynamic">Dynamic resolution</string>
+    <string name="render2_diag_res_rendered">Actually rendered</string>
+    <string name="render2_diag_res_px">%1$d × %2$d px</string>
+    <string name="render2_diag_res_percent">%1$d %% per axis</string>
+    <string name="render2_diag_res_off">off (100 %%)</string>
+    <string name="render2_diag_res_unavailable">not available</string>
+    <string name="render2_diag_res_min">Dynamic resolution lower limit: %1$d %%</string>
+    <string name="render2_diag_bench_res">resolution avg %1$s of %2$s</string>
+</resources>

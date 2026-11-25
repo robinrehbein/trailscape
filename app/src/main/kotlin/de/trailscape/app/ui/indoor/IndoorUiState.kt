@@ -1,6 +1,7 @@
 package de.trailscape.app.ui.indoor
 
 import de.trailscape.app.indoor.IndoorProblem
+import de.trailscape.core.indoor.GhostSection
 import de.trailscape.core.indoor.IndoorMode
 import de.trailscape.core.indoor.IndoorRouteSource
 import de.trailscape.core.indoor.IndoorSessionState
@@ -43,6 +44,9 @@ enum class IndoorStage {
     WORLD,
     RIDE,
     SUMMARY,
+
+    /** 3D-Vorschau einer Strecke ohne Trainer (Idee 4, docs/indoor/vorschau.md). */
+    PREVIEW,
 }
 
 // ---------------------------------------------------------------------------
@@ -59,6 +63,7 @@ enum class IndoorStage {
  * @property gearTable Gangtabelle der virtuellen Gaenge (`RiderSetup.gearTable`).
  * @property timeOfDay Tageszeit der 3D-Welt (Vorgabe: automatisch nach der Uhr).
  * @property otherRiders andere Radfahrer in der 3D-Welt anzeigen (rein dekorativ, Vorgabe an).
+ * @property graphics Grafikstufe der 3D-Ansicht (Vorgabe Standard = wie bisher).
  * @property canContinue Demo an oder ein Trainer gemerkt.
  */
 data class IndoorPairUi(
@@ -69,6 +74,9 @@ data class IndoorPairUi(
     val gearTable: VirtualGearTable = VirtualGearTable.EVEN,
     val timeOfDay: IndoorTimeOfDay = IndoorTimeOfDay.AUTO,
     val otherRiders: Boolean = true,
+    /** „Einblendungen auf der Strecke" (Bergwertung, Kilometer) im HUD, Vorgabe an. */
+    val trailOverlays: Boolean = true,
+    val graphics: de.trailscape.core.indoor.world.IndoorGraphics = de.trailscape.core.indoor.world.IndoorGraphics.STANDARD,
 ) {
     val canContinue: Boolean get() = demoTrainer || trainerName != null
 }
@@ -249,6 +257,10 @@ data class IndoorCatalogItemUi(
     val profile: de.trailscape.core.indoor.catalog.CatalogProfile? = null,
     val previewPath: String? = null,
     val isNew: Boolean = false,
+    /** Platz des entpackten Pakets (Katalog), 0 = unbekannt. */
+    val diskBytes: Long = 0L,
+    /** Quelle des Luftbilds (Katalog), `null` = keine. */
+    val aerialSource: String? = null,
 ) {
     /** Eine Welt liegt bereit (auch wenn es eine neuere gibt). */
     val ready: Boolean
@@ -448,6 +460,10 @@ data class IndoorRideUi(
     val start: IndoorStartUi? = null,
     /** Einheit oder Strecke ist zu Ende, die andere nicht ([IndoorDayEndUi]); `null` = nichts. */
     val dayEnd: IndoorDayEndUi? = null,
+    /** Der Mitfahrer ist die eigene Aussenfahrt: das HUD zeigt auch ihre Leistung an ihrer Stelle. */
+    val ghostOutdoor: Boolean = false,
+    /** Bergwertung und Kilometermarken (`IndoorTrail.kt`); `null` = nichts zu zeigen oder abgeschaltet. */
+    val trail: de.trailscape.core.indoor.climb.TrailLive? = null,
 )
 
 // ---------------------------------------------------------------------------
@@ -485,6 +501,12 @@ data class IndoorSummaryUi(
     val savedRideId: String? = null,
     val saveFailed: Boolean = false,
     val startKm: Double? = null,
+    /** Der Mitfahrer war die eigene Aussenfahrt („x s vor/hinter deiner Außenfahrt"). */
+    val ghostOutdoor: Boolean = false,
+    /** Vergleich mit der Aussenfahrt auf demselben Abschnitt; `null` ohne Aussenfahrt. */
+    val ghostSection: GhostSection? = null,
+    /** Gefahrene Anstiege mit Zeiten (Bergwertung), in Reihenfolge; leer = keine. */
+    val climbs: List<de.trailscape.core.indoor.climb.ClimbEffort> = emptyList(),
 )
 
 // ---------------------------------------------------------------------------

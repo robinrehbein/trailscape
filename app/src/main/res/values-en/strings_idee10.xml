@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Route cards (idea 10): filters, sorting, summary, detail view. Prefix indoor_i10_. -->
+<resources>
+    <string name="indoor_i10_filter_title">Filters and sorting</string>
+    <string name="indoor_i10_filter_open">Open filters and sorting</string>
+    <string name="indoor_i10_filter_close">Close filters and sorting</string>
+    <string name="indoor_i10_filter_active">%1$d filters active</string>
+    <string name="indoor_i10_group_length">Length</string>
+    <string name="indoor_i10_group_climb">Climbing</string>
+    <string name="indoor_i10_group_surface">Surface</string>
+    <string name="indoor_i10_group_state">Status</string>
+    <string name="indoor_i10_group_sort">Sort by</string>
+    <string name="indoor_i10_length_short">Short (under 15 km)</string>
+    <string name="indoor_i10_length_medium">Medium (15–30 km)</string>
+    <string name="indoor_i10_length_long">Long (30 km and up)</string>
+    <string name="indoor_i10_climb_flat">Flat</string>
+    <string name="indoor_i10_climb_rolling">Rolling</string>
+    <string name="indoor_i10_climb_hilly">Hilly</string>
+    <string name="indoor_i10_surface_asphalt">Asphalt</string>
+    <string name="indoor_i10_surface_cobbles">Cobbles</string>
+    <string name="indoor_i10_surface_gravel">Gravel and forest track</string>
+    <string name="indoor_i10_state_loaded">Already downloaded</string>
+    <string name="indoor_i10_state_not_ridden">Not ridden yet</string>
+    <string name="indoor_i10_sort_name">Name</string>
+    <string name="indoor_i10_sort_length">Length</string>
+    <string name="indoor_i10_sort_ascent">Elevation gain</string>
+    <string name="indoor_i10_sort_time">Ride time</string>
+    <string name="indoor_i10_selected">selected</string>
+    <string name="indoor_i10_not_selected">not selected</string>
+    <plurals name="indoor_i10_count">
+        <item quantity="one">%1$d of %2$d route</item>
+        <item quantity="other">%1$d of %2$d routes</item>
+    </plurals>
+    <string name="indoor_i10_empty_title">No route matches these filters</string>
+    <string name="indoor_i10_empty_body">Loosen the selection or reset the filters to see all routes.</string>
+    <string name="indoor_i10_reset">Reset filters</string>
+
+    <string name="indoor_i10_facts_length">Length</string>
+    <string name="indoor_i10_facts_ascent">Elevation gain</string>
+    <string name="indoor_i10_facts_grade">Gradient</string>
+    <string name="indoor_i10_facts_time">Ride time</string>
+    <string name="indoor_i10_km_value">%1$s km</string>
+    <string name="indoor_i10_ascent_value">%1$s m</string>
+    <string name="indoor_i10_grade_both">avg. %1$s %% · max. %2$s %%</string>
+    <string name="indoor_i10_grade_avg">avg. %1$s %%</string>
+    <string name="indoor_i10_time_value">≈ %1$s</string>
+    <string name="indoor_i10_time_basis_profile">at your power</string>
+    <string name="indoor_i10_time_basis_neutral">rough guide, enter FTP and weight in your profile</string>
+    <string name="indoor_i10_time_h_min">%1$d h %2$02d min</string>
+    <string name="indoor_i10_time_min">%1$d min</string>
+    <string name="indoor_i10_ridden">Ridden · best time %1$s</string>
+    <string name="indoor_i10_ridden_label">Ridden</string>
+    <string name="indoor_i10_best_time">Your best time</string>
+    <string name="indoor_i10_never_ridden">Not ridden yet</string>
+    <string name="indoor_i10_details">Details</string>
+    <string name="indoor_i10_details_cd">Open details for %1$s</string>
+    <string name="indoor_i10_card_cd">%1$s, %2$s, %3$s kilometres, %4$s metres of climbing, %5$s</string>
+    <string name="indoor_i10_surface_bar_cd">Surface: %1$s</string>
+
+    <string name="indoor_i10_detail_close">Close</string>
+    <string name="indoor_i10_detail_profile">Elevation profile</string>
+    <string name="indoor_i10_detail_profile_none">There is no elevation profile for this route yet.</string>
+    <string name="indoor_i10_detail_about">About this route</string>
+    <string name="indoor_i10_detail_numbers">Numbers</string>
+    <string name="indoor_i10_detail_surfaces">Surface</string>
+    <string name="indoor_i10_detail_sources">Sources</string>
+    <string name="indoor_i10_detail_source_aerial">Aerial imagery: %1$s</string>
+    <string name="indoor_i10_detail_source_aerial_none">No aerial imagery: the ground is generated from land use.</string>
+    <string name="indoor_i10_detail_source_map">Map data: © OpenStreetMap contributors (ODbL)</string>
+    <string name="indoor_i10_detail_package">Package size</string>
+    <string name="indoor_i10_detail_package_value">%1$s download, %2$s on the device</string>
+    <string name="indoor_i10_detail_package_download_only">%1$s download</string>
+    <string name="indoor_i10_detail_laser">Built with laser data: terrain, buildings and trees from official survey data.</string>
+    <string name="indoor_i10_detail_status">Status</string>
+    <string name="indoor_i10_action_ride">Ride this route</string>
+    <string name="indoor_i10_action_download">Download · %1$s</string>
+    <string name="indoor_i10_action_download_unknown">Download</string>
+    <string name="indoor_i10_action_update">Update · %1$s</string>
+    <string name="indoor_i10_action_cancel">Cancel download</string>
+    <string name="indoor_i10_action_discard">Delete partial download</string>
+    <string name="indoor_i10_action_choose">Select route</string>
+    <string name="indoor_i10_action_chosen">Route selected. Continue with “Ride” at the bottom of the page.</string>
+    <string name="indoor_i10_hint_delete_installed">You delete a fully downloaded route in the indoor settings, where you can delete routes and free up storage.</string>
+    <string name="indoor_i10_detail_image_cd">Picture of the route %1$s</string>
+</resources>

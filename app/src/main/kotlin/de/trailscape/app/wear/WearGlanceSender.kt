@@ -8,10 +8,12 @@ import de.trailscape.app.widget.WidgetState
 import de.trailscape.app.widget.loadWidgetState
 import de.trailscape.core.DiagEvent
 import de.trailscape.core.DiagLog
+import de.trailscape.core.HeuteVorschlag
 import de.trailscape.core.PFAD_WOCHE
 import de.trailscape.core.WochenGlance
 import de.trailscape.core.dekodiereWochenGlance
 import de.trailscape.core.kodiereWochenGlance
+import de.trailscape.core.readShownHeute
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -73,7 +75,10 @@ object WearGlanceSender {
         val jetzt = System.currentTimeMillis()
         if (jetzt - letzterFehlerMs in 0 until FEHLER_PAUSE_MS) return
         val heute = LocalDate.now(ZoneId.systemDefault())
-        val neu = glanceVon(loadWidgetState(context), heute, jetzt)
+        // Der Drinnen/Draussen-Vorschlag, wie „Heute" ihn zuletzt gezeigt hat
+        // (`ui/today/TodayPlaceCard.kt`); nur, wenn er von heute ist.
+        val vorschlag = runCatching { readShownHeute(AppServices.keyValueStore, heute) }.getOrNull()
+        val neu = glanceVon(loadWidgetState(context), heute, jetzt, vorschlag)
 
         val zuletzt = runCatching { AppServices.keyValueStore.getString(STORAGE_KEY) }.getOrNull()
             ?.let { dekodiereWochenGlance(it.toByteArray(Charsets.UTF_8)) }
@@ -92,7 +97,12 @@ object WearGlanceSender {
     }
 
     /** Uebersetzt den Widget-Stand in den Draht-Stand; ohne Touren: Serie 0, kein Ziel. */
-    internal fun glanceVon(state: WidgetState, heute: LocalDate, jetztMs: Long): WochenGlance =
+    internal fun glanceVon(
+        state: WidgetState,
+        heute: LocalDate,
+        jetztMs: Long,
+        vorschlag: HeuteVorschlag? = null,
+    ): WochenGlance =
         WochenGlance.von(
             serieWochen = state.streakWeeks,
             wocheErledigt = state.thisWeekSecured,
@@ -100,5 +110,6 @@ object WearGlanceSender {
             zielKm = state.targetKm,
             heute = heute,
             standMs = jetztMs,
+            vorschlag = vorschlag,
         )
 }

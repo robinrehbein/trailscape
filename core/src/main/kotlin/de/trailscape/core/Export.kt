@@ -1,6 +1,7 @@
 package de.trailscape.core
 
 import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.indoor.climb.ClimbBestBook
 import java.time.LocalDate
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -88,8 +89,10 @@ fun backupFileName(at: LocalDate): String {
  * sonst aus der aktuellen Uhrzeit generierte Tour-ID — fuer Tests gedacht.
  *
  * ## GPX ohne Zeitstempel ist eine Planung
- * Traegt **kein** Punkt ein `<time>`, ist die Datei eine Route und keine
- * Aufzeichnung — so exportieren Komoot, Strava-Routen und Routenplaner.
+ * Traegt **kein** Punkt ein `<time>` (genauer: keine echte Aufzeichnung, siehe
+ * [classifyTrackOrigin] fuer Grenzfaelle wie teilweise oder gleiche Stempel),
+ * ist die Datei eine Route und keine Aufzeichnung — so exportieren Komoot,
+ * Strava-Routen und Routenplaner.
  * Solche Dateien kommen als [Ride.planned] herein: Als Fahrt gezaehlt,
  * landeten ihre Kilometer im Wochenfortschritt und in Fitness/Form, obwohl
  * niemand sie gefahren ist; und als Startzeit bliebe nur „jetzt".
@@ -102,37 +105,24 @@ fun backupFileName(at: LocalDate): String {
 fun rideFromGpx(xml: String, fallbackName: String, id: String? = null, texts: CoreTexts): Ride {
     val parsed = parseGpx(xml, texts)
     val points = parsed.points
-    val baseStats = computeStats(points)
+    val planned = classifyTrackOrigin(points) == TrackOrigin.PLANNED_ROUTE
+    val stats = rideStatsFromPoints(points)
 
     val parsedName = parsed.name?.trim()
     val name = if (!parsedName.isNullOrEmpty()) parsedName else fallbackName
-    val createdAt = points.first().time ?: System.currentTimeMillis()
-    val planned = points.none { it.time != null }
-
-    val hrValues = points.mapNotNull { it.hr }
-    var avgHr: Int? = null
-    var maxHr: Int? = null
-    if (hrValues.isNotEmpty()) {
-        val sum = hrValues.sum()
-        avgHr = dartRound(sum.toDouble() / hrValues.size).toInt()
-        maxHr = hrValues.max()
-    }
+    // Eine Planung ist „von jetzt" (nichts davon ist je gefahren worden);
+    // eine Aufzeichnung beginnt mit ihrem ersten echten Zeitstempel.
+    val now = System.currentTimeMillis()
+    val createdAt = if (planned) now else firstTrackTime(points) ?: now
 
     return Ride(
-        id = id ?: System.currentTimeMillis().toString(),
+        id = id ?: now.toString(),
         name = name,
         createdAt = createdAt,
         points = points,
-        stats = RideStats(
-            distanceKm = baseStats.distanceKm,
-            durationS = baseStats.durationS,
-            movingTimeS = baseStats.movingTimeS,
-            avgSpeedKmh = baseStats.avgSpeedKmh,
-            ascentM = baseStats.ascentM,
-            descentM = baseStats.descentM,
-            avgHrBpm = avgHr,
-            maxHrBpm = maxHr,
-        ),
+        // Auch bei teilweisen oder gleichen Stempeln (Planung): keine Dauer,
+        // kein Tempo — sie stuenden sonst auf einer Strecke, die niemand fuhr.
+        stats = if (planned) stats.copy(durationS = null, movingTimeS = null, avgSpeedKmh = null) else stats,
         planned = planned,
     )
 }
@@ -160,6 +150,7 @@ fun buildBackupJson(
     profile: TrainingProfile?,
     exportedAtMs: Long = System.currentTimeMillis(),
     yearGoal: YearGoal? = null,
+    climbBests: ClimbBestBook? = null,
 ): String {
     val json = buildJsonObject {
         put("app", backupAppName)
@@ -167,6 +158,7 @@ fun buildBackupJson(
         put("exportedAt", formatIso8601Utc(exportedAtMs))
         put("profile", profile?.toJson() ?: JsonNull)
         yearGoal?.let { put("yearGoal", it.toBackupJson()) }
+        climbBests?.takeUnless { it.isEmpty() }?.let { put("climbBests", it.toJsonObject()) }
         put("rides", buildJsonArray { rides.forEach { add(it.toJson()) } })
     }
     return prettyJson.encodeToString(JsonObject.serializer(), json)
@@ -193,6 +185,7 @@ fun writeBackupJson(
     profile: TrainingProfile?,
     exportedAtMs: Long = System.currentTimeMillis(),
     yearGoal: YearGoal? = null,
+    climbBests: ClimbBestBook? = null,
 ) {
     // Kopf als eigenes Objekt serialisieren und die schliessende Klammer
     // abschneiden — so stammen Escaping und Einrueckung aller Kopffelder
@@ -203,6 +196,7 @@ fun writeBackupJson(
         put("exportedAt", formatIso8601Utc(exportedAtMs))
         put("profile", profile?.toJson() ?: JsonNull)
         yearGoal?.let { put("yearGoal", it.toBackupJson()) }
+        climbBests?.takeUnless { it.isEmpty() }?.let { put("climbBests", it.toJsonObject()) }
     }
     val headText = prettyJson.encodeToString(JsonObject.serializer(), head)
     // "…\n}" → "…" (der Kopf ist nie leer, die Klammer steht immer auf
@@ -251,6 +245,11 @@ data class BackupData(
     val profile: TrainingProfile? = null,
     /** Jahresziel aus dem optionalen Feld `yearGoal`; `null`, wenn es fehlt oder unlesbar ist. */
     val yearGoal: YearGoal? = null,
+    /**
+     * Bestzeiten an Anstiegen (Indoor-Bergwertung) aus dem optionalen Feld
+     * `climbBests` (Format: `ClimbBestBook`); leer, wenn es fehlt oder unlesbar ist.
+     */
+    val climbBests: ClimbBestBook = ClimbBestBook(),
 )
 
 /**
@@ -334,5 +333,10 @@ fun parseBackupJson(raw: String, texts: CoreTexts): BackupData {
         }
     }
 
-    return BackupData(rides = rides, profile = profile, yearGoal = parseYearGoal(decoded["yearGoal"]))
+    return BackupData(
+        rides = rides,
+        profile = profile,
+        yearGoal = parseYearGoal(decoded["yearGoal"]),
+        climbBests = ClimbBestBook.fromJsonObject(decoded["climbBests"] as? JsonObject),
+    )
 }

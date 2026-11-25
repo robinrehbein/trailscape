@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte zu „GPX ohne Zeitstempel als geplante Route öffnen"
+    (ui/ImportRecognition.kt, ui/rides/PlanFlip.kt).
+
+    Schluessel-Praefix: gpxplan_ · Regeln: docs/i18n.md.
+    Gegenstueck in values-en/strings_idee07.xml — gleiche Schluessel, gleiche Reihenfolge.
+-->
+<resources>
+    <!-- ImportRecognition.kt: Dialog nach „Teilen"/„Öffnen mit" -->
+    <string name="gpxplan_recognized_planned_title">Als Planung geöffnet</string>
+    <string name="gpxplan_recognized_ridden_title">Als gefahrene Tour importiert</string>
+    <string name="gpxplan_recognized_planned_body">„%1$s“ hat keine Zeitstempel und ist deshalb eine Route, keine Fahrt. Du findest sie auf der Karte und unter den Planungen und kannst sie abfahren. In Statistik, Wochenfortschritt und Entdeckt-Kacheln zählt sie nicht.</string>
+    <string name="gpxplan_recognized_ridden_body">„%1$s“ hat Zeitstempel und ist deshalb eine Aufzeichnung. Sie zählt in Statistik, Wochenfortschritt und Entdeckt-Kacheln.</string>
+    <string name="gpxplan_flip_to_ridden_action">Als gefahrene Tour importieren</string>
+    <string name="gpxplan_flip_to_planned_action">Als Planung öffnen</string>
+    <string name="gpxplan_flip_once_hint">Das lässt sich später in der Tourdetailansicht wieder ändern.</string>
+
+    <!-- AppViewModel.kt: Rückmeldung nach dem Umwandeln -->
+    <string name="gpxplan_flipped_to_planned_message">„%1$s“ ist jetzt eine Planung</string>
+    <string name="gpxplan_flipped_to_ridden_message">„%1$s“ zählt jetzt als gefahrene Tour</string>
+
+    <!-- PlanFlip.kt: Tourdetailansicht -->
+    <string name="gpxplan_detail_route_hint">Diese Tour hat keine Zeitstempel. Vermutlich ist es eine Route, die als gefahrene Tour importiert wurde.</string>
+    <string name="gpxplan_detail_to_planned_action">In Planung umwandeln</string>
+    <string name="gpxplan_detail_to_ridden_action">Als gefahrene Tour übernehmen</string>
+    <string name="gpxplan_to_planned_confirm_title">In Planung umwandeln?</string>
+    <string name="gpxplan_to_planned_confirm_body">„%1$s“ wird zur Planung und zählt nicht mehr für Statistik, Wochenfortschritt, Fitness und Entdeckt-Kacheln. Die Strecke bleibt erhalten, du kannst sie jederzeit wieder als gefahrene Tour übernehmen.</string>
+    <string name="gpxplan_to_planned_confirm_action">Umwandeln</string>
+    <string name="gpxplan_to_ridden_confirm_title">Als gefahrene Tour übernehmen?</string>
+    <string name="gpxplan_to_ridden_confirm_body">„%1$s“ zählt dann für Statistik, Wochenfortschritt, Fitness und Entdeckt-Kacheln. Dauer und Tempo gibt es nur, wenn die Datei Zeitstempel hatte.</string>
+    <string name="gpxplan_to_ridden_confirm_action">Übernehmen</string>
+</resources>

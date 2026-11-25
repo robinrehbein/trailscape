@@ -252,31 +252,56 @@ internal object FoliageAtlas {
             under += doubleArrayOf(cx + cos(a) * rad * 0.34, cy + sin(a) * rad * 0.32, rad * 0.4)
         }
         fillMass(c, r.x + 4, r.y + 4, r.x + r.w - 4, r.y + r.h - 4, under, 12.0, 0x5b41, lumScale = 0.62)
-        // Blaetter: hinten (dunkel) zuerst, dann nach vorne heller.
-        class L(val x: Double, val y: Double, val a: Double, val len: Double, val w: Double, val lum: Double, val hue: Double)
-        val leaves = ArrayList<L>()
+        // Blaetter in Buescheln (seit indoor-world/12): Statt 240 grosser Blaetter (17–25 px, auf einer 4-m-Karte
+        // gut 35 cm lang — von nahem Schuppen statt Laub) rund 900 kleine (8–12 px) in 8 Bueschen, jeder oben
+        // und zur Sonnenseite heller, innen und unten dunkler. Von nahem liest sich das als Laubwerk mit
+        // Licht und Schatten, aus der Ferne bleibt der geschlossene, gelappte Umriss.
+        val clumps = ArrayList<DoubleArray>()
+        clumps += doubleArrayOf(cx, cy - rad * 0.05, rad * 0.42)
+        for (k in 0 until 7) {
+            val a = k * 2 * PI / 7 + rnd.range(-0.25, 0.25)
+            val rr = rad * rnd.range(0.48, 0.6)
+            val y = cy + sin(a) * rr * 0.92
+            if (y > baseY - 30) continue
+            clumps += doubleArrayOf(cx + cos(a) * rr, y, rad * rnd.range(0.34, 0.44))
+        }
+        // hintere Bueschel zuerst (oben), vordere (unten) zuletzt
+        clumps.sortBy { it[1] }
+        for ((ci, cl) in clumps.withIndex()) leafClump(c, cl[0], cl[1], cl[2], 115, 8.0, 12.0, 0x5c00 + ci * 97, 1.2)
+    }
+
+    /**
+     * Ein Laubbuesche: [n] Blaetter der Laenge [lenMin]..[lenMax] in einer Kreisscheibe (Mitte, Radius [rad]),
+     * von hinten nach vorn gemalt. Helligkeit: oben und zur Sonne (oben rechts) heller, innen und unten
+     * dunkler (Eigenschatten), dazu je Blatt etwas Streuung — der Buesche wirkt rund statt flach.
+     */
+    private fun leafClump(c: Canvas, cx: Double, cy: Double, rad: Double, n: Int, lenMin: Double, lenMax: Double, seed: Int, lum: Double) {
+        val rnd = Rnd(seed)
+        class L(val x: Double, val y: Double, val a: Double, val len: Double, val w: Double, val v: Double, val hue: Double, val depth: Double)
+        val list = ArrayList<L>(n)
         var tries = 0
-        while (leaves.size < 240 && tries < 12000) {
+        while (list.size < n && tries < n * 30) {
             tries++
             val ang = rnd.next() * 2 * PI
             val rr = rad * sqrt(rnd.next())
-            val lobe = 0.86 + 0.14 * sin(ang * 5 + 1.3)
-            if (rr > rad * lobe * 0.95) continue
+            val lobe = 0.88 + 0.12 * sin(ang * 4 + seed * 0.37)
+            if (rr > rad * lobe) continue
             val x = cx + cos(ang) * rr
-            val y = cy + sin(ang) * rr * 0.95
-            if (y > baseY - 14) continue
-            // Blatt zeigt vom naechsten Zweigpunkt weg (nach aussen), etwas gestreut.
-            val out = atan2(y - (cy + rad * 0.5), x - cx)
-            val a = out + rnd.range(-0.7, 0.7)
-            val len = rnd.range(17.0, 25.0)
-            leaves += L(x - cos(a) * len * 0.35, y - sin(a) * len * 0.35, a, len, len * rnd.range(0.5, 0.62), 0.0, rnd.range(-0.35, 0.55))
+            val y = cy + sin(ang) * rr
+            // Tiefe: 1 = vorn/aussen oben, 0 = hinten/innen
+            val nx = (x - cx) / rad
+            val ny = (y - cy) / rad
+            val front = sqrt(max(0.0, 1 - nx * nx - ny * ny))
+            val depth = rnd.next()
+            val lit = (0.5 + 0.35 * (-ny) + 0.25 * nx).coerceIn(0.0, 1.0)
+            val v = lum * (0.5 + 0.32 * lit + 0.2 * depth * (0.4 + 0.6 * front) + rnd.range(-0.06, 0.06))
+            // Blatt zeigt nach aussen (vom Buescheinnern weg), gestreut
+            val a = atan2(ny, nx) + rnd.range(-0.9, 0.9)
+            val len = rnd.range(lenMin, lenMax)
+            list += L(x - cos(a) * len * 0.3, y - sin(a) * len * 0.3, a, len, len * rnd.range(0.45, 0.6), v, rnd.range(-0.4, 0.6), depth)
         }
-        val order = leaves.indices.map { it to rnd.next() }.sortedBy { it.second }
-        for ((rank, p) in order.withIndex()) {
-            val f = rank.toDouble() / order.size
-            val lf = leaves[p.first]
-            leaf(c, lf.x, lf.y, lf.a, lf.len, lf.w, 0.55 + 0.47 * f, lf.hue)
-        }
+        list.sortBy { it.depth }
+        for (lf in list) leaf(c, lf.x, lf.y, lf.a, lf.len, lf.w, lf.v, lf.hue)
     }
 
     private fun needleSpray(c: Canvas, r: Region) {
@@ -490,14 +515,19 @@ internal object FoliageAtlas {
             val a = k * 2 * PI / 7 + rnd.range(-0.3, 0.3)
             blobs += doubleArrayOf(cx + cos(a) * r.w * 0.22, cy + sin(a) * r.h * 0.22, rnd.range(17.0, 24.0))
         }
-        fillMass(c, r.x + 3, r.y + 3, r.x + r.w - 3, r.y + r.h - 3, blobs, 10.0, 0x5b25)
-        // Einzelne Blaetter am Rand und obenauf fuer eine blattartige Kante.
-        repeat(46) {
+        // Dunkle, geschlossene Grundmasse (deckt den Umriss fuer die groben Mip-Stufen), darueber kleine
+        // Blaetter in Bueschen (seit indoor-world/12; vorher grobes Rauschen, das auf 3–4 m grossen Karten
+        // als verschwommener Pixelbrei erschien).
+        fillMass(c, r.x + 3, r.y + 3, r.x + r.w - 3, r.y + r.h - 3, blobs, 10.0, 0x5b25, lumScale = 0.95)
+        val order = blobs.sortedBy { it[1] }
+        for ((k, b) in order.withIndex()) leafClump(c, b[0], b[1], b[2] * 1.05, if (k == 0) 70 else 34, 5.0, 7.5, 0x5d00 + k * 31, 1.32)
+        // Einzelne Blaetter am Rand fuer eine blattartige Kante.
+        repeat(40) {
             val a = rnd.next() * 2 * PI
-            val rr = r.w * rnd.range(0.2, 0.42)
+            val rr = r.w * rnd.range(0.3, 0.44)
             val x = cx + cos(a) * rr
             val y = cy + sin(a) * rr
-            leaf(c, x, y, a + rnd.range(-0.6, 0.6), rnd.range(10.0, 15.0), rnd.range(5.0, 7.5), rnd.range(0.7, 1.02), rnd.range(-0.5, 0.8), rib = false)
+            leaf(c, x, y, a + rnd.range(-0.6, 0.6), rnd.range(6.0, 9.0), rnd.range(3.0, 4.5), rnd.range(0.62, 0.95), rnd.range(-0.5, 0.8), rib = false)
         }
     }
 

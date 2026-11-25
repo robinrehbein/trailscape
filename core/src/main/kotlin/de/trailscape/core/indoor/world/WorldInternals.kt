@@ -351,14 +351,26 @@ internal class MapWaterway(val line: DoubleArray, val cls: String, val brunnel: 
 /** Ein benannter Ort der Karte (`place`: city, town, village, hamlet, suburb …). */
 internal class MapPlace(val e: Double, val n: Double, val name: String, val cls: String)
 
+/** Ein Punkt der POI-Ebene (`class`/`subclass` wie in OpenMapTiles, z. B. `bus`/`bus_stop`, `lift_gate`). */
+internal class MapPoi(val e: Double, val n: Double, val cls: String, val subclass: String?, val name: String?)
+
 internal interface MapData {
     /** Benannte Orte im Rechteck (fuer Ortstafeln); ohne Daten leer. */
     fun places(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapPlace> = emptyList()
+
+    /** Punkte der POI-Ebene im Rechteck ([PoiLayer], Detailtreue); ohne Daten leer. */
+    fun pois(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapPoi> = emptyList()
+
+    /** Zusatzobjekte aus vollen OSM-Daten ([OsmDetail], nur Katalog-/Server-Bau); ohne Daten leer. */
+    fun osmFeatures(minE: Double, minN: Double, maxE: Double, maxN: Double): List<OsmFeature> = emptyList()
 
     fun buildings(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapBuilding>
     fun roads(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapRoad>
     fun areas(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapArea>
     fun waterways(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapWaterway>
+
+    /** Echte Straßenausstattung aus vollen Kartendaten ([RealRoadside]); ohne solche Daten [RealRoadside.NONE]. */
+    fun roadside(): RealRoadside = RealRoadside.NONE
 
     companion object {
         val EMPTY: MapData = object : MapData {

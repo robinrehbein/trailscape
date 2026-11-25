@@ -8,6 +8,7 @@ import de.trailscape.core.indoor.IndoorPhase
 import de.trailscape.core.indoor.IndoorRideRecord
 import de.trailscape.core.indoor.IndoorSession
 import de.trailscape.core.indoor.IndoorSessionState
+import de.trailscape.core.indoor.IndoorStep
 import de.trailscape.core.indoor.MovableIndoorSession
 import de.trailscape.core.indoor.IndoorShifter
 import de.trailscape.core.indoor.IndoorTrainer
@@ -124,6 +125,8 @@ class IndoorRideRuntime(
     private val releaseOnFirstStroke: Boolean = false,
     private val journal: IndoorRideJournalSink? = null,
     private val journalIntervalMs: Long = JOURNAL_INTERVAL_MS,
+    /** Wird je Schritt mit dem Ergebnis der Sitzung gerufen (Fahrprotokoll, geführter Abgleich); Fehler darin werden verschluckt. */
+    private val onStep: ((IndoorStep) -> Unit)? = null,
 ) {
     /**
      * Die Darstellung; austauschbar, weil eine Fahrt im Hintergrund die
@@ -475,6 +478,7 @@ class IndoorRideRuntime(
             for (command in step.commands) {
                 guard(IndoorPart.CORE) { trainer.send(command) }
             }
+            onStep?.let { cb -> guard(IndoorPart.CORE) { cb(step) } }
             pushToRenderer(now, step.state)
             maybeJournal(now, step.state)
             val movable = (session as? MovableIndoorSession)?.let { s -> guard(IndoorPart.CORE) { s.canMove } } ?: false

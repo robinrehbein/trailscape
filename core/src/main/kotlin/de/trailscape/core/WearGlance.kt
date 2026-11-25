@@ -44,6 +44,11 @@ import kotlin.math.roundToInt
  *   [LocalDate.toEpochDay] im Kalender des Telefons.
  * @property standMs Zeitpunkt der Berechnung (ms seit Epoch). Nur zur
  *   Diagnose; er zaehlt **nicht** zum Inhalt ([gleicherInhalt]).
+ * @property heute der Drinnen/Draussen-Vorschlag zur Einheit des Tages
+ *   ([HeuteVorschlag]), optional. Steht im Telegramm unter `heute` und wird
+ *   nur geschrieben, wenn vorhanden — ohne ihn ist das Telegramm byte-gleich
+ *   zum alten. Alte Uhren lesen Felder per Namen und uebergehen es; deshalb
+ *   bleibt [GLANCE_VERSION] bei 1.
  */
 data class WochenGlance(
     val serieWochen: Int,
@@ -53,6 +58,7 @@ data class WochenGlance(
     val montagEpochTag: Long,
     val standMs: Long,
     val version: Int = GLANCE_VERSION,
+    val heute: HeuteVorschlag? = null,
 ) {
     /** Serie laeuft, ist diese Woche aber noch nicht verlaengert. */
     val serieInGefahr: Boolean get() = serieWochen > 0 && !wocheErledigt
@@ -65,6 +71,7 @@ data class WochenGlance(
         zielKm?.let { put("ziel", it) }
         put("montag", montagEpochTag)
         put("stand", standMs)
+        heute?.let { put("heute", it.toJson()) }
     }
 
     /** Gleich bis auf den Zeitstempel — dann lohnt kein erneutes Senden. */
@@ -93,6 +100,7 @@ data class WochenGlance(
             zielKm: Int?,
             heute: LocalDate,
             standMs: Long,
+            vorschlag: HeuteVorschlag? = null,
         ): WochenGlance = WochenGlance(
             serieWochen = serieWochen.coerceIn(0, MAX_SERIE_WOCHEN),
             wocheErledigt = wocheErledigt,
@@ -100,6 +108,7 @@ data class WochenGlance(
             zielKm = zielKm?.takeIf { it in 1..MAX_KM },
             montagEpochTag = heute.with(DayOfWeek.MONDAY).toEpochDay(),
             standMs = standMs,
+            heute = vorschlag?.takeIf { it.gueltig() },
         )
 
         private fun rundeKm(km: Double): Double =
@@ -149,8 +158,85 @@ fun dekodiereWochenGlance(bytes: ByteArray): WochenGlance? = runCatching {
         zielKm = ziel,
         montagEpochTag = montag,
         standMs = stand,
+        // Ein kaputter Vorschlag kostet nur den Vorschlag, nicht den Wochenstand.
+        heute = (json["heute"] as? JsonObject)?.let(::dekodiereHeuteVorschlag),
     )
 }.getOrNull()
+
+// ---------------------------------------------------------------------------
+// Vorschlag zur Einheit des Tages (Feld `heute`)
+// ---------------------------------------------------------------------------
+
+/**
+ * Der Drinnen/Draussen-Vorschlag zur Einheit des Tages, wie „Heute" ihn
+ * zuletzt gezeigt hat (`core/…/TodayPlace.kt`, samt Wahl des Nutzers). **Kein
+ * Text**: Die Uhr bildet die Zeile in ihrer Sprache.
+ *
+ * Auf dem Draht: `{"tag": <Epochentag>, "ort": "drinnen"|"draussen",
+ * "min": <Minuten>, "erledigt": true, "gewaehlt": true}`; `min`, `erledigt`
+ * und `gewaehlt` nur, wenn vorhanden bzw. `true`. Unbekannte Werte von `ort`
+ * ergeben keinen Vorschlag.
+ *
+ * @property tagEpochTag Kalendertag des Vorschlags ([LocalDate.toEpochDay]);
+ *   die Uhr zeigt ihn nur an genau diesem Tag ([heuteFuerTag]).
+ * @property drinnen `true` drinnen auf der Rolle, `false` draussen.
+ * @property minuten Dauer der Einheit, 1…[MAX_MINUTEN], oder `null`.
+ * @property erledigt die Einheit ist heute schon gefahren.
+ * @property gewaehlt der Nutzer hat den Vorschlag umgedreht.
+ */
+data class HeuteVorschlag(
+    val tagEpochTag: Long,
+    val drinnen: Boolean,
+    val minuten: Int? = null,
+    val erledigt: Boolean = false,
+    val gewaehlt: Boolean = false,
+) {
+    fun toJson(): JsonObject = buildJsonObject {
+        put("tag", tagEpochTag)
+        put("ort", if (drinnen) ORT_DRINNEN else ORT_DRAUSSEN)
+        minuten?.let { put("min", it) }
+        if (erledigt) put("erledigt", true)
+        if (gewaehlt) put("gewaehlt", true)
+    }
+
+    /** Innerhalb der Grenzen, die auch der Dekoder prueft. */
+    fun gueltig(): Boolean = minuten == null || minuten in 1..MAX_MINUTEN
+
+    companion object {
+        /** Mehr als zehn Stunden ist keine Tageseinheit, sondern ein kaputtes Telegramm. */
+        const val MAX_MINUTEN = 600
+        const val ORT_DRINNEN = "drinnen"
+        const val ORT_DRAUSSEN = "draussen"
+    }
+}
+
+/** Liest das Feld `heute`; tolerant, wirft nie, `null` bei allem Unpassenden. */
+internal fun dekodiereHeuteVorschlag(json: JsonObject): HeuteVorschlag? = runCatching {
+    val tag = json.zahl("tag")?.ganzLong() ?: return null
+    val ort = (json["ort"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+    val drinnen = when (ort) {
+        HeuteVorschlag.ORT_DRINNEN -> true
+        HeuteVorschlag.ORT_DRAUSSEN -> false
+        else -> return null
+    }
+    val minuten = if ("min" in json) {
+        json.zahl("min")?.ganz()?.takeIf { it in 1..HeuteVorschlag.MAX_MINUTEN } ?: return null
+    } else {
+        null
+    }
+    fun flag(key: String): Boolean =
+        (json[key] as? JsonPrimitive)?.takeIf { !it.isString }?.content?.toBooleanStrictOrNull() ?: false
+    HeuteVorschlag(tag, drinnen, minuten, erledigt = flag("erledigt"), gewaehlt = flag("gewaehlt"))
+}.getOrNull()
+
+/** [HeuteVorschlag] aus seinem JSON-Text (wie [HeuteVorschlag.toJson]); tolerant, `null` bei allem Unpassenden. */
+fun parseHeuteVorschlag(text: String?): HeuteVorschlag? = runCatching {
+    (Json.parseToJsonElement(text ?: return null) as? JsonObject)?.let(::dekodiereHeuteVorschlag)
+}.getOrNull()
+
+/** Der Vorschlag aus [stand], wenn er fuer [heute] gilt — sonst `null` (ein Vorschlag von gestern zeigt nichts). */
+fun heuteFuerTag(stand: WochenGlance?, heute: LocalDate): HeuteVorschlag? =
+    stand?.heute?.takeIf { it.tagEpochTag == heute.toEpochDay() }
 
 /** Zahl ohne Anfuehrungszeichen, sonst `null`. */
 private fun JsonObject.zahl(key: String): Double? =

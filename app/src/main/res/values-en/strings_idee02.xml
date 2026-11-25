@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Idea 2: the training plan steers indoor, outdoor and watch (docs/trainingswissenschaft.md 17). -->
+<resources>
+    <!-- TodayPlaceCard.kt -->
+    <string name="idee02_place_eyebrow">Where are you riding today?</string>
+    <string name="idee02_place_title_outdoor">Outdoors today</string>
+    <string name="idee02_place_title_indoor">Indoors today</string>
+    <string name="idee02_place_title_outdoor_chosen">Outdoors today · your choice</string>
+    <string name="idee02_place_title_indoor_chosen">Indoors today · your choice</string>
+    <string name="idee02_place_suggested_was_outdoor">The suggestion was outdoors.</string>
+    <string name="idee02_place_suggested_was_indoor">The suggestion was indoors.</string>
+    <string name="idee02_place_reason_dark_before">Still dark – sunrise not until %1$s</string>
+    <string name="idee02_place_reason_dark_after">Already dark – the sun set at %1$s</string>
+    <string name="idee02_place_reason_dark_share">Sunset at %1$s – not enough daylight for %2$d min</string>
+    <string name="idee02_place_reason_dark_polar">The sun does not rise today</string>
+    <string name="idee02_place_reason_dusk">The end falls into dusk (sunset %1$s) – take lights</string>
+    <string name="idee02_place_reason_daylight">Light until %1$s – enough for %2$d min</string>
+    <string name="idee02_place_reason_intervals">Intervals run cleaner on the trainer: no traffic lights, the power stays put</string>
+    <string name="idee02_place_reason_long">A long endurance ride (%1$d min) is easier outdoors than on the trainer</string>
+    <string name="idee02_place_reason_rain">Rain forecast</string>
+    <string name="idee02_place_reason_storm">Strong wind forecast</string>
+    <string name="idee02_place_reason_frost">Frost – risk of ice</string>
+    <string name="idee02_place_reason_none">Nothing speaks against riding outdoors</string>
+    <string name="idee02_place_route_outdoor">Loop: %1$s · about %2$d min</string>
+    <string name="idee02_place_route_indoor">The matching route for the trainer is in the card below.</string>
+    <string name="idee02_place_plan_action">Plan loop</string>
+    <string name="idee02_place_flip_to_indoor_action">Rather indoors</string>
+    <string name="idee02_place_flip_to_outdoor_action">Rather outdoors</string>
+    <string name="idee02_place_done_title">Session done</string>
+    <string name="idee02_place_done_indoor">Ridden indoors</string>
+    <string name="idee02_place_done_outdoor">Ridden outdoors</string>
+    <string name="idee02_place_done_both">Ridden outdoors and indoors</string>
+    <string name="idee02_place_done_minutes">%1$s · %2$d min</string>
+    <string name="idee02_place_done_km">%1$s · %2$s</string>
+</resources>

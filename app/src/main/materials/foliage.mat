@@ -88,6 +88,19 @@ fragment {
     void material(inout MaterialInputs material) {
         prepareMaterial(material);
         vec4 c = texture(materialParams_baseColorMap, getUV0()) * materialParams.baseColorFactor * getColor();
+        if (materialParams.atlasMode > 0.5) {
+            // Karten, die man fast auf der Kante sieht, ausblenden: Ihr Motiv war dort zu langen Strichen
+            // verzerrt („Federn" in nahen Kronen, Streifen an Grasbuescheln und Kreuzbildern). Die Normale
+            // der Ebene aus den Ableitungen der Weltlage — die Vertexnormale ist fuer das Licht gebogen.
+            // Das Kronendach (atlasMode 0) sieht man flach von weitem und bleibt, wie es ist.
+            highp vec3 wp = getWorldPosition();
+            highp vec3 fn = cross(dFdx(wp), dFdy(wp));
+            float fl = length(fn);
+            if (fl > 1e-12) {
+                float facing = abs(dot(fn / fl, normalize(getWorldCameraPosition() - wp)));
+                c.a *= smoothstep(0.10, 0.32, facing);
+            }
+        }
         material.baseColor = c;
         material.metallic = 0.0;
         material.roughness = materialParams.roughnessFactor;

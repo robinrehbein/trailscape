@@ -140,6 +140,9 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Mova
     private var ghostStartDistM = 0.0
     private var ghostStartRunningMs = 0L
 
+    /** Geleistete Arbeit (J) beim letzten Ansetzen des Geists — Bezug von [GhostSection.riderAvgPowerW]. */
+    private var ghostStartEnergyJ = 0.0
+
     // Zeit
     private var firstNowMs: Long? = null
     private var lastNowMs: Long = 0
@@ -322,7 +325,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Mova
             speedMps = speed,
             powerW = power,
             gradePct = s.gradePct,
-            crr = effectiveCrr(s.surface.kind, rider.profileCrr),
+            crr = effectiveCrr(s.surface.kind, rider.profileCrr, rider.surfaceStrength),
             eleM = s.eleM,
             headwindMps = headwindMps(config.wind, s.headingDeg),
             rider = rider,
@@ -493,7 +496,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Mova
         val s = route.sampleAt(dist)
         return simulationCommand(
             gradePct = s.gradePct,
-            crr = effectiveCrr(s.surface.kind, rider.profileCrr),
+            crr = effectiveCrr(s.surface.kind, rider.profileCrr, rider.surfaceStrength),
             cwKgPerM = aeroCoefficient(PhysicsRider.of(rider).cdaM2, s.eleM),
             headwindMps = headwindMps(config.wind, s.headingDeg),
             gearRatio = gearState(gearIndex, gearTable).ratio,
@@ -562,6 +565,27 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Mova
         return if (avg >= GHOST_MIN_GAP_SPEED_MPS) gs.gapM / avg else null
     }
 
+    /**
+     * Der seit dem letzten Ansetzen gefahrene Abschnitt im Vergleich zum
+     * Geist (IndoorGhostSection.kt); `null` ohne Geist oder ohne Fahrt.
+     * Im Ziel gilt die interpolierte Ankunftszeit des Fahrers.
+     */
+    private fun ghostSectionNow(): GhostSection? {
+        val g = ghost ?: return null
+        val endS = riderFinishS ?: (runningMs / 1000.0)
+        val riderS = endS - ghostStartRunningMs / 1000.0
+        if (!(riderS > 0) || !(dist > ghostStartDistM)) return null
+        val ridden = runningMs - ghostStartRunningMs
+        return GhostSection(
+            startM = ghostStartDistM,
+            endM = dist,
+            riderS = riderS,
+            ghostS = g.sectionS(ghostStartDistM, dist),
+            riderAvgPowerW = if (powerSeen && ridden > 0) (energyJ - ghostStartEnergyJ) / (ridden / 1000.0) else null,
+            ghostAvgPowerW = g.sectionAvgPowerW(ghostStartDistM, dist),
+        )
+    }
+
     /** Angefangene Runden, mindestens 1; ohne Rundschluss immer 1. */
     private fun lapOf(d: Double): Int =
         if (route.isLoop && lengthM > 0) max(1, ceil(d / lengthM - 1e-9).toInt()) else 1
@@ -597,7 +621,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Mova
             hrBpm = lastHr,
             gradePct = s.gradePct,
             surface = s.surface.kind,
-            crr = effectiveCrr(s.surface.kind, rider.profileCrr),
+            crr = effectiveCrr(s.surface.kind, rider.profileCrr, rider.surfaceStrength),
             headwindMps = headwindMps(config.wind, s.headingDeg),
             gear = gearState(gearIndex, gearTable),
             ghost = ghostNow(),
@@ -630,6 +654,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Mova
         idleMs = 0
         ghostStartDistM = dist
         ghostStartRunningMs = runningMs
+        ghostStartEnergyJ = energyJ
         ghost = makeGhost(dist, runningMs)
         // Die naechste Vorgabe gilt der neuen Stelle, auch wenn sie sich kaum unterscheidet.
         lastSim = null
@@ -702,6 +727,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Mova
             totals = totals,
             laps = laps,
             ghostFinalGapS = finalGhostGapS(),
+            ghostSection = ghostSectionNow(),
         )
         record = r
         return r
