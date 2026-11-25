@@ -130,6 +130,43 @@ class AppNavigationTest {
     }
 
     @Test
+    fun `Herausforderungen und Raum teilen sich das Segment Gemeinsam, sobald es beide gibt`() {
+        assertEquals(
+            listOf(IndoorSegment.ROUTES, IndoorSegment.PLAN, IndoorSegment.TOGETHER),
+            indoorSegments(challengesAvailable = true, roomAvailable = true, together = true),
+        )
+        // Gibt es nur eines von beiden, behaelt es sein eigenes Segment.
+        assertEquals(
+            listOf(IndoorSegment.ROUTES, IndoorSegment.PLAN, IndoorSegment.CHALLENGES),
+            indoorSegments(challengesAvailable = true, roomAvailable = false, together = true),
+        )
+        assertEquals(
+            listOf(IndoorSegment.ROUTES, IndoorSegment.PLAN, IndoorSegment.ROOM),
+            indoorSegments(challengesAvailable = false, roomAvailable = true, together = true),
+        )
+        assertEquals(
+            listOf(IndoorSegment.ROUTES, IndoorSegment.PLAN),
+            indoorSegments(challengesAvailable = false, roomAvailable = false, together = true),
+        )
+    }
+
+    @Test
+    fun `Wuensche nach Raum oder Herausforderungen landen auf Gemeinsam`() {
+        val merged = indoorSegments(challengesAvailable = true, roomAvailable = true, together = true)
+        assertEquals(IndoorSegment.TOGETHER, indoorSegmentTarget(IndoorSegment.ROOM, merged))
+        assertEquals(IndoorSegment.TOGETHER, indoorSegmentTarget(IndoorSegment.CHALLENGES, merged))
+        assertEquals(IndoorSegment.TOGETHER, indoorSegmentTarget(IndoorSegment.TOGETHER, merged))
+        assertEquals(IndoorSegment.PLAN, indoorSegmentTarget(IndoorSegment.PLAN, merged))
+        assertEquals(null, indoorSegmentTarget(null, merged))
+        // Ohne „Gemeinsam" bleibt der Wunsch, was er ist.
+        val separate = indoorSegments(challengesAvailable = true, roomAvailable = true)
+        assertEquals(IndoorSegment.ROOM, indoorSegmentTarget(IndoorSegment.ROOM, separate))
+        assertEquals(IndoorSegment.CHALLENGES, indoorSegmentTarget(IndoorSegment.CHALLENGES, separate))
+        // „Gemeinsam" ohne sein Segment faellt wie jeder unbekannte Platz auf „Strecken" zurueck.
+        assertEquals(IndoorSegment.ROUTES, shownIndoorSegment(IndoorSegment.TOGETHER, separate, taskActive = false))
+    }
+
+    @Test
     fun `die Garage ist eine gepushte Seite ohne Leiste und nur aus dem Tab erreichbar`() {
         assertTrue(isPushedRoute(AppRoutes.INDOOR_GARAGE))
         assertFalse(SHELL_TABS.any { it.route == AppRoutes.INDOOR_GARAGE }, "kein fuenfter Platz in der Leiste")
@@ -150,12 +187,13 @@ class AppNavigationTest {
     }
 
     @Test
-    fun `im Indoor-Tab haengen jetzt die Herausforderungen, der Raum bleibt unsichtbar`() {
+    fun `im Indoor-Tab haengen Herausforderungen und Raum im Segment Gemeinsam`() {
         assertEquals(
-            listOf(IndoorSegment.ROUTES, IndoorSegment.PLAN, IndoorSegment.CHALLENGES),
+            listOf(IndoorSegment.ROUTES, IndoorSegment.PLAN, IndoorSegment.TOGETHER),
             shippedIndoorSegments(),
         )
-        assertFalse(IndoorSegment.ROOM in shippedIndoorSegments(), "der Raum hat noch keine Oberflaeche")
+        // Hoechstens drei Segmente: Vier passen nicht in die Zeile (docs/ux/umbau.md).
+        assertTrue(shippedIndoorSegments().size <= 3)
     }
 
     @Test
@@ -165,20 +203,26 @@ class AppNavigationTest {
             assertEquals(IndoorSegment.ROUTES, shownIndoorSegment(wanted, segments, taskActive = true), "$wanted")
         }
         assertEquals(IndoorSegment.ROUTES, shownIndoorSegment(null, segments, taskActive = true))
-        // Ohne Aufgabe gilt der Wunsch — ein Sprung von aussen landet auf den Herausforderungen.
-        assertEquals(IndoorSegment.CHALLENGES, shownIndoorSegment(IndoorSegment.CHALLENGES, segments, taskActive = false))
+        // Ohne Aufgabe gilt der Wunsch — ein Sprung von aussen (gespeicherte Herausforderung,
+        // Einladungslink) landet auf „Gemeinsam", wo beide Abschnitte stehen.
+        assertEquals(IndoorSegment.TOGETHER, shownIndoorSegment(IndoorSegment.CHALLENGES, segments, taskActive = false))
+        assertEquals(IndoorSegment.TOGETHER, shownIndoorSegment(IndoorSegment.ROOM, segments, taskActive = false))
+        assertEquals(IndoorSegment.TOGETHER, shownIndoorSegment(IndoorSegment.TOGETHER, segments, taskActive = false))
         assertEquals(IndoorSegment.PLAN, shownIndoorSegment(IndoorSegment.PLAN, segments, taskActive = false))
-        // Ein Platz ohne Funktion faellt auf „Strecken" zurueck.
-        assertEquals(IndoorSegment.ROUTES, shownIndoorSegment(IndoorSegment.ROOM, segments, taskActive = false))
         assertEquals(IndoorSegment.ROUTES, shownIndoorSegment(null, segments, taskActive = false))
+        // Ein Platz ohne Funktion faellt auf „Strecken" zurueck.
+        val plain = indoorSegments(challengesAvailable = false, roomAvailable = false)
+        assertEquals(IndoorSegment.ROUTES, shownIndoorSegment(IndoorSegment.ROOM, plain, taskActive = false))
     }
 
     @Test
-    fun `Strecken und Herausforderungen leben im Indoor-Ablauf, der Plan daneben`() {
+    fun `Strecken, Herausforderungen und Raum leben im Indoor-Ablauf, der Plan daneben`() {
         assertTrue(indoorSegmentUsesFlow(IndoorSegment.ROUTES))
         assertTrue(indoorSegmentUsesFlow(IndoorSegment.CHALLENGES))
+        // Der Raum setzt wie eine Herausforderung Strecke und Fahrt im selben ViewModel.
+        assertTrue(indoorSegmentUsesFlow(IndoorSegment.ROOM))
+        assertTrue(indoorSegmentUsesFlow(IndoorSegment.TOGETHER))
         assertFalse(indoorSegmentUsesFlow(IndoorSegment.PLAN))
-        assertFalse(indoorSegmentUsesFlow(IndoorSegment.ROOM))
     }
 
     @Test

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Raum für Gruppenfahrten (docs/raum-protokoll.md, docs/ux/umbau.md):
+    Abschnitt „Raum" in Indoor → Gemeinsam und die Einblendung in der Fahrt.
+    Eigene Datei, Schlüssel raum_*. Begriffe (docs/i18n.md, Glossar): Raum,
+    Gastgeber, Einladungslink, Bereit, „Leistung zeigen".
+-->
+<resources>
+    <string name="raum_section_title">Raum</string>
+    <string name="raum_intro">Fahrt zusammen dieselbe Strecke – jeder auf seinem Trainer, alle sehen einander mit Abstand. Ein Raum läuft auf einem eigenen Server, ohne Konto.</string>
+    <string name="raum_create">Raum anlegen</string>
+    <string name="raum_join">Raum beitreten</string>
+    <string name="raum_no_server">Zum Anlegen brauchst du einen eigenen Server. Trage ihn unter Einstellungen → Sync mit eigenem Server ein. Beitreten geht auch ohne.</string>
+    <string name="raum_open_settings">Einstellungen öffnen</string>
+    <string name="raum_server_line">Server: %1$s</string>
+    <string name="raum_privacy">Andere im Raum sehen deinen Namen, wo du auf der Strecke bist und wie schnell du fährst – deine Leistung nur, wenn du sie zeigst. Der Server sieht dabei auch deine IP-Adresse. Verbunden bist du nur mit diesem Server und nur, solange der Raum offen ist.</string>
+    <string name="raum_name_label">Dein Name im Raum</string>
+    <string name="raum_share_power">Leistung zeigen</string>
+    <string name="raum_share_power_hint">Die anderen sehen deine Watt.</string>
+    <string name="raum_create_route_label">Strecke</string>
+    <string name="raum_route_value">%1$s · %2$s km</string>
+    <string name="raum_create_no_route">Wähle zuerst unter „Strecken“ eine bekannte Strecke, die auf deinem Gerät liegt. Eigene Touren gehen nicht – die kennt nur dein Gerät.</string>
+    <string name="raum_create_to_routes">Zu den Strecken</string>
+    <string name="raum_join_link_label">Einladungslink</string>
+    <string name="raum_join_link_hint">Füge den Link ein, den du bekommen hast.</string>
+    <string name="raum_join_link_invalid">Das ist kein Einladungslink von Trailscape.</string>
+    <string name="raum_join_confirm">Beitreten</string>
+    <string name="raum_opening_create">Raum wird angelegt …</string>
+    <string name="raum_opening_connect">Verbinde mit %1$s …</string>
+    <string name="raum_opening_attempt">Versuch %1$d</string>
+    <string name="raum_open_title">Raum auf %1$s</string>
+    <string name="raum_host_tag">Gastgeber</string>
+    <string name="raum_you">%1$s (du)</string>
+    <string name="raum_route_mismatch">Auf diesem Gerät liegt eine neuere Version der Strecke als im Raum. Der Gastgeber aktualisiert die Strecke und legt einen neuen Raum an.</string>
+    <string name="raum_route_unknown">Diese Strecke kennt deine App-Version nicht. Aktualisiere Trailscape.</string>
+    <string name="raum_to_start">Zum Start</string>
+    <string name="raum_start_action">Start in %1$d Sekunden</string>
+    <string name="raum_start_host_hint">Starte, wenn alle bereit sind. Denselben Knopf findest du am Start.</string>
+    <string name="raum_start_guest_hint">Der Gastgeber startet die Fahrt.</string>
+    <string name="raum_countdown">Start in %1$d s</string>
+    <string name="raum_started">Die Fahrt läuft. Du kannst jederzeit einsteigen.</string>
+    <string name="raum_riders_title">Teilnehmer (%1$d von %2$d)</string>
+    <string name="raum_rider_ready">Bereit</string>
+    <string name="raum_rider_riding">Fährt · %1$s km</string>
+    <string name="raum_rider_waiting">Noch nicht am Start</string>
+    <string name="raum_ready_explain">Bereit ist, wer mit geladener Strecke am Start steht.</string>
+    <string name="raum_share_invite">Einladung teilen</string>
+    <string name="raum_share_invite_hint">Wer den Link hat, kann beitreten. Er gilt nur für diesen Raum.</string>
+    <string name="raum_leave">Raum verlassen</string>
+    <string name="raum_end">Raum für alle beenden</string>
+    <string name="raum_end_confirm_title">Raum beenden?</string>
+    <string name="raum_end_confirm_body">Der Raum endet für alle. Wer gerade fährt, fährt allein weiter.</string>
+    <string name="raum_end_confirm_action">Beenden</string>
+    <string name="raum_reconnecting_in">Verbindung unterbrochen. Neuer Versuch in %1$d s. Dein Platz bleibt kurz frei.</string>
+    <string name="raum_reconnecting_now">Verbindung unterbrochen. Verbinde wieder …</string>
+    <string name="raum_notice_ended_by_host">Der Gastgeber hat den Raum beendet.</string>
+    <string name="raum_notice_ended_expired">Der Raum ist abgelaufen.</string>
+    <string name="raum_notice_ended_idle">Der Raum wurde geschlossen, weil niemand mehr verbunden war.</string>
+    <string name="raum_notice_ended_server">Der Server hat den Raum beendet. Legt einen neuen an.</string>
+    <string name="raum_notice_denied">Diesen Raum gibt es nicht mehr, oder der Einladungslink stimmt nicht. Bitte um einen neuen Link.</string>
+    <string name="raum_notice_full">Der Raum ist voll.</string>
+    <string name="raum_notice_version">Server und App passen nicht zusammen. Aktualisiere Trailscape oder den Server.</string>
+    <string name="raum_notice_replaced">Du bist mit einem anderen Gerät in diesem Raum.</string>
+    <string name="raum_notice_blocked">Zu viele Fehlversuche von deinem Anschluss. Versuch es in 15 Minuten wieder.</string>
+    <string name="raum_notice_protocol">Der Server hat die Verbindung abgelehnt. Aktualisiere Trailscape.</string>
+    <string name="raum_notice_gave_up">Keine Verbindung zum Server. Prüfe dein Netz und tritt mit dem Einladungslink wieder bei.</string>
+    <string name="raum_notice_create_unauthorized">Der Server lehnt dein Token ab. Prüfe Einstellungen → Sync mit eigenem Server.</string>
+    <string name="raum_notice_create_disabled">Dein Server bietet keine Räume an. Aktualisiere ihn und schalte Räume ein.</string>
+    <string name="raum_notice_create_server_full">Auf deinem Server sind alle Räume belegt.</string>
+    <string name="raum_notice_create_network">Dein Server ist nicht erreichbar. Prüfe dein Netz.</string>
+    <string name="raum_notice_create_failed">Der Raum ließ sich nicht anlegen.</string>
+    <string name="raum_hud_closed">Raum beendet · du fährst allein weiter</string>
+    <string name="raum_hud_reconnecting">Verbindung zum Raum unterbrochen</string>
+    <string name="raum_hud_ahead_power">%1$s · %2$d m vor dir · %3$d W</string>
+    <string name="raum_hud_behind_power">%1$s · %2$d m hinter dir · %3$d W</string>
+    <string name="raum_wait_title">Warten auf den Start</string>
+    <string name="raum_wait_countdown">Start in %1$d</string>
+    <string name="raum_wait_count">%1$d von %2$d am Start</string>
+    <string name="raum_wait_leave">Raum verlassen und allein fahren</string>
+</resources>

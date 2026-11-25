@@ -2,7 +2,11 @@ package de.trailscape.app.ui.indoor
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -44,6 +48,7 @@ import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.decideToday
 import de.trailscape.app.ui.components.OneUiDialog
+import de.trailscape.app.ui.components.SectionEyebrow
 import de.trailscape.core.TrainingSession
 import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.i18n.sessionTitle
@@ -99,15 +104,18 @@ import kotlinx.coroutines.delay
  * @param mode siehe oben.
  * @param tabHeader nur [IndoorFlowMode.TAB]: die Segmente des Tabs, direkt
  *   unter der Kopfzeile der Startseite.
- * @param challengesSegment nur [IndoorFlowMode.TAB]: statt der Startseite die
- *   Sicht „Herausforderungen" zeigen (Segment des Tabs, `docs/ux/umbau.md`).
+ * @param togetherSegment nur [IndoorFlowMode.TAB]: statt der Startseite die
+ *   Sicht „Gemeinsam" zeigen (Raum und Herausforderungen, `docs/ux/umbau.md`).
  *   Sie braucht dasselbe [IndoorViewModel] wie die Startseite, deshalb liegt
  *   sie in diesem Ablauf und nicht daneben.
  * @param onOpenGarage oeffnet `indoor/garage` (Fahrer und Rad anpassen) vom
  *   Symbol in der Kopfzeile der Startseite. Nur im Tab gesetzt; `null` (der
  *   gepushte Ablauf) zeichnet kein Symbol.
- * @param onChallengeChosen „Gegen … fahren" oder „Strecke herunterladen" in
- *   dieser Sicht: Der Tab wechselt auf „Strecken", wo „Fahren" startet.
+ * @param onShowRoutes „Gegen … fahren", „Strecke herunterladen" oder „Zu den
+ *   Strecken" in dieser Sicht: Der Tab wechselt auf „Strecken".
+ * @param roomInvite ein von aussen geoeffneter Einladungslink zu einem Raum;
+ *   der Abschnitt „Raum" oeffnet damit „Raum beitreten" und quittiert ueber
+ *   [onRoomInviteConsumed]. Verbunden wird erst nach der Bestaetigung dort.
  */
 @Composable
 fun IndoorFlowScreen(
@@ -117,9 +125,11 @@ fun IndoorFlowScreen(
     onOpenWorlds: () -> Unit = {},
     mode: IndoorFlowMode = IndoorFlowMode.PUSHED,
     tabHeader: (@Composable () -> Unit)? = null,
-    challengesSegment: Boolean = false,
-    onChallengeChosen: () -> Unit = {},
+    togetherSegment: Boolean = false,
+    onShowRoutes: () -> Unit = {},
     onOpenGarage: (() -> Unit)? = null,
+    roomInvite: String? = null,
+    onRoomInviteConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val vm: IndoorViewModel = viewModel(
@@ -212,13 +222,15 @@ fun IndoorFlowScreen(
     }
     when (stage) {
         IndoorStage.ROUTE -> when (mode) {
-            IndoorFlowMode.TAB -> if (challengesSegment) {
-                ChallengesStage(
+            IndoorFlowMode.TAB -> if (togetherSegment) {
+                TogetherStage(
                     vm = vm,
                     onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
                     title = stringResource(R.string.indoor_app_tab_title),
                     tabHeader = tabHeader,
-                    onChosen = onChallengeChosen,
+                    onShowRoutes = onShowRoutes,
+                    roomInvite = roomInvite,
+                    onRoomInviteConsumed = onRoomInviteConsumed,
                 )
             } else {
                 HomeStage(
@@ -473,27 +485,40 @@ private fun HomeStage(
 }
 
 /**
- * Die Sicht „Herausforderungen" des Indoor-Tabs (`docs/ux/umbau.md`,
- * `docs/herausforderung.md`): gespeicherte Herausforderungen und „Datei
- * wählen", unter derselben Kopfzeile und denselben Segmenten wie „Strecken".
- * „Gegen … fahren" setzt Strecke und Mitfahrer im [IndoorViewModel] und
- * wechselt auf „Strecken"; ebenso „Strecke herunterladen", weil Voranschlag
- * und Fortschritt des Downloads dort stehen.
+ * Die Sicht „Gemeinsam" des Indoor-Tabs (`docs/ux/umbau.md`): zwei Abschnitte
+ * unter derselben Kopfzeile und denselben Segmenten wie „Strecken".
+ *
+ *  * **Raum** (`docs/raum-protokoll.md`): [IndoorRoomSection]. „Zum Start"
+ *    wählt die Strecke des Raums im [IndoorViewModel] und geht weiter zur
+ *    Fahrt; fehlt dafür noch etwas (kein Trainer gekoppelt), wechselt der Tab
+ *    auf „Strecken", wo es steht.
+ *  * **Herausforderungen** (`docs/herausforderung.md`): gespeicherte
+ *    Herausforderungen und „Datei wählen". „Gegen … fahren" setzt Strecke und
+ *    Mitfahrer und wechselt auf „Strecken"; ebenso „Strecke herunterladen",
+ *    weil Voranschlag und Fortschritt des Downloads dort stehen.
  */
 @Composable
-private fun ChallengesStage(
+private fun TogetherStage(
     vm: IndoorViewModel,
     onOpenSettings: () -> Unit,
     title: String,
     tabHeader: (@Composable () -> Unit)?,
-    onChosen: () -> Unit,
+    onShowRoutes: () -> Unit,
+    roomInvite: String?,
+    onRoomInviteConsumed: () -> Unit,
 ) {
     val ui by vm.route.collectAsStateWithLifecycle()
     val catalog by vm.catalog.collectAsStateWithLifecycle()
     val challenges by vm.challenges.collectAsStateWithLifecycle()
     val challengeImport by vm.challengeImport.collectAsStateWithLifecycle()
+    val room by vm.room.collectAsStateWithLifecycle()
+    val roomServer by vm.roomServer.collectAsStateWithLifecycle()
     // Eine geladene Strecke ändert, ob eine Herausforderung fahrbar ist.
     LaunchedEffect(catalog) { vm.refreshChallenges() }
+    // Der eigene Server kann sich in den Einstellungen geändert haben (ohne Netz gelesen).
+    LaunchedEffect(Unit) { vm.refreshRoomServer() }
+    // Die unter „Strecken" gewählte Strecke, falls sie sich für einen Raum eignet.
+    val createRoute = remember(ui.selected, catalog) { vm.roomRouteOfSelection() }
     ChallengeImportDialog(
         ui = challengeImport,
         onSave = vm::confirmChallengeImport,
@@ -509,6 +534,31 @@ private fun ChallengesStage(
             }
         },
     ) {
+        SectionEyebrow(stringResource(R.string.raum_section_title))
+        IndoorRoomSection(
+            ui = room,
+            server = roomServer,
+            createRoute = createRoute,
+            savedName = remember(room is IndoorRoomUi.Closed) { vm.roomSavedName() },
+            savedSharePower = remember(room is IndoorRoomUi.Closed) { vm.roomSavedSharePower() },
+            pendingInvite = roomInvite,
+            onInviteConsumed = onRoomInviteConsumed,
+            onCreate = vm::createRoom,
+            onJoin = vm::joinRoom,
+            onLeave = vm::leaveRoom,
+            onEnd = vm::endRoom,
+            onStartCountdown = vm::startRoomCountdown,
+            onSharePower = vm::setRoomSharePower,
+            onRide = { routeName -> if (!vm.rideRoomRoute(routeName)) onShowRoutes() },
+            onDownload = { id ->
+                vm.downloadCatalog(id)
+                onShowRoutes()
+            },
+            onDismissNotice = vm::dismissRoomNotice,
+            onOpenSettings = onOpenSettings,
+            onChooseRoute = onShowRoutes,
+        )
+        SectionEyebrow(stringResource(R.string.indoor_app_tab_segment_challenges))
         IndoorChallengeSection(
             ui = IndoorChallengesUi(
                 items = challenges,
@@ -516,11 +566,11 @@ private fun ChallengesStage(
             ),
             onRide = { id, routeName ->
                 vm.useChallenge(id, routeName)
-                onChosen()
+                onShowRoutes()
             },
             onDownload = { id ->
                 vm.downloadCatalog(id)
-                onChosen()
+                onShowRoutes()
             },
             onDelete = vm::deleteChallenge,
             onImport = vm::importChallengeFile,
@@ -600,6 +650,7 @@ private fun RideStage(vm: IndoorViewModel) {
         return
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     IndoorRideScreen(
         ui = ui,
         worldSurface = { modifier ->
@@ -623,6 +674,20 @@ private fun RideStage(vm: IndoorViewModel) {
         onReleaseStart = vm::releaseStart,
         onDismissDayEnd = vm::dismissDayEnd,
     )
+        // Raum fuer Gruppenfahrten: vor dem gemeinsamen Start liegt die Karte
+        // „Warten auf den Start" ueber der gehaltenen Fahrt (IndoorRoomHud.kt).
+        ui.room?.takeIf { it.waiting && !it.closed && ui.session != null }?.let { room ->
+            RoomStartCard(
+                room = room,
+                onStart = vm::startRoomCountdown,
+                onLeave = vm::leaveRoom,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(24.dp),
+            )
+        }
+    }
 
     if (askLeave) {
         val dismiss = {

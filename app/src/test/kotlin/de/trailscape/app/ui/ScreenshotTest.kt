@@ -124,8 +124,9 @@ class ScreenshotTest {
         shot("02c-verlauf-erfolge")
         tab("Indoor")
         shot("03-indoor")
-        segment("Herausforderungen")
-        shot("03c-indoor-herausforderungen")
+        // Raum und Herausforderungen teilen sich das Segment „Gemeinsam" (docs/ux/umbau.md).
+        segment("Gemeinsam")
+        shot("03c-indoor-gemeinsam")
         segment("Strecken")
         // Die Garage: Symbol in der Kopfzeile der Sicht „Strecken", gepushte Seite.
         compose.onAllNodesWithContentDescription("Garage", substring = true)[0].performClick()

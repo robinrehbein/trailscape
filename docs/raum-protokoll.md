@@ -3,8 +3,10 @@
 Stand: 25.11.2026. Grundlage: `docs/konzept-spiel-community.md`, Abschnitte 5.2 und 6.2
 (Etappe 5 „Raum auf eigenem Server“). Umgesetzt in `server/rooms.mjs` (Raumlogik),
 `server/websocket.mjs` (WebSocket nach RFC 6455), `server/server.mjs` (Einbindung),
-`core/src/main/kotlin/de/trailscape/core/room/` (Codec, Raumzustand, Windschatten) und
-`app/src/main/kotlin/de/trailscape/app/room/` (Netz-Client ohne Oberfläche).
+`core/src/main/kotlin/de/trailscape/core/room/` (Codec, Raumzustand, Windschatten),
+`app/src/main/kotlin/de/trailscape/app/room/` (Netz-Client) und — seit der Oberfläche —
+`app/src/main/kotlin/de/trailscape/app/ui/indoor/IndoorRoom*.kt` (Abschnitt 14). Das Protokoll
+selbst ist dabei **unverändert** geblieben: Die Oberfläche benutzt nur, was v1 schon überträgt.
 
 Ziel: **Jeder** Trailscape-Server kann Räume anbieten. Derselbe Code soll später unverändert als
 offizielles Relais laufen können — ohne Konto und ohne Speicherung (Etappe 6, nicht Teil dieser
@@ -333,3 +335,111 @@ Was ein Relais ohne Konto und ohne Speicherung anders bräuchte — bewusst **ni
 | `core/.../room/Drafting.kt` | Windschatten-Näherung (nur gerechnet) |
 | `app/.../room/RoomTransport.kt`, `OkHttpRoomTransport.kt` | WebSocket-Schicht |
 | `app/.../room/RoomClient.kt` | Verbinden, Beitreten, Senden, Wiederverbinden mit Backoff |
+| `app/.../room/RoomInviteActivity.kt` | Trampolin für `trailscape://room…` von außen (prüft nur, verbindet nicht) |
+| `app/.../ui/indoor/IndoorRoomController.kt` | Zustandslogik der Oberfläche: Anlegen, Beitreten, Takt, „Bereit", Start, Schließgründe |
+| `app/.../ui/indoor/IndoorRoomUi.kt` | Zustände für Abschnitt und Fahransicht (reine Daten) |
+| `app/.../ui/indoor/IndoorRoomSection.kt` | Abschnitt „Raum" in Indoor → Gemeinsam, Dialoge „Raum anlegen" / „Raum beitreten" |
+| `app/.../ui/indoor/IndoorRoomHud.kt` | Fahransicht: „Warten auf den Start", die anderen mit Abstand |
+| `app/src/test/.../IndoorRoomControllerTest.kt`, `IndoorRoomFlowTest.kt`, `RoomScreenshotTest.kt` | Zustandslogik gegen Fake-Transport, ganzer Ablauf im ViewModel, Bilder |
+
+## 14 Oberfläche in der App (Stand 25.11.2026)
+
+Wo sie hängt und warum, steht in `docs/ux/umbau.md` („Raum für Gruppenfahrten"); die Prüfung mit
+zwei Geräten in `docs/raum-pruefliste.md`. Hier steht, **wie die Oberfläche das Protokoll benutzt**.
+
+### 14.1 Datenschutz — verbindlich
+
+- **Kein Konto, keine Telemetrie.** Es gibt keine Abfrage „gibt es Räume?" und keinen Abgleich im
+  Hintergrund. Ohne offenen Raum existiert kein Client, kein Socket und kein Thread
+  (`IndoorRoomDeps.of` baut Transport und Zeitgeber erst mit dem ersten Raum).
+- **Verbunden wird nur mit einem Server, den der Nutzer selbst angegeben hat, und nur, solange
+  ein Raum offen ist.** Das sind genau zwei Fälle:
+  1. „Raum anlegen": `POST /api/rooms` und der WebSocket gehen an den Server aus Einstellungen →
+     Sync mit eigenem Server.
+  2. „Raum beitreten": der WebSocket geht an den Server aus dem Einladungslink, den der Nutzer
+     eingefügt oder geöffnet hat. Der Dialog zeigt die Server-Adresse, **bevor** verbunden wird;
+     erst „Beitreten" verbindet. Ein von außen geöffneter Link (`RoomInviteActivity`) wird nur
+     vorgemerkt. Ein Gast hat den Server also nicht in den Einstellungen eingetragen, sondern mit
+     dem Link bestätigt — anders kann niemand einem fremden Raum beitreten, weil Gäste den
+     `SYNC_TOKEN` nie bekommen (Abschnitt 3).
+- **Was die App sendet** — weniger, als das Protokoll erlaubt:
+
+  | Feld | Gesendet? |
+  |---|---|
+  | `join.name` | ja, vom Nutzer im Dialog eingegeben (bereinigt, höchstens 32 Zeichen) |
+  | `join.sharePower` / `settings.sharePower` | ja; Vorgabe in der App **aus** („Leistung zeigen") |
+  | `join.avatar` | **nein** (die anderen werden nicht als Figuren gezeichnet, also braucht es niemand) |
+  | `state.distM`, `state.speedMps` | ja, gut 3-mal je Sekunde, **nur während einer Fahrt im Raum** |
+  | `state.powerW` | nur mit „Leistung zeigen" |
+  | `state.cadenceRpm`, `state.lane` | **nein** |
+  | `settings.name` | nein (der Name steht beim Beitritt fest) |
+  | Puls, Standort, Gerätekennung, App-Version, Sprache | **nein** — das Protokoll kennt dafür kein Feld |
+
+  Der `SYNC_TOKEN` geht nur an `POST /api/rooms` des eigenen Servers, nie über den WebSocket und
+  nie in den Einladungslink (Test: `IndoorRoomControllerTest`).
+- **Was der Nutzer vorher sieht**: Beide Dialoge tragen denselben Satz (`raum_privacy`): Andere
+  im Raum sehen Name, Stelle auf der Strecke und Tempo, die Leistung nur auf Wunsch; der Server
+  sieht außerdem die IP-Adresse; verbunden ist man nur mit diesem Server und nur, solange der
+  Raum offen ist.
+- **Was die App speichert**: den eigenen Anzeigenamen und die Wahl „Leistung zeigen"
+  (`indoor.room.name`, `indoor.room.share_power`). Einladung, Raum-Geheimnis und
+  Gastgeber-Geheimnis leben nur im Speicher; nach einem Neustart der App ist der Raum für dieses
+  Gerät weg (wieder beitreten geht mit dem Link, ein Gastgeber ist dann Gast).
+- Der Einladungslink enthält das Raum-Geheimnis. „Einladung teilen" reicht ihn als Text an das
+  Teilen-Blatt des Systems; die App verschickt selbst nichts.
+- **Offen für den Eigentümer**: `PRIVACY.md` nennt den Raum noch nicht. Mit der Oberfläche
+  verarbeitet erstmals ein *fremder* selbst betriebener Server (der des Gastgebers) Name,
+  Stelle, Tempo und IP-Adresse eines Gastes. Der Absatz dazu ist nicht geschrieben, weil der Text
+  dem Eigentümer vorbehalten ist.
+
+### 14.2 „Bereit" ohne eigenes Feld
+
+Das Protokoll kennt keinen Bereit-Schalter. „Bereit" ist in der Oberfläche, **wer am Start
+steht**: Sobald jemand „Zum Start" gewählt hat und seine Fahransicht mit geladener Strecke offen
+ist, meldet sein Gerät die Stelle 0 (`state` mit `distM: 0`). Wer eine Meldung hat, die nicht
+älter als 5 s ist, gilt als bereit; nach dem Start heißt derselbe Zustand „Fährt · x km". Das ist
+ehrlicher als ein Schalter (bereit ist, wer wirklich losfahren kann) und braucht keine
+Protokolländerung. Grenze: Wer am Start steht, aber die Verbindung verloren hat, erscheint nach
+5 s als „Noch nicht am Start".
+
+### 14.3 Gemeinsamer Start
+
+- Eine Fahrt gehört zum Raum, wenn ihre Strecke die des Raums ist und der Raum offen ist. Sie
+  beginnt immer bei 0 (keine Startpunkt-Wahl, kein „Weiter bei km …"), ohne Mitfahrer aus einer
+  Herausforderung und als freie Fahrt (kein ERG).
+- Vor dem Start wird sie **gehalten** (`holdStart` der Laufzeit, ohne „erster Tritt gilt"). Der
+  Gastgeber sendet `start {inS: 10}`; alle rechnen `startAt` über den Uhrenabgleich (Abschnitt 9)
+  in Geräte-Zeit um und geben die Fahrt frei, sobald `startAt` erreicht ist. Danach beginnt sie
+  wie jede Fahrt mit dem ersten Tritt.
+- Wer nach dem Start an den Start kommt, fährt sofort los (bei 0).
+- Endet der Raum oder verlässt man ihn, während man wartet, wird die Fahrt freigegeben: Niemand
+  hängt am Start fest. Die Fahransicht sagt „Raum beendet · du fährst allein weiter".
+- Reißt die Verbindung **vor** einem `countdown` ab, weiß das Gerät nichts vom Start und wartet,
+  bis es wieder verbunden ist (das `welcome` trägt `startAt`) — oder der Nutzer wählt „Raum
+  verlassen und allein fahren".
+
+### 14.4 Strecke
+
+`route.id` ist der Schlüssel der Streckenwahl in der App (`catalog:<Kennung>` für bekannte
+Strecken, `testwelt` für die Teststrecke), `route.version` die Welt-Version des Katalogs als
+Zahl im String — dieselbe Kennung wie bei den Herausforderungen. Die App vergleicht beides mit
+dem, was auf dem Gerät liegt: bereit → „Zum Start"; fehlt oder älter → „Strecke herunterladen";
+hier neuer → nicht fahrbar, mit Erklärung; unbekannte Form → „Aktualisiere Trailscape". Eigene
+Touren und Planungen kann kein Raum fahren: Ihre Strecke kennt nur ein Gerät.
+
+### 14.5 Was die Oberfläche (noch) nicht kann
+
+- **Kein Kurzcode.** Beitreten geht nur mit dem Einladungslink (einfügen oder antippen). Ein
+  kurzer, tippbarer Code bräuchte auf dem Server eine Zuordnung Code → Raum und wäre mit wenigen
+  Zeichen erratbar; das Raum-Geheimnis hat mit Absicht 256 Bit (Abschnitt 3).
+- **Keine Figuren der anderen in der 3D-Ansicht.** Die anderen stehen als Zeilen mit Abstand in
+  Metern in der Fahransicht (die drei nächsten). Der Renderer ist dafür nicht angefasst.
+- **Kein Windschatten** (`Drafting.kt` bleibt nur gerechnet).
+- **Kein Hintergrunddienst.** Geht die App in den Hintergrund, pausiert die Fahrt wie immer; der
+  WebSocket kann dabei abreißen. Der Server hält den Platz 30 s; danach tritt die App unter neuer
+  Kennung wieder bei.
+- **Keine Rangliste, kein Ergebnis am Ende**, keine Zeitabstände (nur Meter).
+- Der Gastgeber kann die Strecke eines Raums nicht ändern (das Protokoll legt sie beim Anlegen
+  fest); `maxRiders`, `ttlMin` und ein geplanter `startAt` beim Anlegen werden nicht angeboten —
+  es gelten die Vorgaben des Servers.
+- Kein QR-Code für die Einladung.

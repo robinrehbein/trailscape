@@ -64,6 +64,8 @@ class StringResourceParityTest {
         "strings_render2.xml" to "render2_",
         // Garage (Etappe 2, docs/konzept-spiel-community.md).
         "strings_spiel2.xml" to "garage_",
+        // Raum für Gruppenfahrten (Etappe 5, docs/raum-protokoll.md).
+        "strings_spiel5.xml" to "raum_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */

@@ -25,8 +25,10 @@ import kotlin.random.Random
  * passiert, entscheidet der Aufrufer — der Raumzustand ist die reine
  * Funktion `RoomState.reduce` in `:core`.
  *
- * Noch nirgends eingebaut; Einbau in Fahrt, Hintergrunddienst und
- * Oberfläche sind eigene Schritte (Bericht zu Etappe 5).
+ * Benutzt wird er vom Raum im Indoor-Ablauf
+ * (`ui/indoor/IndoorRoomController.kt`, docs/raum-protokoll.md Abschnitt 14) —
+ * je offenem Raum eine Instanz, ohne Raum keine. Ein Hintergrunddienst ist
+ * weiter ein eigener Schritt.
  */
 interface RoomClient {
     val status: StateFlow<RoomConnectionStatus>
