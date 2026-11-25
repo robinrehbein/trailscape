@@ -31,8 +31,8 @@ import kotlin.math.sqrt
  * bis [NEAR_M], mittel bis [MID_M], dahinter weiter die heutige Fernstufe).
  * Dazu `schau-alt/` und `schau-neu/` (alle Arten in Varianten 0..3 nebeneinander),
  * `cameras.json` (Kameras und Sonnenstaende fuer Betrachter und filarender),
- * `metrics.txt`/`metrics.json` (Dreiecke, Zeichenaufrufe, Groessen) und die
- * Bibliothek `library.glb`.
+ * `metrics.txt`/`metrics.json` (Dreiecke, Zeichenaufrufe, Groessen), die
+ * Bibliothek `library.glb` und die beiden Atlanten (`laubatlas.png`, `rindenatlas.jpg`).
  *
  * Abschnitte: **Einzelbaum** (Eiche 4,5 m neben der Mitte), **Allee** (Buchen
  * beidseitig alle 9,5 m), **Waldrand** (Buche/Fichte/Birke/Eiche, davor
@@ -49,6 +49,8 @@ fun writeTreeComparison(dir: File) {
     writeWorld(File(dir, "schau-alt"), "wtreeschaualt", show, legacy = true)
     writeWorld(File(dir, "schau-neu"), "wtreeschauneu", show, legacy = false)
     File(dir, "library.glb").writeBytes(TreeLibrary.libraryGlb())
+    File(dir, "laubatlas.png").writeBytes(TreeTextures.leafPng)
+    File(dir, "rindenatlas.jpg").writeBytes(TreeTextures.barkJpeg)
     File(dir, "cameras.json").writeText(camerasJson())
     val (txt, json) = metrics(trees)
     File(dir, "metrics.txt").writeText(txt)
