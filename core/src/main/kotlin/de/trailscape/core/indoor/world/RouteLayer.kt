@@ -342,6 +342,15 @@ internal class RouteEnv(val ctx: TileContext) {
                 // Gras und Gehweg, nicht aber Fransen, Bordstein und Linien.
                 val on = r.segOnTrack(i)
                 if (on && min(r.trackDist[i], r.trackDist[i + 1]) <= 1.5) continue
+                // Liegt das Stueck mit beiden Enden noch innerhalb der Fahrbahn plus 1,5 m, ist es dieselbe Strasse,
+                // nur von der Glaettung versetzt: Es sperrt nichts. Vorher stanzte es Rand und Bankett aus, ohne
+                // selbst gezeichnet zu werden — das Luftbild schien als helle Platte (welzheimer-wald km 25) bzw.
+                // als Zacken am Bankett in Kehren (sa-calobra) durch.
+                if (on) {
+                    val ha = track.nearest(r.e[i], r.n[i], 30.0)
+                    val hb = track.nearest(r.e[i + 1], r.n[i + 1], 30.0)
+                    if (ha != null && hb != null && max(r.trackDist[i], r.trackDist[i + 1]) <= min(track.halfWidthAt(ha.distM), track.halfWidthAt(hb.distM)) + 1.5) continue
+                }
                 // Ein Weg, der laengs in der eigenen Fahrbahn liegt, ohne als „auf der Strecke" zu gelten
                 // (Richtung oder Abstand knapp daneben), schneidet nur den aeusseren Rand — sonst fehlten die
                 // Fransen auf langen Stuecken und endeten mit einer Querkante.
