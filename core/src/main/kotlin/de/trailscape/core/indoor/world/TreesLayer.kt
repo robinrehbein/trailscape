@@ -791,7 +791,7 @@ internal class TreesLayer : TileLayer {
     }
 
     /**
-     * Farbe des Kronendachs: Artfarbe, zur Haelfte an die Farbe des Luftbilds an dieser Stelle gezogen
+     * Farbe des Kronendachs: Artfarbe, zu 30 % an die Farbe des Luftbilds an dieser Stelle gezogen
      * (bezogen auf die mittlere Helligkeit der Kronendach-Textur). Bis `indoor-world/11` nur die Artfarbe —
      * die Waldkoerper standen als dunkelgruener, satter Teppich mit harter Kante neben dem helleren,
      * graueren Luftbild der Nachbarflaechen und der Stufe 0.
@@ -800,9 +800,14 @@ internal class TreesLayer : TileLayer {
         val base = crownColor(ctx, e, n, shade)
         val a = ctx.aerialMeanAt(e, n, max(4.0, cell * 0.75)) ?: return base
         val f = (shade / 0.8).coerceIn(0.5, 1.2)
+        // Luftbild linear; Blau nie ueber Gruen (Schnee und Dunst im Winterbild faerbten den Wald sonst blaugrau).
+        val ar = Argb.SRGB_TO_LINEAR[Argb.red(a)].toDouble()
+        val ag = Argb.SRGB_TO_LINEAR[Argb.green(a)].toDouble()
+        val ab = min(Argb.SRGB_TO_LINEAR[Argb.blue(a)].toDouble(), ag * 0.85)
+        val al = doubleArrayOf(ar, ag, ab)
         fun ch(k: Int, sh: Int): Int {
             val vb = ((base shr sh) and 0xFF) / 255.0
-            val va = Argb.SRGB_TO_LINEAR[(a shr sh) and 0xFF] / CANOPY_TEX_MEAN[k] * f
+            val va = al[k] / CANOPY_TEX_MEAN[k] * f
             return ((vb + (va - vb) * CANOPY_AERIAL_SHARE).coerceIn(0.0, 1.0) * 255 + 0.5).toInt()
         }
         return Argb.of(255, ch(0, 16), ch(1, 8), ch(2, 0))
@@ -943,11 +948,15 @@ internal class TreesLayer : TileLayer {
         const val ORCHARD_ROW_M = 10.0
         const val ORCHARD_STEP_M = 8.5
 
-        /** Mindestbedeckung im Luftbild der Stufe 1 fuer einen Waldkoerper. */
-        const val FAR_CANOPY_MIN = 0.35
+        /**
+         * Mindestbedeckung im Luftbild der Stufe 1 fuer einen Waldkoerper. Niedrig: Laubwald im Winterbild (Baden-
+         * Wuerttemberg, braun-grau) schaetzt die Kronenerkennung nur schwach — er soll bleiben; wegfallen sollen nur
+         * klar helle Flaechen (Fels, Macchie auf Kalk, Wiese, Kahlschlag), die die Landnutzung als Wald fuehrt.
+         */
+        const val FAR_CANOPY_MIN = 0.1
 
-        /** Anteil der Luftbildfarbe am Kronendach. */
-        const val CANOPY_AERIAL_SHARE = 0.5
+        /** Anteil der Luftbildfarbe am Kronendach (mehr machte Winterwaelder graubraun). */
+        const val CANOPY_AERIAL_SHARE = 0.3
 
         /** Mittlere Farbe (linear) der Kronendach-Textur ([FoliageAtlas.canopyImage]). */
         val CANOPY_TEX_MEAN = doubleArrayOf(0.42, 0.51, 0.31)
