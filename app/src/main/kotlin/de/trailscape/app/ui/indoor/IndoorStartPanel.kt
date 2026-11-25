@@ -17,8 +17,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -81,6 +83,7 @@ internal fun IndoorStartPanel(
     onResume: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    onFinish: (() -> Unit)? = null,
 ) {
     val formats = LocalAppFormats.current
     // Fingerstelle, bis die Sitzung sie bestaetigt (oder kurz nach dem Loslassen).
@@ -186,7 +189,21 @@ internal fun IndoorStartPanel(
             val action: @Composable (Modifier) -> Unit = { m ->
                 when {
                     start.held -> StartAction(stringResource(R.string.indoor_app_start_go_action), onRelease, m)
-                    phase == IndoorPhase.PAUSED -> StartAction(stringResource(R.string.indoor_app_ride_resume_action), onResume, m)
+                    // In der Pause: „Weiter" und daneben „Fahrt beenden" — ein
+                    // einfacher Tipp, weil die Fahrt ohnehin steht (waehrend
+                    // der Fahrt beendet der runde Knopf nur gedrueckt gehalten).
+                    phase == IndoorPhase.PAUSED -> Row(
+                        modifier = m,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (onFinish != null) FinishAction(onFinish)
+                        StartAction(
+                            stringResource(R.string.indoor_app_ride_resume_action),
+                            onResume,
+                            if (compact) Modifier else Modifier.weight(1f),
+                        )
+                    }
                     else -> Unit
                 }
             }
@@ -300,6 +317,20 @@ private fun StartAction(text: String, onClick: () -> Unit, modifier: Modifier) {
         Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(modifier = Modifier.width(6.dp))
         Text(text)
+    }
+}
+
+/** „Fahrt beenden" in der Pause: hell umrandet, damit „Weiter" der Hauptknopf bleibt. */
+@Composable
+private fun FinishAction(onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        border = BorderStroke(1.dp, HudColors.ink.copy(alpha = 0.7f)),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = HudColors.ink),
+    ) {
+        Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(stringResource(R.string.indoor_app_start_finish_action))
     }
 }
 

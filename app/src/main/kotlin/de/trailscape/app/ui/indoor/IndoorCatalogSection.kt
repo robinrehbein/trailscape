@@ -58,25 +58,23 @@ import de.trailscape.core.indoor.catalog.CatalogRideKind
 import java.util.Locale
 
 /**
- * # Bereich „Bekannte Strecken" der Streckenwahl (docs/indoor/catalog.md)
+ * # Bekannte Strecken in der Streckenliste der Startseite (docs/indoor/catalog.md)
  *
- * Karten mit Vorschau (Bild der Welt, sonst Hoehenprofil, sonst
- * Platzhalter), Kennzeichen „Laser"/„Neu", Name, Land, Laenge,
- * Hoehenmetern, Belag, Paketgroesse und Zustand. Eine bereite Strecke ist auswaehlbar wie eine eigene; alles andere
- * hat einen Knopf („Laden", „Fortsetzen", „Abbrechen", „Aktualisieren").
- * Zustandslos — Aktionen gehen nach oben ins `IndoorViewModel`.
+ * Karten mit Vorschau (Bild der Strecke, sonst Hoehenprofil, sonst
+ * Platzhalter), Kennzeichen „Extra detailliert"/„Neu", Name, Land, Laenge,
+ * Hoehenmetern, Belag und einem **Status** („Bereit", „Herunterladen · 77 MB",
+ * „Laedt · 45 %"). Jede Karte ist auswaehlbar, gleich in welchem Zustand —
+ * was dann noch fehlt (Herunterladen, Fortsetzen, Abbrechen), steht unten auf
+ * der Startseite ueber „Fahren" ([IndoorRouteReadiness]). So gibt es pro
+ * Karte keinen eigenen Knopf mehr und genau einen Weg: waehlen, dann unten
+ * das tun, was dort steht. Zustandslos.
  */
 @Composable
-internal fun IndoorCatalogSection(
+internal fun IndoorCatalogList(
     catalog: IndoorCatalogUi,
     selectedKey: String?,
     onSelect: (IndoorRouteOption) -> Unit,
-    onDownload: (String) -> Unit,
-    onCancel: (String) -> Unit,
-    onDiscard: (String) -> Unit,
-    onRefresh: () -> Unit,
 ) {
-    MutedText(stringResource(R.string.indoor_app_catalog_intro))
     when {
         catalog.loading -> Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.Center) {
             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
@@ -87,59 +85,35 @@ internal fun IndoorCatalogSection(
                 item = item,
                 selected = selectedKey == "catalog:${item.id}",
                 onSelect = onSelect,
-                onDownload = { onDownload(item.id) },
-                onCancel = { onCancel(item.id) },
-                onDiscard = { onDiscard(item.id) },
             )
         }
     }
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        TextButton(onClick = onRefresh, enabled = !catalog.refreshing) {
-            if (catalog.refreshing) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-            }
-            Text(
-                text = stringResource(R.string.indoor_app_catalog_refresh),
-                modifier = Modifier.padding(start = 8.dp),
-            )
-        }
-    }
-    catalog.refreshResult?.let { r ->
-        MutedText(
-            stringResource(
-                when (r) {
-                    IndoorCatalogRefresh.UPDATED -> R.string.indoor_app_catalog_refresh_done
-                    IndoorCatalogRefresh.NOT_AVAILABLE -> R.string.indoor_app_catalog_refresh_not_available
-                    IndoorCatalogRefresh.FAILED -> R.string.indoor_app_catalog_refresh_failed
-                },
-            ),
-        )
-    }
-    MutedText(stringResource(R.string.indoor_app_catalog_privacy))
 }
+
+/** Ergebnis von „Liste aktualisieren" als ein Satz (Einstellungen). */
+@Composable
+internal fun catalogRefreshText(r: IndoorCatalogRefresh): String = stringResource(
+    when (r) {
+        IndoorCatalogRefresh.UPDATED -> R.string.indoor_app_catalog_refresh_done
+        IndoorCatalogRefresh.NOT_AVAILABLE -> R.string.indoor_app_catalog_refresh_not_available
+        IndoorCatalogRefresh.FAILED -> R.string.indoor_app_catalog_refresh_failed
+    },
+)
 
 @Composable
 private fun CatalogCard(
     item: IndoorCatalogItemUi,
     selected: Boolean,
     onSelect: (IndoorRouteOption) -> Unit,
-    onDownload: () -> Unit,
-    onCancel: () -> Unit,
-    onDiscard: () -> Unit,
 ) {
     val formats = LocalAppFormats.current
     val lang = formats.language.tag
     val name = item.name.pick(lang)
     val option = IndoorRouteOption.Catalog(item.id, name, item.distanceKm, item.ascentM)
-    val selectable = if (item.ready) {
-        Modifier.selectable(selected = selected, role = Role.RadioButton, onClick = { onSelect(option) })
-    } else {
-        Modifier
-    }
     Card(
-        modifier = Modifier.fillMaxWidth().then(selectable),
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, role = Role.RadioButton, onClick = { onSelect(option) }),
         colors = if (selected) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
         } else {
@@ -149,7 +123,7 @@ private fun CatalogCard(
         CatalogPreviewArea(item, name)
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (item.ready) RadioButton(selected = selected, onClick = null)
+                RadioButton(selected = selected, onClick = null)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(text = name, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                     Text(
@@ -179,110 +153,52 @@ private fun CatalogCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(
-                text = listOfNotNull(
-                    if (item.packageBytes > 0) stringResource(R.string.indoor_app_catalog_package, formats.indoorBytes(item.packageBytes)) else null,
-                    stringResource(if (item.aerial) R.string.indoor_app_catalog_aerial_yes else R.string.indoor_app_catalog_aerial_no),
-                ).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (item.laser) {
-                Text(
-                    text = stringResource(R.string.indoor_app_catalog_laser_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            CatalogStateRow(item, onDownload, onCancel, onDiscard)
+            CatalogStatusPill(item)
         }
     }
 }
 
+/**
+ * Der Status einer bekannten Strecke als Marke: bereit (Signalfarbe),
+ * herunterladen mit Groesse, laedt mit Prozent, angehalten, entpacken,
+ * fehlgeschlagen, neue Fassung.
+ */
 @Composable
-private fun CatalogStateRow(item: IndoorCatalogItemUi, onDownload: () -> Unit, onCancel: () -> Unit, onDiscard: () -> Unit) {
+internal fun CatalogStatusPill(item: IndoorCatalogItemUi) {
     val formats = LocalAppFormats.current
     val size = if (item.packageBytes > 0) formats.indoorBytes(item.packageBytes) else null
-    when (val s = item.state) {
-        IndoorCatalogState.NotLoaded -> OutlinedButton(onClick = onDownload) {
-            Text(
-                if (size != null) {
-                    stringResource(R.string.indoor_app_catalog_download, size)
-                } else {
-                    stringResource(R.string.indoor_app_catalog_download_unknown)
-                },
-            )
-        }
-        is IndoorCatalogState.Paused -> {
-            ProgressLine(s.doneBytes, s.totalBytes, indeterminate = false)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onDownload) { Text(stringResource(R.string.indoor_app_catalog_resume)) }
-                TextButton(onClick = onDiscard) { Text(stringResource(R.string.indoor_app_catalog_discard)) }
+    fun pct(done: Long, total: Long): Int = indoorPercent(if (total > 0) (done.toDouble() / total).toFloat() else 0f)
+    val (text, strong) = when (val s = item.state) {
+        IndoorCatalogState.Ready -> stringResource(R.string.indoor_app_home_status_ready) to true
+        is IndoorCatalogState.UpdateAvailable -> stringResource(R.string.indoor_app_home_status_update) to true
+        IndoorCatalogState.NotLoaded -> (
+            size?.let { stringResource(R.string.indoor_app_home_status_download, it) }
+                ?: stringResource(R.string.indoor_app_home_status_download_unknown)
+            ) to false
+        is IndoorCatalogState.Paused -> stringResource(R.string.indoor_app_home_status_paused, pct(s.doneBytes, s.totalBytes)) to false
+        is IndoorCatalogState.Downloading -> stringResource(R.string.indoor_app_home_status_downloading, indoorPercent(s.fraction)) to false
+        IndoorCatalogState.Installing -> stringResource(R.string.indoor_app_home_status_installing) to false
+        is IndoorCatalogState.Failed ->
+            if (s.installed) {
+                stringResource(R.string.indoor_app_home_status_ready) to true
+            } else {
+                stringResource(R.string.indoor_app_home_status_failed) to false
             }
-        }
-        is IndoorCatalogState.Downloading -> {
-            ProgressLine(s.doneBytes, s.totalBytes, indeterminate = s.totalBytes <= 0)
-            TextButton(onClick = onCancel, enabled = !s.cancelling) {
-                Text(stringResource(if (s.cancelling) R.string.indoor_app_catalog_cancelling else R.string.indoor_app_action_cancel))
-            }
-        }
-        IndoorCatalogState.Installing -> {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            MutedText(stringResource(R.string.indoor_app_catalog_installing))
-        }
-        IndoorCatalogState.Ready -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TagPill(
-                text = stringResource(R.string.indoor_app_catalog_ready),
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            MutedText(stringResource(R.string.indoor_app_catalog_ready_hint))
-        }
-        is IndoorCatalogState.UpdateAvailable -> {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TagPill(text = stringResource(R.string.indoor_app_catalog_update_tag))
-                MutedText(stringResource(R.string.indoor_app_catalog_update_hint))
-            }
-            OutlinedButton(onClick = onDownload) {
-                Text(
-                    if (size != null) {
-                        stringResource(R.string.indoor_app_catalog_update, size)
-                    } else {
-                        stringResource(R.string.indoor_app_catalog_update_unknown)
-                    },
-                )
-            }
-        }
-        is IndoorCatalogState.Failed -> {
-            NoticeBox(
-                icon = when (s.reason) {
-                    IndoorCatalogFailure.OFFLINE -> Icons.Filled.CloudOff
-                    IndoorCatalogFailure.NOT_AVAILABLE -> Icons.Filled.Info
-                    else -> Icons.Filled.Warning
-                },
-                color = if (s.reason == IndoorCatalogFailure.NOT_AVAILABLE) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
-                text = stringResource(
-                    when (s.reason) {
-                        IndoorCatalogFailure.NOT_AVAILABLE -> R.string.indoor_app_catalog_failed_not_available
-                        IndoorCatalogFailure.OFFLINE -> R.string.indoor_app_catalog_failed_offline
-                        IndoorCatalogFailure.CHECKSUM -> R.string.indoor_app_catalog_failed_checksum
-                        IndoorCatalogFailure.NO_SPACE -> R.string.indoor_app_catalog_failed_space
-                        IndoorCatalogFailure.OTHER -> R.string.indoor_app_catalog_failed_other
-                    },
-                ),
-            )
-            if (s.reason != IndoorCatalogFailure.NOT_AVAILABLE) TechnicalDetail(s.detail)
-            if (s.installed) MutedText(stringResource(R.string.indoor_app_catalog_failed_keeps_old))
-            if (s.doneBytes > 0) ProgressLine(s.doneBytes, item.packageBytes, indeterminate = false)
-            OutlinedButton(onClick = onDownload) {
-                Text(stringResource(if (s.doneBytes > 0) R.string.indoor_app_catalog_resume else R.string.indoor_app_action_retry))
-            }
-        }
+    }
+    if (strong) {
+        TagPill(
+            text = text,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+    } else {
+        TagPill(text = text)
     }
 }
 
+/** Fortschritt eines Downloads: Balken und „45 % · 35 MB von 77 MB". */
 @Composable
-private fun ProgressLine(done: Long, total: Long, indeterminate: Boolean) {
+internal fun CatalogProgressLine(done: Long, total: Long, indeterminate: Boolean) {
     val formats = LocalAppFormats.current
     if (indeterminate) {
         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -300,6 +216,18 @@ private fun ProgressLine(done: Long, total: Long, indeterminate: Boolean) {
         )
     }
 }
+
+/** Warum ein Download scheiterte, als ein Satz. */
+@Composable
+internal fun catalogFailureText(reason: IndoorCatalogFailure): String = stringResource(
+    when (reason) {
+        IndoorCatalogFailure.NOT_AVAILABLE -> R.string.indoor_app_catalog_failed_not_available
+        IndoorCatalogFailure.OFFLINE -> R.string.indoor_app_catalog_failed_offline
+        IndoorCatalogFailure.CHECKSUM -> R.string.indoor_app_catalog_failed_checksum
+        IndoorCatalogFailure.NO_SPACE -> R.string.indoor_app_catalog_failed_space
+        IndoorCatalogFailure.OTHER -> R.string.indoor_app_catalog_failed_other
+    },
+)
 
 @Composable
 private fun kindLabel(kind: CatalogRideKind): String = stringResource(

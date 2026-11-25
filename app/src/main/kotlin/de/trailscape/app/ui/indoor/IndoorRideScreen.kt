@@ -250,6 +250,7 @@ private fun StartPanelIfAny(
         onNudge = actions.onNudgeStart,
         onRelease = actions.onReleaseStart,
         onResume = actions.onTogglePause,
+        onFinish = actions.onFinish,
         compact = compact,
         modifier = modifier,
     )
@@ -410,7 +411,7 @@ private fun PortraitHud(
                 if (dayEnd != null) {
                     DayEndCard(dayEnd = dayEnd, actions = actions, modifier = cardModifier)
                 } else {
-                    PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = cardModifier)
+                    PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = cardModifier, onFinish = actions.onFinish)
                 }
             }
         }
@@ -512,7 +513,7 @@ private fun LandscapeHud(
                 if (dayEnd != null) {
                     DayEndCard(dayEnd = dayEnd, actions = actions, modifier = Modifier.align(Alignment.Center))
                 } else {
-                    PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = Modifier.align(Alignment.Center))
+                    PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = Modifier.align(Alignment.Center), onFinish = actions.onFinish)
                 }
             }
         }
@@ -749,7 +750,12 @@ private fun DemoPanel(ui: IndoorRideUi, chromeHidden: Boolean, actions: HudActio
  * Pause mit „Weiter" — dort, wo der Blick ohnehin hingeht.
  */
 @Composable
-private fun PhaseCard(session: IndoorSessionState, onTogglePause: () -> Unit, modifier: Modifier = Modifier) {
+private fun PhaseCard(
+    session: IndoorSessionState,
+    onTogglePause: () -> Unit,
+    modifier: Modifier = Modifier,
+    onFinish: (() -> Unit)? = null,
+) {
     val phase = phaseLabel(session.phase) ?: return
     Surface(color = HudColors.panelStrong, shape = RoundedCornerShape(24.dp), modifier = modifier.widthIn(max = 320.dp)) {
         Column(
@@ -763,13 +769,21 @@ private fun PhaseCard(session: IndoorSessionState, onTogglePause: () -> Unit, mo
             )
             if (session.phase == IndoorPhase.PAUSED) {
                 Spacer(modifier = Modifier.height(10.dp))
-                Button(
-                    onClick = onTogglePause,
-                    colors = ButtonDefaults.buttonColors(containerColor = HudColors.ink, contentColor = Color.Black),
-                ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(stringResource(R.string.indoor_app_ride_resume_action))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // In der Pause ein einfacher Tipp zum Beenden (danach: speichern oder verwerfen).
+                    if (onFinish != null) {
+                        TextButton(onClick = onFinish) {
+                            Text(stringResource(R.string.indoor_app_start_finish_action), color = HudColors.ink)
+                        }
+                    }
+                    Button(
+                        onClick = onTogglePause,
+                        colors = ButtonDefaults.buttonColors(containerColor = HudColors.ink, contentColor = Color.Black),
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(stringResource(R.string.indoor_app_ride_resume_action))
+                    }
                 }
             }
         }

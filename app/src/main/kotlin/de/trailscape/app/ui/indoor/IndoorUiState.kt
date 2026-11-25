@@ -22,10 +22,28 @@ import de.trailscape.core.indoor.world.WorldBuildPhase
  * diese Typen und melden Aktionen ueber Rueckrufe. Den Zustand haelt das
  * `IndoorViewModel`; Screenshot-Tests bauen die Typen von Hand.
  *
- * Ablauf (docs/indoor.md, Abschnitt 10.1):
- * Koppeln → Strecke und Modus → Welt laden → Fahren → Auswertung.
+ * Ablauf (docs/indoor/app.md, „Nutzerfluss"): Der Ablauf beginnt auf der
+ * **Startseite** [ROUTE] (Trainer-Status, Streckenliste, „Fahren"). Von dort
+ * fuehren zwei Nebenseiten weg und wieder zurueck: [PAIR] (Trainer koppeln)
+ * und [SETTINGS] (Einstellungen, Erweitert). „Fahren" fuehrt ueber [WORLD]
+ * (Strecke vorbereiten, nur wenn noetig sichtbar) in die Fahrt [RIDE] und
+ * danach in die Auswertung [SUMMARY].
  */
-enum class IndoorStage { PAIR, ROUTE, WORLD, RIDE, SUMMARY }
+enum class IndoorStage {
+    /** Startseite: Trainer, Strecke, Optionen, „Fahren". */
+    ROUTE,
+
+    /** Nebenseite der Startseite: Trainer und Schalttaster koppeln, Demo-Trainer. */
+    PAIR,
+
+    /** Nebenseite der Startseite: Fahrgefuehl, 3D-Ansicht, Erweitert. */
+    SETTINGS,
+
+    /** Strecke vorbereiten (Voranschlag, Bau, Fehler) bzw. „Bereit". */
+    WORLD,
+    RIDE,
+    SUMMARY,
+}
 
 // ---------------------------------------------------------------------------
 // Koppeln
@@ -116,15 +134,6 @@ sealed interface IndoorRouteOption {
     }
 }
 
-/** Die beiden Bereiche der Streckenwahl. */
-enum class IndoorRouteTab {
-    /** Testwelt, gespeicherte Planungen und gefahrene Touren. */
-    OWN,
-
-    /** Bekannte Strecken mit vorgebauter Welt. */
-    CATALOG,
-}
-
 /** Wer mitfaehrt. */
 sealed interface IndoorGhostOption {
     data object None : IndoorGhostOption
@@ -153,7 +162,6 @@ data class IndoorRouteUi(
     val ghostPastRideAvailable: Boolean,
     val defaultGhostWatts: Int,
     val loadingOptions: Boolean = false,
-    val tab: IndoorRouteTab = IndoorRouteTab.OWN,
 ) {
     val canContinue: Boolean get() = selected != null && (mode == IndoorMode.SIM || ergTitle != null)
 }

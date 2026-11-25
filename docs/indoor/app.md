@@ -15,7 +15,7 @@ als Soll-Zustand des Prototyps.
 - **Rohabruf der Geodaten:** wie in 8.3 vorgesehen ein eigener OkHttp-Adapter
   statt des `HttpClient`-Interface (Kacheln sind Bytes, das Interface liefert
   Text). Keine Weiterleitungen, User-Agent `Trailscape/<Version>`.
-- **Nach Prozesstod beginnt der Ablauf neu bei „Koppeln“.** Es wird weder die
+- **Nach Prozesstod beginnt der Ablauf neu auf der Startseite.** Es wird weder die
   laufende Fahrt noch die Auswahl wiederhergestellt (nur der Demo-Schalter,
   das Kettenblatt und die Gangtabelle bleiben in den SharedPreferences). Der Vertrag verlangt mehr nicht.
 - **Zurück während der Fahrt** verlässt den Ablauf nie: Die Fahrt hält an, ein
@@ -28,8 +28,14 @@ als Soll-Zustand des Prototyps.
 - **Übersetzung (11.2):** `RiderSetup.DEFAULT_REAL_GEAR_RATIO` (40/14) bleibt
   unverändert; der Slice setzt `realGearRatio` beim Start der Fahrt aus dem
   Kettenblatt (Vorgabe 48 → 48/14) und lässt den Kern unberührt.
-- **Mehr:** eigene Gruppe „Indoor“ mit „Indoor-Welten“ und „Indoor-Diagnose“;
-  beide sind Ziele im `NavHost`, keine Seiten des Mehr-Bereichs.
+- **Ablauf (10.1) seit dem Nutzerfluss vom 25.11.2026:** keine Schrittfolge
+  Koppeln → Strecke → Welt mehr, sondern eine Startseite mit Trainer-Status,
+  einer Streckenliste und einem Knopf „Fahren“; Koppeln und Einstellungen sind
+  Nebenseiten. Einzelheiten unten unter „Nutzerfluss“.
+- **Mehr:** eigene Gruppe „Indoor“ mit „Indoor-Training“ (öffnet den Ablauf)
+  und „Indoor-Diagnose“; beide sind Ziele im `NavHost`, keine Seiten des
+  Mehr-Bereichs. Die Weltverwaltung („Strecken auf dem Gerät“) steht seit dem
+  Nutzerfluss unter Indoor-Training → Einstellungen → Erweitert.
 - Die Weltverwaltung bietet verwaiste Welten einzeln zum Löschen an; ein
   Sammel-Löschen (`IndoorWorldsViewModel.deleteOrphaned`) ist vorhanden, aber
   nicht in der Oberfläche.
@@ -57,19 +63,20 @@ als Soll-Zustand des Prototyps.
   `indoor/welten` (Weltverwaltung) und `indoor/diagnose`
   (`IndoorDiagnosticsScreen`). Einstieg: Karte auf *Heute* (mit der Einheit
   des Tages, falls ERG-tauglich) und ein Eintrag im Dialog vor dem Aufzeichnen;
-  Weltverwaltung und Diagnose zusätzlich unter *Mehr*.
+  Weltverwaltung und Diagnose unter den Einstellungen des Ablaufs, die
+  Diagnose zusätzlich unter *Mehr*.
 - `IndoorViewModel` hängt am Backstack-Eintrag `indoor` und überlebt eine
   Drehung. Der Demo-Schalter und das Kettenblatt am Trainer werden in den
   SharedPreferences gemerkt.
-- Kettenblatt am Trainer: Zeile im Schritt *Koppeln* (Stepper, ein Zahn je
+- Kettenblatt am Trainer: Karte unter *Einstellungen → Fahrgefühl* (bis 25.11.2026 im Schritt *Koppeln*; Stepper, ein Zahn je
   Schritt, 28 bis 60, Vorgabe 48 laut Gründer, also die Übersetzung 48/14; Schlüssel
   `trailscape.indoor.chainring_teeth`). Ritzel fest der Zwift Cog mit 14 Zähnen
   (`IndoorViewModel.ZWIFT_COG_TEETH`). Beim Start der Fahrt bekommt die
   Sitzung `IndoorParts.riderSetup(...).copy(realGearRatio = Kettenblatt / 14)`
   — auch auf dem Ersatzweg, wenn der Kern `riderSetup` nicht liefert.
   `RiderSetup` selbst bleibt unverändert (Vertrag).
-- Gangtabelle (seit der Integration): Karte „Virtuelle Gänge“ im Schritt
-  *Koppeln* mit „Gleichmäßig (24 Gänge)“ (`VirtualGearTable.EVEN`, Vorgabe)
+- Gangtabelle (seit der Integration): Karte „Virtuelle Gänge“ unter
+  *Einstellungen → Fahrgefühl* mit „Gleichmäßig (24 Gänge)“ (`VirtualGearTable.EVEN`, Vorgabe)
   und „Wie am Rad (2 × 12)“ (`BIKE_GRX_2X12`); Schlüssel
   `trailscape.indoor.gear_table` (Enum-Name, Unbekanntes → Vorgabe). Die
   Sitzung bekommt `riderSetup(...).copy(realGearRatio = …, gearTable = …)`.
@@ -223,10 +230,10 @@ als Soll-Zustand des Prototyps.
 - [ ] Gleichzeitig von der Uhr aufgezeichnete Einheit wird beim Health-Import
       nicht zur zweiten Tour
 - [ ] Prozesstod (App im Hintergrund beenden): der Ablauf beginnt wieder bei
-      „Koppeln“, nichts hängt, Demo-Schalter und Kettenblatt sind gemerkt
+      der Startseite, nichts hängt, Demo-Schalter und Kettenblatt sind gemerkt
 - [ ] Kettenblatt 48 (Übersetzung 48/14, bzw. geänderter Wert): virtuelle Gänge fühlen sich auf
       dem KICKR mit Zwift Cog wie die echten Gänge an
-- [ ] Diagnoseseite aus dem Ablauf und aus *Mehr* erreichbar
+- [ ] Diagnoseseite aus dem Ablauf (Einstellungen) und aus *Mehr* erreichbar
 - [ ] Englisch: der gesamte Ablauf mit Systemsprache Englisch
 - [ ] Kleines Handy bzw. große Schrift mit Demo-Reglern und Hinweis: Höhenprofil
       bleibt sichtbar, nichts ist abgeschnitten
@@ -312,14 +319,14 @@ steht jetzt in einer Karte wie die übrigen.
   die Luftbild-Lizenzen aller vier Länder.
 - `filament-utils-android` ist entfallen (die Darstellung braucht es nicht).
 - Tageszeit (seit 24.11.2026, Branch `claude/indoor-himmel`): Karte
-  „Tageszeit“ im Schritt Koppeln (Automatisch / Morgen / Mittag / Abend,
+  „Tageszeit“ unter Einstellungen → 3D-Ansicht (bis 25.11.2026 im Schritt Koppeln; Automatisch / Morgen / Mittag / Abend,
   Vorgabe Automatisch, gemerkt unter `trailscape.indoor.time_of_day`). Beim
   Start der Fahrt und bei jeder Änderung `setSky(IndoorDaylight.skySetting(…))`
   mit dem Ursprung der Welt; „Automatisch“ wird während der Fahrt alle
   10 Minuten der Uhr nachgeführt. Nachts helle Dämmerung. Rechnung und
   Bilder: `docs/indoor/render.md`, „Himmel, Wolken, Tageszeit“.
 - Andere Radfahrer (seit 24.11.2026, Branch `claude/indoor-boden-leben`): Schalter
-  „Andere Radfahrer anzeigen“ / „Show other riders“ im Schritt Koppeln unter der
+  „Andere Radfahrer anzeigen“ / „Show other riders“ unter Einstellungen → 3D-Ansicht, unter der
   Tageszeit (Vorgabe an, gemerkt unter `trailscape.indoor.other_riders`). Beim Start der
   Fahrt und bei jeder Änderung `WorldRenderer.setOtherRidersEnabled(…)`; die Zahl begrenzt
   die Qualitätsstufe (`RenderSettings.otherRiders`). Rein dekorativ, kein Einfluss auf
@@ -332,7 +339,7 @@ steht jetzt in einer Karte wie die übrigen.
 
 Zweiter Bereich der Streckenwahl mit vorgebauten Welten aus einem
 GitHub-Release; alles dazu in `docs/indoor/catalog.md`. Für den Ablauf
-wichtig: Eine bereite bekannte Strecke führt mit „Weiter“ ohne Voranschlag
+wichtig: Eine bereite bekannte Strecke führt mit „Fahren“ ohne Voranschlag
 direkt in die Fahrt (`continueFromRoute` → `prepareCatalog` → `startRide`),
 gefahren wird auf `worldRouteOf(manifest)`. Bilder 116 (deutsch, alle
 Zustände) und 117 (englisch).
@@ -507,7 +514,7 @@ passt, und fährt sie im ERG-Modus.
   Am Ruhetag steht dort ehrlich „Heute ist Ruhetag“ mit „Trotzdem frei
   fahren“; am Zieltag, solange die Suche läuft oder wenn der Kern nichts
   liefert, die bisherige Einstiegskarte.
-- Im Schritt *Strecke* steht dieselbe Karte oben (`IndoorRouteScreen`,
+- Auf der Startseite steht dieselbe Karte unter dem Trainer (`IndoorHomeScreen`,
   Parameter `day`). „Fahren“ wählt Strecke, ERG-Modus und Startpunkt und geht
   direkt weiter (`IndoorViewModel.rideDaySuggestion`).
 
@@ -735,3 +742,177 @@ Im Schritt „Welt laden“ einer eigenen Tour gibt es neben dem Bau auf dem
 Gerät die Wahl „Auf dem Server in Laserqualität bauen“ — nur, wenn ein
 Sync-Server eingerichtet ist und er den Bau-Dienst meldet. Ablauf, Zustände,
 Bilder und offene Punkte: [`serverbau.md`](serverbau.md).
+
+## Nutzerfluss (25.11.2026)
+
+Rückmeldung des Inhabers: Der Aufbau des Indoor-Bereichs sei „sehr
+verwirrend“. Nicht weiter präzisiert — die Schwächen unten sind aus Code,
+Doku und Bildern selbst zusammengetragen. Vorher/Nachher-Bilder:
+`docs/indoor/bilder/nutzerfluss/`.
+
+**Was verwirrte (Bestandsaufnahme vorher)**
+
+- *Reihenfolge und Sperre:* Der Ablauf begann mit „Schritt 1 von 4:
+  Koppeln“. Ohne gekoppelten Trainer war „Weiter“ gesperrt — man sah keine
+  einzige Strecke, bevor man ein Gerät gekoppelt oder den Demo-Trainer
+  gefunden hatte. Die Geräteliste stand dabei **unter** vier Karten mit
+  Einstellungen (Kettenblatt, Gänge, Tageszeit, andere Radfahrer).
+- *Einstellungen an falscher Stelle:* Kettenblatt, Gangtabelle, Tageszeit,
+  andere Radfahrer und „Diagnose öffnen“ standen im Schritt Koppeln; „Katalog
+  aktualisieren“ samt GitHub-Hinweis in der Streckenwahl; die Weltverwaltung
+  nur unter *Mehr*.
+- *Zwei Reiter für Strecken:* „Eigene Strecken“ / „Bekannte Strecken“. Eine
+  bekannte Strecke musste man erst auf ihrer Karte laden („Laden (77 MB)“),
+  dann antippen, dann unten „Weiter“; nicht geladene Karten ließen sich gar
+  nicht wählen. Jede Karte hatte eigene Knöpfe (Laden, Fortsetzen, Verwerfen,
+  Abbrechen, Aktualisieren) und vier Zeilen Kleingedrucktes (Paket, Luftbild,
+  Laser).
+- *Drei Wege zur Einheit des Tages:* Karte oben, Modus-Schalter
+  „Freie Fahrt / Einheit des Tages“ und ein Hinweis „keine Einheit“ — auch an
+  Tagen ohne Einheit stand der Schalter da.
+- *Schrittzahlen, die nicht stimmen:* Eine bereite bekannte Strecke sprang von
+  „Schritt 2“ direkt in die Fahrt, eine Testwelt zeigte „Schritt 3 von 4“ nur
+  als „Die Welt ist fertig“.
+- *Fachbegriffe:* „Welt laden“, „Welt bauen“, „Ohne Welt fahren“, „Paket“,
+  „Katalog“, „Laser“, „Generierte Welt“, „Indoor-Welten“.
+- *Versteckte Voraussetzungen:* Bluetooth aus oder fehlende Berechtigung
+  zeigte sich erst nach dem Tipp auf „Losfahren“ als Startfehler in der
+  Fahransicht; ein gekoppelter Trainer war nur im Schritt Koppeln zu sehen.
+- *Technisches im Hauptweg:* Der Voranschlag zeigte Qualität, Belagsquelle,
+  Boden und die Host-Liste gleichrangig mit Datenmenge und Platz; der Bau auf
+  dem eigenen Server stand als zweite große Karte darunter.
+- *Pause ohne Ausweg:* Beenden ging nur über den runden Knopf (1,1 s halten);
+  in der Pause gab es nur „Weiter“.
+
+**Neuer Fluss**
+
+1. **Indoor öffnen** (Heute-Karte, Bereit-Dialog oder neu *Mehr →
+   Indoor-Training*) → **Startseite** „Indoor-Training“ (`IndoorStage.ROUTE`,
+   `IndoorHomeScreen`), Zahnrad oben rechts für Einstellungen.
+2. Oben der **Trainer**: Name mit „Ändern“, „Ohne Trainer (Demo)“, oder
+   „Kein Trainer gekoppelt“ mit „Koppeln“; „Bluetooth ist aus“ bzw.
+   „Bluetooth-Zugriff fehlt“ mit „Beheben“ (sekundenweise nachgefragt wie im
+   Geräteabschnitt). Antippen öffnet die Nebenseite **Trainer koppeln**
+   (Geräteabschnitt von indoor-ble, darunter „Ohne Trainer ausprobieren“,
+   „Fertig“).
+3. Darunter die Karte **Einheit des Tages** (unverändert; ihr „Fahren“
+   führt ohne Trainer erst zum Koppeln).
+4. **Optionen** eingeklappt in einer Zeile („Frei fahren · Du fährst
+   allein.“): Fahrweise (nur mit Einheit wählbar, sonst ein Satz) und
+   Mitfahrer.
+5. **Eine Streckenliste:** „Deine Strecken“ (Testwelt, Planungen, Touren) und
+   „Bekannte Strecken“ mit Vorschau untereinander. Jede Zeile/Karte trägt einen
+   Status: „Bereit“, „Wird einmal vorbereitet“, „Herunterladen · 77 MB“,
+   „Lädt · 45 %“, „Angehalten · 15 %“, „Wird entpackt“, „Fehlgeschlagen“,
+   „Neue Fassung“. Jede Strecke ist wählbar, auch eine noch nicht geladene.
+6. Unten fest: **ein Satz, was fehlt**, mit dem Knopf, der es behebt
+   („Koppele zuerst deinen Trainer.“ [Koppeln], „Wähle oben eine Strecke.“,
+   „… muss einmal heruntergeladen werden (77 MB).“ [Herunterladen], Fortschritt
+   mit [Abbrechen], [Fortsetzen]/[Verwerfen], Fehler mit [Erneut versuchen],
+   „Bereit: …“), darunter der große Knopf **„Fahren“** (56 dp), nur aktiv,
+   wenn Trainer und Strecke bereit sind (`IndoorReadiness.kt`,
+   `indoorCanRide`).
+7. „Fahren“ = bisher „Weiter“ (`continueFromRoute`, unverändert bis auf die
+   zusätzliche Prüfung auf einen Trainer): bereite bekannte Strecke bzw.
+   generierte Welt → direkt in die Fahrt; Testwelt und eigene Strecke mit Welt
+   → „Bereit zum Fahren“ mit Quellenangaben und „Losfahren“; eigene Strecke
+   ohne Welt → **Strecke vorbereiten** (Datenmenge, Platz, Datenschutz;
+   Qualität, Belag, Boden und Hosts unter „Einzelheiten anzeigen“; Server-Bau
+   eingeklappt) → „Vorbereiten“ → Fortschritt → „Losfahren“.
+8. **Fahrt:** HUD wie bisher. Neu: In der Pause steht auf der
+   Startpunkt-Karte (bzw. der Pausenkarte) neben „Weiter“ der Knopf
+   **„Fahrt beenden“** — ein Tipp, weil die Fahrt ohnehin steht. Während der
+   Fahrt bleibt Beenden beim Halten des runden Knopfs; Zurück fragt wie
+   bisher „Weiterfahren / Fahrt beenden“. Danach Auswertung mit
+   „Speichern“/„Verwerfen“ (unverändert).
+
+**Was umgezogen ist** (nichts entfällt)
+
+| Funktion | vorher | jetzt |
+|---|---|---|
+| Kettenblatt, virtuelle Gänge | Schritt Koppeln | Einstellungen → Fahrgefühl |
+| Tageszeit, andere Radfahrer | Schritt Koppeln | Einstellungen → 3D-Ansicht |
+| Diagnose | Schritt Koppeln, Mehr | Einstellungen → Erweitert, Mehr |
+| Weltverwaltung | Mehr („Indoor-Welten“) | Einstellungen → Erweitert („Strecken auf dem Gerät“) |
+| Katalog aktualisieren + Hinweis | Streckenwahl, Reiter Bekannte Strecken | Einstellungen → Erweitert („Liste der bekannten Strecken aktualisieren“) |
+| Laden/Fortsetzen/Verwerfen/Abbrechen/Aktualisieren | Knöpfe auf jeder Katalogkarte | unten über „Fahren“ für die gewählte Strecke |
+| Demo-Trainer | Schritt Koppeln (oben) | Trainer koppeln (unten) „Ohne Trainer ausprobieren“ |
+| Modus, Mitfahrer | Schritt Strecke | Startseite → Optionen (eingeklappt) |
+| Server-Bau | große Karte im Schritt Welt | eingeklappt in „Strecke vorbereiten“ |
+| Mehr → Indoor | Indoor-Welten, Indoor-Diagnose | Indoor-Training, Indoor-Diagnose |
+
+**Wörter:** „3D-Ansicht“ statt „Welt“ im Hauptweg („Vorbereiten“ statt
+„Welt laden“/„Welt bauen“, „Ohne 3D-Ansicht fahren“, „Die 3D-Ansicht wird
+erstellt“), „Herunterladen“ statt „Laden“/„Paket“, „Liste der bekannten
+Strecken“ statt „Katalog“, „Extra detailliert“ statt „Laser“, „Generierte
+Strecke“ statt „Generierte Welt“, „Strecken auf dem Gerät“ statt
+„Indoor-Welten“. In Weltverwaltung, Server-Bau und Fehlertexten der
+Darstellung steht teils noch „Welt“ (Nebenwege, eigene Fachleute-Texte).
+Englisch mitgepflegt (`values-en`).
+
+**Was bewusst gleich blieb**
+
+- Der Startpfad der Fahrt: `continueFromRoute` → `prepareWorld` →
+  `commitWorld`/`startRide` ist logisch unverändert (einzige Ergänzung: ohne
+  Trainer kehrt `continueFromRoute` sofort zurück, wie früher der gesperrte
+  Schritt Koppeln). Auch `autoStart` gilt weiter nur für Katalog und
+  generierte Welt; die Seite „Bereit zum Fahren“ für Testwelt und fertige
+  eigene Welten bleibt, weil dort der Server-Bau angeboten wird
+  (offene Entscheidung unten). `IndoorRenderEntry.kt`, `render/**`,
+  Weltbau, Katalogdateien, `WORLD_BUILDER_ID` unberührt.
+- Die Karte „Einheit des Tages“, HUD-Aufbau, Startpunkt-Karte, Auswertung.
+
+**Umsetzung**
+
+- `IndoorStage`: `ROUTE` ist der Anfang (Startseite), neu `SETTINGS`; `PAIR`
+  ist eine Nebenseite. `IndoorViewModel.openPair`, `openSettings`,
+  `closeSubPage`, `ensureRouteOptions`; `back()` auf der Startseite verlässt
+  den Ablauf. Der Reiter `IndoorRouteTab` ist entfallen.
+- `IndoorHomeScreen.kt` (ersetzt `IndoorRouteScreen.kt`),
+  `IndoorSettingsScreen.kt`, `IndoorReadiness.kt` (rein, getestet),
+  `IndoorCatalogList` statt `IndoorCatalogSection`, `IndoorPairScreen`
+  schlank, `IndoorWorldScreen` mit „Einzelheiten“ und eingeklapptem
+  Server-Bau, `IndoorStartPanel`/`PhaseCard` mit „Fahrt beenden“ in der Pause.
+- Tests: `IndoorReadinessTest` (Trainer, Streckenzustände, „Fahren“),
+  `IndoorViewModelDemoFlowTest.startseiteIstDerAnfangUndFahrenBrauchtEinenTrainer`;
+  die Ablauftests beginnen jetzt auf der Startseite. Bilder aus
+  `IndoorScreenshotTest` (`nutzerfluss-nachher-*`).
+
+**Bilder** (`docs/indoor/bilder/nutzerfluss/`): `vorher-*` aus dem Stand vor
+dem Umbau (gleiche Tests, Commit `f0b4d87`), `nachher-01` nichts bereit,
+`-02` Trainer fehlt, `-03` Bluetooth aus, `-04` Herunterladen, `-05` lädt,
+`-06` bereit (Demo), `-07` Download-Fehler, `-08` eigene Strecke wird
+vorbereitet, `-09` Einstellungen, `-10`/`-11` englisch, `-12` Pause mit
+„Fahrt beenden“, dazu Koppeln, Strecke vorbereiten und Bereit.
+
+**Offen für den Inhaber**
+
+- Testwelt und eigene Strecken mit fertiger Welt zeigen nach „Fahren“ noch
+  die Seite „Bereit zum Fahren“ (ein Tipp mehr als bei bekannten Strecken).
+  Direkt starten wäre einfacher, nähme aber dem Server-Bau „neu in
+  Laserqualität“ seinen Platz und änderte den Startpfad — bewusst
+  zurückgestellt, solange die Absturzsuche beim Tippen auf „Fahren“ läuft.
+- Soll eine fertig geladene bekannte Strecke von selbst losfahren (früher
+  bei der Einheit des Tages so), oder auf „Fahren“ warten (jetzt bei
+  manueller Wahl)?
+- Beschriftungen unter den runden HUD-Knöpfen (Geräte, Kamera, Beenden,
+  Pause) würden die Bedeutung klarer machen, kosten aber Platz auf kleinen
+  Geräten (Bild 108) — nicht umgesetzt.
+- „3D-Ansicht“ als Wort für die Welt: passt es, oder lieber „3D-Strecke“?
+
+**Auf dem Gerät zu prüfen**
+
+- [ ] Erster Start ohne Trainer: Startseite zeigt „Kein Trainer gekoppelt“,
+      „Fahren“ gesperrt mit Satz und „Koppeln“; nach dem Koppeln steht der
+      Name oben und „Fahren“ ist aktiv
+- [ ] Bluetooth in den Schnelleinstellungen aus- und einschalten, während die
+      Startseite offen ist: Hinweis erscheint und verschwindet binnen einer
+      Sekunde
+- [ ] Bekannte Strecke wählen, unten „Herunterladen“, Fortschritt, Abbrechen,
+      Fortsetzen; danach „Bereit: …“ und „Fahren“
+- [ ] Einstellungen: alle Werte wie vorher gemerkt, Tageszeit wirkt in der
+      nächsten Fahrt; „Strecken auf dem Gerät“ und „Diagnose“ öffnen und
+      kehren zur Einstellungsseite zurück
+- [ ] Pause → „Fahrt beenden“ → Auswertung → Speichern/Verwerfen
+- [ ] TalkBack: Trainer-Karte, Status der Strecken und der gesperrte
+      „Fahren“-Knopf werden verständlich vorgelesen

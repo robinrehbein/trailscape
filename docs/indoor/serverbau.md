@@ -168,7 +168,11 @@ NRW, 15–16 MB/km BW) und keinen Heap über die 256 MB der App hinaus.
   über `CatalogStore.installPackage`. Test `IndoorServerBuildTest` gegen
   einen gefälschten Bau-Dienst mit dem echten Paket der Testwelt.
 - Sichtbar nur, wenn ein Sync-Server eingerichtet ist **und** er den
-  Bau-Dienst meldet; sonst bleibt der Schritt wie bisher. Auch bei schon
+  Bau-Dienst meldet; sonst bleibt der Schritt wie bisher. Seit dem
+  Nutzerfluss (25.11.2026, docs/indoor/app.md) heißt der Schritt „Strecke
+  vorbereiten“ und der Server-Bau steht dort **eingeklappt** hinter „Weitere
+  Möglichkeit: auf deinem Server bauen“; läuft ein Auftrag oder ist er
+  gescheitert, steht er offen (oben bzw. an seiner Stelle). Auch bei schon
   vorhandener Gerätewelt wird „neu in Laserqualität“ angeboten („Das Paket
   ersetzt die auf dem Gerät gebaute Welt“).
 - Fortschritt: Senden → Warteschlange (Platz) → Bau (%) → Download (MB) →
