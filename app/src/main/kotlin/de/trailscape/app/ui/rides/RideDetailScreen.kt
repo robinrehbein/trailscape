@@ -102,6 +102,8 @@ import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.core.Confidence
 import de.trailscape.core.DecouplingResult
 import de.trailscape.core.Ride
+import de.trailscape.core.TrackOrigin
+import de.trailscape.core.classifyTrackOrigin
 import de.trailscape.core.RideCurve
 import de.trailscape.core.RouteComparison
 import de.trailscape.core.RideLoad
@@ -342,6 +344,18 @@ internal fun RideDetailScreen(
                         RouteComparisonCard(comparison = it, onOpenRide = appViewModel::requestRideDetail)
                     }
                     impact?.let { RideImpactCard(rideImpactLines(it, LocalCoreTexts.current)) }
+                }
+
+                // Idee 7: Tour <-> Planung umwandeln (siehe PlanFlip.kt).
+                if (!ride.indoor && ride.points.size >= 2) {
+                    PlanFlipSection(
+                        planned = ride.planned,
+                        looksLikeRoute = remember(ride.id, ride.updatedAt) {
+                            classifyTrackOrigin(ride.points) == TrackOrigin.PLANNED_ROUTE
+                        },
+                        rideName = ride.name,
+                        onFlip = { toPlanned -> appViewModel.setRidePlanned(ride.id, toPlanned) },
+                    )
                 }
 
                 if (ride.points.size >= 2) {

@@ -81,7 +81,14 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   Bild teilen (Story 9:16 oder Quadrat, mit Spur, Höhenprofil und Kennzahlen;
   Start und Ziel ab Werk ausgeblendet; auch direkt vom Tourblatt der Karte),
   GPX importieren (z. B. aus Komoot oder
-  Strava)
+  Strava). Dateien ohne echte Zeitstempel (nur Strecke: `<rte>` oder `<trk>`
+  ohne `<time>`, auch mit nur wenigen oder lauter gleichen Stempeln) gelten als
+  **Planung**: Sie öffnen auf der Karte, zählen nicht in Statistik,
+  Wochenfortschritt, Fitness und Entdeckt-Kacheln und lassen sich abfahren
+  (Abbiegehinweise aus der Geometrie, ohne Straßennamen). Beim Teilen/Öffnen
+  sagt ein Dialog, als was die Datei erkannt wurde, und dreht es einmalig um;
+  in der Tourdetailansicht wandelt „In Planung umwandeln“ bzw. „Als gefahrene
+  Tour übernehmen“ in beide Richtungen um (Regeln: `TrackOrigin.kt` in `:core`)
 - Optional zu Strava hochladen: von Hand in der Tour („Zu Strava hochladen“,
   danach „Auf Strava ansehen“) oder automatisch nach dem Beenden einer
   Aufzeichnung (Schalter unter Einstellungen → Strava, ab Werk aus). Ohne
