@@ -55,6 +55,7 @@ import de.trailscape.core.indoor.world.RenderDeviceInfo
 import de.trailscape.core.indoor.world.RenderFailure
 import de.trailscape.core.indoor.world.RenderSettings
 import de.trailscape.core.indoor.world.RenderStats
+import de.trailscape.core.indoor.world.RenderTiers
 import de.trailscape.core.indoor.world.SkySetting
 import de.trailscape.core.indoor.world.WorldRendererListener
 import de.trailscape.core.indoor.world.WorldState
@@ -63,7 +64,10 @@ import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import kotlinx.coroutines.withContext
 
 /** Was die Diagnoseseite gerade zeigt. */
@@ -100,6 +104,11 @@ internal fun DiagnosticsScreen(onBack: () -> Unit, modifier: Modifier = Modifier
     var scene by remember { mutableStateOf(DiagScene.NONE) }
     var testWorldNote by remember { mutableStateOf<String?>(null) }
     var testWorldBusy by remember { mutableStateOf(false) }
+    // Bildratenmessung je Stufe (RenderBench)
+    var benchJob by remember { mutableStateOf<Job?>(null) }
+    var benchLabel by remember { mutableStateOf<String?>(null) }
+    var benchPercent by remember { mutableIntStateOf(0) }
+    var benchResults by remember { mutableStateOf<List<BenchResult>>(emptyList()) }
 
     var safeMode by remember { mutableStateOf(RenderGuard.isSafeMode(context)) }
     val renderer = remember(generation) { FilamentWorldRenderer(context) }
@@ -297,8 +306,98 @@ internal fun DiagnosticsScreen(onBack: () -> Unit, modifier: Modifier = Modifier
             // Messwerte und Geraet
             Eyebrow(stringResource(R.string.indoor_render_diag_stats))
             InfoCard(rows = statsRows(renderer.lastStats))
+            Eyebrow(stringResource(R.string.render2_diag_res_title))
+            ResolutionCard(renderer.resolution)
             Eyebrow(stringResource(R.string.indoor_render_diag_device))
             InfoCard(rows = deviceRows(renderer.info))
+
+            // Bildrate je Stufe: Testwelt, Probefahrt, je 30 s Standard / Hoch / Ultra
+            Eyebrow(stringResource(R.string.render2_diag_bench_title))
+            Text(
+                stringResource(R.string.render2_diag_bench_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val tierLabels = listOf(
+                stringResource(R.string.render2_graphics_standard),
+                stringResource(R.string.render2_graphics_high),
+                stringResource(R.string.render2_graphics_ultra),
+            )
+            if (benchJob == null) {
+                Button(onClick = {
+                    benchResults = emptyList()
+                    benchJob = scope.launch {
+                        try {
+                            if (scene == DiagScene.NONE) start(DiagScene.TEST_WORLD)
+                            riding = true
+                            // Auf die Welt warten (hoechstens 90 s)
+                            var waited = 0
+                            while (status !is DiagStatus.Ready && status !is DiagStatus.Failed && waited < 900) {
+                                delay(100)
+                                waited++
+                            }
+                            if (status !is DiagStatus.Ready) return@launch
+                            val tiers = listOf(
+                                RenderSettings.forQuality(IndoorQuality.MEDIUM),
+                                RenderTiers.high(),
+                                RenderTiers.ultra(),
+                            )
+                            for ((i, preset) in tiers.withIndex()) {
+                                settings = preset
+                                renderer.setSettings(preset)
+                                benchLabel = tierLabels[i]
+                                val progressJob = launch {
+                                    while (true) {
+                                        benchPercent = ((renderer.benchProgress() ?: 0.0) * 100).toInt()
+                                        delay(500)
+                                    }
+                                }
+                                val r = suspendCancellableCoroutine { cont ->
+                                    renderer.startBench(tierLabels[i]) { res -> if (cont.isActive) cont.resume(res) }
+                                    cont.invokeOnCancellation { renderer.cancelBench() }
+                                }
+                                progressJob.cancel()
+                                benchResults = benchResults + r
+                            }
+                        } finally {
+                            benchLabel = null
+                            benchJob = null
+                        }
+                    }
+                }) { Text(stringResource(R.string.render2_diag_bench_start)) }
+            } else {
+                Text(
+                    stringResource(R.string.render2_diag_bench_running, benchLabel ?: "…", benchPercent),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedButton(onClick = { benchJob?.cancel() }) { Text(stringResource(R.string.render2_diag_bench_cancel)) }
+            }
+            if (benchResults.isNotEmpty()) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(CardPadding), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val unknown = stringResource(R.string.render2_diag_bench_gpu_unknown)
+                        val unavailable = stringResource(R.string.render2_diag_res_unavailable)
+                        benchResults.forEach { r ->
+                            val row = stringResource(
+                                R.string.render2_diag_bench_row,
+                                r.label, r.meanMs, r.meanFps, r.low1Ms, r.low1Fps,
+                                r.gpuMeanMs?.let { String.format(Locale.ROOT, "%.1f ms", it) } ?: unknown,
+                            )
+                            val res = stringResource(
+                                R.string.render2_diag_bench_res,
+                                r.dynScaleMean?.let { "${(it * 100).toInt()} %" } ?: unavailable,
+                                if (r.surfaceW > 0) "${r.surfaceW} × ${r.surfaceH} px" else unavailable,
+                            )
+                            Text("$row · $res", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Text(
+                            stringResource(R.string.render2_diag_bench_note),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
 
             // Voreinstellungen
             Eyebrow(stringResource(R.string.indoor_render_diag_presets))
@@ -307,6 +406,8 @@ internal fun DiagnosticsScreen(onBack: () -> Unit, modifier: Modifier = Modifier
                     R.string.indoor_render_diag_preset_low to RenderSettings.forQuality(IndoorQuality.LOW),
                     R.string.indoor_render_diag_preset_medium to RenderSettings.forQuality(IndoorQuality.MEDIUM),
                     R.string.indoor_render_diag_preset_high to RenderSettings.forQuality(IndoorQuality.HIGH),
+                    R.string.render2_diag_preset_high to RenderTiers.high(),
+                    R.string.render2_diag_preset_ultra to RenderTiers.ultra(),
                     R.string.indoor_render_diag_preset_safe to RenderSettings.SAFE,
                 ).forEach { (label, preset) ->
                     FilterChip(
@@ -341,6 +442,16 @@ internal fun DiagnosticsScreen(onBack: () -> Unit, modifier: Modifier = Modifier
                     Slider(
                         value = settings.resolutionScale.toFloat(),
                         onValueChange = { settings = settings.copy(resolutionScale = (it * 20).toInt() / 20.0) },
+                        onValueChangeFinished = { renderer.setSettings(settings) },
+                        valueRange = 0.5f..1f,
+                    )
+                    Text(
+                        stringResource(R.string.render2_diag_res_min, (settings.dynamicResolutionMinScale * 100).toInt()),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Slider(
+                        value = settings.dynamicResolutionMinScale.toFloat(),
+                        onValueChange = { settings = settings.copy(dynamicResolutionMinScale = (it * 20).toInt() / 20.0) },
                         onValueChangeFinished = { renderer.setSettings(settings) },
                         valueRange = 0.5f..1f,
                     )
@@ -453,4 +564,35 @@ private fun settingSwitches(s: RenderSettings): List<Triple<Int, Boolean, (Boole
     Triple(R.string.indoor_render_diag_switch_wind, s.wind) { v -> s.copy(wind = v) },
     Triple(R.string.indoor_render_diag_switch_birds, s.birds) { v -> s.copy(birds = v) },
     Triple(R.string.indoor_render_diag_switch_riders, s.otherRiders > 0) { v -> s.copy(otherRiders = if (v) 3 else 0) },
+    // Grafikstufen Hoch/Ultra — jeder Effekt einzeln
+    Triple(R.string.render2_diag_switch_reflections, s.reflections) { v -> s.copy(reflections = v) },
+    Triple(R.string.render2_diag_switch_taa, s.temporalAA) { v -> s.copy(temporalAA = v) },
+    Triple(R.string.render2_diag_switch_terrain_shadows, s.terrainShadows) { v ->
+        s.copy(terrainShadows = v, shadowFarM = if (v) RenderTiers.ULTRA_SHADOW_FAR_M else 300.0)
+    },
+    Triple(R.string.render2_diag_switch_stable_shadows, s.stableShadows) { v -> s.copy(stableShadows = v, shadowCascades = if (v) 4 else 3) },
+    Triple(R.string.render2_diag_switch_white_balance, s.whiteBalance) { v -> s.copy(whiteBalance = v) },
+    Triple(R.string.render2_diag_switch_vignette, s.vignette) { v -> s.copy(vignette = v) },
+    Triple(R.string.render2_diag_switch_effects_high, s.effectQuality >= 2) { v -> s.copy(effectQuality = if (v) 2 else 0) },
 )
+
+/** Zeichenflaeche, Faktor der dynamischen Aufloesung und tatsaechlich gezeichnete Pixel. */
+@Composable
+private fun ResolutionCard(r: ResolutionInfo?) {
+    val unavailable = stringResource(R.string.render2_diag_res_unavailable)
+    val surface = r?.takeIf { it.surfaceW > 0 }?.let { stringResource(R.string.render2_diag_res_px, it.surfaceW, it.surfaceH) } ?: ""
+    val dynamic = when {
+        r == null -> ""
+        !r.dynamicEnabled -> stringResource(R.string.render2_diag_res_off)
+        r.dynScale == null -> unavailable
+        else -> stringResource(R.string.render2_diag_res_percent, (r.dynScale * 100).toInt())
+    }
+    val rendered = r?.let { i -> i.renderW?.let { w -> stringResource(R.string.render2_diag_res_px, w, i.renderH ?: 0) } ?: unavailable } ?: ""
+    InfoCard(
+        rows = listOf(
+            R.string.render2_diag_res_surface to surface,
+            R.string.render2_diag_res_dynamic to dynamic,
+            R.string.render2_diag_res_rendered to rendered,
+        ),
+    )
+}

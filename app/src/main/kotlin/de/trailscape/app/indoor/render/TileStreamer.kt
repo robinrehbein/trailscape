@@ -97,7 +97,14 @@ internal class TileStreamer(
         startReads(distM)
         unload(distM)
         if (visibilityDirty) applyVisibility(settings)
+        // Gelaendeschatten (Stufe Ultra) umgeschaltet: geladene Kacheln neu einstellen.
+        if (terrainShadowsApplied != core.terrainCastsShadows) {
+            terrainShadowsApplied = core.terrainCastsShadows
+            for (slot in slots.values) (slot as? Slot.Ready)?.loaded?.applyShadows()
+        }
     }
+
+    private var terrainShadowsApplied = false
 
     private fun continueLoading() {
         val id = loadingId ?: return
