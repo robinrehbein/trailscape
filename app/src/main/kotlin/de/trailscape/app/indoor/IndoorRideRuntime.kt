@@ -377,8 +377,9 @@ class IndoorRideRuntime(
     }
 
     /**
-     * Die App verlaesst den Vordergrund: Die Fahrt pausiert (kein
-     * Vordergrunddienst im Prototyp, docs/indoor.md 11.2 Nr. 4).
+     * Die App verlaesst den Vordergrund und die Fahrt soll dabei nicht
+     * weiterlaufen (Schalter „Im Hintergrund weiterfahren" aus oder kein
+     * Vordergrunddienst, docs/indoor/hintergrund.md): Die Fahrt pausiert.
      */
     fun onAppBackground() = enqueue { s ->
         if (s.state.phase == IndoorPhase.RUNNING || s.state.phase == IndoorPhase.AUTO_PAUSED) {

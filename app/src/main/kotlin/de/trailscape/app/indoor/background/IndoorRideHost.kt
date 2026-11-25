@@ -52,6 +52,10 @@ class IndoorRideHost {
          * wie frueher, und die Oberflaeche verwirft sie beim Aufraeumen.
          */
         @Volatile var serviceFailed: Boolean = false
+
+        /** Wird gerade ohne Oberflaeche abgeschlossen (doppeltes „Beenden" wirkt einmal). */
+        @Volatile var closing: Boolean = false
+            internal set
     }
 
     /** Ergebnis eines Abschlusses ohne Oberflaeche — fuer die Benachrichtigung danach. */
@@ -105,13 +109,19 @@ class IndoorRideHost {
      */
     suspend fun finishFromNotification(): Outcome? {
         val current = _ride.value ?: return null
+        if (current.closing) return null
         uiFinisher?.let { finish ->
             finish()
             return Outcome.ShownInApp
         }
+        current.closing = true
         val record = current.runtime.finish()
-        end(current)
-        val outcome = current.closer.complete(record, current.runtime.state.value.session)
+        // Erst speichern, dann abmelden: Bis dahin bleibt der Dienst im Vordergrund.
+        val outcome = try {
+            current.closer.complete(record, current.runtime.state.value.session)
+        } finally {
+            end(current)
+        }
         if (outcome is Outcome.Saved) {
             current.journal?.discard()
             _savedRides.tryEmit(outcome.rideId)

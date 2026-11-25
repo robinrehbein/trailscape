@@ -897,6 +897,8 @@ gibt, werden zum Löschen angeboten, nie stillschweigend gelöscht.
 4. **Fahrt im Hintergrund.** Der Prototyp hat keinen Vordergrunddienst: Wer
    die App verlässt, pausiert die Fahrt. Soll sie weiterlaufen
    (`connectedDevice`-Dienst, Play-Prüfung)?
+   *Entschieden 25.11.2026:* Sie läuft weiter (abschaltbar), siehe
+   `docs/indoor/hintergrund.md`.
 5. **Reale Übersetzung.** Vorgabe 40 Zähne vorn auf dem 14er-Cog; das
    Kettenblatt des Gründers gehört in die Einstellungen.
 6. **Crr-Tabelle.** Die Werte sind Annahmen — nach den ersten Fahrten

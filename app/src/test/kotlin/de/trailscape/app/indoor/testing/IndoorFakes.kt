@@ -533,6 +533,9 @@ class FakeIndoorSession(val config: IndoorSessionConfig) : IndoorSession {
         current = buildState(lastNow ?: 0L)
     }
 
+    override fun recordedPointsFrom(fromIndex: Int): List<TrackPoint> =
+        points.subList(fromIndex.coerceIn(0, points.size), points.size).toList()
+
     override fun finish(): IndoorRideRecord {
         finishCalls++
         record?.let { return it }

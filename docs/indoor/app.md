@@ -15,8 +15,10 @@ als Soll-Zustand des Prototyps.
 - **Rohabruf der Geodaten:** wie in 8.3 vorgesehen ein eigener OkHttp-Adapter
   statt des `HttpClient`-Interface (Kacheln sind Bytes, das Interface liefert
   Text). Keine Weiterleitungen, User-Agent `Trailscape/<Version>`.
-- **Nach Prozesstod beginnt der Ablauf neu auf der Startseite.** Es wird weder die
-  laufende Fahrt noch die Auswahl wiederhergestellt (nur der Demo-Schalter,
+- **Nach Prozesstod beginnt der Ablauf neu auf der Startseite.** Die
+  unterbrochene Fahrt wird seit 25.11.2026 als Tour „(wiederhergestellt)"
+  gespeichert (`docs/indoor/hintergrund.md`); fortgesetzt wird sie nicht, und
+  die Auswahl wird nicht wiederhergestellt (nur der Demo-Schalter,
   das Kettenblatt und die Gangtabelle bleiben in den SharedPreferences). Der Vertrag verlangt mehr nicht.
 - **Zurück während der Fahrt** verlässt den Ablauf nie: Die Fahrt hält an, ein
   Dialog bietet „Weiterfahren“ oder „Fahrt beenden“ (dann Auswertung, dort
@@ -44,7 +46,9 @@ als Soll-Zustand des Prototyps.
 
 - Der Trainer meldet Telemetrie mit höchstens wenigen Hz; die 10-Hz-Schleife
   hält jeweils den letzten Wert vor.
-- Das Verlassen des Vordergrunds (`ON_STOP`) pausiert die Fahrt. Hat erst der
+- Das Verlassen des Vordergrunds (`ON_STOP`) pausiert die Fahrt nur noch,
+  wenn „Im Hintergrund weiterfahren" aus ist oder der Vordergrunddienst nicht
+  starten konnte (seit 25.11.2026, `docs/indoor/hintergrund.md`). Hat erst der
   Hintergrund sie angehalten, läuft sie beim Zurückkehren (`ON_START`) von
   selbst weiter; eine Pause des Nutzers bleibt bestehen.
 - Ein Ausfall eines fremden Teils (Kern, Weltbau, Funk, Darstellung) ist ein
@@ -112,8 +116,9 @@ als Soll-Zustand des Prototyps.
   Telemetrie und Schaltereignisse vom BLE-Thread werden nur abgelegt. Jeder
   Aufruf fremder Teile steht in `try/catch` und meldet `PART_FAILED`; die
   Schleife läuft weiter. Puls über `BleSensors` mit `BleNutzer.INDOOR`.
-- Die App im Hintergrund pausiert die Fahrt; es gibt keinen Vordergrunddienst.
-  Der Bildschirm bleibt während der Fahrt an.
+- Fahrt im Hintergrund: Vordergrunddienst `connectedDevice`, Sicherung gegen
+  Prozesstod, Schalter in den Einstellungen (Vorgabe an); Einzelheiten in
+  `docs/indoor/hintergrund.md`. Der Bildschirm bleibt während der Fahrt an.
 - Demo-Trainer: Regler Leistung (Vorgabe 180 W, 0 bis 600) und Trittfrequenz
   (Vorgabe 85, 0 bis 130) im HUD.
 - Speichern: `IndoorRideRecord` wird zu `Ride(indoor = true, planned = false)`.
@@ -190,7 +195,8 @@ als Soll-Zustand des Prototyps.
 2. **Luftbild:** nur Länder aus dem Register (`aerialSources`); sonst erzeugte
    Bodentextur.
 3. **APK-Größe:** alle ABIs hinnehmen, keine Beschränkung im Prototyp.
-4. **Hintergrund:** keiner; das Verlassen der App pausiert die Fahrt.
+4. **Hintergrund:** seit 25.11.2026 läuft die Fahrt im Vordergrunddienst
+   weiter (abschaltbar), siehe `docs/indoor/hintergrund.md`.
 5. **Übersetzung:** einstellbares Kettenblatt (Vorgabe 48 Zähne statt der
    40 aus `RiderSetup.DEFAULT_REAL_GEAR_RATIO`) auf dem 14er-Zwift-Cog.
 6. **Crr-Tabelle:** fest, nicht einstellbar.
@@ -208,8 +214,10 @@ als Soll-Zustand des Prototyps.
 - [ ] Zwift Click und Pulsgurt gleichzeitig mit dem Trainer
 - [ ] Drehung während Koppeln, Welt laden, Fahren und Auswertung: Zustand und
       Fahrt bleiben erhalten
-- [ ] App in den Hintergrund und zurück: die Fahrt pausiert und setzt auf
-      Wunsch fort; der Trainer fällt nicht dauerhaft aus
+- [ ] App in den Hintergrund und zurück: die Fahrt läuft weiter (mit
+      „Im Hintergrund weiterfahren" aus: pausiert und setzt fort); der
+      Trainer fällt nicht dauerhaft aus — Einzelheiten in
+      `docs/indoor/hintergrund.md`
 - [ ] Bildschirm bleibt während der Fahrt an, danach nicht mehr
 - [ ] Fehleranzeigen: Trainer weg, Welt fehlt oder defekt, Darstellung
       meldet `onFailure`, kein Netz beim Laden; jeweils verständliche Meldung,

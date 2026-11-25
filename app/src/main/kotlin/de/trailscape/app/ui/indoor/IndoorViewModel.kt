@@ -117,9 +117,13 @@ import kotlinx.coroutines.withContext
  * An den Backstack-Eintrag `indoor` gebunden: ueberlebt Drehung, endet mit dem
  * Verlassen des Ablaufs ([onCleared] verwirft eine laufende Fahrt ohne
  * Aufzeichnung und gibt Trainer, Schalttaster, Puls und Darstellung frei).
- * **Nach einem Prozesstod** beginnt der Ablauf neu bei „Koppeln" — eine
- * Fahrt wird nicht wiederhergestellt (ohne Vordergrunddienst pausiert sie im
- * Hintergrund ohnehin, docs/indoor.md 11.2 Nr. 4). Gemerkt wird allein der
+ * **Fahrt im Hintergrund** (docs/indoor/hintergrund.md): Mit „Im
+ * Hintergrund weiterfahren" gehoert eine laufende Fahrt dem [rideHost] und
+ * dem Vordergrunddienst; [onCleared] parkt sie dann, statt sie zu verwerfen,
+ * und ein neues ViewModel uebernimmt sie beim Anlegen.
+ * **Nach einem Prozesstod** beginnt der Ablauf neu auf der Startseite — die
+ * unterbrochene Fahrt wird aus der Sicherung ([journal]) beim Start der App
+ * zur Tour „(wiederhergestellt)", nicht fortgesetzt. Gemerkt wird allein der
  * Demo-Schalter ([KEY_DEMO_TRAINER]), das Kettenblatt am Trainer
  * ([KEY_CHAINRING_TEETH]), die Gangtabelle ([KEY_GEAR_TABLE]) und die
  * Tageszeit der 3D-Welt ([KEY_TIME_OF_DAY]), alle im [store].
@@ -1565,6 +1569,7 @@ class IndoorViewModel(
         val host = rideHost ?: return
         val ride = host.ride.value ?: return
         val parked = ride.parked as? ParkedRide ?: return
+        if (ride.closing || ride.runtime.state.value.finished) return
         ride.parked = null
         val runtime = ride.runtime
         hostRide = ride

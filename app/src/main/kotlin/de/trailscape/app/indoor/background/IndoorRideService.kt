@@ -18,6 +18,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import de.trailscape.app.R
+import de.trailscape.app.data.AppServices
 import de.trailscape.app.i18n.languageOf
 import de.trailscape.app.i18n.localized
 import kotlinx.coroutines.CoroutineScope
@@ -79,7 +80,9 @@ class IndoorRideService : Service() {
             ACTION_PAUSE -> host.ride.value?.runtime?.pause()
             ACTION_RESUME -> host.ride.value?.runtime?.resume()
             ACTION_FINISH -> {
-                scope.launch {
+                // Nicht im Bereich des Dienstes: Der beendet sich, sobald die
+                // Fahrt endet, und braeche sonst das Speichern ab.
+                AppServices.appScope.launch(Dispatchers.Main.immediate) {
                     val outcome = runCatching { host.finishFromNotification() }.getOrNull()
                     outcome?.let { postOutcome(this@IndoorRideService, it) }
                 }
