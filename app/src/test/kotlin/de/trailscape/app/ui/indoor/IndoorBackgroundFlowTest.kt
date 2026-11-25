@@ -144,6 +144,8 @@ class IndoorBackgroundFlowTest {
 
         // Zurueck in die App: ein neues ViewModel uebernimmt die Fahrt an der richtigen Stelle.
         val second = viewModel(parts)
+        assertEquals(IndoorStage.ROUTE, second.stage.value, "das Anlegen allein uebernimmt nichts (Einstellungsseite)")
+        second.adoptBackgroundRide()
         assertEquals(IndoorStage.RIDE, second.stage.value)
         assertSame(runtime, second.activeRuntime)
         val secondRenderer = parts.renderers.last() as FakeWorldRenderer
@@ -181,7 +183,7 @@ class IndoorBackgroundFlowTest {
         assertEquals("Indoor · Teststrecke", saved.name)
         assertFalse(journal.exists())
         // Ein neues ViewModel beginnt wieder auf der Startseite.
-        assertEquals(IndoorStage.ROUTE, viewModel(parts).stage.value)
+        assertEquals(IndoorStage.ROUTE, viewModel(parts).also { it.adoptBackgroundRide() }.stage.value)
     }
 
     @Test

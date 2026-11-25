@@ -20,6 +20,7 @@ import de.trailscape.app.i18n.AppLocale
 import de.trailscape.app.reminder.EXTRA_OPEN_TODAY
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.IndoorDestination
 import de.trailscape.app.ui.TrailscapeApp
 import de.trailscape.app.ui.theme.TrailscapeTheme
 import de.trailscape.app.ui.training.PlanRecipeImportHost
@@ -119,7 +120,7 @@ class MainActivity : ComponentActivity() {
         val requested = intent?.getBooleanExtra(IndoorRideService.EXTRA_OPEN_INDOOR, false) == true
         if (requested) intent?.removeExtra(IndoorRideService.EXTRA_OPEN_INDOOR)
         if (requested || (appStart && host.isRiding)) {
-            ViewModelProvider(this)[AppViewModel::class.java].requestIndoor()
+            ViewModelProvider(this)[AppViewModel::class.java].requestIndoor(IndoorDestination.FLOW)
         }
     }
 

@@ -795,6 +795,7 @@ class IndoorViewModel(
                 graphics = readGraphics(),
             )
         }
+        _backgroundRide.value = readBackgroundRide()
         feelController.reload()
         loadRouteOptions()
     }
@@ -1857,6 +1858,9 @@ class IndoorViewModel(
     /** Meldet die gerade gestartete Fahrt beim Halter an und startet den Vordergrunddienst. */
     private fun registerBackgroundRide(runtime: IndoorRideRuntime) {
         val host = rideHost ?: return
+        // Frisch gelesen: Der Schalter steht unter „Einstellungen → Indoor",
+        // also in einem anderen ViewModel als der Tab, der die Fahrt startet.
+        _backgroundRide.value = readBackgroundRide()
         if (!_backgroundRide.value) return
         val st = rideStatic ?: return
         // Nur Werte, kein `this`: Der Abschluss ohne Oberflaeche darf das ViewModel nicht festhalten.
@@ -1919,8 +1923,14 @@ class IndoorViewModel(
         activeRuntime = null
     }
 
-    /** Ein neues ViewModel (App wieder geoeffnet) uebernimmt eine im Hintergrund laufende Fahrt. */
-    private fun adoptBackgroundRide() {
+    /**
+     * Ein neues ViewModel (App wieder geoeffnet) uebernimmt eine im
+     * Hintergrund laufende Fahrt. Nur der Ablauf ruft das (Tab „Indoor" und
+     * gepushte Seite), nicht „Einstellungen → Indoor" — sonst landete die
+     * Fahrt auf der Einstellungsseite. Ohne geparkte Fahrt ohne Wirkung.
+     */
+    fun adoptBackgroundRide() {
+        if (activeRuntime != null) return
         val host = rideHost ?: return
         val ride = host.ride.value ?: return
         val parked = ride.parked as? ParkedRide ?: return
@@ -2548,7 +2558,6 @@ class IndoorViewModel(
     init {
         // Am Ende der Klasse, damit alle Felder schon belegt sind.
         _backgroundRide.value = readBackgroundRide()
-        adoptBackgroundRide()
     }
 
     companion object {

@@ -5,9 +5,11 @@ verließ oder das Display sperrte (Gründer-Entscheidung 11.2 Nr. 4 im
 Prototyp). Jetzt läuft sie weiter: Ein Vordergrunddienst hält Trainer,
 Steuerung, Sitzung und Aufzeichnung am Leben, die 3D-Ansicht pausiert und
 setzt beim Zurückkehren an der richtigen Stelle fort. Wer das alte Verhalten
-will, schaltet es unter *Indoor-Training → Einstellungen → Hintergrund →
+will, schaltet es unter *Einstellungen → Indoor → Hintergrund →
 „Im Hintergrund weiterfahren"* ab (Vorgabe: an; Schlüssel
-`trailscape.indoor.background_ride`, `"false"` = aus).
+`trailscape.indoor.background_ride`, `"false"` = aus). Der Schalter wird beim
+Start jeder Fahrt frisch gelesen: Die Einstellungsseite hat ein eigenes
+ViewModel, das des Tabs „Indoor" lebt über Tab-Wechsel hinweg.
 
 ## Aufbau
 
@@ -50,8 +52,10 @@ aufgezeichneten Punkte als Kopie, damit die Laufzeit sie sichern kann.
    weiter (`stopWithTask="false"`).
 4. **Zurück in die App** — über die Benachrichtigung (Launcher-Intent mit
    `EXTRA_OPEN_INDOOR`) oder das App-Symbol (`MainActivity` sieht beim Start
-   eine laufende Fahrt): Die Navigation öffnet `indoor`, das neue ViewModel
-   übernimmt die geparkte Fahrt, baut eine neue Darstellung, lädt die Welt
+   eine laufende Fahrt): Die Navigation öffnet den Indoor-Ablauf als
+   gepushte Seite (`IndoorDestination.FLOW`). Das neue ViewModel übernimmt
+   die geparkte Fahrt (`adoptBackgroundRide`, aufgerufen vom Tab „Indoor"
+   und von der gepushten Seite, nie von „Einstellungen → Indoor"), baut eine neue Darstellung, lädt die Welt
    und hängt sie an die Laufzeit; der nächste Takt setzt sie an die aktuelle
    Stelle.
 5. **Beenden**

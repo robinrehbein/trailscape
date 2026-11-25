@@ -3,7 +3,7 @@
      Benachrichtigung des Vordergrunddienstes, Ergebnis- und
      Wiederherstellungsmeldungen. -->
 <resources>
-    <!-- Einstellungen des Indoor-Trainings -->
+    <!-- Einstellungen → Indoor -->
     <string name="idee05_settings_section">Hintergrund</string>
     <string name="idee05_settings_background_title">Im Hintergrund weiterfahren</string>
     <string name="idee05_settings_background_body">Die Fahrt läuft weiter, wenn du die App verlässt oder das Display sperrst. Eine Benachrichtigung zeigt Leistung, Zeit und Distanz. Aus: Verlassen der App pausiert die Fahrt.</string>

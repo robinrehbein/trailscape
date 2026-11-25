@@ -170,6 +170,9 @@ fun IndoorFlowScreen(
     // Stufe unten zum ersten Mal gelesen wird (sonst blitzte die Startseite
     // auf). Nach einer Drehung steht die Stufe schon richtig.
     remember(vm) {
+        // Fahrt im Hintergrund (docs/indoor/hintergrund.md): eine geparkte Fahrt
+        // wieder zeigen — im Tab und auf der gepushten Seite, nie in den Einstellungen.
+        if (mode != IndoorFlowMode.SETTINGS) vm.adoptBackgroundRide()
         if (mode == IndoorFlowMode.SETTINGS && vm.stage.value == IndoorStage.ROUTE) vm.openSettings()
         true
     }
