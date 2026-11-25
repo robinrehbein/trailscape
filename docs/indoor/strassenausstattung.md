@@ -153,8 +153,38 @@ override fun roadside(): RealRoadside = object : RealRoadside {
 
 ## 6. Messwerte und Bilder
 
-(folgt)
+**Stand: UNGEBAUT.** Drei Gradle-Versuche (15:41, 15:45, 16:05) scheiterten an Maven Central
+(HTTP 429 beim Laden des Build-Klassenpfads), bevor Kotlin kompiliert wurde. Es gibt daher noch
+**keine gemessenen Zahlen und keine Belegbilder**; alles unten ist Schätzung.
+
+Schätzung (MEDIUM, je Kachel der Stufe 0, aus den Rastern oben gerechnet, nicht gemessen):
+
+| Teil | Dreiecke je 100 m Strecke | Anmerkung |
+|---|---|---|
+| Mittellinie (Leitlinie 6/12) | ≈ 15–40 | durchgezogen in Kurven bis ≈ 60 |
+| Randlinien (2) | ≈ 80–120 | Eckpunkte auf allen Stationen der Fahrbahn |
+| Bröselkante (2 Seiten) | ≈ 160–240 | 4 Dreiecke je Station und Seite |
+| Flicken + Fugen, Risse | ≈ 20–60 | spärlich |
+| Ort: Rinne, Abläufe, Deckel | ≈ 100–180 | nur innerorts |
+| Leitpfosten (Knoten `props`) | ≈ 100 gerade, ≈ 400 in engen Kurven | ≈ 25 Dreiecke je Pfosten |
+| Schutzplanke | ≈ 300 je 100 m und Seite | nur Brücken/Böschungen |
+
+Budget hält der Bau in jedem Fall ein (Gruppen entfallen, siehe 3). Paketgröße: drei PNG
+(32 × 256, 64 × 256, 128 × 128) je Kachel der Stufe 0, geschätzt 30–45 KB je Kachel, also bei
+rund 8 Kacheln/km etwa +0,3 MB/km (≈ +2 %). Bauzeit: Sichtweiten je Strecke einmal, geschätzt unter
+1 s auf dem Entwicklerrechner für 100 km, auf dem Handy einige Sekunden (nicht gemessen).
+
+Vorgesehene Bilder (`docs/indoor/bilder/strassenausstattung/`, Lenkerkamera `handlebar`, vorher =
+`2a81033`): Landstraße, Ortsdurchfahrt und Pass-Kehren aus der generierten Strecke (`indoor-dev
+generated --profile berg|grundlage60`, ohne Netz), Radweg aus der Testwelt (dort unbefestigt —
+zeigt, dass Wege ohne Markierung bleiben). Ein asphaltierter Radweg ist offline nicht verfügbar.
 
 ## 7. Auf dem Gerät zu prüfen
 
-(folgt)
+- Abgenutzte Linien (MASK) in 10–50 m Entfernung: flimmern sie ohne anisotrope Filterung, oder
+  verschwinden sie in den kleinen Mip-Stufen?
+- Bröselkante: liest sie sich als Kante oder als Rauschen? Helle Säume an MASK-Rändern (MSAA)?
+- Flimmern zwischen Abziehbildern und Fahrbahn (Abstände 5–16 mm) in Kurven und Wannen.
+- Schutzplanke: Licht auf dem W-Profil (keine Rückseite — von der Fahrbahn aus unsichtbar).
+- Leitpfosten-Abstand in Kehren, Bildrate in Kurven mit dichten Pfosten.
+- Bildrate mit bis zu fünf zusätzlichen Primitiven je Kachel.
