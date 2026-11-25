@@ -198,6 +198,11 @@ tiles/*.glb      alle Kacheln, sortiert
   weg): Vor jedem „Laden“ holt die App `catalog.json` aus dem Release und
   nimmt Version, Größe und SHA-256 von dort. Ein Release-Katalog kann die
   Adresse der Pakete nicht umlenken (die beigelegte `baseUrl` gilt).
+- Stand 25.11.2026, später (Welt-Version 12, Branch `claude/indoor-weltqualitaet`,
+  `world.md` „Weltqualität der Katalogstrecken“): alle 20 Versionen in `catalog-src.json`
+  und die 14 des beigelegten Katalogs um eins angehoben (`alpe-dhuez` 12, `solitude` 4,
+  `strohgaeu` 3 …), Paketnamen entsprechend. Bis der Workflow läuft, gilt wie unten
+  beschrieben: Die App lädt, was der Release-Katalog nennt.
 - Stand 25.11.2026 (Welt-Version 11; vorher 10 am 24.11.): Der beigelegte Katalog
   (`app/src/main/assets/indoor/catalog.json`) führt alle **14** Einträge des
   veröffentlichten Katalogs (Texte, Größen, Welt-IDs aus dem Release), mit den
