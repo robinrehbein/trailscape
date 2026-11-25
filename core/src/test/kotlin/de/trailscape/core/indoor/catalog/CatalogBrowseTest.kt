@@ -91,8 +91,8 @@ class CatalogBrowseTest {
         val flat = estimateCatalogRideSeconds(15_000.0, 0.0, null, mapOf(SurfaceKind.ASPHALT to 1.0), rider)!!
         val climb = estimateCatalogRideSeconds(15_000.0, 1250.0, null, mapOf(SurfaceKind.ASPHALT to 1.0), rider)!!
         assertTrue(climb > flat * 2, "Alpe-d'Huez-artig $climb s gegen flach $flat s")
-        // Alpe d'Huez mit 188 W und 85 kg: etwa 1 h 15 bis 1 h 25 min
-        assertTrue(climb in 3800..6000, "$climb")
+        // 15 km mit 1250 Hm bei 188 W: rund 0,2 m/s Steigleistung, also etwa 1 h 40 bis 1 h 45 min
+        assertTrue(climb in 5400..6800, "$climb")
     }
 
     @Test
@@ -141,7 +141,7 @@ class CatalogBrowseTest {
         val g = f.copy(onlyLoaded = true)
         assertFalse(g.matches(short))
         assertTrue(g.matches(long.copy(loaded = true)))
-        assertEquals(3, g.copy(climbs = setOf(CatalogClimbClass.FLAT)).activeCount)
+        assertEquals(4, g.copy(climbs = setOf(CatalogClimbClass.FLAT)).activeCount)
     }
 
     @Test

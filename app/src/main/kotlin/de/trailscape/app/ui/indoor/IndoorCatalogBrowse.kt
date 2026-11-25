@@ -1,6 +1,5 @@
 package de.trailscape.app.ui.indoor
 
-import androidx.compose.foundation.ExperimentalLayoutApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -235,7 +234,6 @@ internal fun SurfaceBar(surfaces: List<Pair<SurfaceKind, Double>>, description: 
  * · 2 aktiv · 7 von 12 Strecken", die sich aufklappt. Jede Auswahl ist ein
  * Chip mit Zustandsansage fuer den Vorleser.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CatalogFilterBar(
     filter: CatalogFilter,
@@ -316,7 +314,6 @@ internal fun CatalogFilterBar(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FilterGroup(title: Int, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

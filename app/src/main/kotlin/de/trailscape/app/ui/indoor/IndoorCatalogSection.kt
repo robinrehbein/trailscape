@@ -4,7 +4,6 @@ import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
@@ -237,7 +236,6 @@ internal fun CatalogRiddenPill(row: CatalogRow) {
  * (Durchschnitt und Maximum) und die geschaetzte Fahrzeit mit Hinweis, woher
  * sie kommt. Umbrechen bei grosser Schrift.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CatalogFactsGrid(row: CatalogRow, modifier: Modifier = Modifier) {
     val formats = LocalAppFormats.current
