@@ -97,19 +97,20 @@ class RoutePreviewTest {
     }
 
     @Test
-    fun achtfachIstAchtmalSoWeit() {
+    fun vierfachIstViermalSoWeit() {
         val tl = PreviewTimeline.of(flat, rider)
+        // Ebene bei 4× (rund 30 m/s) bleibt sicher unter dem Deckel von 60 m/s; 8× laege knapp darueber.
         val p = PreviewPlayer(tl)
-        p.setSpeedFactor(8)
+        p.setSpeedFactor(4)
         p.play(0)
         var now = 0L
         repeat(20) {
             now += 50
             p.tick(now)
         }
-        // 1 s bei 8× (Ebene: unter dem Deckel).
-        assertEquals(tl.distanceAt(8.0), p.distM, 0.5)
-        assertEquals((tl.totalS - 8.0) / 8.0, p.frame(now).remainingS, 0.1)
+        // 1 s bei 4×.
+        assertEquals(tl.distanceAt(4.0), p.distM, 0.5)
+        assertEquals((tl.totalS - 4.0) / 4.0, p.frame(now).remainingS, 0.1)
     }
 
     @Test
