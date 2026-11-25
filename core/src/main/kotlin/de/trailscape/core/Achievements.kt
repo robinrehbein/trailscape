@@ -210,6 +210,34 @@ const val riddenWayCellsPerKm: Double = 65.0
  */
 fun distinctRiddenWaysKm(cellCount: Int): Double = max(0, cellCount) / riddenWayCellsPerKm
 
+/**
+ * „Rundenkenner" (Abzeichen 27) aus den Signaturen des Rundenvergleichs
+ * (`RouteMatch.kt`): Fuer jede draussen gefahrene Tour zaehlt, wie viele
+ * fruehere Touren [sameRoute] zu ihr sind — wie im Tourblatt bezogen auf die
+ * Tour selbst, ohne transitive Gruppen. Anders als dort zaehlt jede Fahrt,
+ * auch ohne Bewegungszeit.
+ *
+ * @param rides alle Touren; Planungen und Indoor-Fahrten fallen heraus.
+ * @param dateOf Kalendertag zu einem Zeitstempel (wie bei [rideFacts]).
+ */
+fun roundAchievementFacts(
+    rides: List<RideInfo>,
+    signatures: Map<String, RouteSignature>,
+    dateOf: (Long) -> LocalDate,
+): RoundAchievementFacts {
+    val ordered = outdoorRides(rides).sortedBy { it.createdAt }.mapNotNull { info -> signatures[info.id]?.let { info to it } }
+    var maxRepeats = 0
+    var fifth: AchievementUnlock? = null
+    for ((i, entry) in ordered.withIndex()) {
+        val (info, sig) = entry
+        var count = 1
+        for (j in 0 until i) if (sameRoute(sig, ordered[j].second)) count += 1
+        maxRepeats = max(maxRepeats, count)
+        if (fifth == null && count >= 5) fifth = AchievementUnlock(info.id, dateOf(info.createdAt))
+    }
+    return RoundAchievementFacts(maxRepeats, fifth)
+}
+
 // ---------------------------------------------------------------------------
 // Plan
 // ---------------------------------------------------------------------------

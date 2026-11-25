@@ -528,6 +528,30 @@ class AchievementsTest {
         assertEquals(0.0, distinctRiddenWaysKm(-3))
     }
 
+    private fun loop(from: Long, km: Double = 20.0) =
+        RouteSignature(LongArray(40) { from + it }, km, startCell = from, endCell = from)
+
+    private fun summary(id: String, day: Long, indoor: Boolean = false) = RideSummary(
+        id = id,
+        name = id,
+        createdAt = dartEpochMs(mon.plusDays(day).atTime(10, 0)),
+        updatedAt = 0,
+        stats = RideStats(20.0, 0.0, 0.0),
+        indoor = indoor,
+    )
+
+    @Test
+    fun roundsCountRepeatsOfTheSameLoop() {
+        val rides = (0L until 6L).map { summary("r$it", it) } + summary("anders", 7) + summary("drinnen", 8, indoor = true)
+        val signatures = rides.associate { it.id to if (it.id == "anders") loop(1000) else loop(0) }
+        val facts = roundAchievementFacts(rides, signatures) { dartLocalOf(it).toLocalDate() }
+        assertEquals(6, facts.maxRepeats)
+        assertEquals(AchievementUnlock("r4", mon.plusDays(4)), facts.fifthRide)
+        val few = roundAchievementFacts(rides.take(3), signatures) { dartLocalOf(it).toLocalDate() }
+        assertEquals(RoundAchievementFacts(3, null), few)
+        assertEquals(RoundAchievementFacts(0, null), roundAchievementFacts(rides, emptyMap()) { mon })
+    }
+
     @Test
     fun earnedBadgesStayReached() {
         val progress = AchievementProgressData(earned = mapOf("plan_first" to mon.minusDays(40), "unbekannt" to mon))
