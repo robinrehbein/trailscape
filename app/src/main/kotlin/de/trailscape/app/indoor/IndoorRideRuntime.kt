@@ -517,14 +517,15 @@ class IndoorRideRuntime(
         guard(IndoorPart.CORE) { trainer.send(TrainerCommand.Stop) }
         guard(IndoorPart.CORE) { trainer.tick(clock()) }
         releaseDevices()
-        if (result != null && journal != null) {
+        val sink = journal
+        if (result != null && sink != null) {
             // Der Rest seit der letzten Sicherung (samt angefangener Sekunde):
             // So liegt die ganze Aufzeichnung auf dem Datentraeger, bis sie
             // gespeichert oder verworfen ist.
             val rest = result.points.drop(journaledPoints)
             journaledPoints = result.points.size
             val last = runCatching { session.state }.getOrNull() ?: _state.value.session
-            if (last != null) runCatching { journal.append(rest, last) }
+            if (last != null) runCatching { sink.append(rest, last) }
         }
         if (renderEnabled) {
             val last = _state.value.session

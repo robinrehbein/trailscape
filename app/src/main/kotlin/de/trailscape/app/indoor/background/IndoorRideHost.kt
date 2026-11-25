@@ -162,9 +162,10 @@ class IndoorRideCloser(
     @Volatile var startRouteM: Double? = null,
 ) {
     suspend fun complete(record: IndoorRideRecord?, last: IndoorSessionState?): IndoorRideHost.Outcome {
-        if (last != null && resumeKey != null) {
+        val key = resumeKey
+        if (last != null && key != null) {
             val point = IndoorStartPoints.afterStop(last.routeDistM, routeLengthM, routeIsLoop, wallClock())
-            runCatching { if (point == null) store.remove(resumeKey) else store.setString(resumeKey, point.toJson()) }
+            runCatching { if (point == null) store.remove(key) else store.setString(key, point.toJson()) }
         }
         record ?: return IndoorRideHost.Outcome.Failed
         val start = startRouteM ?: last?.let { startOf(it) }
