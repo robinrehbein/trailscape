@@ -174,4 +174,16 @@ internal class OsmDetailMap(private val base: MapData, private val features: Lis
     private val index = RectIndex(features, { doubleArrayOf(it.minE, it.minN, it.maxE, it.maxN) }, 256.0)
 
     override fun osmFeatures(minE: Double, minN: Double, maxE: Double, maxN: Double): List<OsmFeature> = index.query(minE, minN, maxE, maxN)
+
+    /**
+     * Echte Schutzplanken für die Straßenausstattung ([RealRoadside]): Regel-Planken und Leitpfosten treten
+     * dort zurück; gezeichnet wird die echte Planke von [OsmDetailLayer]. Nicht [RealRoadside.authoritative] —
+     * die Abfrage reicht nur 120 m weit, und fehlende `guard_rail` heißt in OSM nicht „keine Planke“.
+     */
+    private val realRoadside = object : RealRoadside {
+        override fun guardRails(minE: Double, minN: Double, maxE: Double, maxN: Double): List<DoubleArray> =
+            osmFeatures(minE, minN, maxE, maxN).filter { it.kind == OsmKind.GUARD_RAIL }.map { it.pts }
+    }
+
+    override fun roadside(): RealRoadside = realRoadside
 }
