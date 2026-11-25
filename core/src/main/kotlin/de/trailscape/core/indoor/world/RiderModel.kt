@@ -1,5 +1,8 @@
 package de.trailscape.core.indoor.world
 
+import de.trailscape.core.garage.RiderAvatar
+import de.trailscape.core.garage.RiderLook
+import de.trailscape.core.garage.RiderZone
 import java.io.File
 import kotlin.math.PI
 import kotlin.math.abs
@@ -34,15 +37,54 @@ import kotlin.math.sqrt
  * **Geist.** Dieselbe Geometrie mit einem einzigen durchscheinenden Material
  * ohne Vertexfarben; Teile, die nur im Inneren liegen oder als feine Linien
  * flimmern wuerden, fehlen.
+ *
+ * **Zonen (Garage, docs/indoor/garage.md).** Gebaut wird in fuenf Gruppen
+ * ([RiderMat]) mit Vertexfarben. Beim Schreiben verteilt [splitZones] die
+ * Dreiecke nach der Farbe ihres ersten Eckpunkts auf die einfaerbbaren Zonen
+ * ([RiderZone], je ein Material mit neutral grauen Vertexfarben, Vorgabefarbe in
+ * `baseColorFactor`) und die festen Materialien ([RiderFixedMat]). Die Felder
+ * des Trikots sind dafuer mit Markierungsfarben bemalt (`M_JERSEY_…`), die in
+ * der Datei nie vorkommen.
+ *
+ * **LOD.** `rider_lod.glb` ist dasselbe Modell grob verfeinert ([RiderDetail])
+ * und ohne Kleinteile (Kette, Speichen, Finger, Flaschenhalter, Helmschlitze),
+ * mit denselben Knoten, Animationen und Zonen — fuer Mitfahrer in der Ferne.
  */
 
-/** Materialien des Fahrermodells; alle Kernmaterial, `metallic = 0`. */
+/** Baugruppen des Fahrermodells (mit Vertexfarben); daraus werden Zonen und feste Materialien. */
 internal enum class RiderMat(val matName: String, val roughness: Float) {
     SKIN("x_mat_skin", 0.75f),
     KIT("x_mat_kit", 0.92f),
     GEAR("x_mat_gear", 0.6f),
     BIKE("x_mat_bike", 0.62f),
     RUBBER("x_mat_tire", 0.95f),
+}
+
+/** Feste, nicht einfaerbbare Materialien des Fahrermodells; die Farben stecken in den Vertexfarben. */
+internal enum class RiderFixedMat(val matName: String, val roughness: Float) {
+    HAIR("x_mat_hair", 0.75f),
+    KIT("x_mat_kit", 0.92f),
+    GEAR("x_mat_gear", 0.6f),
+    BIKE("x_mat_bike", 0.62f),
+    RUBBER("x_mat_tire", 0.95f),
+}
+
+/** Rauheit je Zone (wie die Baugruppe, aus der sie stammt). */
+internal fun zoneRoughness(z: RiderZone): Float = when (z) {
+    RiderZone.SKIN -> 0.75f
+    RiderZone.HELMET, RiderZone.SHOES -> 0.6f
+    RiderZone.FRAME, RiderZone.FRAME_ACCENT -> 0.62f
+    RiderZone.BAR_TAPE -> 0.95f
+    else -> 0.92f
+}
+
+/** Materialnamen von `rider.glb` in der Reihenfolge der Datei: erst die Zonen, dann die festen. */
+internal val RIDER_MATERIAL_NAMES: List<String> = RiderZone.entries.map { it.materialName } + RiderFixedMat.entries.map { it.matName }
+
+/** Dateinamen der Fahrermodelle neben [WorldModels.RIDER] und [WorldModels.GHOST]. */
+object RiderModelFiles {
+    /** Leichte Detailstufe fuer Mitfahrer in der Ferne (3 000–5 000 Dreiecke). */
+    const val RIDER_LOD = "rider_lod.glb"
 }
 
 internal const val GHOST_MATERIAL = "x_mat_ghost"
@@ -168,9 +210,17 @@ internal object RiderRig {
 
 private val C_SKIN = lin(0xD6A07E)
 private val C_HAIR = lin(0x4A3526)
-private val C_JERSEY = lin(0xD8432C)
-private val C_JERSEY_DARK = lin(0x8C2519)
-private val C_JERSEY_LIGHT = lin(0xF1EEE8)
+
+/** Markierungsfarben der Trikotfelder und des Lenkerbands: werden beim Schreiben durch Grau ersetzt. */
+private fun marker(k: Int) = Argb.of(255, 251, 9 * k, 3)
+private val M_JERSEY_LOW = marker(1)
+private val M_JERSEY_MID = marker(2)
+private val M_JERSEY_BAND = marker(3)
+private val M_JERSEY_UP = marker(4)
+private val M_JERSEY_YOKE = marker(5)
+private val M_JERSEY_SIDE = marker(6)
+private val M_JERSEY_TRIM = marker(7)
+private val M_BAR_TAPE = Argb.of(255, 3, 251, 9)
 private val C_BIBS = lin(0x25262B)
 private val C_BIBS_BAND = lin(0x3C3E45)
 private val C_SOCK = lin(0xEEEEEA)
@@ -266,8 +316,8 @@ private fun buildFrame(p: Parts, ghost: Boolean) {
     val ttHead = Frame.headTop - Frame.steer * 0.04
     val ttSeat = bb + Frame.seatDir * 0.465
     val dtHead = Frame.headBottom + Frame.steer * 0.042
-    f.addLoft(listOf(bb, Frame.seatTop), doubleArrayOf(0.019, 0.0165), 16, color = C_FRAME)
-    f.addLoft(listOf(Frame.headBottom, Frame.headTop), doubleArrayOf(0.029, 0.0245), 18, true, true, C_FRAME)
+    f.addLoft(listOf(bb, Frame.seatTop), doubleArrayOf(0.019, 0.0165), RiderDetail.seg(16), color = C_FRAME)
+    f.addLoft(listOf(Frame.headBottom, Frame.headTop), doubleArrayOf(0.029, 0.0245), RiderDetail.seg(18), true, true, C_FRAME)
     f.addTube(
         listOf(Key(ttHead, 0.019, 0.023, color = C_FRAME), Key(ttHead.lerp(ttSeat, 0.5), 0.018, 0.019, color = C_FRAME), Key(ttSeat, 0.016, 0.016, color = C_FRAME)),
         2, 16, false,
@@ -279,10 +329,10 @@ private fun buildFrame(p: Parts, ghost: Boolean) {
         },
         1, 18, false,
     )
-    f.addCylinder(Vec3(-0.036, bb.y, bb.z), Vec3(0.036, bb.y, bb.z), 0.025, 0.025, 18, color = C_FRAME)
+    f.addCylinder(Vec3(-0.036, bb.y, bb.z), Vec3(0.036, bb.y, bb.z), 0.025, 0.025, RiderDetail.seg(18), color = C_FRAME)
     // Sattelklemme und Stuetze
-    f.addLoft(listOf(Frame.seatTop - Frame.seatDir * 0.012, Frame.seatTop + Frame.seatDir * 0.006), doubleArrayOf(0.0195, 0.0195), 16, true, true, C_BLACK)
-    f.addLoft(listOf(Frame.seatTop, Frame.postTop), doubleArrayOf(0.0136, 0.0136), 14, false, true, C_BLACK)
+    f.addLoft(listOf(Frame.seatTop - Frame.seatDir * 0.012, Frame.seatTop + Frame.seatDir * 0.006), doubleArrayOf(0.0195, 0.0195), RiderDetail.seg(16), true, true, C_BLACK)
+    f.addLoft(listOf(Frame.seatTop, Frame.postTop), doubleArrayOf(0.0136, 0.0136), RiderDetail.seg(14), false, true, C_BLACK)
     f.addBox(-0.018, Frame.postTop.y - 0.004, Frame.postTop.z - 0.03, 0.018, Frame.SADDLE_Y - 0.026, Frame.postTop.z + 0.03, C_BLACK)
 
     // Hinterbau, links und rechts
@@ -319,13 +369,13 @@ private fun buildFrame(p: Parts, ghost: Boolean) {
             3, 14,
         )
         // Ausfallenden und Steckachsen-Enden
-        addCylinder(Vec3(Frame.HUB_HALF, rear.y, rear.z), Vec3(Frame.DROPOUT_X + 0.01, rear.y, rear.z), 0.011, 0.009, 12, color = C_BLACK)
-        addCylinder(Vec3(Frame.HUB_HALF, front.y, front.z), Vec3(0.07, front.y, front.z), 0.011, 0.009, 12, color = C_BLACK)
+        addCylinder(Vec3(Frame.HUB_HALF, rear.y, rear.z), Vec3(Frame.DROPOUT_X + 0.01, rear.y, rear.z), 0.011, 0.009, RiderDetail.seg(12), color = C_BLACK)
+        addCylinder(Vec3(Frame.HUB_HALF, front.y, front.z), Vec3(0.07, front.y, front.z), 0.011, 0.009, RiderDetail.seg(12), color = C_BLACK)
     }
 
     // Steuersatz, Vorbau
-    f.addLoft(listOf(Frame.headTop, Frame.stemBase - Frame.steer * 0.019), doubleArrayOf(0.0235, 0.019), 16, false, false, C_BLACK)
-    f.addLoft(listOf(Frame.stemBase - Frame.steer * 0.02, Frame.stemBase + Frame.steer * 0.021), doubleArrayOf(0.0205, 0.0205), 16, true, true, C_BLACK)
+    f.addLoft(listOf(Frame.headTop, Frame.stemBase - Frame.steer * 0.019), doubleArrayOf(0.0235, 0.019), RiderDetail.seg(16), false, false, C_BLACK)
+    f.addLoft(listOf(Frame.stemBase - Frame.steer * 0.02, Frame.stemBase + Frame.steer * 0.021), doubleArrayOf(0.0205, 0.0205), RiderDetail.seg(16), true, true, C_BLACK)
     f.addTube(
         listOf(
             Key(Frame.stemBase, 0.017, 0.018, power = 3.0, color = C_BLACK),
@@ -334,15 +384,15 @@ private fun buildFrame(p: Parts, ghost: Boolean) {
         ),
         2, 14,
     )
-    f.addCylinder(Vec3(-0.022, Frame.barCenter.y, Frame.barCenter.z), Vec3(0.022, Frame.barCenter.y, Frame.barCenter.z), 0.0195, 0.0195, 14, color = C_BLACK)
+    f.addCylinder(Vec3(-0.022, Frame.barCenter.y, Frame.barCenter.z), Vec3(0.022, Frame.barCenter.y, Frame.barCenter.z), 0.0195, 0.0195, RiderDetail.seg(14), color = C_BLACK)
 
     // Lenker mit Rennbuegel
     val rub = p.mesh(node, RiderMat.RUBBER)
-    val half = smoothPath(handlebarHalf(), 3)
+    val half = smoothPath(handlebarHalf(), RiderDetail.sub(3))
     val bar = half.reversed().map { Vec3(-it.x, it.y, it.z) } + half.drop(1)
     rub.addLoft(
-        bar, DoubleArray(bar.size) { if (abs(bar[it].x) > 0.055) 0.0148 else 0.0128 }, 10, true, true,
-        ringColors = IntArray(bar.size) { if (abs(bar[it].x) > 0.055) C_BLACK else C_DARK },
+        bar, DoubleArray(bar.size) { if (abs(bar[it].x) > 0.055) 0.0148 else 0.0128 }, RiderDetail.seg(10), true, true,
+        ringColors = IntArray(bar.size) { if (abs(bar[it].x) > 0.055) M_BAR_TAPE else C_DARK },
     )
     // Bremsgriffe
     val by = Frame.barCenter.y
@@ -389,8 +439,8 @@ private fun buildFrame(p: Parts, ghost: Boolean) {
     rub.addSkin(withDome(withDome(saddle, true, 0.006, 2), false, 0.01, 2), 16)
 
     // Bremssaettel
-    f.addEllipsoid(0.045, front.y + 0.062, front.z - 0.058, 0.014, 0.024, 0.02, 10, 6, C_BLACK)
-    f.addEllipsoid(0.045, rear.y + 0.05, rear.z + 0.07, 0.014, 0.018, 0.026, 10, 6, C_BLACK)
+    f.addEllipsoid(0.045, front.y + 0.062, front.z - 0.058, 0.014, 0.024, 0.02, RiderDetail.seg(10), RiderDetail.seg(6, 3), C_BLACK)
+    f.addEllipsoid(0.045, rear.y + 0.05, rear.z + 0.07, 0.014, 0.018, 0.026, RiderDetail.seg(10), RiderDetail.seg(6, 3), C_BLACK)
 
     buildDrivetrain(p, ghost)
     buildBottle(p)
@@ -452,9 +502,10 @@ private fun buildDrivetrain(p: Parts, ghost: Boolean) {
         1, 8,
     )
     for (c in listOf(guide, tension)) {
-        f.addCylinder(Vec3(x - 0.004, c.y, c.z), Vec3(x + 0.004, c.y, c.z), pulleyR - 0.004, pulleyR - 0.004, 14, color = C_BLACK)
+        f.addCylinder(Vec3(x - 0.004, c.y, c.z), Vec3(x + 0.004, c.y, c.z), pulleyR - 0.004, pulleyR - 0.004, RiderDetail.seg(14), color = C_BLACK)
     }
-    if (ghost) return
+    // Die Kette fehlt beim Geist und in der LOD-Stufe.
+    if (ghost || RiderDetail.isLod) return
 
     // Kette: Kettenblatt vorn herum, unten zurueck, S-foermig durch das Schaltwerk, ueber das Ritzel.
     val dz = rear.z - bb.z
@@ -483,9 +534,9 @@ private fun buildBottle(p: Parts) {
     val along = doubleArrayOf(0.0, 0.006, 0.135, 0.152, 0.162, 0.176, 0.181, 0.196)
     val radii = doubleArrayOf(0.031, 0.0365, 0.0365, 0.031, 0.022, 0.022, 0.016, 0.014)
     val cols = IntArray(along.size) { if (it >= 4) C_DARK else C_BOTTLE }
-    gear.addLoft(along.map { base + dir * it }, radii, 18, true, true, ringColors = cols)
-    // Flaschenhalter: zwei Buegel
-    p.both(RiderNodes.BIKE, RiderMat.BIKE) {
+    gear.addLoft(along.map { base + dir * it }, radii, RiderDetail.seg(18), true, true, ringColors = cols)
+    // Flaschenhalter: zwei Buegel (nicht in der LOD-Stufe)
+    if (!RiderDetail.isLod) p.both(RiderNodes.BIKE, RiderMat.BIKE) {
         val side = Vec3.X * 0.03
         val low = base - inward * 0.036
         addTube(
@@ -505,8 +556,9 @@ private fun buildWheel(p: Parts, node: String, rear: Boolean, ghost: Boolean) {
     val tireR = 0.02
     val rub = p.mesh(node, RiderMat.RUBBER)
     // Reifen: Lauffläche dunkel, Flanken hell (Gravel-Reifen)
-    val tire = (0 until 12).map {
-        val a = 2 * PI * it / 12
+    val profile = if (RiderDetail.isLod) 8 else 12
+    val tire = (0 until profile).map {
+        val a = 2 * PI * it / profile
         ProfilePoint(tireR * cos(a), r - tireR + tireR * sin(a), if (sin(a) > 0.3) C_TREAD else C_SIDEWALL)
     }
     rub.addRevolveX(tire, 48, closed = true)
@@ -528,6 +580,8 @@ private fun buildWheel(p: Parts, node: String, rear: Boolean, ghost: Boolean) {
         ProfilePoint(-0.05, 0.011), ProfilePoint(-0.05, 0.0),
     ).map { ProfilePoint(it.x, it.r, C_BLACK) }
     b.addRevolveX(hub, 12)
+    // Bremsscheibe und Kassette fehlen in der LOD-Stufe.
+    if (RiderDetail.isLod) return
     // Bremsscheibe links
     b.addRevolveX(
         listOf(ProfilePoint(0.0405, 0.03), ProfilePoint(0.0405, 0.08), ProfilePoint(0.0385, 0.08), ProfilePoint(0.0385, 0.03)).map { ProfilePoint(it.x, it.r, C_METAL) },
@@ -544,7 +598,7 @@ private fun buildWheel(p: Parts, node: String, rear: Boolean, ghost: Boolean) {
         cassette += ProfilePoint(-0.0345 - 0.0056 * steps.size, 0.013, C_METAL)
         b.addRevolveX(cassette, 20, hard = true)
     }
-    if (ghost) return
+    if (ghost || RiderDetail.isLod) return
     // Speichen: dunkel und etwas kraeftiger als echt, damit sie aus der Verfolgerkamera nicht flimmern.
     val count = 20
     for (i in 0 until count) {
@@ -561,7 +615,7 @@ private fun buildWheel(p: Parts, node: String, rear: Boolean, ghost: Boolean) {
 private fun buildCrank(p: Parts) {
     val c = p.mesh(RiderNodes.CRANK, RiderMat.BIKE)
     val len = RiderRig.CRANK
-    c.addCylinder(Vec3(-0.07, 0.0, 0.0), Vec3(0.07, 0.0, 0.0), 0.0125, 0.0125, 12, color = C_BLACK)
+    c.addCylinder(Vec3(-0.07, 0.0, 0.0), Vec3(0.07, 0.0, 0.0), 0.0125, 0.0125, RiderDetail.seg(12), color = C_BLACK)
     // Kurbelarme: links nach oben (+Y), rechts nach unten
     for (side in listOf(1.0, -1.0)) {
         val x = side * 0.073
@@ -575,7 +629,7 @@ private fun buildCrank(p: Parts) {
         )
         c.addSkin(withDome(withDome(arm, true, 0.02, 2), false, 0.013, 2), 10)
         // Pedalachse
-        c.addCylinder(Vec3(x, side * len, 0.0), Vec3(side * (RiderRig.PEDAL_X + 0.03), side * len, 0.0), 0.0065, 0.0065, 8, color = C_METAL)
+        c.addCylinder(Vec3(x, side * len, 0.0), Vec3(side * (RiderRig.PEDAL_X + 0.03), side * len, 0.0), 0.0065, 0.0065, RiderDetail.seg(8), color = C_METAL)
     }
     // Kettenblatt mit Stern (Antriebsseite −X)
     val x0 = Frame.CHAIN_X + 0.0016
@@ -585,7 +639,7 @@ private fun buildCrank(p: Parts) {
         listOf(ProfilePoint(x0, 0.064), ProfilePoint(x0, ro), ProfilePoint(x1, ro), ProfilePoint(x1, 0.064)).map { ProfilePoint(it.x, it.r, C_DARK) },
         48, closed = true, hard = true,
     )
-    for (k in 0 until 4) {
+    for (k in 0 until if (RiderDetail.isLod) 0 else 4) {
         val a = PI / 4 + k * PI / 2
         c.addTube(
             listOf(
@@ -723,15 +777,22 @@ private fun buildTorso(p: Parts) {
         Key(sv(0.172, 1.492), 0.064, 0.061, rvNeg = 0.057, power = 2.0),
     )
     val rings = withDome(buildRings(keys, 3), true, 0.02, 3)
-    p.mesh(node, RiderMat.KIT).addSkin(rings, 26, capEnd = false) { r, th ->
-        val side = abs(cos(th))
+    val segments = RiderDetail.seg(26)
+    // Felder des Trikots (Muster, RiderLook). Ein Viereck gehoert zum Feld seines ersten
+    // Eckpunkts; die Seitenteile werden deshalb um ein halbes Segment versetzt geprueft,
+    // damit sie links und rechts gleich breit sind.
+    p.mesh(node, RiderMat.KIT).addSkin(rings, segments, capEnd = false) { r, th ->
+        val side = abs(cos(th + PI / segments))
         when {
             r.s < 3.25 -> C_BIBS
-            r.s < 3.5 -> C_JERSEY_DARK
-            r.s > 10.5 -> C_JERSEY_DARK
-            side > 0.84 && r.s < 8.2 -> C_JERSEY_DARK
-            r.s in 6.75..7.5 -> C_JERSEY_LIGHT
-            else -> C_JERSEY
+            r.s < 3.5 -> M_JERSEY_TRIM
+            r.s > 10.5 -> M_JERSEY_TRIM
+            side > 0.84 && r.s < 8.2 -> M_JERSEY_SIDE
+            r.s in 6.75..7.5 -> M_JERSEY_BAND
+            r.s < 5.25 -> M_JERSEY_LOW
+            r.s < 6.75 -> M_JERSEY_MID
+            r.s < 9.0 -> M_JERSEY_UP
+            else -> M_JERSEY_YOKE
         }
     }
     // Hals
@@ -783,7 +844,7 @@ private fun buildArms(p: Parts, ghost: Boolean) {
         if (ghost) {
             addSkin(arm.filter { it.s >= 0.5 }, 14)
         } else {
-            addSkin(cloth(sleeve, 1.05), 14, capEnd = false) { r, _ -> if (r.s > 2.35) C_JERSEY_DARK else C_JERSEY }
+            addSkin(cloth(sleeve, 1.05), 14, capEnd = false) { r, _ -> if (r.s > 2.35) M_JERSEY_TRIM else M_JERSEY_YOKE }
             addSkin(cloth(cuff, 1.07).map { recolor(it, C_GLOVE) }, 14, capStart = false)
         }
         // Handflaeche auf dem Griffkoerper
@@ -797,6 +858,8 @@ private fun buildArms(p: Parts, ghost: Boolean) {
             3,
         )
         addSkin(withDome(palm, false, 0.008, 2), 14)
+        // Finger und Daumen fehlen in der LOD-Stufe (die Handflaeche liegt auf dem Griff).
+        if (RiderDetail.isLod) return@both
         // Finger: um die Aussenseite des Griffs nach unten gelegt
         val z = bz + 0.106
         val fingers = buildRings(
@@ -842,8 +905,8 @@ private fun buildHead(p: Parts, ghost: Boolean) {
     head.addSkin(withDome(crown, true, 0.008, 2), 24, capEnd = !ghost) { r, th ->
         if (sin(th) > 0.1 && r.c.y > -0.05) C_HAIR else C_SKIN
     }
-    head.addEllipsoid(0.0, -0.03, 0.09, 0.013, 0.024, 0.017, 10, 6, C_SKIN)
-    for (side in listOf(1.0, -1.0)) head.addEllipsoid(side * 0.073, -0.014, -0.012, 0.008, 0.026, 0.016, 8, 6, C_SKIN)
+    head.addEllipsoid(0.0, -0.03, 0.09, 0.013, 0.024, 0.017, RiderDetail.seg(10), RiderDetail.seg(6, 3), C_SKIN)
+    for (side in listOf(1.0, -1.0)) head.addEllipsoid(side * 0.073, -0.014, -0.012, 0.008, 0.026, 0.016, RiderDetail.seg(8), RiderDetail.seg(6, 3), C_SKIN)
     p.mesh(RiderNodes.BODY, RiderMat.SKIN).append(head, place)
 
     val gear = MeshBuilder()
@@ -873,8 +936,9 @@ private fun buildHelmet(m: MeshBuilder, ghost: Boolean) {
     val aMin = -10
     val aMax = 200
     // Der Geist hat keine Schlitze und kommt mit dem halben Raster aus.
-    val aStep = if (ghost) 10 else 5
-    val bStep = if (ghost) 9 else 4
+    val coarse = ghost || RiderDetail.isLod
+    val aStep = if (RiderDetail.isLod) 21 else if (coarse) 10 else 5
+    val bStep = if (RiderDetail.isLod) 15 else if (coarse) 9 else 4
     val na = (aMax - aMin) / aStep
     val nb = 180 / bStep
 
@@ -900,7 +964,7 @@ private fun buildHelmet(m: MeshBuilder, ghost: Boolean) {
         for (ib in 0..nb) {
             val bDeg = -90 + ib * bStep
             val b = Math.toRadians(bDeg.toDouble())
-            val v = if (ghost) 0.0 else vent(aDeg, bDeg)
+            val v = if (coarse) 0.0 else vent(aDeg, bDeg)
             val dx = sin(b)
             val dy = cos(b) * sin(a)
             val dz = cos(b) * cos(a)
@@ -1018,14 +1082,120 @@ private fun rotationKeys(count: Int, at: (k: Int) -> Quat): FloatArray {
     return out
 }
 
+// ---------------------------------------------------------------------------
+// Zonen
+// ---------------------------------------------------------------------------
+
+/**
+ * Zone einer Vertexfarbe in ihrer Baugruppe und die Helligkeit, die als graue
+ * Vertexfarbe bleibt (1 = volle Zonenfarbe); `null` = feste Farbe.
+ */
+private fun zoneOf(group: RiderMat, color: Int): Pair<RiderZone, Double>? = when (group) {
+    RiderMat.SKIN -> if (color == C_SKIN) RiderZone.SKIN to 1.0 else null
+    RiderMat.KIT -> when (color) {
+        M_JERSEY_LOW -> RiderZone.JERSEY_LOW to 1.0
+        M_JERSEY_MID -> RiderZone.JERSEY_MID to 1.0
+        M_JERSEY_BAND -> RiderZone.JERSEY_BAND to 1.0
+        M_JERSEY_UP -> RiderZone.JERSEY_UP to 1.0
+        M_JERSEY_YOKE -> RiderZone.JERSEY_YOKE to 1.0
+        M_JERSEY_SIDE -> RiderZone.JERSEY_SIDE to 1.0
+        M_JERSEY_TRIM -> RiderZone.JERSEY_TRIM to 1.0
+        C_BIBS -> RiderZone.BIBS to 1.0
+        // Der Abschluss am Oberschenkel bleibt etwas dunkler als die Hose.
+        C_BIBS_BAND -> RiderZone.BIBS to 0.7
+        else -> null
+    }
+    RiderMat.GEAR -> when (color) {
+        C_HELMET -> RiderZone.HELMET to 1.0
+        C_SHOE -> RiderZone.SHOES to 1.0
+        else -> null
+    }
+    RiderMat.BIKE -> when (color) {
+        C_FRAME -> RiderZone.FRAME to 1.0
+        C_FRAME_LIGHT -> RiderZone.FRAME_ACCENT to 1.0
+        else -> null
+    }
+    RiderMat.RUBBER -> if (color == M_BAR_TAPE) RiderZone.BAR_TAPE to 1.0 else null
+}
+
+private fun fixedOf(group: RiderMat): RiderFixedMat = when (group) {
+    RiderMat.SKIN -> RiderFixedMat.HAIR
+    RiderMat.KIT -> RiderFixedMat.KIT
+    RiderMat.GEAR -> RiderFixedMat.GEAR
+    RiderMat.BIKE -> RiderFixedMat.BIKE
+    RiderMat.RUBBER -> RiderFixedMat.RUBBER
+}
+
+/**
+ * Graue Vertexfarbe einer Zone. Knapp unter Weiss, damit die Netze `COLOR_0`
+ * behalten — dieselbe Ubershader-Variante wie bisher, keine neue.
+ */
+private fun zoneGrey(shade: Double): Int {
+    val g = (254 * shade + 0.5).toInt().coerceIn(0, 254)
+    return Argb.of(255, g, g, g)
+}
+
+/**
+ * Verteilt die Dreiecke von [src] (Baugruppe [group]) auf Zonen und feste
+ * Materialien: Massgeblich ist die Farbe des **ersten** Eckpunkts — bei
+ * Vierecken aus [addSkin] und [addRevolveX] ist das fuer beide Dreiecke
+ * derselbe, die Feldgrenzen laufen so sauber entlang der Querschnitte. In
+ * Zonen wird die Farbe zu Grau ([zoneGrey]), in festen Materialien bleibt sie.
+ * [sink] liefert das Zielnetz je Material-Index in [RIDER_MATERIAL_NAMES].
+ */
+private fun splitZones(group: RiderMat, src: MeshBuilder, sink: (Int) -> MeshBuilder) {
+    val zoneCount = RiderZone.entries.size
+    val remap = HashMap<Int, IntArray>()
+    val idx = src.indices
+    for (t in 0 until src.triangleCount) {
+        val first = idx[t * 3]
+        val zone = zoneOf(group, src.colors[first])?.first
+        val target = zone?.ordinal ?: (zoneCount + fixedOf(group).ordinal)
+        val out = sink(target)
+        val map = remap.getOrPut(target) { IntArray(src.vertexCount) { -1 } }
+        val corners = IntArray(3)
+        for (k in 0..2) {
+            val i = idx[t * 3 + k]
+            var j = map[i]
+            if (j < 0) {
+                val c = src.colors[i]
+                val color = if (zone == null) {
+                    // Ein Eckpunkt mit Zonenfarbe am Rand eines festen Teils bekommt dessen Farbe
+                    // (sonst liefe dort die Vorgabe- oder Markierungsfarbe hinein).
+                    if (zoneOf(group, c) != null) src.colors[first] else c
+                } else {
+                    // Eigene Helligkeit, wenn der Eckpunkt selbst zur Zone gehoert, sonst volle Zonenfarbe.
+                    val own = zoneOf(group, c)
+                    zoneGrey(if (own != null && own.first == zone) own.second else 1.0)
+                }
+                j = out.vertex(
+                    src.positions[i * 3].toDouble(), src.positions[i * 3 + 1].toDouble(), src.positions[i * 3 + 2].toDouble(),
+                    src.normals[i * 3].toDouble(), src.normals[i * 3 + 1].toDouble(), src.normals[i * 3 + 2].toDouble(),
+                    src.uvs[i * 2].toDouble(), src.uvs[i * 2 + 1].toDouble(), color,
+                )
+                map[i] = j
+            }
+            corners[k] = j
+        }
+        out.tri(corners[0], corners[1], corners[2])
+    }
+}
+
 private fun buildModel(ghost: Boolean): ByteArray {
     val parts = buildParts(ghost)
     val scene = GlbScene()
-    val materials = HashMap<RiderMat, Int>()
+    val materials = IntArray(RIDER_MATERIAL_NAMES.size)
     val ghostMaterial = if (ghost) {
         scene.addMaterial(GlbMaterial(GHOST_MATERIAL, floatArrayOf(0.7f, 0.86f, 1f, 0.4f), roughness = 0.8f, alphaMode = GlbAlphaMode.BLEND, emissive = floatArrayOf(0.2f, 0.27f, 0.34f)))
     } else {
-        for (m in RiderMat.entries) materials[m] = scene.addMaterial(GlbMaterial(m.matName, roughness = m.roughness))
+        // Zonen mit den Vorgabefarben (so sieht der Fahrer auch ohne Einfaerben zur Laufzeit richtig aus), dann die festen.
+        val defaults = RiderLook.materialFactors(RiderAvatar.DEFAULT)
+        for (z in RiderZone.entries) {
+            materials[z.ordinal] = scene.addMaterial(GlbMaterial(z.materialName, defaults.getValue(z.materialName), roughness = zoneRoughness(z)))
+        }
+        for (f in RiderFixedMat.entries) {
+            materials[RiderZone.entries.size + f.ordinal] = scene.addMaterial(GlbMaterial(f.matName, roughness = f.roughness))
+        }
         -1
     }
     val index = HashMap<String, Int>()
@@ -1038,10 +1208,13 @@ private fun buildModel(ghost: Boolean): ByteArray {
             for (mesh in meshes.values) all.appendPlain(mesh, spec.origin)
             scene.addMesh(node, all, ghostMaterial)
         } else {
+            val split = arrayOfNulls<MeshBuilder>(RIDER_MATERIAL_NAMES.size)
             for ((mat, mesh) in meshes) {
                 if (spec.origin != Vec3.ZERO) mesh.translate(-spec.origin.x, -spec.origin.y, -spec.origin.z)
-                scene.addMesh(node, mesh, materials.getValue(mat))
+                splitZones(mat, mesh) { k -> split[k] ?: MeshBuilder(1024, 2048).also { split[k] = it } }
             }
+            // Feste Reihenfolge: nach Material, nicht nach Auftreten.
+            for ((k, mesh) in split.withIndex()) if (mesh != null) scene.addMesh(node, mesh, materials[k])
         }
     }
 
@@ -1070,16 +1243,21 @@ private fun buildModel(ghost: Boolean): ByteArray {
 /** Erzeugt `rider.glb` (deterministisch). */
 internal fun buildRiderGlb(): ByteArray = buildModel(ghost = false)
 
+/** Erzeugt `rider_lod.glb`: dieselben Knoten, Animationen und Zonen, grob verfeinert und ohne Kleinteile. */
+internal fun buildRiderLodGlb(): ByteArray = RiderDetail.lod { buildModel(ghost = false) }
+
 /** Erzeugt `ghost.glb`: dasselbe Modell, einheitlich durchscheinend. */
 internal fun buildGhostGlb(): ByteArray = buildModel(ghost = true)
 
 /**
- * Schreibt [WorldModels.RIDER] und [WorldModels.GHOST] nach [dir] (wird
- * angelegt). Gleiche Eingabe, gleiche Bytes — die eingecheckten Dateien unter
- * `app/src/main/assets/indoor/models/` stammen von hier.
+ * Schreibt [WorldModels.RIDER], [RiderModelFiles.RIDER_LOD] und
+ * [WorldModels.GHOST] nach [dir] (wird angelegt). Gleiche Eingabe, gleiche
+ * Bytes — die eingecheckten Dateien unter `app/src/main/assets/indoor/models/`
+ * stammen von hier.
  */
 fun writeIndoorModels(dir: File) {
     dir.mkdirs()
     File(dir, WorldModels.RIDER).writeBytes(buildRiderGlb())
+    File(dir, RiderModelFiles.RIDER_LOD).writeBytes(buildRiderLodGlb())
     File(dir, WorldModels.GHOST).writeBytes(buildGhostGlb())
 }

@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.garage.RiderAvatar
 import de.trailscape.core.i18n.CoreTexts
 import java.time.LocalDate
 import kotlinx.serialization.json.Json
@@ -160,6 +161,7 @@ fun buildBackupJson(
     profile: TrainingProfile?,
     exportedAtMs: Long = System.currentTimeMillis(),
     yearGoal: YearGoal? = null,
+    avatar: RiderAvatar? = null,
 ): String {
     val json = buildJsonObject {
         put("app", backupAppName)
@@ -167,6 +169,7 @@ fun buildBackupJson(
         put("exportedAt", formatIso8601Utc(exportedAtMs))
         put("profile", profile?.toJson() ?: JsonNull)
         yearGoal?.let { put("yearGoal", it.toBackupJson()) }
+        avatar?.let { put("avatar", it.toJsonObject()) }
         put("rides", buildJsonArray { rides.forEach { add(it.toJson()) } })
     }
     return prettyJson.encodeToString(JsonObject.serializer(), json)
@@ -193,6 +196,7 @@ fun writeBackupJson(
     profile: TrainingProfile?,
     exportedAtMs: Long = System.currentTimeMillis(),
     yearGoal: YearGoal? = null,
+    avatar: RiderAvatar? = null,
 ) {
     // Kopf als eigenes Objekt serialisieren und die schliessende Klammer
     // abschneiden — so stammen Escaping und Einrueckung aller Kopffelder
@@ -203,6 +207,7 @@ fun writeBackupJson(
         put("exportedAt", formatIso8601Utc(exportedAtMs))
         put("profile", profile?.toJson() ?: JsonNull)
         yearGoal?.let { put("yearGoal", it.toBackupJson()) }
+        avatar?.let { put("avatar", it.toJsonObject()) }
     }
     val headText = prettyJson.encodeToString(JsonObject.serializer(), head)
     // "…\n}" → "…" (der Kopf ist nie leer, die Klammer steht immer auf
@@ -251,6 +256,8 @@ data class BackupData(
     val profile: TrainingProfile? = null,
     /** Jahresziel aus dem optionalen Feld `yearGoal`; `null`, wenn es fehlt oder unlesbar ist. */
     val yearGoal: YearGoal? = null,
+    /** Aussehen von Fahrer und Rad (Garage) aus dem optionalen Feld `avatar`; `null`, wenn es fehlt oder kein Objekt ist. */
+    val avatar: RiderAvatar? = null,
 )
 
 /**
@@ -334,5 +341,10 @@ fun parseBackupJson(raw: String, texts: CoreTexts): BackupData {
         }
     }
 
-    return BackupData(rides = rides, profile = profile, yearGoal = parseYearGoal(decoded["yearGoal"]))
+    return BackupData(
+        rides = rides,
+        profile = profile,
+        yearGoal = parseYearGoal(decoded["yearGoal"]),
+        avatar = RiderAvatar.fromJson(decoded["avatar"]),
+    )
 }
