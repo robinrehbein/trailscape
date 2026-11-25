@@ -277,6 +277,8 @@ internal class TileStreamer(
                 }
                 require(!buf.hasRemaining()) { "Datei kuerzer als gemeldet" }
                 buf.flip()
+                // Siehe GlbPatch: sonst beendet Filament den Prozess bei Vegetationsmaterialien.
+                GlbPatch.neutralizeSpecular(buf)
                 return buf
             }
         }

@@ -60,7 +60,14 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     private val pendingState = AtomicReference<WorldState?>(null)
 
     private var listener: WorldRendererListener? = null
+    private val guard = RenderGuard(appContext)
+
+    /** Im sicheren Modus (siehe [RenderGuard]) bleiben die Zusaetze der Grafik-Pakete aus. */
+    @set:JvmName("assignSettings")
     private var settings: RenderSettings = RenderSettings.forQuality(IndoorQuality.MEDIUM)
+        set(value) {
+            field = if (guard.safeMode) value.copy(groundDetail = false, wind = false, birds = false, otherRiders = 0) else value
+        }
     private var settingsExplicit = false
     private var sky: SkySetting = SkySetting.DEFAULT
     private var cameraMode: CameraMode = CameraMode.CHASE
@@ -157,6 +164,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             return@guardApi
         }
         request = Request.World(worldDir, manifest)
+        guard.arm()
         fallbackTrack = manifest.track
         warmUpSky()
         // Ohne ausdrueckliche Einstellungen gilt die Voreinstellung der Qualitaet, mit der die Welt gebaut ist.
@@ -194,6 +202,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     }
 
     override fun unloadWorld() = guardApi("unloadWorld") {
+        guard.disarm()
         request = null
         fallbackTrack = null
         clearScene()
@@ -238,17 +247,20 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     }
 
     override fun pause() = guardApi("pause") {
+        guard.disarm()
         pausedByApi = true
         updateLoop()
     }
 
     override fun resume() = guardApi("resume") {
+        if (request is Request.World && !pausedBySurface) guard.arm()
         pausedByApi = false
         updateLoop()
     }
 
     override fun destroy() = guardApi("destroy") {
         if (destroyed) return@guardApi
+        guard.disarm()
         destroyed = true
         listener = null
         teardownFilament()
@@ -338,6 +350,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     /** Lebenszyklus der Seite (WorldSurface): im Hintergrund nicht zeichnen. */
     fun setSurfacePaused(paused: Boolean) {
         pausedBySurface = paused
+        if (paused) guard.disarm() else if (request is Request.World && !pausedByApi && !destroyed) guard.arm()
         try {
             updateLoop()
         } catch (t: Throwable) {
@@ -413,6 +426,8 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     private fun loadMaterialPackages(): Map<String, ByteArray> {
         val out = HashMap<String, ByteArray>()
         for (name in FilamentCore.MATERIALS) {
+            // Sicherer Modus: nur der Himmel (laeuft auch in der Testszene), alles andere macht der Ubershader.
+            if (guard.safeMode && name != FilamentCore.SKY_MATERIAL) continue
             runCatching { appContext.assets.open("$MATERIAL_DIR/$name.filamat").use { it.readBytes() } }
                 .onSuccess { out[name] = it }
         }
@@ -822,6 +837,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     private fun fail(kind: RenderFailure, detail: String) {
         if (failure != null || destroyed) return
         Log.e(TAG, "Darstellung faellt aus ($kind): $detail")
+        guard.disarm()
         failureNote = detail
         failure = kind
         runCatching { teardownFilament() }.onFailure { Log.w(TAG, "Abbau nach Ausfall", it) }

@@ -63,6 +63,7 @@ import de.trailscape.app.ui.theme.RideModeActionHeight
 import de.trailscape.app.ui.theme.RideModeExitHeight
 import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.core.TurnRichtung
+import de.trailscape.core.ZielZeile
 import de.trailscape.core.formatDuration
 import de.trailscape.core.turnAnsageText
 import kotlin.math.roundToInt
@@ -198,6 +199,10 @@ internal fun RideModeScreen(
     // Die Live-Sensorwerte — Parameter nur, damit Screenshot-Tests sie
     // einsetzen koennen; im Betrieb gilt der Vorgabewert.
     sensoren: LiveSensorAnzeige = rememberLiveSensorAnzeige(),
+    // Die Zielzeile („Noch 12 km bis zum Wochenziel", `LiveZielZeile.kt`),
+    // `null` = keine. Klein unter den Hoehenmetern: Sie aendert sich traege
+    // und ist zum Nachdenken da, nicht zum Reagieren.
+    zielZeile: ZielZeile? = null,
 ) {
     Dialog(
         onDismissRequest = onClose,
@@ -305,6 +310,10 @@ internal fun RideModeScreen(
                         size = SmallValueSize,
                         spoken = stringResource(R.string.map_ride_ascent_cd, ascentM.roundToInt()),
                     )
+                    if (zielZeile != null) {
+                        Spacer(Modifier.height(CardGap))
+                        LiveZielZeile(zielZeile, style = MaterialTheme.typography.titleMedium)
+                    }
                 }
 
                 Spacer(Modifier.height(CardGap))

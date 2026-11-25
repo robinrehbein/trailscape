@@ -423,6 +423,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     val isAutoPaused by RecordingRepository.isAutoPaused.collectAsStateWithLifecycle()
     val elapsedMs by RecordingRepository.elapsedMs.collectAsStateWithLifecycle()
     val recordedKm by RecordingRepository.distanceKm.collectAsStateWithLifecycle()
+    val liveZiel = rememberLiveZielZeile(recordedKm)
     val livePoints by RecordingRepository.points.collectAsStateWithLifecycle()
     val speedKmh by RecordingRepository.speedKmh.collectAsStateWithLifecycle()
     val recordingError by RecordingRepository.lastError.collectAsStateWithLifecycle()
@@ -3256,6 +3257,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 onTogglePause = { RecordingRepository.togglePause() },
                                 onStop = { RecordingRepository.stop() },
                                 onOpenRideMode = { rideModeSeite = RideModeSeite.DATEN },
+                                zielZeile = liveZiel,
                             )
 
                             else -> Unit
@@ -3708,6 +3710,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             // „Karte" wechselt zur NAVI_KARTE-Seite dieses Screens (Dialog
             // zu, Kompaktleiste an) — der Fahrmodus endet dabei nicht.
             onShowMap = { rideModeSeite = RideModeSeite.NAVI_KARTE },
+            zielZeile = liveZiel,
         )
     }
 

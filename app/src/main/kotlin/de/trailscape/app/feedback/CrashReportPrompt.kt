@@ -42,7 +42,11 @@ fun CrashReportPrompt() {
     LaunchedEffect(Unit) {
         // Datei-I/O gehoert nicht auf den Main-Thread, auch wenn es hier um
         // wenige Kilobyte geht.
-        report = withContext(Dispatchers.IO) { CrashReporter.readPendingReport(context) }
+        report = withContext(Dispatchers.IO) {
+            // Erst nachtragen: Ein nativer Absturz wird hier zum Bericht (siehe AppDiagnostics).
+            AppDiagnostics.recordExitReasons(context)
+            CrashReporter.readPendingReport(context)
+        }
     }
 
     val pending = report

@@ -82,4 +82,6 @@
     <string name="indoor_render_diag_switch_fps30">At most 30 frames per second</string>
     <string name="indoor_render_diag_resolution">Resolution: %1$d %%</string>
     <string name="indoor_render_diag_failure_detail">Details for a bug report</string>
+    <string name="indoor_render_diag_safe_mode">Safe graphics mode is on: the app was closed while loading a world last time. Ground detail, wind, water, birds and other riders are therefore off.</string>
+    <string name="indoor_render_diag_safe_mode_reset">Leave safe mode</string>
 </resources>
