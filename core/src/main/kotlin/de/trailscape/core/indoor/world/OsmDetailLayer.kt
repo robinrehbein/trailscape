@@ -81,11 +81,14 @@ internal class OsmDetailLayer : TileLayer {
             for (i in 0 until k - 1) {
                 val e0 = p[2 * i]; val n0 = p[2 * i + 1]
                 val e1 = p[2 * i + 2]; val n1 = p[2 * i + 3]
-                if (!s.contains(e0, n0)) continue
+                // Abschnitt beruehrt die Kachel nicht: weiter. Sonst gehoert jedes Teilstueck der Kachel, in der es
+                // beginnt (nicht der ganze Abschnitt der seines Anfangs — sonst fehlten an jeder Kachelgrenze Stuecke).
+                if (max(e0, e1) < s.minE || min(e0, e1) >= s.maxE || max(n0, n1) < s.minN || min(n0, n1) >= s.maxN) continue
                 val len = hypot(e1 - e0, n1 - n0)
                 if (len < 0.3) continue
                 val steps = max(1, Math.ceil(len / SEG_M).toInt())
                 for (j in 0 until steps) {
+                    if (!s.contains(e0 + (e1 - e0) * j / steps, n0 + (n1 - n0) * j / steps)) continue
                     val a = pushOff(e0 + (e1 - e0) * j / steps, n0 + (n1 - n0) * j / steps) ?: continue
                     val b = pushOff(e0 + (e1 - e0) * (j + 1) / steps, n0 + (n1 - n0) * (j + 1) / steps) ?: continue
                     when (f.kind) {
