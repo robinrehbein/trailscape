@@ -201,6 +201,40 @@ Bekannte Grenzen:
 - Ungeprüft ohne Gerätepaar: Darstellung auf runden Displays, Haken-Glyphe in der Uhrschrift
   (Prüfpunkte: `docs/geraete-pruefliste.md`).
 
+## (d) Drinnen oder draußen zur Einheit des Tages — gebaut
+
+Stand: umgesetzt (2026-11-25). Die Kachel zeigt unter den Kilometern eine kleine graue Zeile
+„Heute drinnen · 60 min“, „Heute draußen · 90 min“ oder „Einheit erledigt ✓“ — derselbe
+Vorschlag, den *Heute* auf dem Telefon zeigt (`app/…/ui/today/TodayPlaceCard.kt`, Regeln in
+`docs/trainingswissenschaft.md` 17), samt Wahl des Nutzers.
+- **Protokoll**: optionales Objekt `heute` im Wochenstand (`WochenGlance.heute`,
+  `HeuteVorschlag` in `core/…/WearGlance.kt`): `tag` (Epochentag), `ort`
+  („drinnen“/„draussen“), optional `min` (1…600), `erledigt`, `gewaehlt`. **Kein Text** — die
+  Uhr bildet die Zeile in ihrer Sprache (`GlanceTexts.heute`, Strings
+  `wear/…/values[-en]/strings_idee02.xml`).
+  - Alte Uhr + neues Handy: Der alte Dekoder liest Felder per Namen und übergeht `heute`;
+    `GLANCE_VERSION` bleibt 1. Getestet mit eingefrorener Kopie des alten Dekoders
+    (`WearGlanceHeuteTest`).
+  - Neue Uhr + altes Handy: Feld fehlt → keine Zeile.
+  - Ohne Vorschlag ist das Telegramm byte-gleich zum alten. Ein kaputtes `heute` (falscher
+    Typ, unbekannter Ort, Minuten außerhalb 1…600) kostet nur den Vorschlag, nicht den
+    Wochenstand.
+- **Handy**: *Heute* merkt den gezeigten Vorschlag im Schlüssel-Wert-Speicher
+  (`TODAY_PLACE_SHOWN_KEY`, wie das gezeigte Wochenziel des Widgets) und stößt bei einer
+  Änderung `WearGlanceSender.request` an; der Sender nimmt ihn nur mit, wenn er von heute ist.
+  Damit reist auch ein Umdrehen und das „erledigt“ nach der Fahrt mit, sobald *Heute* wieder
+  angezeigt wird.
+- **Uhr**: `heuteFuerTag` zeigt den Vorschlag nur an seinem eigenen Kalendertag (Uhrkalender);
+  ein Vorschlag von gestern verschwindet um Mitternacht mit der täglichen Neuanforderung der
+  Kachel. Komplikation und Aufzeichnungsansicht bleiben unverändert.
+
+Bekannte Grenzen:
+- Die Uhr erfährt den Vorschlag erst, wenn *Heute* auf dem Telefon einmal gezeigt wurde. Eine
+  Fahrt, die die Einheit erledigt, erscheint als „erledigt“ erst nach dem nächsten Öffnen von
+  *Heute* (der Wochenstand nach dem Speichern der Tour kennt sie, der Vorschlag noch nicht).
+- Ungeprüft ohne Gerätepaar: Länge der Zeile auf runder Anzeige (`WearHeuteTexteTest` prüft
+  grob ≤ 24 Zeichen), Abstand zum Bogen.
+
 ## Testbarkeit
 
 - JVM (`:core`): Kodierung/Dekodierung, Zeilenwahl, Berechnung von `WochenStand` aus `RideFact`s
