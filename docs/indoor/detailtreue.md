@@ -145,6 +145,16 @@ des Servers, nicht des Nutzers — der Verlauf ist ihm trotzdem bekannt).
 | Google Photorealistic 3D Tiles | fertiges 3D-Netz | – | **im EWR technisch gesperrt** („Photorealistic 3D tiles are not available … 403 … from EEA projects“, developers.google.com/maps/comms/eea/map-tiles); außerdem kein Speichern/Offline, keine Geodaten-Extraktion (developers.google.com/maps/documentation/tile/policies) | ja + Abrechnung | – | – | – | ausgeschlossen |
 | Apple Look Around / Bing Streetside | – | – | nur interaktiv im eigenen Kartenwerkzeug mit Token (MapKit) bzw. Bing Maps for Enterprise abgekündigt | ja | – | – | – | ausgeschlossen |
 
+**Wo die OSM-Zusatzdaten (Overpass) abgerufen werden — und wo nicht** (Vorgabe der Orchestrierung,
+Wohngegend des Inhabers ist privat): Die Abfrage verrät dem Overpass-Betreiber den Streckenkorridor.
+- `catalog-build`: **an** (Katalogstrecken sind öffentlich); `--no-osm-detail` schaltet ab.
+- `build` (Entwicklerwerkzeug): **aus**, nur mit `--osm-detail`.
+- `server-build` (eigene Strecken, `server/worlds`): **aus**, es gibt dort keinen Schalter — der Pfad ruft
+  `createWorldBuilder()` bzw. `createLaserWorldBuilder()` ohne Zusatzdaten auf (`ServerBuild.kt`). Ein späterer
+  Schalter müsste ausdrücklich gesetzt werden und dokumentieren, dass die Streckenlage dann an einen Dritten geht.
+- Handy-Bau: **nie** (die App kennt `OsmDetail` nicht; `createWorldBuilder()` ohne Argumente).
+Für eigene Strecken bleibt der Geofabrik-Weg (eigene Kacheln mit Zusatzattributen je Region) die Empfehlung.
+
 **Amtliche und weitere offene Daten** ([sek] = nur aus der Sekundärquelle technicalgis.com/aerial-imagery-atlas/germany, Stand 19.11.2026, an der Quelle noch zu prüfen):
 
 | Quelle | Nutzen | Abdeckung | Lizenz (Fundstelle) | Konto | Menge | Handy / Katalog-Server | Aufwand | Urteil |
