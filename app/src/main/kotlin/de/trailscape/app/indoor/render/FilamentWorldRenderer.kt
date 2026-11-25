@@ -13,12 +13,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.google.android.filament.android.UiHelper
+import de.trailscape.core.garage.RiderAvatar
 import de.trailscape.core.indoor.world.CameraMode
 import de.trailscape.core.indoor.world.IndoorQuality
 import de.trailscape.core.indoor.world.RenderDeviceInfo
 import de.trailscape.core.indoor.world.RenderFailure
 import de.trailscape.core.indoor.world.RenderSettings
 import de.trailscape.core.indoor.world.RenderStats
+import de.trailscape.core.indoor.world.RiderModelFiles
 import de.trailscape.core.indoor.sky.SkyClouds
 import de.trailscape.core.indoor.world.SkySetting
 import de.trailscape.core.indoor.world.WorldManifest
@@ -88,6 +90,9 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     private var uiHelper: UiHelper? = null
     private var surfaceView: SurfaceView? = null
     private var rider: AvatarActor? = null
+
+    /** Aussehen, mit dem [rider] gerade gezeigt wird (Garage); `null` = noch nicht geladen. */
+    private var riderLook: RiderAvatar? = null
     private var cockpit: CockpitActor? = null
     private var ghost: AvatarActor? = null
     private var life: LifeLayer? = null
@@ -402,10 +407,15 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         }
         core = c
         c.materialPackages = loadMaterialPackages()
-        life = LifeLayer(c) {
-            runCatching { appContext.assets.open("${WorldModels.ASSET_DIR}/${WorldModels.RIDER}").use { it.readBytes() } }.getOrNull()
-                ?: runCatching { AvatarModel.buildGlb(AvatarModel.RIDER) }.getOrNull()
-        }
+        life = LifeLayer(
+            core = c,
+            riderGlb = {
+                runCatching { appContext.assets.open("${WorldModels.ASSET_DIR}/${WorldModels.RIDER}").use { it.readBytes() } }.getOrNull()
+                    ?: runCatching { AvatarModel.buildGlb(AvatarModel.RIDER) }.getOrNull()
+            },
+            // Leichte Detailstufe fuer Mitfahrer in der Ferne; fehlt sie, bleibt es beim vollen Modell.
+            riderLodGlb = { readRiderModel(appContext, RiderModelFiles.RIDER_LOD) },
+        )
         deviceInfo = deviceInfo?.copy(backend = c.backendName)
         info = deviceInfo
         if (io == null) {
@@ -558,12 +568,28 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
 
     /** Laedt Fahrer und Geist: erst die Modelle aus den Assets, sonst den eingebauten Fahrer. */
     private fun loadAvatars(c: FilamentCore): Unit? {
+        // Aussehen aus der Garage, bei jeder Strecke neu gelesen (die Garage kann dazwischen offen gewesen sein).
+        val look = loadOwnAvatar(appContext)
+        life?.setOwnAvatar(look)
+        rider?.let { r ->
+            if (look != riderLook) {
+                if (guard.safeMode) {
+                    // Sicherer Modus: Farben stehen in der Datei — also neu laden statt zur Laufzeit setzen.
+                    runCatching { r.destroy() }
+                    rider = null
+                } else {
+                    RiderTint.apply(r.loaded.asset, look)
+                    riderLook = look
+                }
+            }
+        }
         if (rider == null) {
-            val r = loadModel(c, WorldModels.RIDER, AvatarModel.RIDER) ?: run {
+            val r = loadModel(c, WorldModels.RIDER, AvatarModel.RIDER, look) ?: run {
                 fail(RenderFailure.BAD_ASSETS, "Darstellung, Stufe „${RenderStage.MODELS.label}“: kein Fahrermodell ladbar")
                 return null
             }
             rider = r
+            riderLook = look
         }
         if (ghost == null) {
             ghost = loadModel(c, WorldModels.GHOST, AvatarModel.GHOST)
@@ -579,15 +605,20 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         return Unit
     }
 
-    private fun loadModel(c: FilamentCore, assetName: String, palette: AvatarModel.Palette): AvatarActor? {
+    /** [look]: Aussehen aus der Garage (nur der eigene Fahrer; der Geist behaelt seine Farbe). */
+    private fun loadModel(c: FilamentCore, assetName: String, palette: AvatarModel.Palette, look: RiderAvatar? = null): AvatarActor? {
         val fromAssets = runCatching {
             appContext.assets.open("${WorldModels.ASSET_DIR}/$assetName").use { it.readBytes() }
         }.getOrNull()
         if (fromAssets != null) {
-            val actor = runCatching { actorOf(c, fromAssets) }
+            val bytes = if (look != null) RiderTint.prepare(fromAssets, look, guard.safeMode) else fromAssets
+            val actor = runCatching { actorOf(c, bytes) }
                 .onFailure { Log.w(TAG, "Modell $assetName nicht ladbar, nehme den eingebauten Fahrer", it) }
                 .getOrNull()
-            if (actor != null) return actor
+            if (actor != null) {
+                if (look != null && !guard.safeMode) RiderTint.apply(actor.loaded.asset, look)
+                return actor
+            }
         }
         return runCatching { actorOf(c, AvatarModel.buildGlb(palette)) }
             .onFailure { Log.w(TAG, "Eingebauter Fahrer nicht ladbar", it) }
