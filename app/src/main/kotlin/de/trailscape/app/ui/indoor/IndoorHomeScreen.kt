@@ -512,6 +512,7 @@ private fun OptionsCard(
             IndoorGhostOption.None -> stringResource(R.string.indoor_app_ghost_none_body)
             is IndoorGhostOption.PastRide -> stringResource(R.string.indoor_app_ghost_past)
             is IndoorGhostOption.ConstantPower -> stringResource(R.string.indoor_app_ghost_power_label, g.watts)
+            is IndoorGhostOption.Challenge -> g.label
         },
     ).joinToString(" · ")
     Card(modifier = Modifier.fillMaxWidth().animateContentSize()) {
