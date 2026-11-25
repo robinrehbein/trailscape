@@ -115,17 +115,19 @@ fun TodayPlaceEntry(
 ) {
     val context = LocalContext.current
     val date = now.toLocalDate()
-    var choice by remember { mutableStateOf(readPlaceChoice(AppServices.keyValueStore)) }
+    var choice by remember { mutableStateOf(runCatching { readPlaceChoice(AppServices.keyValueStore) }.getOrNull()) }
     var location by remember { mutableStateOf<TrackPoint?>(null) }
     var forecast by remember { mutableStateOf<DayForecast?>(null) }
     val lastOutdoor = remember(rides) { outdoorRides(rides).maxByOrNull { it.createdAt } }
     LaunchedEffect(lastOutdoor?.id, date) {
-        withContext(Dispatchers.IO) {
-            location = lastOutdoor?.id?.let { id ->
+        val (point, day) = withContext(Dispatchers.IO) {
+            val start = lastOutdoor?.id?.let { id ->
                 runCatching { AppServices.rideStorage.loadRide(id)?.points?.firstOrNull() }.getOrNull()
-            }?.let(::coarsePlacePoint)
-            forecast = cachedTodayForecast(date)
+            }
+            coarsePlacePoint(start) to cachedTodayForecast(date)
         }
+        location = point
+        forecast = day
     }
     val progress = remember(decision, rides, rideLoads, now) {
         runCatching {
@@ -141,8 +143,10 @@ fun TodayPlaceEntry(
     // Fuer die Uhr merken, was hier steht — und nur bei einer Aenderung senden.
     val shown = heuteVorschlagVon(place, date, done, progress?.takeIf { done }?.let { it.riddenIndoor && !it.riddenOutdoor })
     LaunchedEffect(shown) {
-        val changed = withContext(Dispatchers.IO) { writeShownHeute(AppServices.keyValueStore, shown) }
-        if (changed) WearGlanceSender.request(context)
+        val changed = withContext(Dispatchers.IO) {
+            runCatching { writeShownHeute(AppServices.keyValueStore, shown) }.getOrDefault(false)
+        }
+        if (changed) runCatching { WearGlanceSender.request(context) }
     }
 
     val ui: TodayPlaceUi = when {
@@ -155,7 +159,7 @@ fun TodayPlaceEntry(
         onFlip = {
             val current = place ?: return@TodayPlaceCard
             val next = PlaceChoice(date, current.place.flipped())
-            writePlaceChoice(AppServices.keyValueStore, next, current.suggested)
+            runCatching { writePlaceChoice(AppServices.keyValueStore, next, current.suggested) }
             choice = next
         },
         onPlanRoute = onPlanRoute,
@@ -322,13 +326,16 @@ private fun DoneBody(progress: PlanSessionProgress, formats: AppFormats) {
 @Composable
 private fun placeReasonText(reason: PlaceReason, p: TodayPlace, now: ZonedDateTime, formats: AppFormats): String {
     val zone: ZoneId = now.zone
-    val sunset = p.sunset?.atZone(zone)?.toLocalTime()?.let(formats::time)
-    val sunrise = p.sunrise?.atZone(zone)?.toLocalTime()?.let(formats::time)
+    val setAt = p.sunset
+    val riseAt = p.sunrise
+    val sunset = setAt?.atZone(zone)?.toLocalTime()?.let(formats::time)
+    val sunrise = riseAt?.atZone(zone)?.toLocalTime()?.let(formats::time)
     return when (reason) {
         PlaceReason.DARK -> when {
-            sunset == null || sunrise == null -> stringResource(R.string.idee02_place_reason_dark_polar)
-            now.toInstant().isBefore(p.sunrise) -> stringResource(R.string.idee02_place_reason_dark_before, sunrise)
-            !now.toInstant().isBefore(p.sunset) -> stringResource(R.string.idee02_place_reason_dark_after, sunset)
+            setAt == null || riseAt == null || sunset == null || sunrise == null ->
+                stringResource(R.string.idee02_place_reason_dark_polar)
+            now.toInstant().isBefore(riseAt) -> stringResource(R.string.idee02_place_reason_dark_before, sunrise)
+            !now.toInstant().isBefore(setAt) -> stringResource(R.string.idee02_place_reason_dark_after, sunset)
             else -> stringResource(R.string.idee02_place_reason_dark_share, sunset, p.minutes)
         }
         PlaceReason.DUSK -> stringResource(R.string.idee02_place_reason_dusk, sunset.orEmpty())
