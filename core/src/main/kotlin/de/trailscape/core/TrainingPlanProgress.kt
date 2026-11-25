@@ -70,6 +70,18 @@ data class PlanSessionProgress(
     val riddenKm: Double? = null,
     /** Last der zugeordneten Tour, falls im uebergebenen Lastverzeichnis. */
     val riddenLoad: Double? = null,
+    /**
+     * Weitere Touren desselben Tages, die mitgezaehlt wurden (siehe
+     * [weekSessionProgress], „Mehrere Fahrten an einem Tag"); [riddenKm],
+     * [riddenLoad] und [riddenMinutes] sind dann Summen.
+     */
+    val extraRideIds: List<String> = emptyList(),
+    /** Bewegungszeit der zugeordneten Tour(en) in Minuten, falls bekannt. */
+    val riddenMinutes: Int? = null,
+    /** Mindestens eine der zugeordneten Touren war drinnen auf der Rolle ([RideInfo.indoor]). */
+    val riddenIndoor: Boolean = false,
+    /** Mindestens eine der zugeordneten Touren war draussen. */
+    val riddenOutdoor: Boolean = false,
 )
 
 /** Kalendertag (lokal) einer Einheit innerhalb ihrer Woche; `null` bei fremdem Kuerzel. */
@@ -98,10 +110,25 @@ private fun sessionDate(week: TrainingWeek, session: TrainingSession): java.time
  *    danach die aeltere. Deterministisch und damit testbar.
  *
  * ## Status
- * Erfuellungsgrad ist das Maximum aus km-Anteil und (falls [rideLoads] die
- * Tour kennt und die Einheit ein Last-Ziel traegt) Last-Anteil; ab
- * [sessionDoneShare] gilt ERLEDIGT, darunter TEILWEISE. Ohne passende Tour
- * entscheidet die Uhr: VERPASST erst, wenn auch der Toleranztag vorbei ist.
+ * Erfuellungsgrad ist das Maximum aus km-Anteil, (falls [rideLoads] die
+ * Tour kennt und die Einheit ein Last-Ziel traegt) Last-Anteil und
+ * Zeit-Anteil ([sessionTimeShare]); ab [sessionDoneShare] gilt ERLEDIGT,
+ * darunter TEILWEISE. Ohne passende Tour entscheidet die Uhr: VERPASST erst,
+ * wenn auch der Toleranztag vorbei ist.
+ *
+ * ## Draussen und drinnen gleich
+ * Eine Indoor-Fahrt ([RideInfo.indoor]) ist eine gefahrene Tour und erledigt
+ * eine Einheit genauso wie eine Fahrt draussen. Weil ihre Kilometer virtuell
+ * sind (am Berg der Strecke langsamer, im ERG-Modus nach Zeit gefahren), zaehlt
+ * der Zeit-Anteil mit — bei Indoor-Fahrten auch fuer Einheiten aus Plaenen ohne
+ * [TrainingSession.durationMin] (dann die Dauer, die auch die ERG-Einheit faehrt).
+ *
+ * ## Mehrere Fahrten an einem Tag
+ * Reicht die beste Tour allein nicht fuer ERLEDIGT, zaehlen die uebrigen noch
+ * freien Touren **genau vom Tag der Einheit** dazu (km, Last und Zeit als
+ * Summe) — draussen abgebrochen und drinnen zu Ende gefahren ist eine Einheit.
+ * Touren vom Nachbartag werden nicht dazugenommen: Sie gehoeren moeglicherweise
+ * zur Einheit dieses Tages.
  *
  * @param rideLoads Last je Tour-ID (z. B. aus `TrainingInsights.rideLoads`);
  *   leer, wenn keine Lasten vorliegen — dann entscheidet allein die Distanz.
@@ -164,13 +191,14 @@ fun weekSessionProgress(
         }
 
         best.taken = true
-        val riddenKm = best.ride.stats.distanceKm
-        val riddenLoad = rideLoads[best.ride.id]
-        val kmShare = if (session.targetKm > 0) riddenKm / session.targetKm else 1.0
-        val loadShare = session.targetLoad
-            ?.takeIf { it > 0 }
-            ?.let { target -> riddenLoad?.div(target) }
-        val fulfilled = max(kmShare, loadShare ?: 0.0)
+        var group = listOf(best.ride)
+        if (fulfilledShare(session, group, rideLoads) < sessionDoneShare && best.date == date) {
+            val sameDay = candidates.filter { !it.taken && it.date == date }
+            sameDay.forEach { it.taken = true }
+            group = group + sameDay.map { it.ride }
+        }
+        val fulfilled = fulfilledShare(session, group, rideLoads)
+        val loads = group.mapNotNull { rideLoads[it.id] }
         results[session] = PlanSessionProgress(
             session = session,
             status = if (fulfilled >= sessionDoneShare) {
@@ -179,13 +207,54 @@ fun weekSessionProgress(
                 PlanSessionStatus.TEILWEISE
             },
             rideId = best.ride.id,
-            riddenKm = riddenKm,
-            riddenLoad = riddenLoad,
+            riddenKm = group.sumOf { it.stats.distanceKm },
+            riddenLoad = if (loads.isEmpty()) null else loads.sum(),
+            extraRideIds = group.drop(1).map { it.id },
+            riddenMinutes = groupMinutes(group),
+            riddenIndoor = group.any { it.indoor },
+            riddenOutdoor = group.any { !it.indoor },
         )
     }
 
     // Ergebnis in Originalreihenfolge der Woche, nicht in Zuordnungsreihenfolge.
     return week.sessions.map { results.getValue(it) }
+}
+
+/** Bewegungszeit (sonst Gesamtdauer) einer Tour in Sekunden, `null` ohne beides. */
+private fun rideSeconds(ride: RideInfo): Int? =
+    (ride.stats.movingTimeS ?: ride.stats.durationS)?.takeIf { it > 0 }
+
+/** Summe der Zeiten in Minuten; `null`, wenn keine Tour eine Zeit kennt. */
+private fun groupMinutes(group: List<RideInfo>): Int? {
+    val seconds = group.mapNotNull(::rideSeconds)
+    return if (seconds.isEmpty()) null else seconds.sum() / 60
+}
+
+/**
+ * Zeit-Anteil der Touren [group] an der Einheit [session], oder `null`.
+ *
+ * Bezugsgroesse ist [TrainingSession.durationMin]. Fehlt sie (Plan aus der
+ * Zeit vor dem Feld), zaehlt der Zeit-Anteil nur, wenn eine der Touren drinnen
+ * war — dann gilt die Dauer, die auch die ERG-Einheit faehrt
+ * (`sessionDurationMinutes`). Fuer reine Fahrten draussen bleibt es in diesem
+ * Fall bei km und Last wie bisher.
+ */
+fun sessionTimeShare(session: TrainingSession, group: List<RideInfo>): Double? {
+    val minutes = groupMinutes(group)?.takeIf { it > 0 } ?: return null
+    val planned = session.durationMin?.takeIf { it > 0 }
+        ?: if (group.any { it.indoor }) de.trailscape.core.indoor.sessionDurationMinutes(session) else null
+    return planned?.let { minutes.toDouble() / it }
+}
+
+/** Erfuellungsgrad: Maximum aus km-, Last- und Zeit-Anteil (Regeln bei [weekSessionProgress]). */
+private fun fulfilledShare(session: TrainingSession, group: List<RideInfo>, rideLoads: Map<String, Double>): Double {
+    val km = group.sumOf { it.stats.distanceKm }
+    val kmShare = if (session.targetKm > 0) km / session.targetKm else 1.0
+    val loads = group.mapNotNull { rideLoads[it.id] }
+    val loadShare = session.targetLoad
+        ?.takeIf { it > 0 && loads.isNotEmpty() }
+        ?.let { target -> loads.sum() / target }
+    return max(max(kmShare, loadShare ?: 0.0), sessionTimeShare(session, group) ?: 0.0)
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +349,9 @@ fun adaptPlan(
 ): AdaptedPlan {
     val nowMs = now ?: System.currentTimeMillis()
     val unchanged = AdaptedPlan(plan, adapted = false, reason = null)
+    // Ein importierter Plan (Plan-Rezept) ist Vorgabe von Trainerin oder Verein:
+    // Er wird nicht mit dem Generator neu gerechnet.
+    if (plan.recipe != null) return unchanged
 
     val completed = plan.weeks.filter { it.end <= nowMs }
     val last = completed.maxByOrNull { it.index } ?: return unchanged
@@ -347,7 +419,8 @@ fun adaptPlan(
         if (week.kind == WeekKind.ZIELWOCHE) {
             week
         } else {
-            val weekSessions = sessions[week.index]
+            // Einzeln importierte Rezepteinheiten (fromRecipe) bleiben stehen.
+            val weekSessions = sessions[week.index] + week.sessions.filter { it.fromRecipe }
             week.copy(targetKm = weekSessions.sumOf { it.targetKm }, sessions = weekSessions)
         }
     }.associateBy { it.index }

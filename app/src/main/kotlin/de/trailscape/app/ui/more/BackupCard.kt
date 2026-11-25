@@ -43,9 +43,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.R
+import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.trailscapePrefs
 import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.i18n.UiText
+import de.trailscape.app.indoor.ClimbBestStore
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.UNREADABLE_FILE_MESSAGE
 import de.trailscape.app.ui.components.OneUiDialog
@@ -170,6 +172,8 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                 appViewModel.addRides(newRides)
                 data.profile?.let { appViewModel.setProfile(it) }
                 data.yearGoal?.let { appViewModel.restoreYearGoal(it) }
+                // Bestzeiten an Anstiegen (Indoor-Bergwertung): je Anstieg gewinnt die schnellere Zeit.
+                withContext(Dispatchers.IO) { ClimbBestStore.merge(AppServices.keyValueStore, data.climbBests) }
                 data.avatar?.let { appViewModel.restoreAvatar(it) }
                 DiagLog.shared.log(DiagEvent.BACKUP_IMPORT_OK, count = newRides.size.toLong())
 

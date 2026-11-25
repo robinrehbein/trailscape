@@ -4,6 +4,7 @@ import de.trailscape.core.DiagEvent
 import de.trailscape.core.DiagLog
 import de.trailscape.core.Ride
 import de.trailscape.core.RideSummary
+import de.trailscape.core.withDerivedPowerMeasured
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.serialization.json.Json
@@ -309,7 +310,10 @@ class RideStorage(private val ridesDir: File) {
     }
 
     /** Schreibt die Datei und pflegt den In-Memory-Index; persistiert ihn NICHT. */
-    private fun saveRideInternal(ride: Ride) {
+    private fun saveRideInternal(unmarked: Ride) {
+        // Herkunft der Leistung an der einen Stelle festhalten, durch die jede
+        // Tour geht (Aufzeichnung, Indoor, Import, Sync): siehe [Ride.powerMeasured].
+        val ride = unmarked.withDerivedPowerMeasured()
         val dir = ensureDir()
         val file = rideFile(dir, ride.id)
         val tmpFile = File(dir, "${file.name}.tmp")

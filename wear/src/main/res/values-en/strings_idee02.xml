@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Idea 2: indoor/outdoor suggestion for today's session on the tile (docs/wear-motivation.md, d). -->
+<resources>
+    <!-- glance/GlanceTexts.kt, tile/WochenTileService.kt -->
+    <string name="idee02_wear_today_outdoor">Outdoors today</string>
+    <string name="idee02_wear_today_indoor">Indoors today</string>
+    <string name="idee02_wear_today_outdoor_min">Outdoors today · %1$d min</string>
+    <string name="idee02_wear_today_indoor_min">Indoors today · %1$d min</string>
+    <string name="idee02_wear_today_done">Session done ✓</string>
+</resources>

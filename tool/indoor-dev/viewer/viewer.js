@@ -28,6 +28,9 @@ const pNum = (k, d) => {
   return Number.isFinite(v) ? v : d;
 };
 const pFlag = (k, d) => (params.has(k) ? !['0', 'false', 'off', ''].includes(params.get(k)) : d);
+const CARD_FADE = pFlag('cardFade', true);
+// Fehlersuche: Materialien, deren Name eines dieser Stuecke enthaelt, nicht zeichnen (`hideMat=props,fringe`).
+const HIDE_MAT = pStr('hideMat', '').split(',').filter(Boolean);
 
 const CONFIG = {
   world: pStr('world', '../out/mock').replace(/\/+$/, ''),
@@ -780,6 +783,20 @@ function prepareMaterials(root) {
     // MASK: Filament schaltet fuer `masked` Alpha-to-Coverage ein (MaterialDefinition.cpp:
     // rasterState.alphaToCoverage = blendingMode == MASKED); hier dasselbe (MSAA ist an).
     if (m.alphaTest > 0 && !m.transparent) m.alphaToCoverage = true;
+    if (HIDE_MAT.some((h) => (m.name || '').includes(h))) m.visible = false;
+    // Wie foliage.mat (atlasMode 1): Blattkarten, die man fast auf der Kante sieht, ausblenden
+    // (`cardFade=0` zeigt den Stand vor indoor-world/12).
+    if (m.name === 'x_mat_tree_cards' && CARD_FADE) {
+      m.onBeforeCompile = (sh) => {
+        sh.fragmentShader = sh.fragmentShader.replace('#include <alphatest_fragment>', `{
+          vec3 fnv = cross(dFdx(vViewPosition), dFdy(vViewPosition));
+          float fl = length(fnv);
+          if (fl > 1e-12) diffuseColor.a *= smoothstep(0.10, 0.32, abs(dot(fnv / fl, normalize(vViewPosition))));
+        }
+        #include <alphatest_fragment>`);
+      };
+      m.customProgramCacheKey = () => 'cards-fade';
+    }
     for (const key of ['map', 'emissiveMap']) {
       const t = m[key];
       if (t && !textures.has(t)) {

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte zu Idee 3 „Eine Auswertung für alles": Art-Filter der Tourenliste
+    (Alle / Draußen / Indoor) und die FTP-Herkunft bei gemessener Leistung.
+    Schlüssel-Präfix: idee03_ (Regeln: docs/i18n.md).
+    Gegenstück: values/strings_idee03.xml — gleiche Schlüssel, gleiche Reihenfolge.
+-->
+<resources>
+    <string name="idee03_filter_all">All</string>
+    <string name="idee03_filter_outdoor">Outdoor</string>
+    <string name="idee03_filter_indoor">Indoor</string>
+    <string name="idee03_filter_empty">No rides in this selection.</string>
+    <string name="idee03_load_scale_twenty_min_measured">All load values use a %1$d W threshold (%2$s W/kg), estimated from your rides. It is based on your best 20-minute stretch of measured power (power meter or smart trainer). An entered FTP would still be more accurate.</string>
+</resources>

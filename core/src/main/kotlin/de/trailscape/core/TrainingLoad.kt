@@ -1689,6 +1689,14 @@ enum class EftpSource {
     /** `0,95 × bestes 20-min-Mittel` aus den geschaetzten Leistungsreihen. */
     ZWANZIG_MINUTEN,
 
+    /**
+     * `0,95 × bestes 20-min-Mittel`, das aus **gemessener** Leistung stammt
+     * (Leistungsmesser, Rollentrainer, Datei mit Leistungswerten). Dieselbe
+     * Rechnung wie [ZWANZIG_MINUTEN], nur ohne die ±15–25 % der GPS-Schaetzung
+     * in der Beschriftung.
+     */
+    ZWANZIG_MINUTEN_GEMESSEN,
+
     /** Aus dem Vergleich HF-Last ↔ Physiklast zurueckgerechnet (α). */
     KALIBRIERT,
 
@@ -1777,7 +1785,9 @@ fun resolveEftp(
 
 /**
  * Wie [resolveEftp], nimmt aber das bereits ermittelte beste 20-min-Mittel
- * entgegen statt der vollen Leistungsreihen.
+ * entgegen statt der vollen Leistungsreihen. [bestTwentyMinMeasured] sagt, ob
+ * dieses Mittel aus gemessener Leistung stammt (siehe
+ * [EftpSource.ZWANZIG_MINUTEN_GEMESSEN]); ohne Angabe gilt es als geschaetzt.
  *
  * Existiert fuer Aufrufer, die die Leistungsreihen nicht mehr im Speicher
  * halten (der Bestwert je Tour liegt im persistenten Last-Cache, siehe
@@ -1788,6 +1798,7 @@ fun resolveEftp(
     profile: TrainingProfile,
     bestTwentyMinW: Double?,
     calibration: LoadCalibration = LoadCalibration.NEUTRAL,
+    bestTwentyMinMeasured: Boolean = false,
 ): EftpEstimate {
     val override = profile.eftpOverrideW
     if (override != null) {
@@ -1823,7 +1834,7 @@ fun resolveEftp(
     if (best != null && fromPower > anchor) {
         return EftpEstimate(
             watts = fromPower,
-            source = EftpSource.ZWANZIG_MINUTEN,
+            source = if (bestTwentyMinMeasured) EftpSource.ZWANZIG_MINUTEN_GEMESSEN else EftpSource.ZWANZIG_MINUTEN,
             confidence = Confidence.MEDIUM,
             bestTwentyMinW = best,
         )

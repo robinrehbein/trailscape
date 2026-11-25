@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texts for “Ridden outdoors → ride it again indoors” (docs/indoor/app.md).
+    Key prefix: idee01_ — same keys and order as values/strings_idee01.xml.
+-->
+<resources>
+    <!-- IndoorFromRide.kt (ride detail) -->
+    <string name="idee01_detail_indoor_action">Ride indoors</string>
+    <string name="idee01_detail_indoor_ridden_hint">On the indoor trainer, with your outdoor ride as your riding partner.</string>
+    <string name="idee01_detail_indoor_planned_hint">Ride this planned route indoors on the trainer.</string>
+    <!-- IndoorTexts.kt -->
+    <string name="idee01_ghost_outdoor_label">Outdoor ride on %1$s</string>
+    <!-- IndoorRideHud.kt -->
+    <string name="idee01_hud_ghost_ahead_power">%1$s · %2$s ahead · %3$d W</string>
+    <string name="idee01_hud_ghost_behind_power">%1$s · %2$s behind · %3$d W</string>
+    <string name="idee01_hud_ghost_ahead_m_power">%1$s · %2$d m ahead · %3$d W</string>
+    <string name="idee01_hud_ghost_behind_m_power">%1$s · %2$d m behind · %3$d W</string>
+    <!-- IndoorOutdoorComparison.kt (summary) -->
+    <string name="idee01_summary_eyebrow">Compared with your outdoor ride</string>
+    <string name="idee01_summary_ahead">You were %1$s ahead of your outdoor ride.</string>
+    <string name="idee01_summary_behind">You were %1$s behind your outdoor ride.</string>
+    <string name="idee01_summary_even">You were level with your outdoor ride.</string>
+    <string name="idee01_summary_section">Compared over %1$s km from km %2$s.</string>
+    <string name="idee01_summary_section_full">Compared over %1$s km.</string>
+    <string name="idee01_summary_col_indoor">Indoors</string>
+    <string name="idee01_summary_col_outdoor">Outdoors</string>
+    <string name="idee01_summary_row_time">Time</string>
+    <string name="idee01_summary_row_speed">Avg speed</string>
+    <string name="idee01_summary_row_power">Avg power</string>
+    <string name="idee01_summary_no_power">Your outdoor ride has no power data.</string>
+</resources>

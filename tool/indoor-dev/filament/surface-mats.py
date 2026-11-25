@@ -16,6 +16,19 @@ COMMON_HEAD = '''// {title}
 //    der Weltlage modulo 5,12 m (die Weltlage bleibt dank schwebendem Ursprung unter rund
 //    2,5 km — highp genuegt; gleiche Phase wie das Gelaende, weil Ursprung und Kacheln auf
 //    256 m = 50 × 5,12 m liegen).
+//  * Nahdetail der Fahrbahn (SurfaceNearDetail, Karten von nahdetail.py): je Belag eine
+//    kachelbare Karte in Weltkoordinaten (Gefaelle in R/G, Hoehe in B), in zwei Massstaeben
+//    (der zweite gedreht und 2,63-mal groesser, gegen sichtbare Wiederholung) — feine Koernung,
+//    Mikroschatten in Poren, Rauheit je Belag (Kornspitzen und Fahrspuren glatter). Dazu Relief
+//    aus dem Belagsbild selbst: Fugen, Risse und Steine der Belagstextur werden zu Rillen
+//    (Helligkeitsgefaelle → Normale, Richtung aus den Bildschirmableitungen von Lage und UV,
+//    ohne Tangenten). `nearA.x` = 0 schaltet alles ab (Randstreifen, „Bodendetails“ aus).
+//  * PBR-Texturen (PbrTextures, Saetze von pbr.py, docs/indoor/pbr-texturen.md): je Belag bzw.
+//    Randstreifen eine Schicht eines Textur-Arrays — Farbdetail (Mittel 1) + Rauheit und
+//    Normale. Die Farbe bleibt die des Belagsbilds (ganz oder als grobe Mip-Stufe, `pbrC.w`), nah
+//    kommen Detail, Normale und Rauheit aus der Textur; weich aus bis `pbrA.x` Meter. In
+//    Weltkoordinaten zwei Massstaebe, in Flecken eine zweite Schicht (Makrovariation); Kopfstein
+//    in Fahrbahn-UV, damit die Steinreihen der Strasse folgen. `pbrA.x` = 0: wie vorher.
 //
 // Erzeugt von tool/indoor-dev/filament/surface-mats.py (nicht von Hand aendern), kompilieren:
 // tool/indoor-dev/filament/materials.sh (matc 1.75.1).
@@ -36,7 +49,17 @@ material {{
         {{ type : float, name : detailStrength }},
         {{ type : float, name : bumpStrength }},
         {{ type : float, name : anisoRange }},
-        {{ type : float, name : forestWarmth }}
+        {{ type : float, name : forestWarmth }},
+        {{ type : sampler2d, name : nearMap, precision : medium }},
+        {{ type : float4, name : nearA }},
+        {{ type : float4, name : nearB }},
+        {{ type : float4, name : nearC }},
+        {{ type : sampler2dArray, name : pbrMapC, precision : medium }},
+        {{ type : sampler2dArray, name : pbrMapN, precision : medium }},
+        {{ type : float4, name : pbrA }},
+        {{ type : float4, name : pbrB }},
+        {{ type : float4, name : pbrC }},
+        {{ type : float4, name : pbrD }}
     ],
     shadingModel : lit,
     blending : {blending},
@@ -69,6 +92,27 @@ fragment {{
         return mix(texture(materialParams_baseColorMap, uv), c * 0.25, near);
     }}
 
+    // Waldboden waermer (wie terrain.mat) und dunkles Blaugruen zu Gruenbraun.
+    vec3 warmth(vec3 c, float wf, float fw) {{
+        float lumc = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        c = mix(c, vec3(lumc) * vec3(1.42, 1.0, 0.62) * 1.08, fw * wf);
+        float mxc = max(c.r, max(c.g, c.b));
+        float cool = smoothstep(0.0, 0.22, (c.b - c.r) / max(mxc, 0.004)) * (1.0 - smoothstep(0.06, 0.16, lumc));
+        return mix(c, vec3(lumc) * vec3(1.12, 1.06, 0.66) * 1.05, 0.65 * cool * step(0.001, fw));
+    }}
+
+    // Wertrauschen fuer die Makrovariation der PBR-Schichten (Flecken von einigen Metern).
+    highp float pbrHash(highp vec2 p) {{
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+    }}
+    highp float pbrNoise(highp vec2 p) {{
+        highp vec2 i = floor(p);
+        highp vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(pbrHash(i), pbrHash(i + vec2(1.0, 0.0)), f.x),
+                   mix(pbrHash(i + vec2(0.0, 1.0)), pbrHash(i + vec2(1.0, 1.0)), f.x), f.y);
+    }}
+
     void material(inout MaterialInputs material) {{
         highp vec2 uv = getUV0();
         highp vec3 wp = getWorldPosition();
@@ -76,21 +120,33 @@ fragment {{
         float ar = materialParams.anisoRange;
         float near = ar > 0.0 ? 1.0 - smoothstep(ar * 0.7, ar, dist) : 0.0;
         vec4 c = sampleAniso(uv, near) * materialParams.baseColorFactor * getColor();
+        // PBR: Koordinaten und ihre Ableitungen vor jeder Verzweigung (textureGrad unten)
+        vec4 pA = materialParams.pbrA;  // Reichweite m, Normale, Farbdetail, Ersatz der Feinstruktur
+        vec4 pD = materialParams.pbrD;  // Koordinaten (0 Welt, 1 Fahrbahn-UV), Meter je u, je v, Meter zweite Schicht
+        float pw = pA.x > 0.0 ? 1.0 - smoothstep(pA.x * 0.5, pA.x, dist) : 0.0;
+        highp vec2 pq = pD.x > 0.5 ? vec2(uv.x * pD.y, uv.y * pD.z) : getUserWorldPosition().xz;
+        highp vec2 pqx = dFdx(pq);
+        highp vec2 pqy = dFdy(pq);
+        // Bildschirmableitungen fuer das Relief, vor jeder Verzweigung (in ungleichfoermigem
+        // Kontrollfluss sind dFdx/dFdy undefiniert).
+        highp vec3 dp1 = dFdx(wp);
+        highp vec3 dp2 = dFdy(wp);
+        highp vec2 du1 = dFdx(uv);
+        highp vec2 du2 = dFdy(uv);
 
         // Waldboden waermer (wie terrain.mat): Randstreifen im Wald sind ans kuehle Luftbild angeglichen.
         vec4 cls0 = materialParams.detailClass;
         float wf = cls0.z / max(cls0.x + cls0.y + cls0.z + cls0.w, 1e-3);
-        float lumc = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
-        c.rgb = mix(c.rgb, vec3(lumc) * vec3(1.42, 1.0, 0.62) * 1.08, materialParams.forestWarmth * wf);
-        // Dunkles Blaugruen (an das Winter-Luftbild angeglichene Raender) zu Gruenbraun
-        float mxc = max(c.r, max(c.g, c.b));
-        float cool = smoothstep(0.0, 0.22, (c.b - c.r) / max(mxc, 0.004)) * (1.0 - smoothstep(0.06, 0.16, lumc));
-        c.rgb = mix(c.rgb, vec3(lumc) * vec3(1.12, 1.06, 0.66) * 1.05, 0.65 * cool * step(0.001, materialParams.forestWarmth));
+        c.rgb = warmth(c.rgb, wf, materialParams.forestWarmth);
 
         vec3 nTs = vec3(0.0, 0.0, 1.0);
+        vec3 nGeo = normalize(getWorldTangentFrame()[2]);
+        vec3 pW = vec3(0.0);
+        float rough = materialParams.roughnessFactor;
         vec4 cls = materialParams.detailClass;
         float range = materialParams.detailRange;
         float fade = range > 0.0 ? 1.0 - smoothstep(range * 0.55, range, dist) : 0.0;
+        fade *= 1.0 - pw;  // nah ersetzt die PBR-Textur das Boden-Detail
         float clsSum = cls.x + cls.y + cls.z + cls.w;
         if (fade > 0.001 && clsSum > 0.0) {{
             highp vec3 uw = getUserWorldPosition();
@@ -103,17 +159,140 @@ fragment {{
             float gx = dot(hx - h0, cls);
             float gy = dot(hy - h0, cls);
             c.rgb *= max(1.0 + materialParams.detailStrength * fade * (h - 0.5) * 2.0, 0.0);
-            vec3 nGeo = normalize(getWorldTangentFrame()[2]);
-            vec3 p = -(gx * vec3(1.0, 0.0, 0.0) + gy * vec3(0.0, 0.0, 1.0)) * (materialParams.bumpStrength * fade);
-            p -= dot(p, nGeo) * nGeo;
-            vec3 nW = normalize(nGeo + p);
+            pW -= (gx * vec3(1.0, 0.0, 0.0) + gy * vec3(0.0, 0.0, 1.0)) * (materialParams.bumpStrength * fade);
+        }}
+
+        // Nahdetail der Fahrbahn
+        vec4 nA = materialParams.nearA;  // Reichweite m, Normale, Helligkeit, Relief aus dem Belagsbild
+        float track = 0.0;
+        if (nA.x > 0.0) {{
+            vec4 nB = materialParams.nearB;  // Meter je Karte, Rauheit, Rauheit-Variation, Spurglanz
+            vec4 nC = materialParams.nearC;  // Spurlage u, Relief-Reichweite m, Relief-Abstand in Texeln, Relief-Mip mindestens
+            rough = nB.y;
+            float nf = 1.0 - smoothstep(nA.x * 0.55, nA.x, dist);
+            float rf = 1.0 - smoothstep(nC.y * 0.55, nC.y, dist);
+            rf *= 1.0 - pw * pA.w;  // ersetzt die PBR-Textur die Feinstruktur, auch deren Relief
+            // Fahrspuren der Zweispur-Wege (u quer, Wegmitte bei u = 0,5): verdichtet, glatter
+            if (nC.x > 0.0) {{
+                float du = (abs(fract(uv.x) - 0.5) - nC.x) / 0.09;
+                track = exp(-du * du);
+            }}
+            rough -= nB.w * track;
+            if (nf > 0.001) {{
+                highp vec2 w = getUserWorldPosition().xz;
+                // zweiter Massstab 37° gedreht, 2,63-mal groesser: bricht das Kachelmuster
+                const mat2 rot = mat2(0.7986, 0.6018, -0.6018, 0.7986);
+                highp vec2 q1 = w / nB.x;
+                highp vec2 q2 = (rot * w) / (nB.x * 2.63);
+                vec3 d1 = texture(materialParams_nearMap, q1).rgb;
+                vec3 d2 = texture(materialParams_nearMap, q2).rgb;
+                vec2 g = (d1.rg - 0.5) + 0.55 * (transpose(rot) * (d2.rg - 0.5));
+                float h = (d1.b - 0.5) + 0.55 * (d2.b - 0.5);
+                float k = nf * (1.0 - 0.45 * track) * (1.0 - 0.75 * pw);
+                c.rgb *= max(1.0 + nA.z * k * h * 2.0, 0.0);
+                pW -= (g.x * vec3(1.0, 0.0, 0.0) + g.y * vec3(0.0, 0.0, 1.0)) * (2.0 * nA.y * k);
+                rough -= nB.z * nf * h;
+            }}
+            if (rf > 0.001 && nA.w > 0.0) {{
+                // Relief aus dem Belagsbild: Helligkeitsgefaelle (dunkel = tief), zentrale
+                // Differenzen ueber ±nC.z Texel (breitere Fasen an Steinkanten, glatte Kuppen)
+                // (Mip-Stufe explizit: mindestens nC.w, damit Sprenkel im Stein die Flaeche nicht
+                // kippen; textureLod ist auch in ungleichfoermigen Verzweigungen definiert).
+                highp vec2 bts = vec2(textureSize(materialParams_baseColorMap, 0));
+                highp vec2 o = nC.z / bts;
+                float lod = max(0.5 * log2(max(max(dot(du1 * bts, du1 * bts), dot(du2 * bts, du2 * bts)), 1e-8)), nC.w);
+                const vec3 lw = vec3(0.2126, 0.7152, 0.0722);
+                float lu = dot(textureLod(materialParams_baseColorMap, uv + vec2(o.x, 0.0), lod).rgb, lw);
+                float lu0 = dot(textureLod(materialParams_baseColorMap, uv - vec2(o.x, 0.0), lod).rgb, lw);
+                float lv = dot(textureLod(materialParams_baseColorMap, uv + vec2(0.0, o.y), lod).rgb, lw);
+                float lv0 = dot(textureLod(materialParams_baseColorMap, uv - vec2(0.0, o.y), lod).rgb, lw);
+                float inv = 0.5 / max(0.25 * (lu + lu0 + lv + lv0), 0.03);
+                // Richtung von u und v in der Welt (Kotangenten-Rahmen aus den Ableitungen)
+                vec3 dp2p = cross(dp2, nGeo);
+                vec3 dp1p = cross(nGeo, dp1);
+                vec3 tU = dp2p * du1.x + dp1p * du2.x;
+                vec3 tV = dp2p * du1.y + dp1p * du2.y;
+                tU *= inversesqrt(max(dot(tU, tU), 1e-20));
+                tV *= inversesqrt(max(dot(tV, tV), 1e-20));
+                pW -= ((lu - lu0) * tU + (lv - lv0) * tV) * (2.0 * inv * nA.w * rf);
+            }}
+        }}
+        // PBR-Texturen
+        if (pw > 0.001) {{
+            vec4 pB = materialParams.pbrB;  // Meter je Kachel, Schicht, zweite Schicht (<0: keine), Flaechenanteil zweite Schicht
+            vec4 pC = materialParams.pbrC;  // Rauheit: Skala, Versatz, Anteil; Mip-Stufe der Belagsfarbe beim Ersatz
+            vec3 ax = vec3(1.0, 0.0, 0.0);
+            vec3 ay = vec3(0.0, 0.0, 1.0);
+            if (pD.x > 0.5) {{
+                // Richtung von u und v in der Welt (Kotangenten-Rahmen wie beim Relief)
+                vec3 dp2p = cross(dp2, nGeo);
+                vec3 dp1p = cross(nGeo, dp1);
+                ax = dp2p * du1.x + dp1p * du2.x;
+                ay = dp2p * du1.y + dp1p * du2.y;
+                ax *= inversesqrt(max(dot(ax, ax), 1e-20));
+                ay *= inversesqrt(max(dot(ay, ay), 1e-20));
+            }}
+            float s1 = 1.0 / pB.x;
+            vec4 t1 = textureGrad(materialParams_pbrMapC, vec3(pq * s1, pB.y), pqx * s1, pqy * s1);
+            vec2 pn = textureGrad(materialParams_pbrMapN, vec3(pq * s1, pB.y), pqx * s1, pqy * s1).rg * 2.0 - 1.0;
+            vec3 alb = t1.rgb * 2.0;
+            float pr = t1.a;
+            if (pD.x < 0.5) {{
+                // zweiter Massstab 37° gedreht, 2,63-mal groesser: bricht die Wiederholung
+                const mat2 rot = mat2(0.7986, 0.6018, -0.6018, 0.7986);
+                float s2 = s1 / 2.63;
+                highp vec2 q2 = (rot * pq) * s2;
+                vec2 g2x = (rot * pqx) * s2;
+                vec2 g2y = (rot * pqy) * s2;
+                vec4 t2 = textureGrad(materialParams_pbrMapC, vec3(q2, pB.y), g2x, g2y);
+                vec2 n2 = textureGrad(materialParams_pbrMapN, vec3(q2, pB.y), g2x, g2y).rg * 2.0 - 1.0;
+                alb *= mix(vec3(1.0), t2.rgb * 2.0, 0.4);
+                pr = mix(pr, t2.a, 0.3);
+                pn += 0.4 * (transpose(rot) * n2);
+            }}
+            if (pB.z >= 0.0 && pB.w > 0.0) {{
+                // Makrovariation: in Flecken (Flaechenanteil pB.w) die zweite Schicht
+                highp vec2 mw = getUserWorldPosition().xz;
+                float m = 0.65 * pbrNoise(mw / 9.0) + 0.35 * pbrNoise(mw / 3.7 + 17.0);
+                float th = 1.0 - pB.w;
+                float aw = smoothstep(th - 0.1, th + 0.1, m);
+                if (aw > 0.001) {{
+                    float sa = 1.0 / pD.w;
+                    vec4 ta = textureGrad(materialParams_pbrMapC, vec3(pq * sa, pB.z), pqx * sa, pqy * sa);
+                    vec2 na = textureGrad(materialParams_pbrMapN, vec3(pq * sa, pB.z), pqx * sa, pqy * sa).rg * 2.0 - 1.0;
+                    alb = mix(alb, ta.rgb * 2.0, aw);
+                    pr = mix(pr, ta.a, aw);
+                    pn = mix(pn, na, aw);
+                }}
+            }}
+            // Farbe: Detail auf dem Belagsbild bzw. (Anteil pA.w) die grobe Farbe des Belagsbilds
+            // mal Detail — so bleibt die Farbe im Mittel die der Ferne.
+            // In den Fahrspuren (verdichtet, feiner) weniger Korn und Relief
+            float tk = 1.0 - 0.6 * track;
+            vec3 det = mix(vec3(1.0), alb, pA.z * tk);
+            vec3 cD = c.rgb * det;
+            vec3 cR = cD;
+            if (pA.w > 0.0) {{
+                vec3 cl = textureLod(materialParams_baseColorMap, uv, pC.w).rgb * materialParams.baseColorFactor.rgb * getColor().rgb;
+                cR = warmth(cl, wf, materialParams.forestWarmth) * det;
+            }}
+            c.rgb = mix(c.rgb, mix(cD, cR, pA.w), pw);
+            pW += (pn.x * ax + pn.y * ay) * (pA.y * pw * tk);
+            rough = mix(rough, pr * pC.x + pC.y, pw * pC.z);
+        }}
+        if (dot(pW, pW) > 0.0) {{
+            pW -= dot(pW, nGeo) * nGeo;
+            vec3 nW = normalize(nGeo + pW);
+            // Fahrbahn: gekippte Normalen dunkeln im Mittel ab (cos des Kippwinkels); ausgleichen,
+            // damit beim Ausblenden in der Ferne kein Helligkeitsverlauf entsteht.
+            if (nA.x > 0.0 || pw > 0.0) c.rgb *= 1.0 / max(dot(nW, nGeo), 0.55);
             nTs = vec3(dot(nW, getWorldTangentFrame()[0]), dot(nW, getWorldTangentFrame()[1]), dot(nW, getWorldTangentFrame()[2]));
         }}
         material.normal = nTs;
         prepareMaterial(material);
         material.baseColor = {base};
         material.metallic = 0.0;
-        material.roughness = materialParams.roughnessFactor;
+        material.roughness = clamp(rough, 0.45, 1.0);
     }}
 }}
 '''

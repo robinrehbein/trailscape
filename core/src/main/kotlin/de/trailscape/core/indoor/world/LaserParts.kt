@@ -319,6 +319,7 @@ internal class LaserBuildingsLayer(
         val s = ctx.spec
         var budget = ctx.budget.buildings
         val built = ArrayList<LaserBuilding>()
+        val flat = HashSet<LaserBuilding>()
         if (ctx.level == 0 && budget > 0) {
             val list = parts.lod2In(s.minE, s.minN, s.maxE, s.maxN)
                 .map { it to (ctx.track.nearest(it.ce, it.cn, 2000.0)?.distance ?: 2000.0) }
@@ -328,15 +329,22 @@ internal class LaserBuildingsLayer(
                 val wallMat = TileMaterial(WorldNames.MAT_BUILDING_WALL, atlas, repeat = true, roughness = 0.92f)
                 val roofMat = TileMaterial(WorldNames.MAT_BUILDING_ROOF, atlas, repeat = true, roughness = 0.85f)
                 val mesher = Lod2Mesher(ctx, list.map { it.first })
+                val aerialRoofs = AerialRoofs.of(ctx) // Dachbild aus dem Luftbild (Detailtreue), sonst Atlas
                 for ((b, dist) in list) {
                     // Kein LoD2-Koerper auf der Fahrbahn: Bruecken und Stege fuehrt das LoD2 teils als
                     // flache „Gebaeude“; quer auf der Strecke lagen sie als graue Platte (schoenbuch km 7).
                     if (dist < 40.0 && coversTrack(ctx, b)) continue
+                    // Flache LoD2-Koerper (Bodenplatten, Silo- und Mistplatten, Behaelterdeckel unter
+                    // ~1,2 m, z. B. 29 × 11 m bei 0,1 m Hoehe nahe welzheimer-wald km 25) lagen als graue
+                    // Platten auf der Wiese. Sie entfallen — auch der Kartengrundriss an ihrer Stelle.
+                    if (b.topU - b.groundU < FLAT_LOD2_M) { flat += b; continue }
                     val m = mesher.mesh(b) ?: continue
                     if (m.triangles > budget) continue
                     budget -= m.triangles
                     out.mesh(WorldNames.NODE_BUILDINGS, wallMat, b.ce, b.cn).append(m.wall)
-                    out.mesh(WorldNames.NODE_BUILDINGS, roofMat, b.ce, b.cn).append(m.roof)
+                    if (aerialRoofs?.adopt(m.roof, b.topU - b.groundU) { out.mesh(WorldNames.NODE_BUILDINGS, aerialRoofs.material, b.ce, b.cn) } != true) {
+                        out.mesh(WorldNames.NODE_BUILDINGS, roofMat, b.ce, b.cn).append(m.roof)
+                    }
                     built += b
                 }
             }
@@ -349,7 +357,7 @@ internal class LaserBuildingsLayer(
                     val c = FootprintShape.centroid(outer)
                     val l = parts.lod2At(c[0], c[1])
                     when {
-                        l != null && l in builtSet -> null
+                        l != null && (l in builtSet || l in flat) -> null
                         l != null && l.measuredHeightM > 1.0 -> MapBuilding(b.id, b.rings, l.measuredHeightM, b.minHeightM, b.colour)
                         else -> parts.ndomHeight(b)?.let { MapBuilding(b.id, b.rings, it, b.minHeightM, b.colour) } ?: b
                     }
@@ -364,6 +372,9 @@ internal class LaserBuildingsLayer(
         base.build(sub, out)
     }
 }
+
+/** Hoehe (Traufe bis Boden, LoD2), unter der ein Koerper als flache Platte gilt und entfaellt. */
+internal const val FLAT_LOD2_M = 1.2
 
 internal class Lod2Mesh(val wall: MeshBuilder, val roof: MeshBuilder) {
     val triangles: Int get() = wall.triangleCount + roof.triangleCount

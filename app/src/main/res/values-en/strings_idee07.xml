@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texts for “open GPX without timestamps as a planned route”
+    (ui/ImportRecognition.kt, ui/rides/PlanFlip.kt).
+
+    Key prefix: gpxplan_ · Rules: docs/i18n.md.
+    Counterpart of values/strings_idee07.xml — same keys, same order.
+-->
+<resources>
+    <!-- ImportRecognition.kt: dialog after “Share”/“Open with” -->
+    <string name="gpxplan_recognized_planned_title">Opened as a planned route</string>
+    <string name="gpxplan_recognized_ridden_title">Imported as a ride</string>
+    <string name="gpxplan_recognized_planned_body">“%1$s” has no timestamps, so it is a route, not a ride. You can see it on the map and among your planned routes, and ride it. It does not count towards statistics, weekly progress or discovered tiles.</string>
+    <string name="gpxplan_recognized_ridden_body">“%1$s” has timestamps, so it is a recording. It counts towards statistics, weekly progress and discovered tiles.</string>
+    <string name="gpxplan_flip_to_ridden_action">Import as a ride</string>
+    <string name="gpxplan_flip_to_planned_action">Open as a planned route</string>
+    <string name="gpxplan_flip_once_hint">You can change this later in the ride details.</string>
+
+    <!-- AppViewModel.kt: feedback after converting -->
+    <string name="gpxplan_flipped_to_planned_message">“%1$s” is now a planned route</string>
+    <string name="gpxplan_flipped_to_ridden_message">“%1$s” now counts as a ride</string>
+
+    <!-- PlanFlip.kt: ride details -->
+    <string name="gpxplan_detail_route_hint">This ride has no timestamps. It is probably a route that was imported as a ride.</string>
+    <string name="gpxplan_detail_to_planned_action">Convert to planned route</string>
+    <string name="gpxplan_detail_to_ridden_action">Count as a ride</string>
+    <string name="gpxplan_to_planned_confirm_title">Convert to a planned route?</string>
+    <string name="gpxplan_to_planned_confirm_body">“%1$s” becomes a planned route and no longer counts towards statistics, weekly progress, fitness and discovered tiles. The route is kept, and you can count it as a ride again at any time.</string>
+    <string name="gpxplan_to_planned_confirm_action">Convert</string>
+    <string name="gpxplan_to_ridden_confirm_title">Count as a ride?</string>
+    <string name="gpxplan_to_ridden_confirm_body">“%1$s” will then count towards statistics, weekly progress, fitness and discovered tiles. Duration and speed are only available if the file had timestamps.</string>
+    <string name="gpxplan_to_ridden_confirm_action">Count as ride</string>
+</resources>

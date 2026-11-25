@@ -87,7 +87,7 @@ class LightAndShadingTest {
         }
         val l = at(IndoorTimeOfDay.EVENING)
         assertEquals(params("sky.mat"), SkyShading.sky(l).keys + setOf("time", "clouds"))
-        assertEquals(params("water.mat"), SkyShading.water(l).keys + setOf("time", "waves"))
+        assertEquals(params("water.mat"), SkyShading.water(l).keys + setOf("time", "waves", "waveNormals"))
         // Horizont des Himmelsmaterials = Dunstfarbe × iblLuminance: Gelaende und Himmel stossen nahtlos aneinander.
         val h = SkyShading.sky(l)["horizon"] as DoubleArray
         assertEquals(l.fogColor.g * l.skyScale, h[1], 1e-9)

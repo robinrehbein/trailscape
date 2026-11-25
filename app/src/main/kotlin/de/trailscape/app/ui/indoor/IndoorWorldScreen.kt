@@ -62,6 +62,9 @@ fun IndoorWorldScreen(
     onServerCancel: () -> Unit = {},
     onServerRetry: () -> Unit = {},
     initialAdvancedOpen: Boolean = false,
+    // Vorschau (Idee 4): andere Beschriftungen fuer „Ohne 3D-Ansicht" und „Losfahren"; `null` = wie vor einer Fahrt.
+    withoutWorldLabel: String? = null,
+    continueLabel: String? = null,
 ) {
     val building = ui is IndoorWorldUi.Building
     val serverBusy = server is IndoorServerUi.Working
@@ -86,7 +89,7 @@ fun IndoorWorldScreen(
                         }
                     }
                     NeutralButton(onClick = onRideWithoutWorld, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.indoor_app_world_without_action))
+                        Text(withoutWorldLabel ?: stringResource(R.string.indoor_app_world_without_action))
                     }
                 }
                 is IndoorWorldUi.Building -> {
@@ -105,7 +108,7 @@ fun IndoorWorldScreen(
                 }
                 is IndoorWorldUi.Ready -> {
                     Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.indoor_app_world_ride_action))
+                        Text(continueLabel ?: stringResource(R.string.indoor_app_world_ride_action))
                     }
                 }
                 is IndoorWorldUi.Failed -> {
@@ -115,7 +118,7 @@ fun IndoorWorldScreen(
                         }
                     }
                     NeutralButton(onClick = onRideWithoutWorld, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.indoor_app_world_without_action))
+                        Text(withoutWorldLabel ?: stringResource(R.string.indoor_app_world_without_action))
                     }
                 }
                 is IndoorWorldUi.RouteUnavailable -> {

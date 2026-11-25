@@ -1,77 +1,164 @@
 // Wasser der Indoor-Darstellung: ersetzt das Material der Knoten `water` aus den
-// Kacheln (die Flaechen selbst kommen aus dem Weltbau). Glatte, dunkle Oberflaeche mit
-// leichtem, ziehendem Wellengang (Normale aus derselben kachelbaren Rauschtextur wie
-// die Wolken), Sonnenglanz ueber das normale Filament-Licht (GGX) und eine Spiegelung
-// des Himmels nach Fresnel als belichtete Eigenleuchtfarbe (Verlauf wie sky.mat).
-// Dunst, Schatten und Belichtung wirken wie bei jedem anderen Material.
+// Kacheln (die Flaechen selbst kommen unveraendert aus dem Weltbau, WaterLayer).
+//
+//  * Wellen: drei Lagen einer prozeduralen Steigungskarte (WaterWaves, 128² RGBA8 mit
+//    Mipmaps), je Lage gedreht, krumm skaliert und in eigener Richtung ziehend — in
+//    Nutzer-Weltkoordinaten (getUserWorldPosition, nicht getWorldPosition: Filament darf
+//    seine interne Welt verschieben, dann wuerden die Wellen mit der Kamera wandern).
+//    In der Ferne mitteln die Mipmaps die Steigung weg, zusaetzlich klingt jede Lage
+//    mit dem Abstand ab und die Rauheit steigt (Sonnenstrasse statt Pixelglitzern).
+//  * Spiegelung: Himmelsverlauf, Sonnenhof und Wolken in Richtung des gespiegelten
+//    Blicks — dieselben Formeln und Werte wie sky.mat (SkyShading.sky), gewichtet nach
+//    Fresnel (Schlick, F0 0,02) als belichtete Eigenleuchtfarbe. Flach gespiegelte
+//    Strahlen treffen bei niedriger Kamera das Ufer: dort eine gezackte Uferkulisse
+//    (bankColor: beleuchtete Vegetation, WaterShading); von hoch oben (Kuestenstrasse) bleibt es Himmel.
+//  * Sonnenglitzern: Filaments eigenes Sonnenlicht (GGX) auf der Wellen-Normale.
+//  * Tiefe/Ufer: der Weltbau schreibt den Wasseranteil (0 am Ufer … 1 im Wasser) in die
+//    Vertexfarbe (WaterLayer: sRGB 58/78/80 − 18/20/14·Anteil, linear gespeichert).
+//    Daraus: geschaetzte Tiefe, Durchsicht auf den (abgesenkten, mit Luftbild
+//    texturierten) Grund nach Blickwinkel, weicher Uferrand. Fehlt die Farbe
+//    (Filament: (0,0,0,1)), gilt ueberall „offenes Wasser“.
+//  * Ueberblendung `transparent` (vormultipliert): Ausgabe = Spiegelung + Streuung,
+//    Alpha = 1 − (1 − F)·T. Wasser schreibt keine Tiefe (Filament-Standard fuer transparent).
+//
+// Shader bewusst schlicht (GLES 3.0): nur texture(), exp, pow, smoothstep; Koordinaten
+// und Uhr highp (mediump wuerde nach Minuten die Wellen zerreissen); keine Schleifen,
+// Verzweigungen nur auf Uniforms (`detail`).
+//
+// Parameter-Namen = WaterShading.params (+ time, waves, waveNormals vom Aufrufer);
+// WaterShadingTest prueft das gegen diese Datei.
 //
 // Kompilieren: tool/indoor-dev/filament/materials.sh (matc 1.75.1).
 material {
     name : TrailscapeWater,
     parameters : [
         { type : float3, name : deepColor },
+        { type : float3, name : shallowColor },
         { type : float3, name : zenith },
         { type : float3, name : horizon },
         { type : float, name : horizonBand },
+        { type : float3, name : bankColor },
+        { type : float3, name : cloudLit },
+        { type : float3, name : cloudShade },
+        { type : float, name : cloudCover },
+        { type : float, name : cloudScale },
+        { type : float2, name : wind },
+        { type : float, name : glow },
+        { type : float, name : glowSize },
         { type : float, name : time },
         { type : float, name : waveScale },
         { type : float, name : waveStrength },
         { type : float, name : reflectivity },
-        { type : sampler2d, name : waves, precision : medium }
+        { type : float, name : clarity },
+        { type : float, name : detail },
+        { type : sampler2d, name : waves, precision : medium },
+        { type : sampler2d, name : waveNormals, precision : medium }
     ],
+    requires : [ color ],
     shadingModel : lit,
-    blending : opaque,
+    blending : transparent,
     culling : none,
+    // Filaments Specular-AA: raut nach der Normalenvarianz im Pixel auf — gegen Funkeln im Sonnenglitzer
+    specularAntiAliasing : true,
+    specularAntiAliasingVariance : 0.2,
+    specularAntiAliasingThreshold : 0.15,
     featureLevel : 1
 }
 
 fragment {
-    float waveHeight(highp vec2 p) {
-        highp vec2 w = vec2(0.021, 0.013) * materialParams.time;
-        return texture(materialParams_waves, p + w).r * 0.6
-             + texture(materialParams_waves, p * 2.3 - w * 1.7 + vec2(0.5, 0.2)).r * 0.4;
+    // Steigung (dh/dx, dh/dz) einer Lage: Karte gedreht um (c, s), Massstab k (1/m), Zug in
+    // Richtung der Hauptwellen. Steigung zurueck in Weltachsen gedreht (R^T).
+    vec2 layerSlope(highp vec2 p, float c, float s, highp float k, highp float drift) {
+        highp vec2 q = vec2(c * p.x - s * p.y, s * p.x + c * p.y) * k;
+        q.x += drift;
+        vec2 t = texture(materialParams_waveNormals, q).rg * 2.0 - 1.0;
+        return vec2(c * t.x + s * t.y, -s * t.x + c * t.y);
     }
 
     void material(inout MaterialInputs material) {
-        highp vec3 wp = getWorldPosition();
-        highp vec2 p = wp.xz * materialParams.waveScale;
-        float e = 0.004;
-        float h0 = waveHeight(p);
-        float hx = waveHeight(p + vec2(e, 0.0));
-        float hz = waveHeight(p + vec2(0.0, e));
-        // Wellen in der Ferne glaetten (sonst flimmert die Flaeche wie Kies)
-        float dist = length(getWorldPosition() - getWorldCameraPosition());
-        float fade = 1.0 / (1.0 + dist / 25.0);
-        vec2 slope = vec2(hx - h0, hz - h0) * (materialParams.waveStrength * fade / e) * 0.01;
-        // In Tangentenraum; die Tangente der Wasserflaeche ist beliebig gedreht, das Rauschen
-        // ist richtungslos — die Drehung sieht man nicht.
-        material.normal = normalize(vec3(-slope.x, -slope.y, 1.0));
+        highp vec3 up = getUserWorldPosition();
+        highp vec2 p = up.xz;
+        highp float t = materialParams.time;
+        highp vec3 toCam = getWorldCameraPosition() - getWorldPosition();
+        float dist = length(toCam);
+        bool full = materialParams.detail > 0.5;
+
+        // --- Wellen: drei Lagen, Massstaebe 1 : 3,16 : 10 (krumm, kein gemeinsames Raster)
+        highp float k0 = materialParams.waveScale;
+        // Windflecken: grossraeumig (Kachel 260 m) langsam wandernde Zonen mit staerkerer und
+        // schwaecherer Kraeuselung — ruhige Spiegelflaechen neben matt glitzernden Streifen.
+        float gust = smoothstep(0.30, 0.72, texture(materialParams_waves, p * 0.00385 + materialParams.wind * (t * 3.0)).r);
+        float a = materialParams.waveStrength * mix(0.45, 1.35, gust);
+        vec2 slope = layerSlope(p, 0.9211, 0.3894, k0 * 3.164, t * 0.095) * (0.065 * a / (1.0 + dist / 90.0));
+        if (full) {
+            slope += layerSlope(p, 1.0, 0.0, k0, t * 0.052) * (0.080 * a / (1.0 + dist / 260.0));
+            slope += layerSlope(p, -0.6967, 0.7174, k0 * 10.0, t * 0.16) * (0.045 * a / (1.0 + dist / 30.0));
+        }
+        highp vec3 nW = normalize(vec3(-slope.x, 1.0, -slope.y));
+        // Welt → Tangentenraum (Spalten T, B, N; v * M = transpose(M) * v)
+        material.normal = normalize(nW * getWorldTangentFrame());
         prepareMaterial(material);
 
-        material.baseColor = vec4(materialParams.deepColor, 1.0);
-        material.metallic = 0.0;
-        material.roughness = 0.06;
-        material.reflectance = 0.5;
+        vec3 n = getWorldNormalVector();
+        if (n.y < 0.0) n = -n;
+        vec3 v = getWorldViewVector();
+        float cosV = clamp(dot(n, v), 0.0, 1.0);
+        float fresnel = 0.02 + 0.98 * pow(1.0 - cosV, 5.0);
 
-        // Spiegelung des Himmels: Verlauf in Richtung des gespiegelten Blicks
-        vec3 n = material.normal.x * getWorldTangentFrame()[0]
-               + material.normal.y * getWorldTangentFrame()[1]
-               + material.normal.z * getWorldTangentFrame()[2];
-        n = normalize(n);
-        if (dot(n, vec3(0.0, 1.0, 0.0)) < 0.0) n = -n;
-        vec3 v = normalize(getWorldViewVector());
+        // --- Spiegelung: Himmel wie sky.mat in Richtung r
         vec3 r = reflect(-v, n);
+        // In der Ferne sind die Wellen weggemittelt; aufgeraute Flecken spiegeln dort trotzdem
+        // steiler (hellerer Himmel), glatte bleiben dunkel — so bleiben die Flecken sichtbar.
+        r.y += gust * 0.07 * smoothstep(20.0, 250.0, dist);
         float ay = max(r.y, 0.0);
         float tg = 1.0 - exp(-ay / materialParams.horizonBand);
         vec3 sky = mix(materialParams.horizon, materialParams.zenith, tg);
-        // wie SkyLookModel.gradient: Uebergang entsaettigen (kein Lila zwischen Orange und Blau)
         sky = mix(sky, vec3(dot(sky, vec3(0.2126, 0.7152, 0.0722))), 0.55 * 4.0 * tg * (1.0 - tg));
-        // Flach gespiegelte Strahlen treffen das Ufer (Baeume, Gelaende), nicht den hellen
-        // Horizont: dort eine dunkle, gruenliche Uferfarbe aus dem Dunst.
-        vec3 shore = materialParams.horizon * vec3(0.20, 0.26, 0.22);
-        sky = mix(shore, sky, smoothstep(0.02, 0.30, r.y));
-        float cosT = clamp(dot(n, v), 0.0, 1.0);
-        float fresnel = 0.02 + 0.98 * pow(1.0 - cosT, 5.0);
+        vec3 sunC = frameUniforms.lightColorIntensity.rgb * frameUniforms.lightColorIntensity.w;
+        float mu = max(dot(r, frameUniforms.lightDirection), 0.0);
+        sky += sunC * (materialParams.glow * pow(mu, materialParams.glowSize));
+        if (full) { // nur auf Uniform verzweigen: texture() braucht gleichfoermigen Kontrollfluss (Ableitungen)
+            highp vec2 uv = r.xz / (max(r.y, 0.0) + 0.18) * materialParams.cloudScale + materialParams.wind * t;
+            float n1 = texture(materialParams_waves, uv).r;
+            float n2 = texture(materialParams_waves, uv * 2.03 + vec2(0.37, 0.11) + materialParams.wind * (t * 0.6)).r;
+            float raw = n1 * 0.78 + n2 * 0.22;
+            float cover = materialParams.cloudCover;
+            float dens = smoothstep(1.0 - cover - 0.16, 1.0 - cover + 0.30, raw) * smoothstep(0.02, 0.16, r.y);
+            vec3 cloud = mix(materialParams.cloudLit, materialParams.cloudShade, 0.25 + 0.45 * smoothstep(0.35, 1.0, dens));
+            sky = mix(sky, cloud, dens * 0.9);
+        }
+        // Ufer: flache Strahlen treffen bei niedriger Kamera Baeume und Boeschung. Deren Oberkante
+        // als gezackte Silhouette ueber die Himmelsrichtung von r (Rauschen auf einem Kreis in der
+        // Textur — nahtlos, keine atan-Kante); die Wellen lassen sie zittern wie ein Spiegelbild.
+        float camH = toCam.y;
+        float bank = 1.0 - smoothstep(12.0, 60.0, camH);
+        highp vec2 az = r.xz / max(length(r.xz), 1e-3);
+        float sil = texture(materialParams_waves, az * 0.37 + vec2(0.11, 0.63)).r;
+        float top = mix(0.05, 0.30, sil);
+        float inBank = bank * (1.0 - smoothstep(top - 0.07, top + 0.03, r.y));
+        // Uferkulisse: je Richtung heller/dunkler (Wiese, Wald), unten dunkler (Stamm- und Boeschungsschatten)
+        vec3 shore = materialParams.bankColor * (mix(0.45, 1.6, sil * sil) * mix(0.65, 1.15, clamp(r.y / top, 0.0, 1.0)))
+                   + (materialParams.horizon + materialParams.zenith) * 0.035; // Luft- und Himmelslicht vor dem Ufer
+        sky = mix(sky, shore, inBank);
+
+        // --- Tiefe und Durchsicht aus dem Wasseranteil der Vertexfarbe
+        float share = clamp((0.0745 - getColor().g) / 0.0314, 0.0, 1.0);
+        // Schmale Fluesse erreichen den Anteil 1 nie (Rasterzelle breiter als der Fluss):
+        // Tiefe deshalb frueh voll, nur der Rand selbst ist flach.
+        float deep = smoothstep(0.30, 0.60, share);
+        float edge = smoothstep(0.27, 0.40, share);
+        float depthM = mix(0.25, 2.5, deep);
+        // Weg durchs Wasser bis zum Grund: senkrecht kurz, flach lang
+        float path = depthM / max(abs(v.y), 0.08);
+        float trans = pow(max(materialParams.clarity, 0.001), path);
+        trans = mix(1.0, trans, edge);
+
+        float cover = 1.0 - (1.0 - fresnel) * trans;
+        vec3 body = mix(materialParams.shallowColor, materialParams.deepColor, deep);
+        material.baseColor = vec4(body * ((1.0 - fresnel) * (1.0 - trans)), cover);
+        material.metallic = 0.0;
+        material.roughness = mix(0.045, 0.16, smoothstep(30.0, 400.0, dist)) + 0.05 * gust;
+        material.reflectance = 0.35;
         material.emissive = vec4(sky * (fresnel * materialParams.reflectivity), 0.0);
     }
 }

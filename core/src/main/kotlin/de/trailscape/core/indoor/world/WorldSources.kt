@@ -202,6 +202,18 @@ internal class VectorMapData(
     override fun places(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapPlace> =
         allPlaces.filter { it.e in minE..maxE && it.n in minN..maxN }
 
+    /** POI-Punkte nur aus den feinen Kacheln (z14 um die Strecke; die groben fuehren kaum welche). */
+    private val allPois: List<MapPoi> by lazy {
+        fine?.all(LAYER_POI)?.mapNotNull { f ->
+            if (f.geom != VecGeom.POINT) return@mapNotNull null
+            val cls = f.cls ?: return@mapNotNull null
+            MapPoi(f.parts[0][0], f.parts[0][1], cls, f.str("subclass"), f.str("name:de") ?: f.str("name"))
+        } ?: emptyList()
+    }
+
+    override fun pois(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapPoi> =
+        allPois.filter { it.e in minE..maxE && it.n in minN..maxN }
+
     override fun roads(minE: Double, minN: Double, maxE: Double, maxN: Double) =
         query(minE, minN, maxE, maxN, { it.roads }) { boundsOf(listOf(it.line)) }
 

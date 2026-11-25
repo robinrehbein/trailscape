@@ -37,18 +37,8 @@ object SkyShading {
         "sunDisk" to 1.0,
     )
 
-    /** Albedo des Wasserkoerpers (linear): dunkles Gruenblau, damit die Spiegelung traegt. */
-    val WATER_DEEP = SkyRgb(0.018, 0.040, 0.046)
-
-    fun water(l: DaylightLighting): Map<String, Any> = linkedMapOf(
-        "deepColor" to WATER_DEEP.arr(),
-        "zenith" to l.look.zenith.arr(),
-        "horizon" to l.look.horizon.arr(),
-        "horizonBand" to SkyLookModel.HORIZON_BAND,
-        "waveScale" to 0.045,
-        "waveStrength" to 1.0,
-        "reflectivity" to 0.85,
-    )
+    /** Wassermaterial: siehe [de.trailscape.core.indoor.water.WaterShading] (Wellen, Spiegelung, Ufer). */
+    fun water(l: DaylightLighting): Map<String, Any> = de.trailscape.core.indoor.water.WaterShading.params(l)
 
     /**
      * Gelaende-Material (`terrain.mat`): Boden-Detail nah am Fahrer ([GroundDetail]), weich aus

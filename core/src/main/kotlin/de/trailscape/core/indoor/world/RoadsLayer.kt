@@ -104,7 +104,9 @@ internal class RoadsLayer : TileLayer {
         val grass = out.mesh(WorldNames.NODE_ROADS, TileMaterial(MAT_ISLAND, grassTex, repeat = true, roughness = 0.95f))
         val kerb = out.mesh(WorldNames.NODE_ROADS, TileMaterial(MAT_ISLAND_KERB, roughness = 0.85f))
         val uvM = RouteTextures.Verge.GRASS.sizeM
-        val tint = RouteGeometry.linColor(0.74, 0.8, 0.62)
+        // Farbe wie bis `indoor-world/11` (gegen die damals dunklere Grastextur gewaehlt).
+        val gm = RouteTextures.Verge.GRASS.meanLinear
+        val tint = RouteGeometry.linColor(0.74 * 0.190 / gm[0], 0.8 * 0.270 / gm[1], 0.62 * 0.080 / gm[2])
         val kerbCol = RouteGeometry.linColor(0.42, 0.41, 0.39)
         for (isl in list) {
             val cnt = isl.ring.size / 2

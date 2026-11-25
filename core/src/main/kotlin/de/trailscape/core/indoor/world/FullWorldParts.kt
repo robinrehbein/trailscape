@@ -29,10 +29,13 @@ internal object FullWorldParts : WorldParts {
     private val trees = TreesLayer()
     private val water = WaterLayer()
     private val props = PropsLayer()
+    private val pois = PoiLayer()
+    private val vines = VineyardLayer()
+    private val osmDetail = OsmDetailLayer()
 
-    private val level0 = listOf<TileLayer>(terrain, water, route, roads, buildings, trees, props)
-    private val level1 = listOf<TileLayer>(terrain, water, buildings, trees)
-    private val level2 = listOf<TileLayer>(terrain)
+    private val level0 = listOf<TileLayer>(terrain, water, route, roads, buildings, trees, vines, osmDetail, pois, props)
+    private val level1 = listOf<TileLayer>(terrain, water, buildings, trees, osmDetail)
+    private val level2 = listOf<TileLayer>(terrain, osmDetail)
 
     override fun origin(route: IndoorRoute, heightAtLatLon: (Double, Double) -> Double): GeoOrigin =
         worldOrigin(route, heightAtLatLon)

@@ -53,7 +53,7 @@ fun main(args: Array<String>) {
 }
 
 private const val USAGE = """Aufruf:
-  build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>] [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--offline] [--laser [--laser-radius m] [--lod2-corridor <datei>] [--laser-profile e0,n0,e1,n1[,schritt]]]
+  build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>] [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--offline] [--osm-detail] [--laser [--laser-radius m] [--lod2-corridor <datei>] [--laser-profile e0,n0,e1,n1[,schritt]]]
   lod2-cut --gpx <datei> --out <datei.tsl2> [--lod2-radius m] [--offline]
   plan --gpx <datei> [--quality LOW|MEDIUM|HIGH] [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--laser]
   testworld --out <dir> [--quality LOW|MEDIUM|HIGH]
@@ -61,7 +61,7 @@ private const val USAGE = """Aufruf:
   check <dir>
   models --out <dir>
   catalog-routes [--only a,b]
-  catalog-build --out <dir> [--only a,b] [--quality LOW|MEDIUM|HIGH] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline] [--laser]
+  catalog-build --out <dir> [--only a,b] [--quality LOW|MEDIUM|HIGH] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline] [--laser] [--no-osm-detail]
   catalog-preview --out <dir> [--only a,b] [--prepare]   (Vorschau: --prepare = Welten bereitlegen + plan.tsv, sonst Profil/Laser/Bild in catalog.json)
   sky --time AUTO|MORNING|NOON|EVENING [--lat 51.3] [--lon 9.5] [--epoch-ms ms] [--quality LOW|MEDIUM|HIGH] --out <dir>
   server-info
@@ -108,7 +108,7 @@ private fun run(all: List<String>): Int {
     val cmd = all.firstOrNull() ?: throw UsageError("Befehl fehlt")
     val rest = all.drop(1)
     return when (cmd) {
-        "build" -> build(Args(rest, setOf("no-aerial", "catalog-aerial", "offline", "laser")))
+        "build" -> build(Args(rest, setOf("no-aerial", "catalog-aerial", "offline", "laser", "osm-detail")))
         "plan" -> plan(Args(rest, setOf("no-aerial", "catalog-aerial", "offline", "laser")))
         "testworld" -> testworld(Args(rest, emptySet()))
         "generated" -> generated(Args(rest, emptySet()))
@@ -135,7 +135,7 @@ private fun run(all: List<String>): Int {
         "server-request" -> Args(rest, setOf("laser")).let { a ->
             serverRequest(File(a.req("gpx")), File(a.req("out")), a.flag("laser"), a.quality(), a.double("from-km"), a.double("to-km"))
         }
-        "catalog-build" -> Args(rest, setOf("keep-going", "no-aerial", "offline", "laser")).let { a ->
+        "catalog-build" -> Args(rest, setOf("keep-going", "no-aerial", "offline", "laser", "no-osm-detail")).let { a ->
             catalogBuild(
                 out = File(a.req("out")),
                 only = a.opt("only"),
@@ -145,6 +145,7 @@ private fun run(all: List<String>): Int {
                 noAerial = a.flag("no-aerial"),
                 offline = a.flag("offline"),
                 laser = a.flag("laser"),
+                osmDetail = !a.flag("no-osm-detail"),
             )
         }
         "catalog-preview" -> Args(rest, setOf("prepare")).let { a ->
@@ -200,7 +201,7 @@ private fun aerialRegister(a: Args): List<de.trailscape.core.indoor.world.Aerial
     if (a.flag("catalog-aerial")) de.trailscape.core.indoor.world.aerialSources + catalogAerialSources else de.trailscape.core.indoor.world.aerialSources
 
 /** Der Weltbau: mit `--laser` die Datenstufe „Laser" (DGM1, nDOM, LoD2 — NRW und Baden-Wuerttemberg, nach Lage der Strecke). */
-private fun builderFor(a: Args): de.trailscape.core.indoor.world.WorldBuilder =
+private fun builderFor(a: Args, osm: de.trailscape.core.indoor.world.OsmDetail? = null): de.trailscape.core.indoor.world.WorldBuilder =
     if (a.flag("laser")) {
         var opts = toolLaserOptions(File(CACHE_DIR), a.flag("offline"), a.double("laser-radius"))
         a.opt("lod2-corridor")?.let { f ->
@@ -208,9 +209,9 @@ private fun builderFor(a: Args): de.trailscape.core.indoor.world.WorldBuilder =
             if (!file.isFile) throw UsageError("LoD2-Korridor nicht gefunden: $file")
             opts = de.trailscape.core.indoor.world.LaserOptions(opts.fetcher, radiusM = opts.radiusM, lod2Corridor = file.readBytes())
         }
-        de.trailscape.core.indoor.world.createLaserWorldBuilder(opts)
+        de.trailscape.core.indoor.world.createWorldBuilder(opts, osm)
     } else {
-        createWorldBuilder()
+        de.trailscape.core.indoor.world.createWorldBuilder(null, osm)
     }
 
 /** LoD2 auf den Korridor der Strecke zuschneiden und im kompakten Format schreiben (docs/indoor/lidar.md). */
@@ -279,7 +280,9 @@ private fun build(a: Args): Int {
     val counting = CountingFetcher(createGeoPipeline(raw, File(CACHE_DIR), aerialRegister(a)))
     val start = System.nanoTime()
     println("Baue nach ${out.path} …")
-    val builder = builderFor(a)
+    // --osm-detail: volle OSM-Attribute (Hecken, Zaeune, Leitplanken, Strom, Windraeder …) ueber Overpass
+    val osm = if (a.flag("osm-detail")) fetchOsmDetail(prepared.plan.route, File(CACHE_DIR), a.flag("offline")) else null
+    val builder = builderFor(a, osm)
     val manifest = try {
         builder.build(prepared.plan, WorldBuildDeps(counting, ImageIoDecoder), out, ConsoleListener())
     } catch (e: WorldBuildFailed) {

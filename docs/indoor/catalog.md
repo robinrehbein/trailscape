@@ -198,6 +198,11 @@ tiles/*.glb      alle Kacheln, sortiert
   weg): Vor jedem „Laden“ holt die App `catalog.json` aus dem Release und
   nimmt Version, Größe und SHA-256 von dort. Ein Release-Katalog kann die
   Adresse der Pakete nicht umlenken (die beigelegte `baseUrl` gilt).
+- Stand 25.11.2026, später (Welt-Version 12, Branch `claude/indoor-weltqualitaet`,
+  `world.md` „Weltqualität der Katalogstrecken“): alle 20 Versionen in `catalog-src.json`
+  und die 14 des beigelegten Katalogs um eins angehoben (`alpe-dhuez` 12, `solitude` 4,
+  `strohgaeu` 3 …), Paketnamen entsprechend. Bis der Workflow läuft, gilt wie unten
+  beschrieben: Die App lädt, was der Release-Katalog nennt.
 - Stand 25.11.2026 (Welt-Version 11; vorher 10 am 24.11.): Der beigelegte Katalog
   (`app/src/main/assets/indoor/catalog.json`) führt alle **14** Einträge des
   veröffentlichten Katalogs (Texte, Größen, Welt-IDs aus dem Release), mit den
@@ -487,3 +492,94 @@ parallele Uploads ins Release nur am Text geprüft.
 Katalogwelten baut die CI vor; eigene Strecken kann der eigene Server mit
 derselben Laser-Stufe bauen. Das Paketformat und der Installationsweg sind
 dieselben (`CatalogStore.installPackage`). Siehe [`serverbau.md`](serverbau.md).
+
+## Streckenkarten mit mehr Aussagekraft (Idee 10)
+
+Die Liste „Bekannte Strecken" wird bei 20 und mehr Strecken unübersichtlich.
+Die Karten, die Auswahl über der Liste und eine Detailansicht sind
+überarbeitet. **Das Katalogformat ist unverändert** (Format 1); alles beruht
+auf Feldern, die es gibt: `lengthM`, `ascentM`, `surfaces`, `kind`, `country`,
+`region`, `profile`, `description`, `packageBytes`, `diskBytes`,
+`aerialSource`, `laser`. Die Logik steht getestet in `:core`
+(`core/…/indoor/catalog/CatalogBrowse.kt`, `CatalogBrowseTest`), die
+Oberfläche in `app/…/ui/indoor/IndoorCatalogBrowse.kt`,
+`IndoorCatalogSection.kt` und `IndoorCatalogDetail.kt`.
+
+### Die Karte
+
+Jede Karte zeigt gleich aufgebaut: Name, Region und Land, Art (Rennrad /
+Schotter / Pflaster), dann in festen Feldern **Länge**, **Höhenmeter**,
+**Steigung** („Ø 8,1 % · max. 12,4 %") und **Fahrzeit**, darunter die
+**Belagsleiste** mit den Anteilen als Text, das Höhenprofil, die Beschreibung,
+den Status („Bereit", „Herunterladen · 77 MB", …), „Gefahren · Bestzeit …"
+und „Details". Bei großer Schrift brechen die Felder um.
+
+- **Steigung:** Durchschnitt = Höhenmeter geteilt durch die Länge der
+  *Anstiegsabschnitte* des Profils (so liest ein Radfahrer „8 % im Schnitt am
+  Berg"); Maximum = steilster 200-m-Abschnitt (Messrauschen zählt so nicht).
+  Ohne Profil im Katalog nur der Durchschnitt über die ganze Strecke.
+- **Fahrzeit „bei deiner Leistung":** `estimateCatalogRideSeconds` rechnet mit
+  75 % der FTP (`CATALOG_SUSTAINED_FTP_FRACTION`, bewusst vorsichtig: eine
+  ganze Strecke hält niemand auf FTP) und der Fahrphysik der Indoor-Fahrt
+  (`steadySpeedMps`: Roll-, Luft- und Hangabtriebswiderstand, Gleichgewichtstempo
+  je Profilschritt, Rollwiderstand aus dem Belagsmix, Gewicht, Rad, CdA und
+  Wirkungsgrad aus dem Profil). Windstill, Meereshöhe, bergab höchstens 54 km/h.
+  Ohne Profil im Katalog: gleichmäßiger Anstieg mit der mittleren Steigung —
+  das schätzt wellige Strecken etwas zu langsam, weil Gefälle fehlen.
+  **Ohne eingetragene FTP** gilt die Annahme „2,5 W/kg" des Profils, und die
+  Karte sagt es: „Richtwert, trage FTP und Gewicht im Profil ein". Es ist eine
+  Schätzung, keine Zusage; Ampeln, Pausen und Trainerlimits fehlen.
+- **Gefahren / Bestzeit:** Eine gespeicherte Indoor-Fahrt zählt zur Strecke,
+  wenn ihr Name „Indoor · <Streckenname>" lautet (deutsch oder englisch) und
+  sie mindestens 95 % der Länge fuhr; „ab km x" und abgebrochene Fahrten
+  zählen nicht. Bestzeit = kürzeste bewegte Zeit. Grenze: Eine Tour kennt ihre
+  Strecke nur über den Namen — wer die Fahrt umbenennt, verliert die Zuordnung.
+  Besser wäre eine Kennung der Strecke an der Tour (siehe „Offen").
+
+### Filter und Sortierung
+
+Eine Zeile „Filter und Sortierung · 2 Filter aktiv · 7 von 12 Strecken" über
+der Liste klappt auf. Innerhalb einer Art gilt „oder", zwischen den Arten „und".
+
+| Art | Auswahl | Grenzen |
+|---|---|---|
+| Länge | kurz / mittel / lang | unter 15 km / bis 30 km / darüber |
+| Anstieg | flach / wellig / bergig | unter 8 / bis 20 / darüber Höhenmeter je km |
+| Belag | Asphalt / Pflaster / Schotter und Waldweg | Belag mit mindestens 15 % Anteil |
+| Stand | schon geladen / noch nicht gefahren | |
+
+Sortierung: Name, Länge, Höhenmeter, Fahrzeit (ohne Schätzung ans Ende,
+sonst nach Name). Die Auswahl bleibt für die Sitzung des App-Prozesses erhalten
+(`CatalogBrowseSession`, nicht auf Platte). Ohne Treffer steht „Keine Strecke
+passt zu diesen Filtern" mit „Filter zurücksetzen".
+
+### Detailansicht
+
+„Details" auf der Karte öffnet eine Vollbildansicht: großes Bild, vollständiges
+Höhenprofil, Zahlen, Beschreibung, Belag, Paketgröße (Download und Platz auf
+dem Gerät), Quellen (Kartendaten OpenStreetMap, Luftbild laut `aerialSource`)
+und die Aktionen über die vorhandenen Wege der Startseite:
+
+- bereit: „Diese Strecke fahren" (mit gekoppeltem Trainer; wählt und geht weiter)
+  bzw. „Strecke auswählen";
+- nicht geladen, angehalten oder gescheitert: „Herunterladen · 77 MB"
+  (wählt die Strecke, startet bzw. setzt den Download fort);
+- läuft: „Download abbrechen";
+- angehalten oder gescheitert: zusätzlich „Angefangenen Download löschen";
+- neue Fassung: „Aktualisieren".
+
+Für den Vorleser tragen Filter-Chips ihren Zustand („ausgewählt"), die Belagsleiste
+eine Beschreibung, „Details" den Streckennamen, die Überschriften sind als
+Überschriften ausgezeichnet.
+
+### Offen
+
+- **Fertig geladene Strecke löschen** gibt es nur in den Indoor-Einstellungen;
+  im Detail steht ein Hinweis darauf, kein eigener Knopf (der Controller hat
+  nur `discardPartial`).
+- **Tour ↔ Strecke:** Eine Katalogkennung an der gespeicherten Indoor-Tour
+  würde die Zuordnung der Bestzeit unabhängig vom Namen machen
+  (`Ride`-Format, nicht Teil dieser Idee).
+- **Katalog:** Ein Feld für Fahrzeit-Richtwert oder „Schwierigkeit" fehlt nicht
+  zwingend; ein Feld `highlights` (Ort der steilsten Stelle) würde die Detailansicht
+  bereichern. Das Format wurde nicht geändert.
