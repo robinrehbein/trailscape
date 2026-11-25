@@ -294,13 +294,15 @@ Die Screenshot-Tests laufen nur mit `-Pscreenshots` und schreiben nach `build/ou
 ## Nicht geprüft
 
 - **Ungebaut.** Weder `:core:test` noch `:app:testDebugUnitTest` liefen in der Umbau-Session. Der Kotlin-Code ist ohne Compiler geschrieben und von Hand gegengelesen.
-- Die Screenshot-Tests sind in den Klickwegen angepasst, aber nicht ausgeführt.
+- Die Screenshot-Tests sind in den Klickwegen angepasst, aber nicht ausgeführt. `ScreenshotTest` öffnet dabei erstmals den Indoor-Tab in der ganzen App unter Robolectric (echtes `IndoorViewModel`); ob das dort durchläuft, zeigt erst ein Lauf.
+- Zwei unabhängige Gegenlesungen des ganzen Diffs („sei der Compiler“) fanden keinen Build-Fehler; drei Logikfehler daraus sind behoben. Das ersetzt keinen Build.
 
 Nur auf einem echten Gerät prüfbar:
 
 - Ob „Indoor“ neben „Heute“, „Karte“ und „Verlauf“ auf 320 dp und mit großer Schrift einzeilig bleibt.
 - Ob der Knopf „Fahren“ der Indoor-Startseite sauber über der schwebenden Leiste steht und die Liste darunter vollständig scrollt.
 - Der Wechsel der Leiste beim Betreten und Verlassen von Koppeln, Vorbereiten, Fahrt und Auswertung im Indoor-Tab, einschließlich der randlosen Fahransicht.
+- Der Indoor-Tab liest bei jedem Wiedereintritt Einstellungen, Strecken und die Einheit des Tages neu (`IndoorViewModel.refreshHome`); ob das einen laufenden Download oder einen schon durchgeblätterten Tagesvorschlag stört, ist offen.
 - Ob ein Tabwechsel den Indoor-Zustand erhält (gewählte Strecke, laufender Download) und ob eine von außen ausgelöste Navigation während einer Indoor-Fahrt diese sauber pausiert.
 - Ob versehentliche Tipps beim Verschieben oder Zoomen der Karte Punkte setzen, und ob die Ortskarte dabei stört.
 - Platz im Blatt „Wohin?“ (Suchfeld, Zahnrad, zwei Knöpfe) und im Kopf des Planungsblatts (Rückgängig neben ⋮ und ✕).

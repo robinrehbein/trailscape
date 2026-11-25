@@ -158,7 +158,12 @@ fun IndoorFlowScreen(
     }
     // Die Startseite ist der Anfang: Strecken einmal lesen (nach einer Drehung nicht erneut).
     // Zum Ansehen geoeffnet (Vorschau): keine Startseite, also auch keine Streckenliste und kein Katalogabruf.
-    LaunchedEffect(vm) { if (!vm.previewMode) vm.ensureRouteOptions() }
+    // Im Tab lebt das ViewModel ueber Tab-Wechsel hinweg: bei jedem Wiedereintritt
+    // Einstellungen und Strecken neu lesen ([IndoorViewModel.refreshHome]).
+    LaunchedEffect(vm) {
+        if (vm.previewMode) return@LaunchedEffect
+        if (mode == IndoorFlowMode.TAB) vm.refreshHome() else vm.ensureRouteOptions()
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, vm) {
@@ -200,7 +205,11 @@ fun IndoorFlowScreen(
             )
             IndoorFlowMode.PUSHED -> HomeStage(vm = vm, onExit = onExit, onOpenSettings = vm::openSettings)
             // Die Einstellungsseite ist geschlossen: zurueck in die Einstellungen der App.
-            IndoorFlowMode.SETTINGS -> LaunchedEffect(Unit) { onExit() }
+            IndoorFlowMode.SETTINGS -> {
+                // Leere Flaeche in Hintergrundfarbe, solange die Seite hinausfaehrt.
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {}
+                LaunchedEffect(Unit) { onExit() }
+            }
         }
         IndoorStage.PAIR -> PairStage(vm)
         IndoorStage.SETTINGS -> SettingsStage(vm, onOpenWorlds, onOpenDiagnostics)

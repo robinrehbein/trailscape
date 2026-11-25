@@ -673,6 +673,35 @@ class IndoorViewModel(
     }
 
     /**
+     * Der Indoor-Tab kommt (wieder) nach vorn. Sein ViewModel lebt ueber
+     * Tab-Wechsel hinweg — anders als der gepushte Ablauf, der bei jedem
+     * Oeffnen neu entsteht. Deshalb hier neu lesen, was sich inzwischen
+     * geaendert haben kann: die Indoor-Einstellungen (sie werden unter
+     * „Einstellungen → Indoor" von einem eigenen ViewModel geschrieben), das
+     * Fahrgefuehl, die Strecken (neue Tour, neuer Plan) und die Einheit des
+     * Tages. Nur auf der Startseite und nie waehrend einer Fahrt.
+     */
+    fun refreshHome() {
+        if (_stage.value != IndoorStage.ROUTE || activeRuntime != null) {
+            ensureRouteOptions()
+            return
+        }
+        _pair.update {
+            it.copy(
+                demoTrainer = readDemoFlag(),
+                chainringTeeth = readChainringTeeth(),
+                gearTable = readGearTable(),
+                timeOfDay = readTimeOfDay(),
+                otherRiders = readOtherRiders(),
+                trailOverlays = IndoorTrailController.readOverlays(store),
+                graphics = readGraphics(),
+            )
+        }
+        feelController.reload()
+        loadRouteOptions()
+    }
+
+    /**
      * Liest die waehlbaren Strecken: Testwelt, gespeicherte Planungen und
      * gefahrene Touren. **Indoor-Fahrten sind keine Strecke** — ihre Punkte
      * sind die virtuelle Spur einer anderen Strecke, niemand war dort.

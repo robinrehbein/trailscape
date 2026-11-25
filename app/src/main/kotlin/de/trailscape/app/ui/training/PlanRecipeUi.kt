@@ -36,7 +36,6 @@ import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.i18n.UiText
-import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.OneUiDialog
