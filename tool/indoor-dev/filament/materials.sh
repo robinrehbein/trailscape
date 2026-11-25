@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Kompiliert die eigenen Filament-Materialien der Indoor-Darstellung
 # (app/src/main/materials/*.mat → app/src/main/assets/indoor/materials/*.filamat)
-# mit matc derselben Version wie die App (1.75.1, aus build.sh). Nur OpenGL
+# mit matc derselben Version wie die App (1.81.0, aus build.sh). Nur OpenGL
 # (Geraet: OpenGL ES; Referenzrenderer: Desktop-GL). Die .filamat liegen im Repo,
 # der Gradle-Bau braucht matc nicht.
 set -euo pipefail

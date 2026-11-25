@@ -2,7 +2,7 @@
 //
 // Anders als shots.mjs (three.js im Browser) rechnet dieses Skript nur die Szene
 // aus — Kacheln nach `show`, Teilflaechen-Regel, Fahrer und Kamera wie die App
-// (`TilePlanner`, `CameraRig`, `modelMatrix`) — und laesst echtes Filament 1.75.1
+// (`TilePlanner`, `CameraRig`, `modelMatrix`) — und laesst echtes Filament 1.81.0
 // zeichnen (`filament/build/filarender`, unter Xvfb auf Mesa llvmpipe).
 //
 //   node filashots.mjs <welt> --sky <dir> [--dists 0,500] [--cameras chase,handlebar]
@@ -11,6 +11,8 @@
 //        [--riders "18:-0.9:0,60:0.9:2,140:-1.3:1:o"]   andere Radfahrer: Abstand voraus (m), Seitenversatz
 //                                                     (rechts +), Trikot 0–5, „o" = Gegenverkehr
 //        [--birds 5]                                   ein Schwarm von n Voegeln vor der Kamera
+//        [--shadow-type PCF|PCSS|VSM|DPCF]             Schattenart (Vorgabe PCF wie FilamentCore)
+//   FILARENDER=<pfad> nimmt einen anderen Renderer (z. B. filament/build-1.75.1/filarender).
 //
 // `--sky` ist ein Verzeichnis von `indoor-dev sky` (sky.json, cube.bin, clouds.bin).
 // `--rig v1` nimmt die Lenkerkamera vor der Ueberarbeitung (fuer Vorher-Bilder).
@@ -23,7 +25,7 @@ import { cameraPose, riderMatrix, laneOffsetM, projection, steerMatrix } from '.
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..', '..');
-const BIN = join(HERE, '..', 'filament', 'build', 'filarender');
+const BIN = process.env.FILARENDER ? resolve(process.env.FILARENDER) : join(HERE, '..', 'filament', 'build', 'filarender');
 
 const a = {
   world: null, sky: null, dists: [0], cameras: ['chase'], width: 900, height: 1200, out: null, prefix: '',
@@ -52,6 +54,7 @@ for (let i = 0; i < argv.length; i++) {
     case '--no-rider': a.rider = false; break;
     case '--riders': a.riders = v().split(',').filter(Boolean).map((x) => { const p = x.split(':'); return { gap: +p[0], lat: +p[1], jersey: +(p[2] ?? 0), oncoming: p[3] === 'o' }; }); break;
     case '--birds': a.birds = Number(v()); break;
+    case '--shadow-type': a.set.shadowType = v(); break; // PCF (wie die App), PCSS, VSM, DPCF
     case '--set': { const [kk, vv] = v().split('='); a.set[kk] = vv === '1' || vv === 'true'; break; }
     default:
       if (k.startsWith('--')) { console.error(`unbekannte Option ${k}`); process.exit(2); }
@@ -163,7 +166,7 @@ for (const dist of a.dists) {
     const sceneFile = join(out, `${name}.scene.json`);
     writeFileSync(sceneFile, JSON.stringify(scene));
     const t0 = Date.now();
-    const r = spawnSync(BIN, [sceneFile, join(out, `${name}.png`)], { env: { ...process.env, DISPLAY: display }, encoding: 'utf8' });
+    const r = spawnSync(BIN, [sceneFile, join(out, `${name}.png`)], { env: { MESA_GL_VERSION_OVERRIDE: '4.6', ...process.env, DISPLAY: display }, encoding: 'utf8' });
     const stat = (r.stdout || '').trim().split('\n').pop();
     if (r.status !== 0) {
       failed++;

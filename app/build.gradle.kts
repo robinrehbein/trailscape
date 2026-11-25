@@ -101,7 +101,7 @@ androidComponents {
 
 android {
     namespace = "de.trailscape.app"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         // Neue Play-App. Die alte GitHub-Installation mit
@@ -344,19 +344,19 @@ dependencies {
     // weil `matc` hier nicht baubar ist; `Gltfio.init()` laedt auch die
     // Engine). `filament-utils` braucht die Darstellung nicht und ist bei der
     // Integration entfallen (je ABI rund 1,4 MB weniger, docs/indoor/render.md).
-    // 1.75.1 ist die neueste Version, die gegen
-    // compileSdk 36 / AGP 9.0.1 baut: Ab 1.76.0 verlangen die AARs
-    // compileSdk 37 (aar-metadata `minCompileSdk=37`; neueste Version auf
-    // Maven Central ist 1.81.0, Stand 23.11.2026) — ein Anheben waere ein
-    // eigener Schritt samt AGP-Update. Verwendet wird das ausschliesslich unter
+    // PROTOTYP (Branch claude/grafik-filament-upgrade, UNGEBAUT): 1.81.0. Ab 1.76.0
+    // verlangen die AARs compileSdk 37 (aar-metadata `minCompileSdk=37`), das
+    // wiederum AGP >= 9.1.1 (Root-Build) und Gradle >= 9.3.1 (Wrapper). Die
+    // .filamat sind mit matc 1.81.0 neu gebaut (Materialversion 81 statt 75).
+    // Bewertung: docs/indoor/filament-upgrade.md. Verwendet wird das ausschliesslich unter
     // `app/.../indoor/render/`; R8-Regeln dazu stehen in proguard-rules.pro
     // (Besitzer: Slice indoor-render).
     //
     // Kosten: Filament bringt je ABI native Bibliotheken von rund 10 MB mit
     // (arm64-v8a, armeabi-v7a, x86, x86_64). Ob das APK auf arm64 beschraenkt
     // wird, ist eine offene Entscheidung des Gruenders (docs/indoor.md §11).
-    implementation("com.google.android.filament:filament-android:1.75.1")
-    implementation("com.google.android.filament:gltfio-android:1.75.1")
+    implementation("com.google.android.filament:filament-android:1.81.0")
+    implementation("com.google.android.filament:gltfio-android:1.81.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

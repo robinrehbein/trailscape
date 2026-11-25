@@ -277,12 +277,13 @@ int main(int argc, char** argv) {
     Entity sunE = utils::EntityManager::get().create();
     {
         LightManager::ShadowOptions so;
-        so.mapSize = 2048;
-        so.shadowCascades = 3;
+        // Vorgaben wie FilamentCore; die Schalter in settings dienen nur Vergleichen.
+        so.mapSize = (uint32_t)opt(settings, "shadowMapSize", 2048);
+        so.shadowCascades = (uint8_t)opt(settings, "shadowCascades", 3);
         so.cascadeSplitPositions[0] = 0.05f;
         so.cascadeSplitPositions[1] = 0.2f;
-        so.shadowFar = 300.f;
-        so.shadowFarHint = 300.f;
+        so.shadowFar = opt(settings, "shadowFar", 300.f);
+        so.shadowFarHint = so.shadowFar;
         so.shadowNearHint = 1.f;
         so.stable = false;
         const double3 enu = d3(K["sunDirEnu"]);
@@ -406,13 +407,27 @@ int main(int argc, char** argv) {
     view->setPostProcessingEnabled(post);
     {
         View::MultiSampleAntiAliasingOptions m;
-        m.enabled = true;
+        m.enabled = opt(settings, "msaa", true);
         m.sampleCount = 4;
         view->setMultiSampleAntiAliasingOptions(m);
         view->setAntiAliasing(View::AntiAliasing::NONE);
     }
-    view->setShadowType(shadows ? View::ShadowType::DPCF : View::ShadowType::PCF);
+    // Schattenart wie FilamentCore (PCF); "shadowType" in settings waehlt fuer Vergleiche
+    // PCF (harte Kanten), PCSS (weich, EVSM-basiert), VSM oder DPCF (veraltet, faellt auf PCSS).
     {
+        const std::string st = opt(settings, "shadowType", std::string("PCF"));
+        View::ShadowType t = View::ShadowType::PCF;
+        if (st == "PCSS") t = View::ShadowType::PCSS;
+        else if (st == "VSM") t = View::ShadowType::VSM;
+        else if (st == "DPCF") t = View::ShadowType::DPCF;
+        view->setShadowType(t);
+        fprintf(stderr, "Schattenart %s\n", st.c_str());
+    }
+    {
+        View::VsmShadowOptions v;
+        v.highPrecision = opt(settings, "vsmHighPrecision", false);
+        v.lightBleedReduction = opt(settings, "vsmLightBleedReduction", 0.15f);
+        view->setVsmShadowOptions(v);
         View::SoftShadowOptions s;
         s.penumbraScale = 1.5f;
         s.penumbraRatioScale = 1.f;
