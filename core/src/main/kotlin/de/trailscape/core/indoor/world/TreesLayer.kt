@@ -54,7 +54,10 @@ internal class TreesLayer : TileLayer {
         val leaves = if (ctx.level == 0) leavesMaterial(ctx) else farLeavesMaterial(ctx)
         val canopy = canopyMaterial(ctx)
         val volumeBudget = if (ctx.level == 0) b.vegetation / 4 else total
-        var used = forestVolume(ctx, out, canopy, leaves, volumeBudget)
+        // Stufe 1: Kronenschaetzung aus dem eigenen (groeberen) Luftbild — Waldkoerper nur, wo das Bild auch
+        // Wald zeigt (die Landnutzung nennt auch Macchie, Kahlschlaege und lichte Hutewaelder „Wald").
+        val far = if (ctx.level != 0) ctx.aerialRaw?.let { canopyFromAerial(it, 128) } else null
+        var used = forestVolume(ctx, out, canopy, leaves, volumeBudget, far)
         if (ctx.level == 0) {
             used += undergrowth(ctx, out, leaves, min(UNDERGROWTH_MAX, (total - used) / 6))
             // Karten haben je Dreieck rund dreimal so viele Eckpunkt-Bytes wie geschlossene Koerper:
@@ -68,29 +71,29 @@ internal class TreesLayer : TileLayer {
     // -----------------------------------------------------------------------
 
     /** Baut die Waldkoerper der Kachel; gibt die Zahl der Dreiecke zurueck. */
-    private fun forestVolume(ctx: TileContext, out: TileOutput, canopy: TileMaterial, leaves: TileMaterial, budget: Int): Int {
+    private fun forestVolume(ctx: TileContext, out: TileOutput, canopy: TileMaterial, leaves: TileMaterial, budget: Int, far: CanopyGrid?): Int {
         val s = ctx.spec
         var cell = if (ctx.level == 0) 8.0 else 32.0
         while (true) {
             val cells = (s.cellM / cell).toInt()
-            val forest = forestCells(ctx, cells, cell)
+            val forest = forestCells(ctx, cells, cell, far)
             val count = forest.count { it }
             // Kronendach 2 Dreiecke je Zelle, Kreuzbilder am Rand und obenauf (Schaetzung nach oben)
             val tris = count * 2 + count * TreeModels.TUFT_TRIANGLES * 7 / 10
             if (tris <= budget || cell >= s.cellM / 4) {
                 // In Stufe 0 lieber kein Waldkoerper als grobe Zellen (32–64 m lasen sich als flache Scherben).
                 if (count == 0 || tris > budget || (ctx.level == 0 && cell > 16.0)) return 0
-                return emitVolume(ctx, out, canopy, leaves, forest, cells, cell, budget)
+                return emitVolume(ctx, out, canopy, leaves, forest, cells, cell, budget, far)
             }
             cell *= 2
         }
     }
 
-    private fun forestCells(ctx: TileContext, cells: Int, cell: Double): BooleanArray {
+    private fun forestCells(ctx: TileContext, cells: Int, cell: Double, far: CanopyGrid?): BooleanArray {
         val s = ctx.spec
         val out = BooleanArray(cells * cells)
         for (j in 0 until cells) for (i in 0 until cells) {
-            out[j * cells + i] = isVolumeCell(ctx, s.minE + (i + 0.5) * cell, s.minN + (j + 0.5) * cell, cell)
+            out[j * cells + i] = isVolumeCell(ctx, s.minE + (i + 0.5) * cell, s.minN + (j + 0.5) * cell, cell, far)
         }
         return out
     }
@@ -100,18 +103,22 @@ internal class TreesLayer : TileLayer {
      * Waldnachbarn. Vereinzelte Zellen (Schatten im Luftbild, Baumgruppen) standen sonst als
      * dunkle Rauten und Zelte in offenen Flaechen.
      */
-    private fun isVolumeCell(ctx: TileContext, e: Double, n: Double, cell: Double): Boolean {
-        if (!isRawVolumeCell(ctx, e, n, cell)) return false
+    private fun isVolumeCell(ctx: TileContext, e: Double, n: Double, cell: Double, far: CanopyGrid?): Boolean {
+        if (!isRawVolumeCell(ctx, e, n, cell, far)) return false
         var k = 0
         for (dj in -1..1) for (di in -1..1) {
             if (di == 0 && dj == 0) continue
-            if (isRawVolumeCell(ctx, e + di * cell, n + dj * cell, cell) && ++k >= 3) return true
+            if (isRawVolumeCell(ctx, e + di * cell, n + dj * cell, cell, far) && ++k >= 3) return true
         }
         return false
     }
 
-    private fun isRawVolumeCell(ctx: TileContext, e: Double, n: Double, cell: Double): Boolean {
-        val forest = if (ctx.level == 0) ctx.land.canopyAt(e, n) >= 0.55 else ctx.land.classAt(e, n) == LandClass.FOREST
+    private fun isRawVolumeCell(ctx: TileContext, e: Double, n: Double, cell: Double, far: CanopyGrid?): Boolean {
+        val forest = if (ctx.level == 0) {
+            ctx.land.canopyAt(e, n) >= 0.55
+        } else {
+            ctx.land.classAt(e, n) == LandClass.FOREST && (far == null || farCanopy(ctx, far, e, n) >= FAR_CANOPY_MIN)
+        }
         if (!forest) return false
         if (ctx.level != 0) {
             // Kein Waldkoerper ueber der Strecke selbst (sie laeuft dort durch eine Schneise).
@@ -122,7 +129,7 @@ internal class TreesLayer : TileLayer {
         return hit == null || hit.distance > NEAR_M
     }
 
-    private fun emitVolume(ctx: TileContext, out: TileOutput, canopy: TileMaterial, leaves: TileMaterial, forest: BooleanArray, cells: Int, cell: Double, budget: Int): Int {
+    private fun emitVolume(ctx: TileContext, out: TileOutput, canopy: TileMaterial, leaves: TileMaterial, forest: BooleanArray, cells: Int, cell: Double, budget: Int, far: CanopyGrid?): Int {
         var used = 0
         val s = ctx.spec
         // Zellen ausserhalb der Kachel werden nach derselben Regel bewertet: Raender passen ueber Kachelgrenzen.
@@ -130,7 +137,7 @@ internal class TreesLayer : TileLayer {
         fun isF(i: Int, j: Int): Boolean {
             if (i in 0 until cells && j in 0 until cells) return forest[j * cells + i]
             val key = (i.toLong() shl 32) xor (j.toLong() and 0xffffffffL)
-            return outside.getOrPut(key) { isVolumeCell(ctx, s.minE + (i + 0.5) * cell, s.minN + (j + 0.5) * cell, cell) }
+            return outside.getOrPut(key) { isVolumeCell(ctx, s.minE + (i + 0.5) * cell, s.minN + (j + 0.5) * cell, cell, far) }
         }
         // Ein Gitterpunkt liegt am Waldrand, wenn eine der vier Zellen um ihn kein Wald ist: dort liegt er am Boden.
         fun edgeVertex(i: Int, j: Int): Boolean = !(isF(i - 1, j - 1) && isF(i, j - 1) && isF(i - 1, j) && isF(i, j))
@@ -199,7 +206,7 @@ internal class TreesLayer : TileLayer {
                     1 -> 0.62
                     else -> 0.68 + 0.26 * Noise.value(e / 13.0, n / 13.0, SEED_TINT)
                 }
-                idx[k] = m.vertex(ctx.x(e), ctx.y(y), ctx.z(n), nor.x, nor.y, nor.z, e / FoliageAtlas.CANOPY_M, -n / FoliageAtlas.CANOPY_M, crownColor(ctx, e, n, shade))
+                idx[k] = m.vertex(ctx.x(e), ctx.y(y), ctx.z(n), nor.x, nor.y, nor.z, e / FoliageAtlas.CANOPY_M, -n / FoliageAtlas.CANOPY_M, canopyColor(ctx, e, n, shade, cell))
             }
             // (i,j) → (i+1,j) → (i+1,j+1) → (i,j+1) laeuft in (e, n) gegen den Uhrzeigersinn: oben sichtbar.
             // Diagonale entlang der kleineren Hoehendifferenz, damit Raender nicht zackig einknicken.
@@ -776,6 +783,36 @@ internal class TreesLayer : TileLayer {
     // Farben und Material
     // -----------------------------------------------------------------------
 
+    /** Kronenbedeckung des Luftbilds der Stufe 1 an (e, n). */
+    private fun farCanopy(ctx: TileContext, far: CanopyGrid, e: Double, n: Double): Double {
+        val s = ctx.spec
+        if (!s.contains(e, n)) return 1.0 // ausserhalb der Kachel: Nachbarkachel entscheidet, Rand bleibt stetig
+        return far.at((e - s.minE) / s.cellM, (s.maxN - n) / s.cellM)
+    }
+
+    /**
+     * Farbe des Kronendachs: Artfarbe, zu 30 % an die Farbe des Luftbilds an dieser Stelle gezogen
+     * (bezogen auf die mittlere Helligkeit der Kronendach-Textur). Bis `indoor-world/11` nur die Artfarbe —
+     * die Waldkoerper standen als dunkelgruener, satter Teppich mit harter Kante neben dem helleren,
+     * graueren Luftbild der Nachbarflaechen und der Stufe 0.
+     */
+    private fun canopyColor(ctx: TileContext, e: Double, n: Double, shade: Double, cell: Double): Int {
+        val base = crownColor(ctx, e, n, shade)
+        val a = ctx.aerialMeanAt(e, n, max(4.0, cell * 0.75)) ?: return base
+        val f = (shade / 0.8).coerceIn(0.5, 1.2)
+        // Luftbild linear; Blau nie ueber Gruen (Schnee und Dunst im Winterbild faerbten den Wald sonst blaugrau).
+        val ar = Argb.SRGB_TO_LINEAR[Argb.red(a)].toDouble()
+        val ag = Argb.SRGB_TO_LINEAR[Argb.green(a)].toDouble()
+        val ab = min(Argb.SRGB_TO_LINEAR[Argb.blue(a)].toDouble(), ag * 0.85)
+        val al = doubleArrayOf(ar, ag, ab)
+        fun ch(k: Int, sh: Int): Int {
+            val vb = ((base shr sh) and 0xFF) / 255.0
+            val va = al[k] / CANOPY_TEX_MEAN[k] * f
+            return ((vb + (va - vb) * CANOPY_AERIAL_SHARE).coerceIn(0.0, 1.0) * 255 + 0.5).toInt()
+        }
+        return Argb.of(255, ch(0, 16), ch(1, 8), ch(2, 0))
+    }
+
     private fun crownColor(ctx: TileContext, e: Double, n: Double, shade: Double): Int {
         val conifer = ctx.land.coniferShare(e, n).coerceIn(0.0, 1.0)
         val v = 0.85 + 0.3 * Noise.value(e / 23.0, n / 23.0, SEED_TINT)
@@ -910,6 +947,19 @@ internal class TreesLayer : TileLayer {
         /** Obstwiese: Abstand der Reihen und in der Reihe. */
         const val ORCHARD_ROW_M = 10.0
         const val ORCHARD_STEP_M = 8.5
+
+        /**
+         * Mindestbedeckung im Luftbild der Stufe 1 fuer einen Waldkoerper. Niedrig: Laubwald im Winterbild (Baden-
+         * Wuerttemberg, braun-grau) schaetzt die Kronenerkennung nur schwach — er soll bleiben; wegfallen sollen nur
+         * klar helle Flaechen (Fels, Macchie auf Kalk, Wiese, Kahlschlag), die die Landnutzung als Wald fuehrt.
+         */
+        const val FAR_CANOPY_MIN = 0.1
+
+        /** Anteil der Luftbildfarbe am Kronendach (mehr machte Winterwaelder graubraun). */
+        const val CANOPY_AERIAL_SHARE = 0.3
+
+        /** Mittlere Farbe (linear) der Kronendach-Textur ([FoliageAtlas.canopyImage]). */
+        val CANOPY_TEX_MEAN = doubleArrayOf(0.42, 0.51, 0.31)
 
         /** Grundfarben des Waldkoerpers in sRGB. */
         val CONIFER = intArrayOf(50, 72, 46)
