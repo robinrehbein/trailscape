@@ -6,6 +6,8 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { createRoomService } from './rooms.mjs';
+import { acceptUpgrade, checkHandshake, rejectUpgrade } from './websocket.mjs';
 
 // ---------------------------------------------------------------------------
 // Konfiguration
@@ -51,6 +53,38 @@ if (WORLDS_URL && !/^http:\/\/[^/]+$/.test(WORLDS_URL)) {
   console.error('FEHLER: WORLDS_URL muss eine interne http-Adresse ohne Pfad sein, z. B. http://worlds:8081');
   process.exit(1);
 }
+
+// Räume für Gruppenfahrten in Echtzeit (docs/raum-protokoll.md). Vorgabe AUS:
+// Erst ROOMS=1 schaltet /api/rooms und den WebSocket unter /api/rooms/ws frei.
+const ROOMS_ENABLED = /^(1|true|yes)$/i.test(process.env.ROOMS || '');
+
+/** Ganzzahl aus der Umgebung in [min, max], sonst Abbruch mit Meldung. */
+function envInt(name, fallback, min, max) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    console.error(`FEHLER: ${name} muss eine ganze Zahl von ${min} bis ${max} sein.`);
+    process.exit(1);
+  }
+  return n;
+}
+
+const ROOM_LIMITS = {
+  maxRooms: envInt('ROOMS_MAX', 20, 1, 1000),
+  maxRidersPerRoom: envInt('ROOM_MAX_RIDERS', 10, 2, 50),
+  roomTtlMs: envInt('ROOM_TTL_MIN', 360, 5, 24 * 60) * 60_000,
+  roomIdleMs: envInt('ROOM_IDLE_MIN', 15, 1, 24 * 60) * 60_000,
+  rejoinGraceMs: envInt('ROOM_REJOIN_GRACE_S', 30, 1, 600) * 1000,
+};
+ROOM_LIMITS.maxConnections = ROOM_LIMITS.maxRooms * ROOM_LIMITS.maxRidersPerRoom + 20;
+const ROOM_BODY_LIMIT = 4 * 1024;
+
+// Protokoll des Raum-Dienstes: bekommt nur Zählerstände und Adressen bei
+// Fehlversuchen, nie Geheimnisse, Namen oder Positionen (rooms.mjs).
+const rooms = ROOMS_ENABLED
+  ? createRoomService({ limits: ROOM_LIMITS, log: (m) => console.log(`${new Date().toISOString()} ${m}`) })
+  : null;
 
 const RIDE_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
 
@@ -135,8 +169,8 @@ function recordAuthFailure(ip) {
   console.warn(`${new Date(now).toISOString()} Fehlgeschlagene Authentifizierung von ${ip}`);
 }
 
-/** Liest den Request-Body ein, begrenzt auf MAX_BODY_BYTES. Wirft bei Überschreitung. */
-function readBody(req) {
+/** Liest den Request-Body ein, begrenzt auf [maxBytes]. Wirft bei Überschreitung. */
+function readBody(req, maxBytes = MAX_BODY_BYTES) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let totalBytes = 0;
@@ -144,7 +178,7 @@ function readBody(req) {
 
     req.on('data', (chunk) => {
       totalBytes += chunk.length;
-      if (totalBytes > MAX_BODY_BYTES) {
+      if (totalBytes > maxBytes) {
         tooLarge = true;
         req.destroy();
         return;
@@ -443,6 +477,15 @@ async function handleRequest(req, res) {
 
   const ip = clientIp(req);
 
+  // Der WebSocket der Räume braucht KEINEN SYNC_TOKEN (Gäste haben ihn nicht);
+  // er läuft über das 'upgrade'-Ereignis. Ein gewöhnlicher Request hierher
+  // bekommt nur den Hinweis und zählt nicht als Fehlversuch.
+  if (pathname === '/api/rooms/ws') {
+    if (!rooms) sendJson(res, 404, { error: 'Nicht gefunden' });
+    else sendJson(res, 426, { error: 'WebSocket erwartet' }, { Upgrade: 'websocket' });
+    return;
+  }
+
   const retryAfter = rateLimitRetryAfterSeconds(ip);
   if (retryAfter > 0) {
     sendJson(
@@ -467,6 +510,11 @@ async function handleRequest(req, res) {
       return;
     }
     forwardToWorlds(req, res);
+    return;
+  }
+
+  if (pathname === '/api/rooms' || pathname.startsWith('/api/rooms/')) {
+    await handleRooms(req, res, method, pathname);
     return;
   }
 
@@ -500,6 +548,89 @@ async function handleRequest(req, res) {
 
   sendJson(res, 404, { error: 'Nicht gefunden' });
 }
+
+// ---------------------------------------------------------------------------
+// Räume (docs/raum-protokoll.md) — REST-Teil, nur mit SYNC_TOKEN
+// ---------------------------------------------------------------------------
+
+async function handleRooms(req, res, method, pathname) {
+  if (!rooms) {
+    sendJson(res, 404, { error: 'Raeume sind auf diesem Server nicht eingeschaltet (ROOMS=1)' });
+    return;
+  }
+  if (pathname === '/api/rooms' && method === 'GET') {
+    sendJson(res, 200, rooms.listRooms(), { 'Cache-Control': 'no-store' });
+    return;
+  }
+  if (pathname === '/api/rooms' && method === 'POST') {
+    if (Number(req.headers['content-length'] || 0) > ROOM_BODY_LIMIT) {
+      sendJson(res, 413, { error: 'Anfrage zu gross', code: 'TOO_LARGE' }, { Connection: 'close' });
+      return;
+    }
+    let body;
+    try {
+      body = await readBody(req, ROOM_BODY_LIMIT);
+    } catch (err) {
+      if (err.message === 'PAYLOAD_TOO_LARGE') sendJson(res, 413, { error: 'Anfrage zu gross', code: 'TOO_LARGE' });
+      else sendJson(res, 400, { error: 'Fehler beim Lesen der Anfrage' });
+      return;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(body.toString('utf8'));
+    } catch {
+      sendJson(res, 400, { error: 'Ungültiges JSON', code: 'INVALID' });
+      return;
+    }
+    const result = rooms.createRoom(parsed);
+    // Die Antwort enthält die Geheimnisse: nirgends zwischenspeichern.
+    sendJson(res, result.status, result.body, { 'Cache-Control': 'no-store' });
+    return;
+  }
+  const match = /^\/api\/rooms\/([A-Za-z0-9_-]{16})$/.exec(pathname);
+  if (match && method === 'DELETE') {
+    if (rooms.deleteRoom(match[1], 'host')) sendEmpty(res, 204);
+    else sendJson(res, 404, { error: 'Nicht gefunden' });
+    return;
+  }
+  sendJson(res, 404, { error: 'Nicht gefunden' });
+}
+
+/** WebSocket-Handshake für /api/rooms/ws; alles andere mit Upgrade wird abgewiesen. */
+function handleUpgrade(req, socket, head) {
+  socket.on('error', () => socket.destroy());
+  let pathname;
+  try {
+    pathname = new URL(req.url, 'http://localhost').pathname;
+  } catch {
+    rejectUpgrade(socket, 400, 'Ungueltige Anfrage-URL');
+    return;
+  }
+  if (!rooms || pathname !== '/api/rooms/ws') {
+    rejectUpgrade(socket, 404, 'Nicht gefunden');
+    return;
+  }
+  const problem = checkHandshake(req);
+  if (problem) {
+    rejectUpgrade(socket, problem.status, problem.message, problem.headers);
+    return;
+  }
+  const ip = clientIp(req);
+  const admit = rooms.canAccept(ip);
+  if (!admit.ok) {
+    rejectUpgrade(socket, admit.status, admit.message, admit.status === 429 ? { 'Retry-After': '900' } : {});
+    return;
+  }
+  const conn = acceptUpgrade(req, socket, head, { maxMessageBytes: rooms.limits.maxMessageBytes });
+  const session = rooms.attach(conn, ip);
+  conn.on('message', (text) => session.onMessage(text));
+  conn.on('close', () => session.onClose());
+  wsConnections.add(conn);
+  conn.on('close', () => wsConnections.delete(conn));
+}
+
+/** Offene WebSocket-Verbindungen (für Keepalive-Pings über Reverse-Proxys). */
+const wsConnections = new Set();
 
 /**
  * Reicht eine Anfrage an den Bau-Dienst durch (Datenstrom in beide Richtungen,
@@ -550,8 +681,34 @@ async function main() {
     });
   });
 
+  server.on('upgrade', handleUpgrade);
+
+  if (rooms) {
+    const tick = setInterval(() => rooms.tick(), rooms.limits.broadcastIntervalMs);
+    // Keepalive: Reverse-Proxys trennen stille Verbindungen (nginx nach 60 s).
+    const keepalive = setInterval(() => {
+      for (const c of wsConnections) c.ping();
+    }, 15_000);
+    const stop = () => {
+      clearInterval(tick);
+      clearInterval(keepalive);
+      rooms.shutdown();
+      server.close();
+      setTimeout(() => process.exit(0), 300);
+    };
+    process.once('SIGTERM', stop);
+    process.once('SIGINT', stop);
+  }
+
   server.listen(PORT, () => {
     console.log(`Trailscape-Sync-Server läuft auf Port ${PORT} – Datenverzeichnis: ${DATA_DIR}`);
+    if (rooms) {
+      const l = rooms.limits;
+      console.log(
+        `Räume eingeschaltet: höchstens ${l.maxRooms} Räume à ${l.maxRidersPerRoom} Fahrer, ` +
+          `Lebensdauer ${l.roomTtlMs / 60_000} min, Leerlauf-Abbau nach ${l.roomIdleMs / 60_000} min`
+      );
+    }
   });
 }
 

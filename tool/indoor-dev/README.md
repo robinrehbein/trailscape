@@ -43,6 +43,7 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 | `server-info` | JSON mit Welt-Version, Laser-Quellen und Belagsklassen (für den Bau-Dienst) |
 | `server-build --job <dir> --cache <dir> [--max-km n] [--max-points n]` | Bau für den Bau-Dienst (`server/worlds`, `docs/indoor/serverbau.md`): liest `<job>/request.json`, baut mit Laser (wo vorhanden) und Katalog-Luftbild, prüft, packt nach `<job>/package.zip`, schreibt `<job>/result.json`; Fortschritt als `@progress {…}` |
 | `server-request --gpx <datei> --out <request.json> [--laser] [--from-km a --to-km b]` | Auftrag für den Bau-Dienst aus einer GPX-Datei (Proben) |
+| `tree-library --out <datei>` | die Baumbibliothek der App schreiben (`app/src/main/assets/indoor/models/trees.glb`, 72 Vorlagen); nur nach Änderungen am Generator nötig, `TreeLibraryAssetTest` prüft die eingecheckte Datei. Belegbilder des Einbaus: `baeume/einbau.py` (siehe `docs/indoor/baeume.md`) |
 | `models --out <dir>` | Fahrer und Geist schreiben (`writeIndoorModels` aus `RiderModel.kt` in `:core`; meldet sauber, wenn es die Funktion noch nicht gibt) |
 
 Exit-Codes: 0 in Ordnung, 1 Bau gescheitert / Verstöße, 2 falscher Aufruf.

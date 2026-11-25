@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
         openIndoorIfRequested(intent, appStart = savedInstanceState == null)
         collectIndoorSavedRides()
         planRecipeIfRequested(intent)
+        challengesIfRequested(intent)
         setContent {
             TrailscapeTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -90,6 +91,19 @@ class MainActivity : ComponentActivity() {
         importIfRequested(intent)
         openIndoorIfRequested(intent, appStart = false)
         planRecipeIfRequested(intent)
+        challengesIfRequested(intent)
+    }
+
+    /**
+     * „Trailscape öffnen" nach dem Speichern einer Herausforderung von aussen
+     * ([de.trailscape.app.challenge.ChallengeImportActivity]): gleich zum
+     * Segment „Herausforderungen" im Tab „Indoor". Das Extra wird entfernt,
+     * damit eine Drehung nichts doppelt tut.
+     */
+    private fun challengesIfRequested(intent: Intent?) {
+        if (intent?.getBooleanExtra(de.trailscape.app.challenge.EXTRA_OPEN_CHALLENGES, false) != true) return
+        intent.removeExtra(de.trailscape.app.challenge.EXTRA_OPEN_CHALLENGES)
+        ViewModelProvider(this)[AppViewModel::class.java].requestChallenges()
     }
 
     /**
@@ -118,13 +132,14 @@ class MainActivity : ComponentActivity() {
     /**
      * Die [PlanRecipeImportActivity] hat ein Plan-Rezept gelesen und in
      * [de.trailscape.app.ui.training.PendingPlanRecipe] abgelegt. Hier geht es
-     * nur zum Tab „Training"; die Vorschau zeigt der Host im Compose-Inhalt.
+     * nur zur Sicht „Plan" (Tab „Indoor"); die Vorschau zeigt der Host im
+     * Compose-Inhalt.
      * Das Extra wird entfernt, damit eine Drehung nichts doppelt tut.
      */
     private fun planRecipeIfRequested(intent: Intent?) {
         if (intent?.getBooleanExtra(EXTRA_PLAN_RECIPE_PENDING, false) != true) return
         intent.removeExtra(EXTRA_PLAN_RECIPE_PENDING)
-        ViewModelProvider(this)[AppViewModel::class.java].requestTab(AppTab.TRAINING)
+        ViewModelProvider(this)[AppViewModel::class.java].requestPlan()
     }
 
     /**

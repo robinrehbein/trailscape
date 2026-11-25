@@ -18,14 +18,10 @@
     <!-- TourList.kt -->
     <string name="indoor_app_tourlist_pill">Indoor</string>
     <!-- RideDetailScreen.kt -->
-    <string name="indoor_app_detail_notice">Ridden on the indoor trainer. The map shows the virtual route – it doesn’t count towards “New roads”, explorer tiles or route comparisons.</string>
+    <string name="indoor_app_detail_notice">Ridden on the trainer. The map shows the virtual route – it doesn’t count towards “New roads”, explorer tiles or route comparisons.</string>
     <!-- ShareCard.kt -->
-    <string name="indoor_app_share_date_line">%1$s · On the indoor trainer</string>
+    <string name="indoor_app_share_date_line">%1$s · On the trainer</string>
     <!-- Wiring (IndoorFlowScreen.kt, ReadyToRideDialog.kt, MoreScreen.kt) -->
-    <string name="indoor_app_ready_action">Ride indoors on the trainer</string>
-    <string name="indoor_app_more_group">Indoor</string>
-    <string name="indoor_app_more_diagnostics_title">Indoor diagnostics</string>
-    <string name="indoor_app_more_diagnostics_status">Check 3D rendering on this device</string>
     <string name="indoor_app_flow_leave_title">Ride paused</string>
     <string name="indoor_app_flow_leave_body">If you finish the ride, you’ll see the summary and can save it.</string>
     <string name="indoor_app_flow_leave_resume">Keep riding</string>
@@ -53,10 +49,10 @@
     <string name="indoor_app_value_kj">%1$d kJ</string>
     <string name="indoor_app_value_percent">%1$d%%</string>
     <!-- IndoorEntryCard.kt -->
-    <string name="indoor_app_entry_title">Indoor training</string>
-    <string name="indoor_app_entry_body">Ride real routes in 3D on your smart trainer.</string>
+    <string name="indoor_app_entry_title">Indoor</string>
+    <string name="indoor_app_entry_body">Ride real routes in 3D on your trainer.</string>
     <string name="indoor_app_entry_body_erg">Today: %1$s</string>
-    <string name="indoor_app_entry_action">Open indoor training</string>
+    <string name="indoor_app_entry_action">Open Indoor</string>
     <!-- IndoorPairScreen.kt -->
     <string name="indoor_app_pair_title">Pair trainer</string>
     <string name="indoor_app_pair_intro">Choose your smart trainer. A shifter such as the Zwift Click is optional. The connection is made when the ride starts.</string>
@@ -84,7 +80,11 @@
     <string name="indoor_app_pair_other_riders_title">Show other riders</string>
     <string name="indoor_app_pair_other_riders_body">A few riders and oncoming cyclists on the route – scenery only, no effect on resistance or drafting.</string>
     <!-- IndoorRouteScreen.kt -->
-    <string name="indoor_app_route_title">Indoor training</string>
+    <string name="indoor_app_route_title">Indoor</string>
+    <string name="indoor_app_tab_title">Indoor</string>
+    <string name="indoor_app_tab_segment_routes">Routes</string>
+    <string name="indoor_app_tab_segment_plan">Plan</string>
+    <string name="indoor_app_tab_segment_challenges">Challenges</string>
     <string name="indoor_app_route_section_mode">Riding mode</string>
     <string name="indoor_app_route_section_ghost">Riding partner</string>
     <string name="indoor_app_route_testworld_title">Test route</string>
@@ -135,12 +135,12 @@
     <string name="indoor_app_world_cancelling">Cancelling…</string>
     <string name="indoor_app_world_ready_title">All set</string>
     <string name="indoor_app_world_ready_body">The 3D view of “%1$s” is stored on your device. You can ride it without a network too.</string>
-    <string name="indoor_app_world_ride_action">Start riding</string>
+    <string name="indoor_app_world_ride_action">Continue</string>
     <string name="indoor_app_world_failed_title">The 3D view could not be created</string>
     <string name="indoor_app_world_failed_hint">You can try again or ride without the 3D view – you then see the elevation profile instead.</string>
     <string name="indoor_app_world_failed_offline">No network: the elevation data for this route is not on your device yet. Connect to the internet and try again.</string>
     <string name="indoor_app_world_failed_source">A data source is not responding properly right now. Try again later; anything already downloaded is kept.</string>
-    <string name="indoor_app_world_failed_no_space">There is not enough space on your device for this route. Free up storage or delete routes you no longer need under Indoor training → Settings → Routes on this device.</string>
+    <string name="indoor_app_world_failed_no_space">There is not enough space on your device for this route. Free up storage or delete routes you no longer need under Settings → Indoor → Routes on this device.</string>
     <string name="indoor_app_world_failed_route">This route is too long (over 150 km) or too short for the 3D view.</string>
     <string name="indoor_app_world_failed_internal">An unexpected error occurred while preparing the route.</string>
     <string name="indoor_app_technical_detail">Technical detail: %1$s</string>
@@ -197,12 +197,12 @@
     <string name="indoor_app_notice_trainer_unsupported">This trainer cannot be controlled. You can ride, but the resistance stays as you set it on the device.</string>
     <string name="indoor_app_notice_shifter_unsupported">The shifter cannot be used. Change gear with the buttons on the screen.</string>
     <string name="indoor_app_notice_bluetooth_off">Bluetooth is off. Switch it on so the trainer can connect.</string>
-    <string name="indoor_app_notice_no_permission">The Bluetooth permission is missing. Grant it under More → Sensors.</string>
+    <string name="indoor_app_notice_no_permission">The Bluetooth permission is missing. Grant it under Settings → Sensors &amp; trainer.</string>
     <string name="indoor_app_notice_tile_failed">A part of the route could not be loaded and appears incomplete.</string>
-    <string name="indoor_app_notice_part_failed">Part of indoor training reported an error. The ride carries on as well as it can.</string>
+    <string name="indoor_app_notice_part_failed">Part of Indoor reported an error. The ride carries on as well as it can.</string>
     <string name="indoor_app_notice_dismiss_action">Dismiss</string>
     <string name="indoor_app_problem_not_ready">This part is not finished in this version yet.</string>
-    <string name="indoor_app_problem_not_ready_hint">Indoor training cannot be fully used in this version yet.</string>
+    <string name="indoor_app_problem_not_ready_hint">Indoor cannot be fully used in this version yet.</string>
     <string name="indoor_app_problem_failed_core">An error occurred in the training logic.</string>
     <string name="indoor_app_problem_failed_world">An error occurred while preparing the route.</string>
     <string name="indoor_app_problem_failed_ble">An error occurred in the Bluetooth connection.</string>
@@ -283,6 +283,7 @@
     <!-- IndoorSummaryScreen.kt -->
     <string name="indoor_app_summary_title">Summary</string>
     <string name="indoor_app_summary_saved">The ride has been saved as an indoor ride.</string>
+    <string name="indoor_app_summary_open_tour_action">View ride</string>
     <string name="indoor_app_summary_record_missing_title">Recording not available</string>
     <string name="indoor_app_summary_record_missing_body">The ride was not fully recorded and therefore cannot be saved.</string>
     <string name="indoor_app_summary_too_short">Rides shorter than %1$d seconds are not saved.</string>
@@ -329,7 +330,7 @@
     <string name="indoor_app_worlds_attribution_hide">Hide attribution</string>
     <string name="indoor_app_worlds_delete_action">Delete</string>
     <string name="indoor_app_worlds_delete_confirm_title">Delete route?</string>
-    <string name="indoor_app_worlds_delete_confirm_body">The 3D view of “%1$s” (%2$s) will be deleted. You can load it again later.</string>
+    <string name="indoor_app_worlds_delete_confirm_body">The 3D view of “%1$s” (%2$s) will be deleted. You can download or prepare it again later.</string>
     <!-- END flow screens -->
 
     <!-- Bekannte Strecken (Katalog, docs/indoor/catalog.md) -->
@@ -388,7 +389,7 @@
     <string name="indoor_app_day_rest_body_planned">The plan had “%1$s”. Your readiness suggests a break today, so there is no trainer session.</string>
     <string name="indoor_app_day_open_free_action">Ride freely anyway</string>
     <string name="indoor_app_day_event_title">Event day</string>
-    <string name="indoor_app_day_event_body">The event has its own course – there is no trainer session for it.</string>
+    <string name="indoor_app_day_event_body">The event has its own route – there is no trainer session for it.</string>
     <string name="indoor_app_day_meta">%1$d min · the trainer holds the target power</string>
     <string name="indoor_app_day_reduced_meta">%1$d instead of %2$d min · adjusted to your readiness</string>
     <string name="indoor_app_day_easy_meta">No session planned today – %1$d min easy and flat</string>
@@ -420,11 +421,11 @@
     <string name="indoor_app_day_world_download">Download: %1$s</string>
     <string name="indoor_app_day_world_download_unknown">Download</string>
     <string name="indoor_app_day_world_build">Prepare: about %1$d min</string>
-    <string name="indoor_app_day_world_plan">Plan a loop, then prepare: about %1$d min</string>
+    <string name="indoor_app_day_world_plan">Build a loop, then prepare: about %1$d min</string>
     <string name="indoor_app_day_ride_action">Ride</string>
     <string name="indoor_app_day_download_action">Download and ride</string>
     <string name="indoor_app_day_build_action">Prepare</string>
-    <string name="indoor_app_day_plan_action">Plan a loop</string>
+    <string name="indoor_app_day_plan_action">Build a loop</string>
     <string name="indoor_app_day_next_action">Other route (%1$d/%2$d)</string>
     <string name="indoor_app_day_path_real">Real route</string>
     <string name="indoor_app_day_path_generated">Generated route</string>
@@ -470,7 +471,7 @@
     <string name="indoor_app_server_incompatible_unknown">Your server builds a different route version (%1$s) than the app.</string>
     <string name="indoor_app_server_failed_title">Server build did not work</string>
     <string name="indoor_app_server_failure_offline">Your server cannot be reached right now. A running job continues there; try again in a moment.</string>
-    <string name="indoor_app_server_failure_unauthorized">Your server rejected the token. Check it under More → Sync with your own server.</string>
+    <string name="indoor_app_server_failure_unauthorized">Your server rejected the token. Check it under Settings → Sync with your own server.</string>
     <string name="indoor_app_server_failure_too_long">The route is too long for your server’s limits.</string>
     <string name="indoor_app_server_failure_queue_full">Too many jobs are already waiting on your server. Try again later.</string>
     <string name="indoor_app_server_failure_build_failed">The build on the server failed. Details are in the job’s log there.</string>
@@ -493,7 +494,7 @@
     <string name="indoor_app_home_trainer_demo_title">No trainer (demo)</string>
     <string name="indoor_app_home_trainer_demo_body">You set power and cadence yourself during the ride.</string>
     <string name="indoor_app_home_trainer_missing_title">No trainer paired</string>
-    <string name="indoor_app_home_trainer_missing_body">Pair your smart trainer – or try everything without a device.</string>
+    <string name="indoor_app_home_trainer_missing_body">Pair your trainer – or try everything without a device.</string>
     <string name="indoor_app_home_trainer_bt_off_title">Bluetooth is off</string>
     <string name="indoor_app_home_trainer_bt_off_body">Turn on Bluetooth so that %1$s can connect.</string>
     <string name="indoor_app_home_trainer_permission_title">Bluetooth access missing</string>
@@ -525,7 +526,7 @@
     <string name="indoor_app_home_update">There is a new version of “%1$s”. The downloaded one stays rideable.</string>
     <string name="indoor_app_home_download_action">Download</string>
     <string name="indoor_app_home_ride_action">Ride</string>
-    <string name="indoor_app_settings_title">Settings</string>
+    <string name="indoor_app_settings_title">Indoor</string>
     <string name="indoor_app_settings_section_ride">Ride feel</string>
     <string name="indoor_app_settings_section_view">3D view</string>
     <string name="indoor_app_settings_section_advanced">Advanced</string>
@@ -537,8 +538,6 @@
     <string name="indoor_app_world_details_hide">Hide details</string>
     <string name="indoor_app_world_advanced_show">More options: build on your server</string>
     <string name="indoor_app_start_finish_action">End ride</string>
-    <string name="indoor_app_more_flow_title">Indoor training</string>
-    <string name="indoor_app_more_flow_status">Ride real routes in 3D on your trainer</string>
     <string name="indoor_app_settings_refresh_body">Fetch new routes and preview images</string>
     <plurals name="indoor_app_home_catalog_summary">
         <item quantity="one">%1$d ready-made route to download</item>

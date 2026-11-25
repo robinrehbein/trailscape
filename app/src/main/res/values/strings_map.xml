@@ -29,24 +29,20 @@
 
     <!-- ExploreSheet.kt -->
     <string name="map_explore_search_placeholder">Wohin?</string>
-    <string name="map_explore_round_trip_action">Runde ab hier</string>
+    <string name="map_explore_plan_route_action">Route planen</string>
+    <string name="map_explore_build_loop_action">Runde bauen</string>
     <string name="map_explore_saved_routes_label">Gespeicherte Routen</string>
     <string name="map_explore_recent_label">Zuletzt gesucht</string>
-    <string name="map_explore_map_label">Karte</string>
-    <string name="map_explore_offline_title">Offline-Karten</string>
-    <string name="map_explore_offline_body">Gegenden für unterwegs ohne Netz laden</string>
 
     <!-- LongPressHint.kt -->
-    <string name="map_long_press_hint_snackbar">Tipp: Lange auf die Karte drücken setzt einen Punkt – als Ziel oder Start einer Runde.</string>
-    <string name="map_long_press_hint_line">Lange auf die Karte drücken: Punkt setzen</string>
+    <string name="map_long_press_hint_snackbar">Tipp: Tippe auf die Karte und setze einen Punkt – als Ziel oder Start einer Runde.</string>
+    <string name="map_long_press_hint_line">Auf die Karte tippen: Punkt setzen</string>
 
     <!-- PlaceCard.kt -->
     <string name="map_place_close_cd">Ort schließen</string>
     <string name="map_place_waypoint_action">Als Wegpunkt</string>
     <string name="map_place_route_here_action">Route hierher</string>
     <string name="map_place_round_trip_action">Runde ab hier</string>
-    <string name="map_place_add_waypoint_cd">Ort als Wegpunkt zur Route hinzufügen</string>
-    <string name="map_place_add_waypoint_action">+ Als Wegpunkt</string>
     <string name="map_place_distance_away">%1$s km entfernt</string>
 
     <!-- SearchSheet.kt -->
@@ -65,7 +61,7 @@
     <string name="map_search_failed_error">Ortssuche fehlgeschlagen.</string>
 
     <!-- RoundTripSetupSheet.kt -->
-    <string name="map_round_trip_title">Runde ab hier</string>
+    <string name="map_round_trip_title">Runde bauen</string>
     <string name="map_round_trip_close_cd">Schließen</string>
     <string name="map_round_trip_length_cd">Länge der Runde</string>
     <string name="map_round_trip_surface_mixed">Gemischt</string>
@@ -93,7 +89,7 @@
     <!-- RouteGenerationSheet.kt -->
     <string name="map_generation_title">Passende Runde</string>
     <string name="map_generation_discard_cd">Routenvorschlag verwerfen</string>
-    <string name="map_generation_wind_tip">Tipp: Mit „Wind berücksichtigen“ unter „Runde ab hier“ auf der Karte bevorzugt die Suche Runden mit Rückenwind auf dem Heimweg.</string>
+    <string name="map_generation_wind_tip">Tipp: Mit „Wind berücksichtigen“ unter „Runde bauen“ auf der Karte bevorzugt die Suche Runden mit Rückenwind auf dem Heimweg.</string>
     <string name="map_generation_map_center_hint">Deine Position war nicht verfügbar – die Runde startet in der Kartenmitte. „Neu suchen“ nimmt den Startpunkt noch einmal neu auf.</string>
     <string name="map_generation_offline_hint">Ohne Netz rechnet Trailscape auch auf dem Gerät, sobald die Routing-Karten dieser Gegend geladen sind.</string>
     <string name="map_generation_locating_status">Position wird ermittelt …</string>
@@ -179,8 +175,8 @@
     <string name="map_compact_pause_cd">Aufzeichnung pausieren</string>
     <string name="map_compact_end_action">Beenden</string>
     <string name="map_compact_end_hold_hint">halten</string>
-    <string name="map_compact_data_action">Daten</string>
-    <string name="map_compact_data_cd">Zur Datenseite des Fahrmodus</string>
+    <string name="map_compact_data_action">Fahrmodus</string>
+    <string name="map_compact_data_cd">Fahrmodus öffnen</string>
     <string name="map_compact_speed_paused_value">Pause</string>
     <string name="map_compact_speed_auto_label">automatisch</string>
     <string name="map_compact_speed_manual_label">Aufzeichnung</string>
@@ -232,7 +228,9 @@
     <string name="map_planning_remove_point_cd">%1$s entfernen</string>
     <string name="map_planning_add_start_action">Start hinzufügen</string>
     <string name="map_planning_add_point_action">Punkt hinzufügen</string>
-    <string name="map_planning_add_point_hint">Suchen oder lange auf die Karte drücken</string>
+    <string name="map_planning_add_point_hint">Suchen oder auf die Karte tippen</string>
+    <string name="map_planning_undo_cd">Rückgängig: letzten Punkt zurücknehmen</string>
+    <string name="map_planning_discard_action">Verwerfen</string>
     <string name="map_planning_locating_status">Position wird geholt …</string>
     <string name="map_planning_use_position_action">Mein Standort als Start</string>
     <string name="map_planning_surface_mixed">Gemischt</string>
@@ -402,6 +400,8 @@
     <string name="map_screen_location_denied_notice">Standortfreigabe wurde abgelehnt – ohne sie geht es hier nicht weiter.</string>
     <string name="map_screen_location_imprecise_notice">Zum Aufzeichnen wird der genaue Standort gebraucht. Wähle in der Abfrage „Genau“ statt „Ungefähr“.</string>
     <string name="map_screen_planning_cleared_status">Planung geleert.</string>
+    <string name="map_screen_planning_discarded_status">Planung verworfen.</string>
+    <string name="map_screen_route_saved_status">Als Planung gespeichert. Du findest sie im Verlauf.</string>
     <string name="map_screen_round_trip_from_place">ab %1$s</string>
     <string name="map_screen_round_trip_from_position">ab deinem Standort</string>
     <string name="map_screen_route_name_title">Name der Route</string>

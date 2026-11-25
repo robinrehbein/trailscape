@@ -3,14 +3,19 @@ package de.trailscape.app.ui.map
 import de.trailscape.core.KeyValueStore
 
 /**
- * Der einmalige Tipp zum **langen Druecken** auf die Karte (Massnahme U6).
+ * Der einmalige Tipp zum **Punktesetzen** auf der Karte (Massnahme U6).
  *
- * Langes Druecken ist seit der Fuehrung „Klartext" die einzige Geste, die auf
- * der Karte etwas anlegt (siehe `onMapLongPress` in `MapScreen.kt`) — und
- * zugleich eine, die man nicht sieht: Kein Knopf verraet sie, und ein
- * gewoehnlicher Tipp tut bewusst nichts. Ein Zahnrad oder ein eigener Knopf
- * auf der Karte kam nicht in Frage (Entscheidung Gruender: die Karte bleibt
- * frei). Stattdessen gibt es zwei leise Wege, die Geste zu entdecken:
+ * Seit dem Umbau der Bedienstruktur (docs/ux/seitenkarte.md,
+ * Entscheidungsfrage 4) setzt ein einfacher Tipp auf die Karte einen Punkt
+ * (siehe `onMapTap` in `MapScreen.kt`, Regeln in `MapTapPlanning.kt`); der
+ * lange Druck tut dasselbe und bleibt erhalten. Die Geste sieht man aber
+ * weiterhin nicht — kein Knopf verraet sie. Deshalb gibt es zwei leise Wege,
+ * sie zu entdecken (Aufzaehlung unten).
+ *
+ * Die Namen in dieser Datei (`LangDrueck…`, `LONG_PRESS_HINT_…`) stammen aus
+ * der Zeit, als nur der lange Druck etwas anlegte. Sie bleiben, weil der
+ * Speicherschluessel des Merkers an ihnen haengt und ein bereits gesehener
+ * Tipp nicht noch einmal erscheinen soll.
  *
  *  * einmal eine Snackbar beim Erkunden (hier entschieden, gezeigt in
  *    `MapScreen.kt`),
@@ -25,7 +30,7 @@ import de.trailscape.core.KeyValueStore
 
 /*
  * Die Texte stehen in `strings_map.xml`: `map_long_press_hint_snackbar` fuer die
- * einmalige Snackbar — sagt, was die Geste beim Erkunden wirklich tut: einen
+ * einmalige Snackbar — sagt, was der Tipp auf die Karte beim Erkunden wirklich tut: einen
  * Punkt setzen, dessen Ortskarte „Route hierher" und „Runde ab hier"
  * anbietet; bewusst kurz, die Ortskarte erklaert den Rest selbst —, und
  * `map_long_press_hint_line` fuer die dauerhafte Zeile im hochgewischten
@@ -52,8 +57,8 @@ internal const val LONG_PRESS_HINT_SEEN_MS = 2_000L
  * Schluessel des Merkers (im gemeinsamen [KeyValueStore], wie der
  * Onboarding-Merker). Gesetzt wird er, sobald der Tipp einmal gesehen wurde
  * ([langDrueckHinweisGesehen]) **oder** die Nutzerin die Geste von selbst
- * gefunden hat — wer lange drueckt,
- * braucht den Tipp nicht mehr.
+ * gefunden hat — wer auf die Karte tippt oder lange drueckt und damit einen
+ * Punkt setzt, braucht den Tipp nicht mehr.
  */
 internal const val LONG_PRESS_HINT_STORAGE_KEY = "trailscape.hint.longPress"
 
@@ -85,7 +90,7 @@ internal enum class LangDrueckLage {
     /** Routenplanung: Die Planung erklaert das Setzen selbst (Platzhalterzeile im Blatt). */
     PLANUNG,
 
-    /** Aufzeichnung laeuft: Langes Druecken tut dann nichts, ein Tipp waere falsch. */
+    /** Aufzeichnung laeuft: Die Karte setzt dann keine Punkte, der Hinweis waere falsch. */
     AUFZEICHNUNG,
 
     /** Navigation laeuft: dasselbe — und am Lenker lenkt jede Einblendung ab. */
@@ -95,7 +100,7 @@ internal enum class LangDrueckLage {
 /**
  * Leitet die [LangDrueckLage] aus den Zustaenden von `MapScreen.kt` ab.
  *
- * Die Rangfolge folgt `onMapLongPress`: Aufzeichnung und Navigation schlucken
+ * Die Rangfolge folgt `mapTapAction`/`mapLongPressAction`: Aufzeichnung und Navigation schlucken
  * die Geste ganz, deshalb gehen sie allem anderen vor; danach die Planung;
  * erst dann die offenen Aufgaben des Erkundens.
  */

@@ -404,7 +404,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
                         rideCount = rides.size,
                         coreTexts = coreTexts,
                         fallbackErgTitle = indoorErgTitle,
-                        onOpen = { appViewModel.requestIndoor() },
+                        onOpen = { appViewModel.requestIndoorRoutes() },
                         onRideDay = appViewModel::requestIndoorDay,
                         onPlanRoute = { target -> appViewModel.requestRouteGeneration(target) },
                     )
@@ -423,7 +423,8 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     item(key = "erste-tour") {
                         FirstRideState(
                             onRecord = appViewModel::requestRecording,
-                            onImport = { appViewModel.requestMoreSection(MoreSection.BACKUP) },
+                            // Touren kommen im Verlauf hinein („+" bzw. sein Leerzustand).
+                            onImport = { appViewModel.requestTab(AppTab.RIDES) },
                             hasOffer = offer != null,
                         )
                     }
@@ -491,7 +492,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
                             suggestedKm = suggestedYearGoalKm,
                             milestone = milestone,
                             onYearGoal = { showYearGoal = true },
-                            onOpenProgress = { appViewModel.requestTab(AppTab.TRAINING) },
+                            onOpenProgress = { appViewModel.requestProgress() },
                             challenge = nextChallenge,
                         )
                     }
@@ -499,10 +500,12 @@ fun TodayScreen(appViewModel: AppViewModel) {
 
                 item(key = "sec-ziel") { SectionEyebrow(stringResource(R.string.today_goal_eyebrow)) }
                 item(key = "ziel") {
-                    val openTraining = { appViewModel.requestTab(AppTab.TRAINING) }
+                    // Jeder Knopf oeffnet, was er nennt (Seitenkarte, Befund 9):
+                    // „Dein Ziel" den Plan, „Ziel festlegen" gleich das Formular.
+                    val openTraining = { appViewModel.requestPlan() }
                     val shownPlan = displayPlan
                     if (shownPlan == null) {
-                        GoalPromptCard(onOpenTraining = openTraining)
+                        GoalPromptCard(onOpenTraining = { appViewModel.requestPlan(openGoalEditor = true) })
                     } else {
                         val goal = shownPlan.goal
                         val goalDate = localOfEpochMs(goal.date).toLocalDate()

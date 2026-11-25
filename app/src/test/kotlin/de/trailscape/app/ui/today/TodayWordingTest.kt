@@ -147,7 +147,7 @@ class TodayWordingTest {
         assertEquals(TodayEffort.RUHETAG, effort)
         assertEquals("Heute lieber Pause statt Training.", de(todayHeadline(effort, skipped, null, false)))
         assertEquals(
-            "Im Plan standen 45 km. Schieb die Fahrt lieber um einen Tag – oder roll nur kurz und locker.",
+            "Im Plan standen 45 km. Schieb die Tour lieber um einen Tag – oder roll nur kurz und locker.",
             de(todaySentence(effort, skipped)),
         )
         // Ohne Planeinheit: kein Widerspruch zum Knopf „Locker rollen" darunter.
@@ -243,7 +243,7 @@ class TodayWordingTest {
         assertEquals(UpcomingSession(5, UpcomingKind.LONG, 80), upcoming)
         val note = whyNote(TodayEffort.LOCKER, route(null, null), false, upcoming, false, hasPlan = true, texts = CoreTextsDe)
         assertEquals(
-            listOf("Samstag steht die lange Fahrt mit 80 km an. Heute nicht überziehen, dann hast du dafür genug Kraft."),
+            listOf("Samstag steht die lange Tour mit 80 km an. Heute nicht überziehen, dann hast du dafür genug Kraft."),
             de(note),
         )
         assertNull(upcomingKeySession(week, todayIndex = 5, todayKm = 80))
@@ -352,7 +352,7 @@ class TodayWordingTest {
     fun `die erste Runde wird mit Kilometern direkt gebaut`() {
         val o = offer(firstRoundRoute, planRestDay = false, weekSessions = emptyList())
         assertEquals(TodayOffer(firstRoundRoute.target!!, restDay = false, firstRound = true), o)
-        assertEquals("Runde bauen · 26 km", de(offerButtonLabel(o!!)))
+        assertEquals("Runde für heute bauen · 26 km", de(offerButtonLabel(o!!)))
         // Ohne erste Runde bleibt der gewohnte Knopf.
         assertEquals(
             "Runde für heute bauen",
@@ -378,7 +378,7 @@ class TodayWordingTest {
         assertEquals(
             listOf(
                 "Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg über etwa 1½ h.",
-                "Mit jeder Fahrt richtet sich die Empfehlung mehr nach deinem Tempo und deiner Form.",
+                "Mit jeder Tour richtet sich die Empfehlung mehr nach deinem Tempo und deiner Form.",
             ),
             de(note),
         )
@@ -404,11 +404,11 @@ class TodayWordingTest {
         assertEquals("Donnerstag, heute: 45 km geplant", de(strip[3].description))
         assertEquals("Samstag: 80 km geplant", de(strip[5].description))
         assertEquals("Dienstag: 32 km gefahren", de(strip[1].description))
-        assertEquals("Mittwoch: keine Fahrt", de(strip[2].description))
+        assertEquals("Mittwoch: keine Tour", de(strip[2].description))
         assertEquals("Freitag: Ruhetag", de(strip[4].description))
 
-        assertEquals("31 von 120 km" to "noch 2 Fahrten", de(weekSummary(31.6, 120, strip, rideCount = 1)))
-        assertEquals("32 km diese Woche" to "1 Fahrt", de(weekSummary(31.6, null, strip, rideCount = 1)))
+        assertEquals("31 von 120 km" to "noch 2 Touren", de(weekSummary(31.6, 120, strip, rideCount = 1)))
+        assertEquals("32 km diese Woche" to "1 Tour", de(weekSummary(31.6, null, strip, rideCount = 1)))
     }
 
     @Test
@@ -418,10 +418,10 @@ class TodayWordingTest {
         val strip = weekStrip(thursday, week, emptyMap(), todayKm = null, texts = CoreTextsDe)
         assertEquals("79 von 40 km" to "Wochenziel geschafft", de(weekSummary(79.0, 40, strip, rideCount = 3)))
         // Auf dem Weg zum Ziel abgerundet: „40 von 40 km" erst, wenn es geschafft ist.
-        assertEquals("39 von 40 km" to "noch 1 Fahrt", de(weekSummary(39.6, 40, strip, rideCount = 2)))
+        assertEquals("39 von 40 km" to "noch 1 Tour", de(weekSummary(39.6, 40, strip, rideCount = 2)))
         assertEquals("40 von 40 km" to "Wochenziel geschafft", de(weekSummary(40.0, 40, strip, rideCount = 2)))
         // Knapp darunter bleibt es beim Offenen.
-        assertEquals("39 von 40 km" to "noch 1 Fahrt", de(weekSummary(39.4, 40, strip, rideCount = 2)))
+        assertEquals("39 von 40 km" to "noch 1 Tour", de(weekSummary(39.4, 40, strip, rideCount = 2)))
     }
 
     @Test

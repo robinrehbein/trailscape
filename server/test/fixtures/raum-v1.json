@@ -1,0 +1,69 @@
+{
+  "_hinweis": "Beispielnachrichten des Raum-Protokolls v1 (docs/raum-protokoll.md). Gelesen von server/test/protocol-fixtures.test.mjs und core/src/test/.../room/RoomCodecTest.kt. 'aktuell' = was der Server heute schickt; 'alt' = Mindestform ohne optionale Felder; 'neu' = ein künftiger Server mit zusätzlichen Feldern und Typen.",
+  "client": {
+    "join": { "type": "join", "v": 1, "room": "AbCdEfGhIjKlMnOp", "secret": "s3cr3t-s3cr3t-s3cr3t-s3cr3t-s3cr3t-s3cr3t-x", "name": "Anna", "avatar": { "v": 1, "jersey": "#d33", "helmet": 2 }, "sharePower": true },
+    "joinRejoin": { "type": "join", "v": 1, "room": "AbCdEfGhIjKlMnOp", "secret": "s3cr3t-s3cr3t-s3cr3t-s3cr3t-s3cr3t-s3cr3t-x", "name": "Anna", "sharePower": false, "rejoin": { "id": "Rdr_0001", "key": "rejoin-key-rejoin-key-x" } },
+    "state": { "type": "state", "distM": 1234.56, "speedMps": 8.42, "powerW": 215, "cadenceRpm": 88, "lane": 0 },
+    "stateMinimal": { "type": "state", "distM": 0, "speedMps": 0 },
+    "ping": { "type": "ping", "c": 987654321 },
+    "settings": { "type": "settings", "sharePower": false },
+    "leave": { "type": "leave" },
+    "start": { "type": "start", "inS": 30 },
+    "end": { "type": "end" }
+  },
+  "server": {
+    "aktuell": {
+      "welcome": {
+        "type": "welcome", "v": 1, "serverTime": 1764072000000,
+        "you": { "id": "Rdr_0001", "rejoinKey": "rejoin-key-rejoin-key-x", "host": false },
+        "room": { "id": "AbCdEfGhIjKlMnOp", "route": { "id": "katalog/eifel", "lengthM": 12345.6, "loop": true, "version": "3", "name": "Eifel-Runde" }, "maxRiders": 10, "createdAt": 1764071000000, "expiresAt": 1764092600000, "startAt": null },
+        "riders": [
+          { "id": "Rdr_0001", "name": "Anna", "host": false, "sharePower": true, "avatar": { "v": 1, "jersey": "#d33" } },
+          { "id": "Rdr_0002", "name": "Ben", "host": true, "sharePower": false }
+        ],
+        "states": [ { "id": "Rdr_0002", "at": 1764071999750, "distM": 50.5, "speedMps": 7.1, "cadenceRpm": 85 } ],
+        "limits": { "maxRooms": 20, "maxRidersPerRoom": 10, "roomTtlMin": 360, "roomIdleMin": 15, "rejoinGraceS": 30, "maxMessageBytes": 1024, "maxAvatarBytes": 512, "maxNameChars": 32, "maxMessagesPerSecond": 8, "broadcastIntervalMs": 250 }
+      },
+      "rider": { "type": "rider", "rider": { "id": "Rdr_0003", "name": "Cleo", "host": false, "sharePower": true } },
+      "left": { "type": "left", "id": "Rdr_0003", "reason": "timeout" },
+      "snapshot": { "type": "snapshot", "serverTime": 1764072000250, "states": [ { "id": "Rdr_0002", "at": 1764072000100, "distM": 52.3, "speedMps": 7.2, "powerW": 180, "cadenceRpm": 86, "lane": 1 } ] },
+      "countdown": { "type": "countdown", "startAt": 1764072030000, "serverTime": 1764072000000 },
+      "ended": { "type": "ended", "reason": "host", "serverTime": 1764075600000 },
+      "pong": { "type": "pong", "c": 987654321, "s": 1764072000123 },
+      "error": { "type": "error", "code": "VERSION", "message": "Protokollversion nicht unterstuetzt", "supported": [1] }
+    },
+    "alt": {
+      "welcome": {
+        "type": "welcome", "v": 1, "serverTime": 1764072000000,
+        "you": { "id": "Rdr_0001", "rejoinKey": "rejoin-key-rejoin-key-x" },
+        "room": { "id": "AbCdEfGhIjKlMnOp", "route": { "id": "katalog/eifel", "lengthM": 12345.6 } },
+        "riders": [ { "id": "Rdr_0001", "name": "Anna" } ]
+      },
+      "snapshot": { "type": "snapshot", "serverTime": 1764072000250, "states": [ { "id": "Rdr_0002", "at": 1764072000100, "distM": 52.3, "speedMps": 7.2 } ] },
+      "ended": { "type": "ended" }
+    },
+    "neu": {
+      "welcome": {
+        "type": "welcome", "v": 1, "serverTime": 1764072000000, "region": "eu",
+        "you": { "id": "Rdr_0001", "rejoinKey": "rejoin-key-rejoin-key-x", "host": false, "color": 3 },
+        "room": { "id": "AbCdEfGhIjKlMnOp", "route": { "id": "katalog/eifel", "lengthM": 12345.6, "loop": true, "checksum": "abc" }, "maxRiders": 10, "createdAt": 1, "expiresAt": 2, "startAt": null, "theme": "nacht" },
+        "riders": [ { "id": "Rdr_0001", "name": "Anna", "team": "rot" }, { "kaputt": true }, { "id": "Rdr_0002", "name": 5 } ],
+        "states": [],
+        "limits": { "maxRidersPerRoom": 12, "neueGrenze": 7 }
+      },
+      "snapshot": { "type": "snapshot", "serverTime": 1764072000250, "seq": 99, "states": [ { "id": "Rdr_0002", "at": 1764072000100, "distM": 52.3, "speedMps": 7.2, "heartRate": 140 }, { "id": "Rdr_0003", "at": 1764072000100, "distM": "52.3", "speedMps": 7.2 }, { "id": "Rdr_0004", "at": 1764072000100, "distM": -1, "speedMps": 7.2 } ] },
+      "unbekannt": { "type": "emote", "id": "Rdr_0002", "what": "winken" }
+    },
+    "kaputt": [
+      "",
+      "kein json",
+      "[]",
+      "{}",
+      "{\"type\":5}",
+      "{\"type\":\"welcome\",\"v\":1}",
+      "{\"type\":\"pong\",\"c\":1}",
+      "{\"type\":\"countdown\",\"startAt\":\"bald\",\"serverTime\":1}",
+      "{\"type\":\"left\"}"
+    ]
+  }
+}

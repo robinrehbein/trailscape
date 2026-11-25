@@ -567,6 +567,7 @@ class FakeIndoorSession(val config: IndoorSessionConfig) : IndoorSession {
                 GhostState(gDist, 8.0 * (g.watts / 180.0), gDist - distM, null)
             }
             is GhostSpec.PastRide -> GhostState(distM, speedMps, 0.0, 0.0)
+            is GhostSpec.Shared -> GhostState(distM, speedMps, 0.0, 0.0)
         }
         return IndoorSessionState(
             phase = phase,

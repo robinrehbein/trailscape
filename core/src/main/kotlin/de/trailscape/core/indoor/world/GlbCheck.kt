@@ -1,5 +1,6 @@
 package de.trailscape.core.indoor.world
 
+import de.trailscape.core.indoor.tree.TreeInstanceNames
 import de.trailscape.core.indoor.SurfaceKind
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -495,7 +496,19 @@ private class GlbChecker(private val p: ParsedGlb, private val model: Boolean) {
             if (isSub && (n.parent == null || p.info.nodes[n.parent].name != WorldNames.NODE_TERRAIN)) {
                 out.add("Teilflaeche \"$name\" ist kein Kind von \"${WorldNames.NODE_TERRAIN}\"")
             }
-            if (n.hasTransform) out.add("Kachel-Knoten \"$name\" hat eine eigene Transformation")
+            // Einzige Ausnahme: leere Instanzknoten der Baeume (TreeInstanceNames) tragen Lage, Drehung, Massstab.
+            val treeInstance = name.startsWith(TreeInstanceNames.INSTANCE_PREFIX)
+            if (treeInstance) {
+                if (n.mesh != null) out.add("Instanzknoten \"$name\" hat ein Netz")
+                if (n.parent == null || p.info.nodes[n.parent].name != WorldNames.NODE_TREES) out.add("Instanzknoten \"$name\" ist kein Kind von \"${WorldNames.NODE_TREES}\"")
+                if (TreeInstanceNames.parseInstance(name) == null) out.add("Instanzknoten \"$name\": Art, Variante oder Abschnitt unlesbar")
+            } else if (n.hasTransform) {
+                out.add("Kachel-Knoten \"$name\" hat eine eigene Transformation")
+            }
+            if (name.startsWith(TreeInstanceNames.BIN_PREFIX)) {
+                if (TreeInstanceNames.parseBin(name) == null) out.add("Abschnittsknoten \"$name\": Abschnitt unlesbar")
+                if (n.parent == null || p.info.nodes[n.parent].name != WorldNames.NODE_TREES) out.add("Abschnittsknoten \"$name\" ist kein Kind von \"${WorldNames.NODE_TREES}\"")
+            }
         }
         for ((i, m) in p.info.materials.withIndex()) {
             val name = m.name
@@ -712,5 +725,122 @@ private class GlbChecker(private val p: ParsedGlb, private val model: Boolean) {
                 if (path !in setOf("translation", "rotation", "scale")) out.add("$label: Kanal $ci mit Pfad $path (erlaubt: translation, rotation, scale)")
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Netze und Knoten lesen (Baumbibliothek, Instanzknoten)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ein Primitiv, wie [GlbScene] es schreibt, entpackt: Lagen und Normalen `x y z`, Texturkoordinaten
+ * `u v` (auch normierte `UNSIGNED_SHORT` als Gleitkomma), Farben `r g b a` je 0..255 (`null` ohne
+ * `COLOR_0`), Dreiecksindizes.
+ */
+class GlbPrimitiveData(
+    val material: String?,
+    val vertexCount: Int,
+    val positions: FloatArray,
+    val normals: FloatArray,
+    val uvs: FloatArray,
+    val colors: ByteArray?,
+    val indices: IntArray,
+) {
+    val triangleCount: Int get() = indices.size / 3
+}
+
+/** Lage eines Knotens relativ zu seinem Elternknoten: Verschiebung, Drehung um die Hochachse (rad), Massstab. */
+class GlbNodePlacement(val name: String, val x: Double, val y: Double, val z: Double, val yawRad: Double, val scale: Double)
+
+/**
+ * Eine GLB zum Auslesen einzelner Netze — fuer die Baumbibliothek ([de.trailscape.core.indoor.tree.TreeLibrary]),
+ * deren Vorlagen die Darstellung selbst als Vertexpuffer anlegt, und fuer die Instanzknoten der Kacheln.
+ * Liest nur, was [GlbScene] schreibt (ein eingebetteter Puffer, `POSITION`/`NORMAL`/`TEXCOORD_0`/`COLOR_0`).
+ *
+ * @throws IllegalArgumentException wenn [bytes] keine lesbare GLB ist.
+ */
+class GlbMeshFile(bytes: ByteArray) {
+    private val p = ParsedGlb.read(bytes)
+    private val byName: Map<String, Int> = HashMap<String, Int>().also { m -> p.nodes.forEachIndexed { i, n -> n["name"].str()?.let { name -> m.putIfAbsent(name, i) } } }
+
+    /** Namen aller Knoten mit einem Netz. */
+    val meshNodeNames: List<String> get() = p.nodes.filter { it["mesh"].int() != null }.mapNotNull { it["name"].str() }
+
+    /** Die Primitive des Knotens [nodeName]; `null`, wenn es ihn nicht gibt, er kein Netz hat oder Daten fehlen. */
+    fun primitives(nodeName: String): List<GlbPrimitiveData>? {
+        val node = p.nodes.getOrNull(byName[nodeName] ?: return null) ?: return null
+        val mesh = p.meshes.getOrNull(node["mesh"].int() ?: return null) ?: return null
+        val materials = p.json.list("materials")
+        val out = ArrayList<GlbPrimitiveData>()
+        for (prim in mesh.list("primitives")) {
+            val attrs = prim["attributes"].obj() ?: return null
+            val pos = floats(attrs["POSITION"].int(), 3) ?: return null
+            val n = pos.size / 3
+            val nrm = floats(attrs["NORMAL"].int(), 3)?.takeIf { it.size == n * 3 } ?: return null
+            val uv = floats(attrs["TEXCOORD_0"].int(), 2)?.takeIf { it.size == n * 2 } ?: FloatArray(n * 2)
+            val col = attrs["COLOR_0"].int()?.let { colors(it) }?.takeIf { it.size == n * 4 }
+            val idx = indices(prim["indices"].int(), n) ?: return null
+            out += GlbPrimitiveData(materials.getOrNull(prim["material"].int() ?: -1)?.get("name").str(), n, pos, nrm, uv, col, idx)
+        }
+        return out
+    }
+
+    /** Die eingebetteten Bilder `(mimeType, Bytes)` in der Reihenfolge der Datei. */
+    fun images(): List<Pair<String?, ByteArray>> = p.imagesJson.mapNotNull { img -> p.imageBytes(img)?.let { img["mimeType"].str() to it } }
+
+    /** Bild der Grundfarbe des Materials [materialName]; `null`, wenn es keines hat. */
+    fun baseColorImage(materialName: String): ByteArray? {
+        val m = p.json.list("materials").firstOrNull { it["name"].str() == materialName } ?: return null
+        val tex = m["pbrMetallicRoughness"].obj()?.get("baseColorTexture").obj()?.get("index").int() ?: return null
+        val src = p.json.list("textures").getOrNull(tex)?.get("source").int() ?: return null
+        return p.imageBytes(p.imagesJson.getOrNull(src) ?: return null)
+    }
+
+    /**
+     * Alle Knoten **ohne Netz**, deren Name mit [prefix] beginnt, mit ihrer Lage (`translation`,
+     * Drehung um y aus `rotation`, erster Wert von `scale`).
+     */
+    fun placements(prefix: String): List<GlbNodePlacement> = p.nodes.mapNotNull { n ->
+        val name = n["name"].str()?.takeIf { it.startsWith(prefix) } ?: return@mapNotNull null
+        if (n["mesh"].int() != null) return@mapNotNull null
+        val t = n["translation"].arr()?.mapNotNull { it.num() }?.takeIf { it.size == 3 } ?: listOf(0.0, 0.0, 0.0)
+        val r = n["rotation"].arr()?.mapNotNull { it.num() }?.takeIf { it.size == 4 }
+        val s = n["scale"].arr()?.mapNotNull { it.num() }?.firstOrNull() ?: 1.0
+        val yaw = if (r == null) 0.0 else 2.0 * Math.atan2(r[1], r[3])
+        GlbNodePlacement(name, t[0], t[1], t[2], yaw, s)
+    }
+
+    private fun floats(accessor: Int?, width: Int): FloatArray? {
+        val (v, _) = p.accessorView(accessor ?: return null)
+        if (v == null || v.width != width) return null
+        val scale = when {
+            !v.normalized -> 1.0
+            v.componentType == 5121 -> 1.0 / 255.0
+            v.componentType == 5123 -> 1.0 / 65535.0
+            else -> 1.0
+        }
+        return FloatArray(v.count * width) { (p.read(v, it / width, it % width) * scale).toFloat() }
+    }
+
+    private fun colors(accessor: Int): ByteArray? {
+        val (v, _) = p.accessorView(accessor)
+        if (v == null || v.width < 3) return null
+        val scale = when (v.componentType) {
+            5121 -> 1.0
+            5123 -> 255.0 / 65535.0
+            else -> 255.0
+        }
+        return ByteArray(v.count * 4) {
+            val c = it % 4
+            if (c >= v.width) 255.toByte() else Math.round(p.read(v, it / 4, c) * scale).coerceIn(0, 255).toByte()
+        }
+    }
+
+    private fun indices(accessor: Int?, vertexCount: Int): IntArray? {
+        if (accessor == null) return IntArray(vertexCount) { it }
+        val (v, _) = p.accessorView(accessor)
+        if (v == null || v.width != 1) return null
+        val out = IntArray(v.count - v.count % 3) { p.read(v, it, 0).toInt() }
+        return out.takeIf { a -> a.all { it in 0 until vertexCount } }
     }
 }

@@ -277,6 +277,47 @@
             </intent-filter>
         </activity>
 
+        <!-- Herausforderung teilen (docs/herausforderung.md): Datei
+             *.trailscape-challenge per „Oeffnen mit" oder „Teilen".
+             Eigenes kleines Fenster mit Vorschau (ChallengeImportActivity),
+             nichts wird ohne „Speichern" abgelegt.
+
+             MIME-Typen: der eigene Typ (so teilt Trailscape selbst) und
+             octet-stream/json fuer Dateimanager und Messenger, die ihn nicht
+             kennen; dort greift der Dateiname (pathPattern, bestmoeglich: Fuer
+             content:-URIs haengt er vom Anbieter ab). Wer sicher gehen will,
+             nimmt in der App „Datei waehlen". Ob die Datei wirklich eine
+             Herausforderung ist, prueft parseChallenge, nicht dieser Filter.
+             Nur content: wie bei der ImportActivity (siehe dort). -->
+        <activity
+            android:name=".challenge.ChallengeImportActivity"
+            android:exported="true"
+            android:label="@string/spiel3_import_title_unnamed"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|keyboard|uiMode|density">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/vnd.trailscape.challenge" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/json" />
+                <data android:pathPattern=".*\\.trailscape-challenge" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.trailscape.challenge" />
+            </intent-filter>
+        </activity>
+
         <!-- Ruecksprung der Strava-Anmeldung (trailscape://strava-callback,
              siehe strava/StravaAuthActivity): durchsichtiges Trampolin wie
              die ImportActivity. Exportiert, weil der Browser sie aufrufen

@@ -1,5 +1,6 @@
 package de.trailscape.core.indoor.world
 
+import de.trailscape.core.indoor.tree.TreeInstanceNames
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
@@ -394,6 +395,7 @@ internal class TreesLayer : TileLayer {
         val crowns = out.mesh(WorldNames.NODE_TREES, leaves)
         val scratchTrunk = MeshBuilder(64, 64)
         val scratchCrown = MeshBuilder(256, 256)
+        val aleppo = ctx.origin.lat < ALEPPO_MAX_LAT
         for (c in placed) {
             scratchTrunk.clear()
             scratchCrown.clear()
@@ -405,8 +407,21 @@ internal class TreesLayer : TileLayer {
             TreeModels.build(c.spec, c.lod, scratchTrunk, scratchCrown, toward)
             val g = ctx.ground.heightAt(c.e, c.n)
             val m = Mat4.translation(ctx.x(c.e), ctx.y(g), ctx.z(c.n))
-            trunks.append(scratchTrunk, m)
-            crowns.append(scratchCrown, m)
+            // Bandbaeume: gebacken wie bisher, aber je Streckenabschnitt in einem eigenen Knoten, dazu ein
+            // Instanzknoten — die Darstellung tauscht nahe Abschnitte gegen Baeume der Bibliothek.
+            if (hit != null && c.dist <= TreeInstanceNames.BAND_M) {
+                val bin = floor(hit.distM / TreeInstanceNames.BIN_M).toInt()
+                val node = TreeInstanceNames.binName(bin)
+                out.mesh(node, trunkMat).append(scratchTrunk, m)
+                out.mesh(node, leaves).append(scratchCrown, m)
+                val (kind, variant, scale) = TreeInstanceMapping.instanceOf(c.spec, aleppo)
+                out.treeInstances += TileOutput.TreeInstance(
+                    TreeInstanceNames.instanceName(kind, variant, bin), ctx.x(c.e), ctx.y(g), ctx.z(c.n), c.spec.turn, scale,
+                )
+            } else {
+                trunks.append(scratchTrunk, m)
+                crowns.append(scratchCrown, m)
+            }
         }
         return used
     }
@@ -891,6 +906,9 @@ internal class TreesLayer : TileLayer {
 
         /** Hoechster Abstand fuer die mittlere bzw. feinste Stufe (falls das Budget reicht). */
         const val MID_M = 40.0
+
+        /** Suedlich dieser Breite steht statt der Waldkiefer die Aleppo-Kiefer (Mallorca, Mittelmeerkueste). */
+        const val ALEPPO_MAX_LAT = 42.0
         const val DETAIL_M = 22.0
         const val DENSE_SPACING_M = 6.5
         const val OPEN_SPACING_M = 8.0

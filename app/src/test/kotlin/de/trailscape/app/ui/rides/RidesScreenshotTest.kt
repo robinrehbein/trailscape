@@ -145,14 +145,43 @@ class RidesScreenshotTest {
         shot("72-tour-lang-en")
     }
 
-    /** Tourdetail auf dem normalen Bildschirm: Kopf, Zahlenzeile, Satz, Kachelreihe. */
+    /** Tourdetail auf dem normalen Bildschirm: Kopf mit Teilen und Menue, Zahlenzeile, Satz, fester Knopf unten. */
     @Test
     fun tourKopfEnglisch() {
         startInHistory()
         compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
         settle()
-        awaitText(string(R.string.rides_detail_show_map_action))
+        assertEquals("Ride again", string(R.string.rides_detail_ride_again_action))
+        awaitText(string(R.string.rides_detail_ride_again_action))
         shot("73-tour-en")
+    }
+
+    /** Das Menue der Tour (⋮): Auf der Karte zeigen, Umbenennen, Umwandeln, Loeschen. */
+    @Test
+    fun tourMenueEnglisch() {
+        startInHistory()
+        compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
+        settle()
+        compose.onAllNodesWithContentDescription(string(R.string.rides_detail_menu_cd))[0].performClick()
+        settle()
+        awaitText(string(R.string.rides_detail_show_map_action))
+        awaitText(string(R.string.rides_detail_rename_action))
+        awaitText(string(R.string.common_action_delete))
+        shot("73a-tour-menue-en")
+    }
+
+    /** Das Blatt „Nochmal fahren": draussen, Indoor, 3D-Vorschau. */
+    @Test
+    fun tourNochmalEnglisch() {
+        startInHistory()
+        compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
+        settle()
+        compose.onAllNodesWithText(string(R.string.rides_detail_ride_again_action))[0].performClick()
+        settle()
+        awaitText(string(R.string.rides_again_outdoor_title))
+        awaitText(string(R.string.rides_again_indoor_title))
+        awaitText(string(R.string.rides_again_preview_title))
+        shot("73b-tour-nochmal-en")
     }
 
     /** Eine gespeicherte Planung: Hinweis statt Klartext-Satz. */

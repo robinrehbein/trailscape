@@ -102,7 +102,7 @@ class MoreScreenshotTest {
         allPages(suffix = "en")
         // Stichproben: je Seite ein Knoten aus strings_more.xml, der nur im
         // Englischen so lautet.
-        assertEquals("Import & backup", context.getString(R.string.more_page_backup_title))
+        assertEquals("Backup", context.getString(R.string.more_page_backup_title))
     }
 
     /** Dieselben Seiten auf Deutsch — der Vergleich zeigt, dass sich dort nichts verschoben hat. */
@@ -167,7 +167,7 @@ class MoreScreenshotTest {
     private fun allPages(suffix: String) {
         openSettings()
         page(R.string.more_page_profile_title, "71-profil-$suffix") {
-            click(R.string.more_profile_advanced_action)
+            // Puls und FTP stehen ohne Aufklappen auf der Seite.
             compose.onAllNodesWithText(context.getString(R.string.more_profile_ftp_label))[0].assertExists()
         }
         page(R.string.more_page_health_title, "72-uhr-$suffix") {
@@ -180,7 +180,7 @@ class MoreScreenshotTest {
             compose.onAllNodesWithText(context.getString(R.string.more_reminder_weekly_time_label))[0].assertExists()
         }
         page(R.string.more_page_backup_title, "76-backup-$suffix") {
-            compose.onAllNodesWithText(context.getString(R.string.more_backup_import_archive_action))[0].assertExists()
+            compose.onAllNodesWithText(context.getString(R.string.more_backup_import_action))[0].assertExists()
         }
         page(R.string.more_page_sync_title, "77-sync-$suffix") {
             compose.onAllNodesWithText(context.getString(R.string.more_sync_action))[0].assertExists()

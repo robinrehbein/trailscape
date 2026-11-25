@@ -17,12 +17,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.DownloadForOffline
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Loop
 import androidx.compose.material.icons.rounded.Route
-import androidx.compose.material.icons.rounded.Spa
-import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -39,11 +36,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.ui.components.OneUiSearchField
+import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.rides.plannedRouteMeta
-import de.trailscape.app.ui.today.TodayOffer
-import de.trailscape.app.ui.today.offerChipLabel
 import de.trailscape.core.GeoResult
 import de.trailscape.core.RideSummary
 
@@ -55,28 +51,24 @@ import de.trailscape.core.RideSummary
  * ohne Aufziehen sichtbar:
  *
  *  * das **Suchfeld** (Ort, Stadt, Adresse; bei Fokus darunter Treffer bzw.
- *    der Suchverlauf, die Karte bleibt oben sichtbar),
- *  * **„Heute 45 km"** — die Runde, die „Heute" empfiehlt (fehlt an einem
- *    Ruhetag oder ohne Empfehlung),
- *  * **„Runde ab hier"** — oeffnet das Blatt, in dem Laenge und Untergrund
+ *    der Suchverlauf, die Karte bleibt oben sichtbar), rechts daneben das
+ *    Zahnrad zu den Einstellungen,
+ *  * **„Route planen"** — beginnt die Planung direkt, auch ohne vorher
+ *    gewaehlten Ort (`enterPlanning` in `MapScreen.kt`),
+ *  * **„Runde bauen"** — oeffnet das Blatt, in dem Laenge und Untergrund
  *    gewaehlt werden ([RoundTripSetupSheet]).
  *
- * Beide Knoepfe sind **gleich breit** nebeneinander: Es sind zwei Einstiege
- * in dasselbe (eine Runde bauen), keine Rangfolge. Fehlt die Tagesrunde,
- * nimmt „Runde ab hier" die ganze Breite.
+ * Beide Knoepfe sind **gleich breit** nebeneinander. Die Runde des Tages
+ * („Runde für heute bauen") hat ihren Einstieg auf „Heute" und im Blatt
+ * „Losfahren", nicht mehr hier (docs/ux/seitenkarte.md, Befund 5).
  *
  * ## Hochgewischt: was man schon hat
- * Der Griff haelt, was er verspricht: Hochgewischt zeigt das Blatt die
- * gespeicherten Routen (Planungen, neueste zuerst), die zuletzt gesuchten
- * Orte und den Weg zu den Offline-Karten. Vorher hatte das Blatt keinen
- * Koerper, und Wischen am Griff tat schlicht nichts. Ganz oben steht eine
- * kleine Zeile zum langen Druck auf die Karte — der einzigen Geste, die man
- * sonst nirgends sieht (siehe `LongPressHint.kt`).
+ * Hochgewischt zeigt das Blatt die gespeicherten Routen (Planungen, neueste
+ * zuerst) und die zuletzt gesuchten Orte. Ganz oben steht eine kleine Zeile,
+ * dass ein Tipp auf die Karte einen Punkt setzt (siehe `LongPressHint.kt`).
+ * Kartenstil und Offline-Ausschnitt haben genau einen Einstieg: den
+ * Ebenen-Knopf ueber dem Blatt.
  *
- * @param todayOffer die heute angebotene Runde oder `null`, wenn es heute
- *   keine gibt (Zieltag). Am Ruhetag ist es die lockere Runde; der Knopf sagt
- *   das dann auch („Locker · 16 km", Spa-Symbol) und tritt grau statt farbig
- *   auf — ein Angebot, keine Aufforderung.
  * @param bottomInset Platz, den das Blatt unten frei haelt (Kapsel bzw.
  *   Gestenleiste) — die Flaeche selbst laeuft bis an den Rand.
  */
@@ -94,14 +86,13 @@ internal fun ExploreSheet(
     searchResults: List<GeoResult>,
     searchHistory: List<Place>,
     onSelectPlace: (Place) -> Unit,
-    todayOffer: TodayOffer?,
-    onTodayRoute: () -> Unit,
+    onPlanRoute: () -> Unit,
     onRoundTripHere: () -> Unit,
+    onOpenSettings: () -> Unit,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     savedRoutes: List<RideSummary>,
     onSelectRoute: (RideSummary) -> Unit,
-    onOpenOfflineMaps: () -> Unit,
     expandedHeight: Dp,
     bottomInset: Dp,
     modifier: Modifier = Modifier,
@@ -129,14 +120,21 @@ internal fun ExploreSheet(
                     bottom = 12.dp,
                 ),
             ) {
-                OneUiSearchField(
-                    value = searchQuery,
-                    onValueChange = onSearchQueryChange,
-                    placeholder = stringResource(R.string.map_explore_search_placeholder),
-                    busy = searchBusy,
-                    onFocusChange = onSearchingChange,
-                    onSearch = onSubmitSearch,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OneUiSearchField(
+                        value = searchQuery,
+                        onValueChange = onSearchQueryChange,
+                        placeholder = stringResource(R.string.map_explore_search_placeholder),
+                        modifier = Modifier.weight(1f),
+                        busy = searchBusy,
+                        onFocusChange = onSearchingChange,
+                        onSearch = onSubmitSearch,
+                    )
+                    // Das Zahnrad steht auf allen vier Tabs; auf der Karte
+                    // sitzt es im Blatt, damit die Kartenflaeche frei bleibt.
+                    // Waehrend der Suche gehoert die Zeile dem Feld.
+                    if (!searching) SettingsAction(onClick = onOpenSettings)
+                }
 
                 if (searching) {
                     Spacer(Modifier.height(4.dp))
@@ -158,25 +156,15 @@ internal fun ExploreSheet(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        if (todayOffer != null) {
-                            FilledTonalButton(
-                                onClick = onTodayRoute,
-                                modifier = Modifier.weight(1f).heightIn(min = 44.dp),
-                                contentPadding = ChipPadding,
-                                colors = if (todayOffer.restDay) {
-                                    ButtonDefaults.filledTonalButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                        contentColor = MaterialTheme.colorScheme.onSurface,
-                                    )
-                                } else {
-                                    ButtonDefaults.filledTonalButtonColors()
-                                },
-                            ) {
-                                ChipContent(
-                                    icon = if (todayOffer.restDay) Icons.Rounded.Spa else Icons.Rounded.Star,
-                                    label = offerChipLabel(todayOffer),
-                                )
-                            }
+                        // Die zweitwichtigste Aufgabe der Karte bekommt einen
+                        // sichtbaren Einstieg: Die Planung beginnt hier, auch
+                        // ohne vorher gewaehlten Ort.
+                        FilledTonalButton(
+                            onClick = onPlanRoute,
+                            modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                            contentPadding = ChipPadding,
+                        ) {
+                            ChipContent(icon = Icons.Rounded.Route, label = stringResource(R.string.map_explore_plan_route_action))
                         }
                         // Grau statt NeutralButton: dessen Flaeche hat die
                         // Farbe der Karte und waere auf diesem Blatt unsichtbar.
@@ -189,7 +177,7 @@ internal fun ExploreSheet(
                                 contentColor = MaterialTheme.colorScheme.onSurface,
                             ),
                         ) {
-                            ChipContent(icon = Icons.Rounded.Loop, label = stringResource(R.string.map_explore_round_trip_action))
+                            ChipContent(icon = Icons.Rounded.Loop, label = stringResource(R.string.map_explore_build_loop_action))
                         }
                     }
                 }
@@ -201,7 +189,6 @@ internal fun ExploreSheet(
                 recentPlaces = searchHistory,
                 onSelectRoute = onSelectRoute,
                 onSelectPlace = onSelectPlace,
-                onOpenOfflineMaps = onOpenOfflineMaps,
                 modifier = Modifier
                     .fillMaxHeight()
                     .verticalScroll(rememberScrollState()),
@@ -216,7 +203,6 @@ private fun ExploreSheetBody(
     recentPlaces: List<Place>,
     onSelectRoute: (RideSummary) -> Unit,
     onSelectPlace: (Place) -> Unit,
-    onOpenOfflineMaps: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.padding(start = CardPadding, end = CardPadding, bottom = 12.dp)) {
@@ -246,20 +232,13 @@ private fun ExploreSheetBody(
                 )
             }
         }
-        SectionLabel(stringResource(R.string.map_explore_map_label))
-        SheetRow(
-            title = stringResource(R.string.map_explore_offline_title),
-            subtitle = stringResource(R.string.map_explore_offline_body),
-            icon = Icons.Rounded.DownloadForOffline,
-            onClick = onOpenOfflineMaps,
-        )
     }
 }
 
 /**
- * Die leise, dauerhafte Erklaerung des langen Drucks (Massnahme U6, siehe
- * `LongPressHint.kt`): Die Geste hat keinen Knopf, und die einmalige Snackbar
- * ist nach dem ersten Mal weg. Hier, wo man ohnehin nach dem „Wohin?" sucht,
+ * Die leise, dauerhafte Erklaerung, dass ein Tipp auf die Karte einen Punkt
+ * setzt (Massnahme U6, siehe `LongPressHint.kt`): Die Geste hat keinen Knopf,
+ * und die einmalige Snackbar ist nach dem ersten Mal weg. Hier, wo man ohnehin nach dem „Wohin?" sucht,
  * steht sie deshalb immer — klein und in `onSurfaceVariant`, damit sie
  * erklaert, ohne mit den Eintraegen darunter zu konkurrieren.
  */

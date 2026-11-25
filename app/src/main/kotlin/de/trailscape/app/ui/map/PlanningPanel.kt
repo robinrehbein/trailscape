@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
@@ -84,8 +85,8 @@ import kotlin.math.roundToInt
  */
 
 /**
- * Die Routenplanung als Kartenblatt — „Route hierher", „+ Als Wegpunkt" und
- * langes Druecken landen hier.
+ * Die Routenplanung als Kartenblatt — „Route planen" im Blatt „Wohin?" und
+ * „Route hierher" auf der Ortskarte landen hier.
  *
  * ## Aufbau nach der Fuehrung „Klartext"
  * Das Blatt folgt denselben Regeln wie „Runde ab hier"
@@ -116,7 +117,7 @@ import kotlin.math.roundToInt
  *
  * ## Der Griff bleibt die innere Stufe
  * Der Griff klappt zwischen vollem Inhalt, halber Hoehe und blossem Kopf um.
- * Wegpunkte werden auf der **Karte** gesetzt (langes Druecken), und dafuer
+ * Wegpunkte werden auf der **Karte** gesetzt (Tipp oder langer Druck), und dafuer
  * muss sich das Blatt wegraeumen lassen, ohne die Planung zu verlieren
  * (`onMapLongPress` in `MapScreen.kt`). Der Kopf traegt deshalb allein alles,
  * was man eingeklappt wissen muss.
@@ -179,6 +180,18 @@ internal fun PlanningSheet(
      * `MapScreen.kt`) und haengt den gewaehlten Ort als Wegpunkt an.
      */
     onAddWaypointViaSearch: () -> Unit,
+    /**
+     * Ob „Rückgängig" etwas zuruecknehmen kann (siehe `WaypointUndoStack` in
+     * `MapTapPlanning.kt`); sonst steht der Knopf deaktiviert da.
+     */
+    canUndo: Boolean = false,
+    /** „Rückgängig" im Kopf: nimmt die letzte Aenderung der Wegpunktliste zurueck (Fehltipper auf der Karte). */
+    onUndo: () -> Unit = {},
+    /**
+     * „Verwerfen": wirft Planung und Route weg. `null` blendet den Knopf aus
+     * (Vorschau ohne Karten-Screen).
+     */
+    onDiscard: (() -> Unit)? = null,
     onClear: () -> Unit,
     onSave: () -> Unit,
     onShare: () -> Unit,
@@ -226,6 +239,9 @@ internal fun PlanningSheet(
                 working = busy || locating,
                 canShare = route != null,
                 canClear = waypoints.isNotEmpty() || route != null,
+                showUndo = !generated,
+                canUndo = canUndo,
+                onUndo = onUndo,
                 onShare = onShare,
                 onClear = onClear,
                 onClose = onClose,
@@ -307,6 +323,10 @@ internal fun PlanningSheet(
                 // Eine Hauptaktion, und erst wenn es etwas zu tun gibt: Vorher
                 // standen „Route speichern" und „Losfahren" ausgegraut da und
                 // nahmen dem Blatt ein Viertel seiner Hoehe.
+                // „Verwerfen" als sichtbarer Knopf (docs/ux/seitenkarte.md,
+                // Befund 8): Eine Planung, die man nicht mehr will, wird man
+                // hier los — nicht nur ueber das ✕ im Kopf oder das ⋮.
+                val discard = onDiscard.takeIf { waypoints.isNotEmpty() || route != null }
                 if (hasRoute) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         NeutralButton(
@@ -330,6 +350,15 @@ internal fun PlanningSheet(
                         )
                     }
                 }
+                if (discard != null) {
+                    NeutralButton(
+                        onClick = discard,
+                        destructive = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.map_planning_discard_action), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
         },
     )
@@ -348,6 +377,9 @@ private fun PlanningHeader(
     working: Boolean,
     canShare: Boolean,
     canClear: Boolean,
+    showUndo: Boolean,
+    canUndo: Boolean,
+    onUndo: () -> Unit,
     onShare: () -> Unit,
     onClear: () -> Unit,
     onClose: () -> Unit,
@@ -384,6 +416,16 @@ private fun PlanningHeader(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(8.dp))
+        }
+        // „Rückgängig" steht im Kopf, weil der auch eingeklappt sichtbar
+        // bleibt — genau dann, wenn auf der Karte Punkte gesetzt werden.
+        if (showUndo) {
+            IconButton(onClick = onUndo, enabled = canUndo) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Undo,
+                    contentDescription = stringResource(R.string.map_planning_undo_cd),
+                )
+            }
         }
         if (canShare || canClear) {
             PlanningMenu(

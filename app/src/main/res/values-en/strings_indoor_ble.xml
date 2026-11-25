@@ -9,17 +9,17 @@
 -->
 <resources>
     <!-- IndoorDevicesUi.kt -->
-    <string name="indoor_ble_section_title">Indoor training</string>
-    <string name="indoor_ble_section_intro">Trainer and shifter for training at home. Trailscape remembers one device per role. It connects only during an indoor ride, not on this page.</string>
+    <string name="indoor_ble_section_title">Trainer and shifter</string>
+    <string name="indoor_ble_section_intro">Smart trainer and shifter for riding indoors. Trailscape remembers one trainer and one shifter. It connects only during an indoor ride, not on this page.</string>
     <string name="indoor_ble_role_trainer_label">Trainer</string>
     <string name="indoor_ble_role_shifter_label">Shifter</string>
-    <string name="indoor_ble_trainer_none_hint">Nothing paired. Trailscape controls smart trainers that use the Bluetooth standard FTMS.</string>
+    <string name="indoor_ble_trainer_none_hint">Nothing paired. Trailscape controls trainers that use the Bluetooth standard FTMS.</string>
     <string name="indoor_ble_shifter_none_hint">Nothing paired. Optional: without a shifter you change gears with the on-screen buttons.</string>
     <string name="indoor_ble_unnamed_label">Unnamed device</string>
     <string name="indoor_ble_forget_action">Forget</string>
     <string name="indoor_ble_scan_action">Search for trainer</string>
     <string name="indoor_ble_scan_running_label">Searching …</string>
-    <string name="indoor_ble_scan_stop_action">Stop</string>
+    <string name="indoor_ble_scan_stop_action">Stop search</string>
     <string name="indoor_ble_scan_hint">The search takes 20 seconds and finds trainers (FTMS) and shifters. Pedal briefly to wake the trainer, and press the shifter once.</string>
     <string name="indoor_ble_scan_blocked_hint">First grant the permission and turn on Bluetooth – the notes for both are at the top of this page.</string>
     <string name="indoor_ble_location_off_hint">On Android 11 and older, Android finds no devices while location is off. Turn location on briefly for the search.</string>
@@ -29,7 +29,7 @@
     <string name="indoor_ble_pair_action">Pair</string>
     <string name="indoor_ble_paired_label">Paired</string>
     <string name="indoor_ble_replace_confirm_title">Replace “%1$s”?</string>
-    <string name="indoor_ble_replace_confirm_body">Trailscape remembers one device per role. “%1$s” takes the place of “%2$s”.</string>
+    <string name="indoor_ble_replace_confirm_body">Trailscape remembers one trainer and one shifter. “%1$s” takes the place of “%2$s”.</string>
     <string name="indoor_ble_replace_action">Replace</string>
     <string name="indoor_ble_cancel_action">Cancel</string>
     <string name="indoor_ble_forget_confirm_title">Forget “%1$s”?</string>

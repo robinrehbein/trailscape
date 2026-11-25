@@ -973,10 +973,11 @@ einer gefahrenen Tour gegen die eigene Außenfahrt.
 
 **Was fehlte und jetzt dazukam**
 
-1. **Einstieg:** In der Tourdetailansicht (`RideDetailScreen`, unter „Diese
-   Tour nochmal fahren“) steht für jede Außenfahrt und jede Planung mit Spur
-   der umrandete Knopf **„Indoor fahren“** mit einem Satz darunter
-   (`ui/indoor/IndoorFromRide.kt`). Indoor-Fahrten bekommen ihn nicht (ihre
+1. **Einstieg:** In der Tourdetailansicht öffnet der feste Knopf „Nochmal
+   fahren“ ein Blatt; dort steht für jede Außenfahrt und jede Planung mit Spur
+   die Zeile **„Indoor fahren“** mit einem Satz darunter
+   (`ui/rides/RideAgain.kt`; bis zum Umbau nach `docs/ux/umbau.md` ein eigener
+   Knopf im Inhalt). Indoor-Fahrten bekommen ihn nicht (ihre
    Spur ist virtuell). Der Tipp schließt das Detail und öffnet das
    Indoor-Training (`AppViewModel.requestIndoorRide` → `IndoorFlowScreen` →
    `IndoorViewModel.preferRide`).
@@ -1027,7 +1028,7 @@ einer gefahrenen Tour gegen die eigene Außenfahrt.
   (Vorgabe `null`), `IndoorRideRecord.ghostSection` (Vorgabe `null`),
   `GhostSection`, `ghostResultOf` (`IndoorGhostSection.kt`). Tests:
   `IndoorGhostSectionTest`.
-- App: `IndoorFromRide.kt`, `IndoorOutdoorComparison.kt`;
+- App: `ui/rides/RideAgain.kt`, `IndoorOutdoorComparison.kt`;
   `IndoorRideUi.ghostOutdoor`, `IndoorSummaryUi.ghostOutdoor`/`ghostSection`;
   `HudGhostChip(showPower)`. Texte: `strings_idee01.xml` (de/en). Tests:
   `IndoorViewModelDemoFlowTest.indoorFahrenAusDerTourWaehltStreckeUndAussenfahrtVor`,

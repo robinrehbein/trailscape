@@ -10,6 +10,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -278,14 +279,27 @@ class TrainingScreenshotTest {
         click(R.string.training_form_all_values_action)
     }
 
+    /**
+     * Oeffnet die Sicht „Fortschritt": Tab „Verlauf", Segment „Fortschritt".
+     * Bis zum Umbau nach der Seitenkarte (docs/ux/umbau.md) war das die
+     * Vorgabe-Sicht des Tabs „Training" — daher der Name.
+     */
     private fun openTraining() {
-        compose.onAllNodesWithText(string(R.string.training_screen_title))[0].performClick()
+        navTab(R.string.shell_nav_history_label)
+        compose.onAllNodesWithText(string(R.string.rides_screen_segment_progress))[0].performClick()
         settle()
     }
 
-    /** Wechselt im Training-Tab von der Sicht „Fortschritt" (Vorgabe) auf „Plan". */
+    /** Oeffnet die Sicht „Plan": Tab „Indoor", Segment „Plan" (frueher das zweite Segment von „Training"). */
     private fun openPlan() {
-        compose.onAllNodesWithText(string(R.string.progress_segment_plan))[0].performClick()
+        navTab(R.string.shell_nav_indoor_label)
+        compose.onAllNodesWithText(string(R.string.indoor_app_tab_segment_plan))[0].performClick()
+        settle()
+    }
+
+    /** Tippt einen Tab der Navigationsleiste an — sie liegt ueber dem Inhalt, ist also der letzte Treffer. */
+    private fun navTab(id: Int) {
+        compose.onAllNodesWithText(string(id)).onLast().performClick()
         settle()
     }
 

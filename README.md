@@ -238,7 +238,7 @@ Ein Gradle-Projekt mit zwei Modulen:
 | Modul | Was | Warum getrennt |
 |---|---|---|
 | `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 1338 Unit-Tests hängen hier |
-| `:app` | Android: Compose/Material-3-Oberfläche (vier Tabs — Heute, Karte, Training, Mehr; die Tourenliste liegt als Blatt auf der Karte), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
+| `:app` | Android: Compose/Material-3-Oberfläche (vier Tabs — Heute, Karte, Indoor, Verlauf; Einstellungen hinterm Zahnrad, siehe `docs/ux/umbau.md`), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
 
 Weitere Bausteine:
 

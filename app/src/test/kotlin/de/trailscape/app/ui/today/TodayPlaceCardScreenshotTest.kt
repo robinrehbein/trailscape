@@ -109,7 +109,7 @@ class TodayPlaceCardScreenshotTest {
         compose.onNodeWithText("Heute draußen").assertExists()
         compose.onNodeWithText("Hell bis", substring = true).assertExists()
         shot("heute-ort-draussen")
-        compose.onNodeWithText("Runde planen").performClick()
+        compose.onNodeWithText("Runde bauen").performClick()
         assertEquals(TARGET, planned)
         compose.onNodeWithText("Lieber drinnen").performClick()
         assertEquals(true, flipped)

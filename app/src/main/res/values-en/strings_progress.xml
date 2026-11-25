@@ -31,7 +31,7 @@
     <!-- %1$s = bisherige Weite in km, %2$d = Kilometer mehr -->
     <string name="progress_challenge_body">Your longest ride of the last few weeks: %1$s km. You have %2$d km more in you.</string>
     <string name="progress_challenge_all_time_body">Your longest ride of the last few weeks: %1$s km. Add %2$d km and you ride further than ever.</string>
-    <string name="progress_challenge_action">Build a %1$d km loop</string>
+    <string name="progress_challenge_action">Build a loop · %1$d km</string>
     <string name="progress_challenge_route_label">Next longest ride</string>
 
     <!-- Jahresziel. %1$d = Jahr -->
@@ -84,8 +84,6 @@
     <string name="progress_milestone_all_done">All steps reached</string>
 
     <!-- Fortschritt im Training-Tab -->
-    <string name="progress_segment_progress">Progress</string>
-    <string name="progress_segment_plan">Plan</string>
     <string name="progress_trend_eyebrow">Last 12 weeks</string>
     <!-- %1$s = Kilometer der letzten vier Wochen -->
     <string name="progress_trend_headline">%1$s km in 4 weeks</string>

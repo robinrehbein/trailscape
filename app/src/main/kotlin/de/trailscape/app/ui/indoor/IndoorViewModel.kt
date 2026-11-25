@@ -47,6 +47,11 @@ import de.trailscape.core.RouteTarget
 import de.trailscape.core.TodayRoute
 import de.trailscape.core.TrainingPlan
 import de.trailscape.core.TrainingProfile
+import de.trailscape.app.challenge.ChallengeDraftStore
+import de.trailscape.app.challenge.ChallengeStore
+import de.trailscape.app.challenge.challengeRouteInfo
+import de.trailscape.core.challenge.ChallengeRoute
+import de.trailscape.core.challenge.routeOfKey
 import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.i18n.sessionTitle
 import de.trailscape.core.indoor.BleLink
@@ -201,6 +206,9 @@ class IndoorViewModel(
     catalogDownloader: CatalogDownloader? = null,
     catalogOnline: () -> Boolean = { false },
     serverDeps: IndoorServerDeps? = null,
+    challengeStore: ChallengeStore? = null,
+    avatarJson: () -> String? = { null },
+    challengeDrafts: ChallengeDraftStore? = null,
     var onRideSaved: (String) -> Unit = {},
     var onPlanRoute: (RouteTarget) -> Unit = {},
     private val rideHost: IndoorRideHost? = null,
@@ -236,6 +244,32 @@ class IndoorViewModel(
 
     /** Fahrerangaben und eigene Indoor-Fahrten fuer die Streckenkarten (Fahrzeit, „Gefahren"). */
     val catalogExtras: StateFlow<IndoorCatalogExtras> = _catalogExtras.asStateFlow()
+    /** Geteilte Herausforderungen (docs/herausforderung.md): Liste, Import, Teilen. */
+    private val challengeController = IndoorChallengeController(
+        store = challengeStore,
+        routeInfo = { ref ->
+            challengeRouteInfo(
+                ref,
+                entry = { catalogController.entry(it) },
+                installedVersion = { catalogController.installedWorld(it)?.version },
+            )
+        },
+        scope = this.scope,
+        io = io,
+        kv = store,
+        nowMs = wallClock,
+        avatarJson = avatarJson,
+        drafts = challengeDrafts,
+    )
+
+    /** Gespeicherte Herausforderungen. */
+    val challenges: StateFlow<List<IndoorChallengeUi>> = challengeController.items
+
+    /** Vorschau und Rückmeldung beim Import einer Datei; `null` = keine. */
+    val challengeImport: StateFlow<ChallengeImportUi?> = challengeController.importState
+
+    /** Vorschau beim Teilen der eigenen Fahrt; `null` = keine. */
+    val challengeShare: StateFlow<ChallengeShareUi?> = challengeController.share
 
     /** Bau auf dem eigenen Server (docs/indoor/serverbau.md). */
     private val serverController = IndoorServerBuildController(serverDeps, this.scope, io) { rideId, dir, manifest, laser, replaced ->
@@ -395,6 +429,12 @@ class IndoorViewModel(
     private var rideStatic: RideStatic? = null
     private var finishing = false
     private var pendingRide: Ride? = null
+
+    // Herausforderung teilen (docs/herausforderung.md): was die Auswertung zum Teilen braucht
+    private var shareRoute: IndoorRoute? = null
+    private var shareRef: ChallengeRoute? = null
+    private var challengeOpponent: String? = null
+    private var rideDateIso: String? = null
 
     /** Stelle in der Runde, an der die Fahrt mit dem ersten Tritt begann; `null` vorher. */
     private var rideStartRouteM: Double? = null
@@ -731,6 +771,35 @@ class IndoorViewModel(
     }
 
     /**
+     * Der Indoor-Tab kommt (wieder) nach vorn. Sein ViewModel lebt ueber
+     * Tab-Wechsel hinweg — anders als der gepushte Ablauf, der bei jedem
+     * Oeffnen neu entsteht. Deshalb hier neu lesen, was sich inzwischen
+     * geaendert haben kann: die Indoor-Einstellungen (sie werden unter
+     * „Einstellungen → Indoor" von einem eigenen ViewModel geschrieben), das
+     * Fahrgefuehl, die Strecken (neue Tour, neuer Plan) und die Einheit des
+     * Tages. Nur auf der Startseite und nie waehrend einer Fahrt.
+     */
+    fun refreshHome() {
+        if (_stage.value != IndoorStage.ROUTE || activeRuntime != null) {
+            ensureRouteOptions()
+            return
+        }
+        _pair.update {
+            it.copy(
+                demoTrainer = readDemoFlag(),
+                chainringTeeth = readChainringTeeth(),
+                gearTable = readGearTable(),
+                timeOfDay = readTimeOfDay(),
+                otherRiders = readOtherRiders(),
+                trailOverlays = IndoorTrailController.readOverlays(store),
+                graphics = readGraphics(),
+            )
+        }
+        feelController.reload()
+        loadRouteOptions()
+    }
+
+    /**
      * Liest die waehlbaren Strecken: Testwelt, gespeicherte Planungen und
      * gefahrene Touren. **Indoor-Fahrten sind keine Strecke** — ihre Punkte
      * sind die virtuelle Spur einer anderen Strecke, niemand war dort.
@@ -739,6 +808,7 @@ class IndoorViewModel(
         routeOptionsRequested = true
         _route.update { it.copy(loadingOptions = true) }
         catalogController.load()
+        challengeController.refresh()
         scope.launch {
             val (saved, erg) = withContext(io) { savedOptions() to computeErg() }
             ergWorkout = erg
@@ -997,6 +1067,8 @@ class IndoorViewModel(
             } else {
                 IndoorGhostOption.None
             }
+        is IndoorGhostOption.Challenge ->
+            if (challengeController.rideable(ghost.challengeId)?.route?.key == selected?.key) ghost else IndoorGhostOption.None
         else -> ghost
     }
 
@@ -1025,10 +1097,75 @@ class IndoorViewModel(
                     return
                 }
             is IndoorGhostOption.ConstantPower -> IndoorGhostOption.ConstantPower(ghost.watts.coerceIn(30, 1000))
+            is IndoorGhostOption.Challenge -> {
+                val c = challengeController.rideable(ghost.challengeId) ?: return
+                if (c.route.key != selected?.key) return
+                IndoorGhostOption.Challenge(c.id, c.name.ifBlank { texts.challengeFallbackName() })
+            }
             IndoorGhostOption.None -> ghost
         }
         _route.update { it.copy(ghost = accepted) }
     }
+
+    // -----------------------------------------------------------------------
+    // Herausforderungen (docs/herausforderung.md)
+    // -----------------------------------------------------------------------
+
+    /** Die Strecke zur Herausforderung als Kennung des Teilens; `null` = nicht teilbar (nur bekannte Strecken und die Teststrecke). */
+    private fun challengeRefOf(option: IndoorRouteOption): ChallengeRoute? = when (option) {
+        IndoorRouteOption.TestWorld -> ChallengeRoute.TestWorld
+        is IndoorRouteOption.Catalog -> catalogController.installedWorld(option.catalogId)?.version?.let { routeOfKey(option.key, it) }
+        else -> null
+    }
+
+    /** Liest die gespeicherten Herausforderungen neu (beim Öffnen der Startseite). */
+    fun refreshChallenges() = challengeController.refresh()
+
+    fun deleteChallenge(id: String) {
+        challengeController.delete(id)
+        _route.update { if ((it.ghost as? IndoorGhostOption.Challenge)?.challengeId == id) it.copy(ghost = IndoorGhostOption.None) else it }
+    }
+
+    /** Eine Datei wurde gewählt: prüft sie und zeigt die Vorschau (`null` = nicht lesbar oder zu groß). */
+    fun importChallengeFile(bytes: ByteArray?) = challengeController.importBytes(bytes)
+
+    fun confirmChallengeImport() = challengeController.confirmImport()
+
+    fun dismissChallengeImport() = challengeController.dismissImport()
+
+    /**
+     * „Gegen <Name> fahren": wählt die Strecke der Herausforderung und sie als
+     * Mitfahrer. Nur, wenn die Strecke in der passenden Version bereitliegt.
+     *
+     * @param routeName Anzeigename der Strecke in der Sprache der Oberfläche.
+     */
+    fun useChallenge(id: String, routeName: String) {
+        val c = challengeController.rideable(id) ?: return
+        val option: IndoorRouteOption = _route.value.options.firstOrNull { it.key == c.route.key } ?: when (val r = c.route) {
+            ChallengeRoute.TestWorld -> IndoorRouteOption.TestWorld
+            is ChallengeRoute.Catalog -> {
+                val e = catalogController.entry(r.id) ?: return
+                IndoorRouteOption.Catalog(r.id, routeName.ifBlank { e.name.de }, e.lengthM / 1000.0, e.ascentM)
+            }
+        }
+        selectRoute(option)
+        setGhost(IndoorGhostOption.Challenge(id, ""))
+    }
+
+    /** Öffnet die Vorschau zum Teilen der eben beendeten Fahrt. */
+    fun openChallengeShare() = challengeController.openShare(
+        route = shareRoute,
+        points = pendingRide?.points.orEmpty(),
+        ref = shareRef,
+        dateIso = rideDateIso,
+        reply = challengeOpponent != null,
+    )
+
+    fun setChallengeShareName(name: String) = challengeController.setShareName(name)
+
+    fun setChallengeShareDate(include: Boolean) = challengeController.setShareIncludeDate(include)
+
+    fun closeChallengeShare() = challengeController.closeShare()
 
     /** Nutzeraktion „Laden"/„Fortsetzen"/„Aktualisieren" einer bekannten Strecke. */
     fun downloadCatalog(id: String) = catalogController.download(id)
@@ -1484,6 +1621,9 @@ class IndoorViewModel(
             return
         }
         val routeUi = _route.value
+        shareRoute = route
+        shareRef = routeUi.selected?.let { challengeRefOf(it) }
+        challengeOpponent = (routeUi.ghost as? IndoorGhostOption.Challenge)?.label
         val demo = _pair.value.demoTrainer
         val mode = if (routeUi.mode == IndoorMode.ERG && ergWorkout != null && !calibrationRequested) IndoorMode.ERG else IndoorMode.SIM
 
@@ -1929,6 +2069,7 @@ class IndoorViewModel(
         IndoorGhostOption.None -> null
         is IndoorGhostOption.PastRide -> ghost.label
         is IndoorGhostOption.ConstantPower -> texts.ghostConstantPowerLabel(ghost.watts)
+        is IndoorGhostOption.Challenge -> ghost.label
     }
 
     private fun ghostSpecOf(ghost: IndoorGhostOption): GhostSpec = when (ghost) {
@@ -1939,6 +2080,8 @@ class IndoorViewModel(
             val timed = ride?.points?.count { it.time != null } ?: 0
             if (ride != null && timed >= 2) GhostSpec.PastRide(ghost.label, ride.points) else GhostSpec.None
         }
+        is IndoorGhostOption.Challenge ->
+            challengeController.rideable(ghost.challengeId)?.let { GhostSpec.Shared(ghost.label, it.curve) } ?: GhostSpec.None
     }
 
     private fun fallbackRiderSetup(p: TrainingProfile): RiderSetup = RiderSetup(
@@ -2100,6 +2243,9 @@ class IndoorViewModel(
             val rideName = if (startKm != null) texts.rideNameFrom(name, startKm) else texts.rideName(name)
             runCatching { indoorRideToRide(r, rideName) }.getOrNull()
         }
+        rideDateIso = record?.let {
+            java.time.Instant.ofEpochMilli(it.startedAtEpochMs).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
+        }
         val totals = record?.totals ?: rs.session?.totals
         val movingS = totals?.movingS ?: 0
         val distanceM = totals?.distanceM ?: 0.0
@@ -2130,6 +2276,10 @@ class IndoorViewModel(
             recordProblem = if (record == null) rs.problem else null,
             startKm = startKm,
             climbs = trail.efforts(),
+            challengeOpponent = challengeOpponent,
+            // Teilbar: bekannte Strecke oder Teststrecke, ab dem Start, lang genug, mit Aufzeichnung.
+            canShareChallenge = pendingRide != null && shareRef != null && startKm == null &&
+                record != null && record.totals.movingS >= MIN_INDOOR_RIDE_S,
         )
     }
 
@@ -2144,6 +2294,10 @@ class IndoorViewModel(
             if (ok) {
                 journal?.discard()
                 _summary.update { it?.copy(saving = false, savedRideId = ride.id) }
+                // Teilbar? Dann fuer das Blatt „Teilen" der Tour festhalten (docs/ux/umbau.md).
+                if (current.canShareChallenge) {
+                    challengeController.keepDraft(ride.id, shareRoute, ride.points, shareRef, rideDateIso, challengeOpponent != null)
+                }
                 runCatching { onRideSaved(ride.id) }
             } else {
                 _summary.update { it?.copy(saving = false, saveFailed = true) }
@@ -2503,6 +2657,8 @@ class IndoorViewModel(
                     catalogDownloader = AppServices.indoorCatalogDownloader,
                     catalogOnline = { AppServices.isNetworkAvailable() },
                     serverDeps = AppServices.indoorServerDeps,
+                    challengeStore = AppServices.challengeStore,
+                    challengeDrafts = AppServices.challengeDraftStore,
                     onRideSaved = onRideSaved,
                     rideHost = IndoorRideHost.shared,
                     journal = IndoorRideJournal.inFilesDir(app.filesDir),

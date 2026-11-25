@@ -117,4 +117,20 @@ class TilePlannerTest {
         assertEquals(true to true, shadowFlags(WorldNames.NODE_BUILDINGS))
         assertEquals(false to true, shadowFlags(WorldNames.NODE_TERRAIN))
     }
+
+    @Test
+    fun baumabschnitte() {
+        // Abschnitt der Bandbaeume: eigene Art (einzeln ausblendbar), Grundart `trees` (Schalter, Schatten).
+        val bin = de.trailscape.core.indoor.tree.TreeInstanceNames.binName(17)
+        assertEquals(bin, nodeCategory(listOf(bin, WorldNames.NODE_TREES, null)))
+        assertEquals(WorldNames.NODE_TREES, baseCategory(bin))
+        assertEquals(true to false, shadowFlags(baseCategory(bin)))
+        val safe = de.trailscape.core.indoor.world.RenderSettings.SAFE
+        assertEquals(safe.trees, nodeVisible(bin, safe))
+        assertTrue(nodeVisible(bin, safe.copy(trees = true)))
+        // Teilflaechen bleiben sichtbar wie bisher, andere x_-Knoten unter `trees` zaehlen zu `trees`.
+        assertTrue(nodeVisible("terrain_sub_1_2", safe))
+        assertEquals(WorldNames.NODE_TREES, nodeCategory(listOf("x_trees_bin_", WorldNames.NODE_TREES)))
+        assertEquals(WorldNames.NODE_TREES, nodeCategory(listOf("x_sonst", WorldNames.NODE_TREES)))
+    }
 }

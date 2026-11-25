@@ -9,17 +9,17 @@
 -->
 <resources>
     <!-- IndoorDevicesUi.kt -->
-    <string name="indoor_ble_section_title">Indoor-Training</string>
-    <string name="indoor_ble_section_intro">Rollentrainer und Schalttaster für das Training zu Hause. Je Rolle merkt sich Trailscape ein Gerät. Verbunden wird nur während einer Indoor-Fahrt, nicht auf dieser Seite.</string>
-    <string name="indoor_ble_role_trainer_label">Rollentrainer</string>
+    <string name="indoor_ble_section_title">Trainer und Schalttaster</string>
+    <string name="indoor_ble_section_intro">Rollentrainer und Schalttaster für das Fahren drinnen. Trailscape merkt sich einen Trainer und einen Schalttaster. Verbunden wird nur während einer Indoor-Fahrt, nicht auf dieser Seite.</string>
+    <string name="indoor_ble_role_trainer_label">Trainer</string>
     <string name="indoor_ble_role_shifter_label">Schalttaster</string>
-    <string name="indoor_ble_trainer_none_hint">Nichts gekoppelt. Trailscape steuert Smart-Trainer mit dem Bluetooth-Standard FTMS.</string>
+    <string name="indoor_ble_trainer_none_hint">Nichts gekoppelt. Trailscape steuert Trainer mit dem Bluetooth-Standard FTMS.</string>
     <string name="indoor_ble_shifter_none_hint">Nichts gekoppelt. Optional: Ohne Schalttaster schaltest du über die Knöpfe auf dem Bildschirm.</string>
     <string name="indoor_ble_unnamed_label">Unbenanntes Gerät</string>
     <string name="indoor_ble_forget_action">Vergessen</string>
     <string name="indoor_ble_scan_action">Trainer suchen</string>
     <string name="indoor_ble_scan_running_label">Suche läuft …</string>
-    <string name="indoor_ble_scan_stop_action">Stopp</string>
+    <string name="indoor_ble_scan_stop_action">Suche beenden</string>
     <string name="indoor_ble_scan_hint">Die Suche dauert 20 Sekunden und findet Trainer (FTMS) und Schalttaster. Tritt kurz in die Pedale, damit der Trainer aufwacht, und drücke den Schalttaster einmal.</string>
     <string name="indoor_ble_scan_blocked_hint">Erst die Berechtigung erteilen und Bluetooth einschalten – die Hinweise dazu stehen oben auf dieser Seite.</string>
     <string name="indoor_ble_location_off_hint">Ohne eingeschalteten Standort findet Android unter Android 11 und älter keine Geräte. Schalte den Standort für die Suche kurz ein.</string>
@@ -29,7 +29,7 @@
     <string name="indoor_ble_pair_action">Koppeln</string>
     <string name="indoor_ble_paired_label">Gekoppelt</string>
     <string name="indoor_ble_replace_confirm_title">„%1$s“ ersetzen?</string>
-    <string name="indoor_ble_replace_confirm_body">Je Rolle merkt sich Trailscape ein Gerät. „%1$s“ tritt an die Stelle von „%2$s“.</string>
+    <string name="indoor_ble_replace_confirm_body">Trailscape merkt sich je einen Trainer und einen Schalttaster. „%1$s“ tritt an die Stelle von „%2$s“.</string>
     <string name="indoor_ble_replace_action">Ersetzen</string>
     <string name="indoor_ble_cancel_action">Abbrechen</string>
     <string name="indoor_ble_forget_confirm_title">„%1$s“ vergessen?</string>

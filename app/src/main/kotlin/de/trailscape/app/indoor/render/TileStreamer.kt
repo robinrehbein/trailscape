@@ -27,6 +27,8 @@ import java.util.concurrent.Executor
  *  5. **Teilflaechen** grober Kacheln aus, solange die feinere Kachel fertig
  *     und sichtbar ist; wird sie entladen, kommt die Teilflaeche im selben
  *     Bild zurueck — nie ein Loch.
+ *  6. **Baumabschnitte** (`x_trees_bin_<k>`) aus, solange [TreeInstancer] an
+ *     ihrer Stelle Baeume der Bibliothek zeigt.
  *
  * Eine Kachel, die sich nicht laden laesst, meldet [Callbacks.onTileFailed]
  * und bleibt fuer diesen Durchgang aussen vor; die Fahrt geht weiter.
@@ -38,6 +40,8 @@ internal class TileStreamer(
     private val io: Executor,
     private val post: (Runnable) -> Unit,
     private val callbacks: Callbacks,
+    /** Baeume aus der Bibliothek ([TreeInstancer]); `null` = nur die gebackenen. */
+    private val trees: TreeInstancer? = null,
 ) {
     interface Callbacks {
         fun onTileFailed(tileId: String, detail: String)
@@ -106,6 +110,11 @@ internal class TileStreamer(
 
     private var terrainShadowsApplied = false
 
+    /** Die Sichtbarkeit beim naechsten [update] neu anwenden (Baumabschnitte haben gewechselt). */
+    fun invalidateVisibility() {
+        visibilityDirty = true
+    }
+
     private fun continueLoading() {
         val id = loadingId ?: return
         val slot = slots[id] as? Slot.Loading ?: run {
@@ -118,6 +127,7 @@ internal class TileStreamer(
             slot.loaded.asset.releaseSourceData()
             slot.loaded.applyShadows()
             slot.loaded.addToScene()
+            planner.tile(id)?.let { t -> trees?.onTileReady(id, slot.loaded, t.anchorE, t.anchorU, -t.anchorN) }
             slots[id] = Slot.Ready(slot.loaded)
             loadingId = null
             visibilityDirty = true
@@ -212,7 +222,10 @@ internal class TileStreamer(
         val drop = planner.toUnload(distM, slots.keys.toList())
         for (id in drop) {
             when (val s = slots[id]) {
-                is Slot.Ready -> s.loaded.destroy()
+                is Slot.Ready -> {
+                    trees?.onTileGone(id)
+                    s.loaded.destroy()
+                }
                 is Slot.Loading -> {
                     core.resetResourceLoader()
                     s.loaded.destroy()
@@ -234,11 +247,13 @@ internal class TileStreamer(
             if (s !is Slot.Ready) continue
             val tile = planner.tile(id) ?: continue
             val hidden = TilePlanner.hiddenSubs(tile, shown)
+            // Baumabschnitte, an deren Stelle gerade Instanzen der Bibliothek stehen
+            val hiddenBins = trees?.hiddenBins(id) ?: emptySet()
             // Wasser: eigenes Material (Spiegelung, Wellen), abschaltbar mit dem Schalter „Himmel"
             s.loaded.applyWater(if (settings.sky) core.ensureWaterInstance() else null)
             s.loaded.applyVisibility { cat ->
                 when {
-                    cat != null && cat in hidden -> false
+                    cat != null && (cat in hidden || cat in hiddenBins) -> false
                     else -> nodeVisible(cat, settings)
                 }
             }
@@ -255,6 +270,8 @@ internal class TileStreamer(
         alive = false
         if (loadingId != null) runCatching { core.resetResourceLoader() }
         loadingId = null
+        // Erst die Instanzen (sie haengen an Materialien und Weltknoten), dann die Kacheln.
+        trees?.let { t -> runCatching { t.destroy() } }
         for (s in slots.values) {
             when (s) {
                 is Slot.Ready -> s.loaded.destroy()

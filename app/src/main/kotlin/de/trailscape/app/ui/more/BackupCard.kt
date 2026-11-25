@@ -5,42 +5,29 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FolderZip
-import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
@@ -50,18 +37,12 @@ import de.trailscape.app.i18n.UiText
 import de.trailscape.app.indoor.ClimbBestStore
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.UNREADABLE_FILE_MESSAGE
-import de.trailscape.app.ui.components.OneUiDialog
-import de.trailscape.app.ui.rememberActivityImportAction
 import de.trailscape.app.ui.withCause
-import de.trailscape.core.BulkImportResult
 import de.trailscape.core.DiagEvent
 import de.trailscape.core.DiagLog
 import de.trailscape.core.FormatException
 import de.trailscape.core.backupFileName
-import de.trailscape.core.i18n.CoreTexts
-import de.trailscape.core.importArchive
 import de.trailscape.core.parseBackupJson
-import de.trailscape.core.scanArchive
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -84,31 +65,16 @@ import kotlinx.coroutines.withContext
  * (siehe `ui/ActivityImportAction.kt`).
  *
  * ## Archiv-Import
- * „Archiv importieren (ZIP)" oeffnet den ZIP-Stream zweimal: einmal fuer
- * [scanArchive] (nur die Eintragsnamen, um den Nenner fuer die
- * Fortschrittsanzeige zu kennen — die zweite Variante von
- * [de.trailscape.core.importArchive] macht das ebenso, akzeptiert dafuer aber
- * nur ein bereits komplett geladenes [ByteArray]), einmal fuer den
- * eigentlichen, gestreamten Import. Scheitert das Vor-Oeffnen (mancher
- * Anbieter erlaubt keinen zweiten `openInputStream`-Aufruf auf demselben
- * `Uri`), faellt die Anzeige auf einen unbestimmten Fortschritt zurueck statt
- * abzubrechen — der Import selbst braucht den Nenner nicht.
- *
- * Der Fortschritts-Dialog ist bewusst **nicht** abbrechbar (kein
- * Abbrechen-Knopf, `onDismissRequest = {}`): `importArchive` in `:core` ist
- * eine einzelne blockierende Funktion ohne Abbruchpunkte (kein
- * `isActive`/`ensureActive` je Eintrag) — ein `Job.cancel()` wuerde erst
- * greifen, wenn der Aufruf ohnehin fertig ist, also nur die UI faelschlich
- * „abgebrochen" zeigen, waehrend der Import im Hintergrund weiterlaeuft. Bei
- * Bedarf muesste [de.trailscape.core.importArchive] dafuer erst eine
- * Abbruchpruefung bekommen (`:core`, ausserhalb dieses Auftrags).
+ * „Archiv importieren (ZIP)" ist die Aktion aus `ArchiveImportAction.kt`
+ * ([rememberArchiveImportAction]); Ablauf und die Entscheidung gegen einen
+ * Abbrechen-Knopf stehen dort.
  *
  * Die Aktions-Buttons tragen inzwischen Icons (anders als vorher: `:app` band
  * damals nur `material-icons-core` ein, dessen kleiner Symbolsatz weder ein
  * Save- noch ein Routen-Symbol enthielt). Seit `material-icons-extended`
  * eingebunden ist, stehen beide zur Verfuegung.
  *
- * Der Inhalt der Seite „Import & Backup" der Einstellungen (siehe
+ * Der Inhalt der Seite „Backup" der Einstellungen (siehe
  * `MoreScreen.kt`).
  *
  * ## Letzte Sicherung
@@ -125,13 +91,6 @@ fun BackupCardContent(appViewModel: AppViewModel) {
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
 
     var busy by remember { mutableStateOf(false) }
-
-    // Archiv-Import: eigener Zustand, weil er zusaetzlich einen
-    // Fortschritts- und einen Ergebnis-Dialog braucht.
-    var archiveBusy by remember { mutableStateOf(false) }
-    var archiveDone by remember { mutableIntStateOf(0) }
-    var archiveTotal by remember { mutableStateOf<Int?>(null) }
-    var archiveResult by remember { mutableStateOf<BulkImportResult?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
@@ -174,6 +133,9 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                 data.yearGoal?.let { appViewModel.restoreYearGoal(it) }
                 // Bestzeiten an Anstiegen (Indoor-Bergwertung): je Anstieg gewinnt die schnellere Zeit.
                 withContext(Dispatchers.IO) { ClimbBestStore.merge(AppServices.keyValueStore, data.climbBests) }
+                // Erfolge: zusammengefuehrt, nie ueberschrieben (`docs/erfolge.md`).
+                data.progress?.let { de.trailscape.app.data.ErfolgeStore.shared.restore(it) }
+                data.avatar?.let { appViewModel.restoreAvatar(it) }
                 DiagLog.shared.log(DiagEvent.BACKUP_IMPORT_OK, count = newRides.size.toLong())
 
                 appViewModel.showMessage(backupImportMessage(newRides.size, skipped, data.profile != null))
@@ -191,59 +153,9 @@ fun BackupCardContent(appViewModel: AppViewModel) {
         }
     }
 
-    // Import einzelner Aktivitaetsdateien (GPX oder FIT, je auch `.gz`,
-    // mehrere auf einmal) — dieselbe fertig verdrahtete Aktion wie im
-    // Verlauf (`ui/ActivityImportAction.kt`): Mehrfachauswahl, Import ueber
-    // das ViewModel, Ergebnis-Snackbar und stehender Fehlerdialog. Frueher
-    // hatte die Karte eine eigene Kopie davon, die nur eine Datei nahm.
-    val activityImport = rememberActivityImportAction(appViewModel)
-
-    // Massenimport aus einem ZIP-Archiv (Strava-/Garmin-/Wahoo-Export) — siehe
-    // KDoc der Karte oben fuer den Ablauf und die Abbrechbarkeits-Entscheidung.
-    val importArchiveLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            archiveBusy = true
-            archiveDone = 0
-            archiveTotal = null
-            try {
-                archiveTotal = withContext(Dispatchers.IO) { tryScanArchiveTotal(context, uri, coreTexts) }
-
-                val result = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(uri)?.use { stream ->
-                        importArchive(
-                            input = stream,
-                            existing = rides,
-                            total = archiveTotal,
-                            texts = coreTexts,
-                            onProgress = { done, total ->
-                                archiveDone = done
-                                // `importArchive` meldet ohne bekannten Nenner
-                                // `total == done` (siehe :core-KDoc) — das
-                                // wuerde die Anzeige faelschlich auf
-                                // "bestimmt" umschalten, darum hier ignoriert.
-                                if (archiveTotal != null) archiveTotal = total
-                            },
-                        )
-                    } ?: throw FormatException(UNREADABLE_FILE_MESSAGE)
-                }
-
-                if (result.rides.isNotEmpty()) appViewModel.addRides(result.rides)
-                archiveResult = result
-            } catch (e: FormatException) {
-                appViewModel.showMessage(e.message ?: UNREADABLE_FILE_MESSAGE)
-            } catch (e: Exception) {
-                appViewModel.showMessage(
-                    withCause(context.getString(R.string.more_backup_archive_read_error), e),
-                )
-            } finally {
-                archiveBusy = false
-            }
-        }
-    }
-
+    // Der Tour-Import (GPX/FIT und ZIP-Archive) liegt seit dem Umbau nach der
+    // Seitenkarte allein im Verlauf („+"): Touren kommen dort hinein, wo sie
+    // danach liegen. Diese Seite ist nur noch das Backup.
     SettingsHint(stringResource(R.string.more_backup_hint))
     Spacer(modifier = Modifier.height(8.dp))
     // Ehrlicher Hinweis statt Modal-Dialog: Die Export-Datei ist bewusst
@@ -281,33 +193,9 @@ fun BackupCardContent(appViewModel: AppViewModel) {
             Spacer(Modifier.size(ButtonDefaults.IconSpacing))
             Text(stringResource(R.string.more_backup_import_action))
         }
-        SettingsSecondaryButton(
-            onClick = activityImport.start,
-            enabled = !busy && !activityImport.importing,
-        ) {
-            Icon(
-                Icons.Filled.Route,
-                contentDescription = null,
-                modifier = Modifier.size(ButtonDefaults.IconSize),
-            )
-            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-            Text(stringResource(R.string.more_backup_import_rides_action))
-        }
-        SettingsSecondaryButton(
-            onClick = { importArchiveLauncher.launch(arrayOf("application/zip", "*/*")) },
-            enabled = !busy && !archiveBusy,
-        ) {
-            Icon(
-                Icons.Filled.FolderZip,
-                contentDescription = null,
-                modifier = Modifier.size(ButtonDefaults.IconSize),
-            )
-            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-            Text(stringResource(R.string.more_backup_import_archive_action))
-        }
     }
 
-    if (busy || activityImport.importing) {
+    if (busy) {
         Spacer(modifier = Modifier.height(12.dp))
         LinearProgressIndicator(
             modifier = Modifier
@@ -315,137 +203,6 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                 .height(4.dp),
         )
     }
-
-    if (archiveBusy) {
-        ArchiveImportProgressDialog(done = archiveDone, total = archiveTotal)
-    }
-
-    archiveResult?.let { result ->
-        ArchiveImportResultDialog(result = result, onDismiss = { archiveResult = null })
-    }
-}
-
-/**
- * Ermittelt die Gesamtzahl importierbarer Eintraege vorab ueber [scanArchive],
- * damit der Fortschritts-Dialog einen echten Nenner hat. Liefert `null`, wenn
- * sich die Datei kein zweites Mal oeffnen laesst oder kein ZIP ist — dann
- * bleibt die Anzeige unbestimmt, der eigentliche Import scheitert (falls
- * ueberhaupt) erst beim zweiten, tatsaechlich verwendeten Stream.
- */
-private fun tryScanArchiveTotal(context: Context, uri: Uri, texts: CoreTexts): Int? =
-    try {
-        context.contentResolver.openInputStream(uri)?.use { scanArchive(it, texts).size }
-    } catch (e: Exception) {
-        null
-    }
-
-/** Nicht schliessbarer Fortschritts-Dialog fuer den Archiv-Import — siehe Karten-KDoc. */
-@Composable
-private fun ArchiveImportProgressDialog(done: Int, total: Int?) {
-    OneUiDialog(
-        onDismissRequest = {},
-        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
-        title = { Text(stringResource(R.string.more_backup_archive_progress_title)) },
-        text = {
-            Column {
-                val knownTotal = total?.takeIf { it > 0 }
-                if (knownTotal != null) {
-                    LinearProgressIndicator(
-                        progress = { (done.toFloat() / knownTotal.toFloat()).coerceIn(0f, 1f) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(stringResource(R.string.more_backup_archive_progress_known, done, knownTotal))
-                } else {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(stringResource(R.string.more_backup_archive_progress_unknown, done))
-                }
-            }
-        },
-        confirmButton = {},
-    )
-}
-
-/** Ergebnis-Dialog fuer den Archiv-Import: Zahlen plus aufklappbare Fehlerliste. */
-@Composable
-private fun ArchiveImportResultDialog(result: BulkImportResult, onDismiss: () -> Unit) {
-    var showErrors by remember { mutableStateOf(false) }
-
-    OneUiDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.more_backup_archive_done_title)) },
-        text = {
-            Column {
-                Text(
-                    pluralStringResource(
-                        R.plurals.more_backup_archive_imported_count,
-                        result.importedCount,
-                        result.importedCount,
-                    ),
-                )
-
-                if (result.duplicateCount > 0) {
-                    Text(
-                        pluralStringResource(
-                            R.plurals.more_backup_archive_duplicates_count,
-                            result.duplicateCount,
-                            result.duplicateCount,
-                        ),
-                    )
-                }
-
-                if (result.errorCount > 0) {
-                    Text(
-                        text = pluralStringResource(
-                            R.plurals.more_backup_archive_errors_count,
-                            result.errorCount,
-                            result.errorCount,
-                        ),
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                    TextButton(onClick = { showErrors = !showErrors }) {
-                        Text(
-                            stringResource(
-                                if (showErrors) {
-                                    R.string.more_backup_archive_errors_hide_action
-                                } else {
-                                    R.string.more_backup_archive_errors_show_action
-                                },
-                            ),
-                        )
-                    }
-                    if (showErrors) {
-                        Box(modifier = Modifier.heightIn(max = 240.dp)) {
-                            SelectionContainer {
-                                Text(
-                                    text = result.errors.joinToString("\n\n") {
-                                        "${it.path}\n${it.message}"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .verticalScroll(rememberScrollState()),
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (result.totalCount == 0) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        stringResource(R.string.more_backup_archive_empty_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_action_close)) }
-        },
-    )
 }
 
 /**

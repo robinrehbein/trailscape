@@ -112,7 +112,7 @@ class TodayWordingEnglishTest {
         // Mit deutschen Kerntexten bliebe der Wochentag deutsch — die Sprache
         // des Wochentags haengt an `texts`, nicht an der Ressource.
         val noteDe = whyNote(TodayEffort.HART, route(null, null), false, upcoming, false, hasPlan = true, texts = CoreTextsDe)
-        assertEquals(listOf("Samstag steht die lange Fahrt mit 80 km an."), noteDe.map(TodayStrings::de))
+        assertEquals(listOf("Samstag steht die lange Tour mit 80 km an."), noteDe.map(TodayStrings::de))
     }
 
     @Test
@@ -163,7 +163,7 @@ class TodayWordingEnglishTest {
     fun `Plural waehlt one und other`() {
         val oneLeft = UiText.Plural(R.plurals.today_week_open_rides_count, 1)
         assertEquals("1 ride to go", en(oneLeft))
-        assertEquals("noch 1 Fahrt", TodayStrings.de(oneLeft))
+        assertEquals("noch 1 Tour", TodayStrings.de(oneLeft))
     }
 
     @Test

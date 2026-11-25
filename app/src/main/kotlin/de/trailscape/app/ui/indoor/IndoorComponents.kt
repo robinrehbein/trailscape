@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,6 +39,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.indoor.TECHNICAL_DETAIL_MAX_CHARS
+import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ScreenPadding
@@ -49,8 +51,13 @@ import kotlinx.coroutines.launch
  *
  * Kopfzeile ([ScreenHeader] mit „Zurück"), darunter ein scrollender Inhalt und
  * — wenn gesetzt — eine feste Aktionsleiste unten, damit „Weiter" auf jeder
- * Bildschirmhoehe erreichbar bleibt. Die Navigationsleiste der App ist hier
- * ausgeblendet; unten bleibt nur der System-Rand frei.
+ * Bildschirmhoehe erreichbar bleibt. Unten bleibt die Bodenfreiheit der
+ * Huelle frei ([LocalFloatingNavigationBarSpace]): auf der Startseite des
+ * Indoor-Tabs die schwebende Navigationsleiste, auf allen anderen Seiten des
+ * Ablaufs (Leiste ausgeblendet) nur der System-Rand.
+ *
+ * @param headerExtra steht direkt unter der Kopfzeile, vor dem Inhalt — die
+ *   Segmente des Indoor-Tabs.
  */
 @Composable
 internal fun IndoorPage(
@@ -60,8 +67,13 @@ internal fun IndoorPage(
     overline: String? = null,
     bottomBar: (@Composable ColumnScope.() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
+    headerExtra: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    // Mindestens der System-Rand — auch dort, wo keine Huelle die
+    // Bodenfreiheit stellt (Vorschauen, Tests).
+    val systemBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val bottomSpace = maxOf(LocalFloatingNavigationBarSpace.current, systemBottom)
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         // Oben und seitlich loest der Ablauf die Insets selbst auf (der
         // `NavHost` tut es fuer `indoor` nicht, damit die Fahransicht randlos
@@ -70,7 +82,7 @@ internal fun IndoorPage(
             modifier = Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-                .windowInsetsPadding(WindowInsets.navigationBars),
+                .padding(bottom = bottomSpace),
         ) {
             Column(
                 modifier = Modifier
@@ -87,6 +99,7 @@ internal fun IndoorPage(
                     onBack = onBack,
                     actions = actions,
                 )
+                headerExtra?.invoke()
                 content()
                 Spacer(modifier = Modifier.height(8.dp))
             }

@@ -22,7 +22,6 @@
     <string name="training_notice_profile_action">Profil öffnen</string>
 
     <!-- TrainingScreen.kt -->
-    <string name="training_screen_title">Training</string>
     <string name="training_screen_goal_eyebrow">Dein Ziel</string>
     <string name="training_screen_week_eyebrow">Diese Woche</string>
     <string name="training_screen_form_eyebrow">Deine Form</string>
@@ -50,9 +49,9 @@
         <item quantity="other">noch %1$d&#160;Wochen</item>
     </plurals>
     <string name="training_goal_no_prognosis">Noch keine Prognose.</string>
-    <string name="training_goal_hint_long_rides">Wichtigster Hebel: die langen Fahrten. Das Rennen ist länger als deine längste Tour der letzten Wochen.</string>
-    <string name="training_goal_hint_short">Für deine Zielzeit fehlen noch etwa %1$d Min. Am meisten bringen die langen Fahrten.</string>
-    <string name="training_goal_hint_on_track">Das reicht für deine Zielzeit. Bleib bei den langen Fahrten dran.</string>
+    <string name="training_goal_hint_long_rides">Wichtigster Hebel: die langen Touren. Das Rennen ist länger als deine längste Tour der letzten Wochen.</string>
+    <string name="training_goal_hint_short">Für deine Zielzeit fehlen noch etwa %1$d Min. Am meisten bringen die langen Touren.</string>
+    <string name="training_goal_hint_on_track">Das reicht für deine Zielzeit. Bleib bei den langen Touren dran.</string>
     <string name="training_goal_hint_no_target">Trag eine Zielzeit ein, dann siehst du, ob es reicht.</string>
     <string name="training_goal_prognosis_event">Mit dem Plan kommst du bis zum Renntag auf %1$s.</string>
     <string name="training_goal_prognosis_event_value">ca. %1$s</string>
@@ -176,7 +175,7 @@
     <!-- WeekCard.kt -->
     <string name="training_week_title">Belastung dieser Woche</string>
     <string name="training_week_budget_hint">Zielwert entspricht ≈ %1$s h Fahrzeit bei gemischter Woche und deinem Budget von %2$s h pro Woche. Fährst du härter, brauchst du weniger Zeit für denselben Zielwert.</string>
-    <string name="training_week_budget_missing_hint">Zielwert entspricht ≈ %1$s h Fahrzeit bei gemischter Woche. Trage im Mehr-Tab dein Zeitbudget ein, dann rechnen wir es mit ein.</string>
+    <string name="training_week_budget_missing_hint">Zielwert entspricht ≈ %1$s h Fahrzeit bei gemischter Woche. Trage unter Einstellungen → Profil dein Zeitbudget ein, dann rechnen wir es mit ein.</string>
     <string name="training_week_load_label">Last (7 Tage)</string>
     <string name="training_week_average_label">ø Woche (4 Wochen)</string>
     <string name="training_week_target_label">Zielwert</string>
@@ -190,13 +189,13 @@
     <string name="training_plan_week_progress">%1$s von %2$d km</string>
     <string name="training_plan_week_target">Ziel: %1$d km</string>
     <string name="training_plan_session_km_load">%1$d km · Last %2$d</string>
-    <string name="training_plan_route_cd">Passende Runde für „%1$s“ planen</string>
+    <string name="training_plan_route_cd">Runde für „%1$s“ bauen</string>
     <string name="training_plan_session_ridden">gefahren: %1$s, %2$s km</string>
     <string name="training_plan_session_today">heute · %1$s</string>
     <string name="training_plan_session_skipped">ausgelassen</string>
-    <string name="training_plan_loop_action">Runde</string>
+    <string name="training_plan_loop_action">Runde bauen</string>
     <string name="training_plan_feasibility_title">Plan und Ziel passen nicht zusammen</string>
-    <string name="training_plan_feasibility_longest_label">Längste Fahrt</string>
+    <string name="training_plan_feasibility_longest_label">Längste Tour</string>
     <string name="training_plan_feasibility_goal_label">Ziel</string>
     <string name="training_plan_feasibility_supports_label">Trägt bis</string>
     <string name="training_plan_feasibility_adjust_action">Ziel anpassen</string>
@@ -209,7 +208,7 @@
     <string name="training_vitals_estimated">geschätzt</string>
     <string name="training_vitals_no_data">Noch keine Daten</string>
     <string name="training_vitals_open_cd">Körperwerte erklärt öffnen</string>
-    <string name="training_vitals_source_none">Noch keine Werte von deiner Uhr. Health Connect verbindest du in den Einstellungen.</string>
+    <string name="training_vitals_source_none">Noch keine Werte von deiner Uhr. Health Connect verbindest du unter Einstellungen → Uhr &amp; Gesundheitsdaten.</string>
     <string name="training_vitals_source">Von deiner Uhr über Health Connect</string>
     <string name="training_vitals_source_today">Von deiner Uhr über Health Connect · heute %1$s</string>
     <string name="training_vitals_source_yesterday">Von deiner Uhr über Health Connect · gestern %1$s</string>

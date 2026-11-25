@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Herausforderung teilen (docs/herausforderung.md). Eigene Datei, damit die
+    Texte dieser Funktion nicht mit anderen Zweigen kollidieren. Im sichtbaren
+    Text heißt es „Strecke" und „3D-Ansicht", nie „Welt".
+-->
+<resources>
+    <!-- Teilen-Weg -->
+    <string name="spiel3_share_chooser_title">Herausforderung teilen</string>
+
+    <!-- Segment „Herausforderungen" im Indoor-Tab -->
+    <string name="spiel3_section_empty">Hier erscheinen Touren, die dir jemand als Datei schickt. Du fährst dann gegen die Zeit der anderen Person.</string>
+    <string name="spiel3_section_pick_file">Datei wählen</string>
+    <string name="spiel3_delete_title">Herausforderung löschen?</string>
+    <string name="spiel3_delete_body">„%1$s“ wird von diesem Gerät gelöscht. Die Datei, die du bekommen hast, bleibt unberührt.</string>
+    <string name="spiel3_row_selected">Gewählt</string>
+    <string name="spiel3_row_delete_cd">Herausforderung löschen</string>
+    <string name="spiel3_row_ride">Gegen %1$s fahren</string>
+    <string name="spiel3_row_ride_unnamed">Gegen diese Tour fahren</string>
+    <string name="spiel3_row_download">Strecke herunterladen</string>
+    <string name="spiel3_row_mismatch">Auf diesem Gerät liegt eine neuere Version der Strecke. Die Zeit passt nicht mehr dazu.</string>
+    <string name="spiel3_row_unknown">Diese Strecke kennt deine App-Version nicht. Aktualisiere Trailscape.</string>
+    <string name="spiel3_unnamed">Ohne Namen</string>
+
+    <!-- Vorschau: was die Datei enthält -->
+    <string name="spiel3_preview_route">Strecke</string>
+    <string name="spiel3_preview_route_version">%1$s, Version %2$d</string>
+    <string name="spiel3_preview_name">Name</string>
+    <string name="spiel3_preview_ride">Tour</string>
+    <string name="spiel3_preview_ride_value">%1$s in %2$s</string>
+    <string name="spiel3_preview_date">Datum</string>
+    <string name="spiel3_preview_avatar">Aussehen</string>
+    <string name="spiel3_preview_included">enthalten</string>
+    <string name="spiel3_preview_not_included">nicht enthalten</string>
+    <string name="spiel3_preview_never">Nie enthalten: Puls, Leistung, Trittfrequenz, Orte, Uhrzeiten, Konto oder Gerät.</string>
+
+    <!-- Import -->
+    <string name="spiel3_import_title">Herausforderung von %1$s</string>
+    <string name="spiel3_import_title_unnamed">Herausforderung</string>
+    <string name="spiel3_import_discard">Verwerfen</string>
+    <string name="spiel3_import_saved">Gespeichert</string>
+    <string name="spiel3_import_already">Schon vorhanden</string>
+    <string name="spiel3_import_full">Zu viele Herausforderungen</string>
+    <string name="spiel3_import_failed">Speichern fehlgeschlagen</string>
+    <string name="spiel3_import_saved_body">Du findest sie unter Indoor → Herausforderungen.</string>
+    <string name="spiel3_import_failed_body">Lösche eine ältere Herausforderung oder gib Speicher frei und versuche es noch einmal.</string>
+    <string name="spiel3_import_open_app">Trailscape öffnen</string>
+    <string name="spiel3_avail_ready">Die Strecke liegt auf diesem Gerät bereit.</string>
+    <string name="spiel3_avail_download">Die Strecke musst du erst herunterladen. Das geht danach unter Indoor → Herausforderungen.</string>
+    <string name="spiel3_avail_mismatch">Auf diesem Gerät liegt eine neuere Version der Strecke. Du kannst die Herausforderung speichern, aber noch nicht fahren.</string>
+    <string name="spiel3_avail_unknown">Diese Strecke kennt deine App-Version nicht. Du kannst die Herausforderung speichern und nach einem Update fahren.</string>
+    <string name="spiel3_reject_title">Datei nicht angenommen</string>
+    <string name="spiel3_reject_too_new">Diese Datei stammt aus einer neueren Version von Trailscape (Format %1$d). Aktualisiere die App, dann lässt sie sich öffnen.</string>
+    <string name="spiel3_reject_too_large">Die Datei ist zu groß für eine Herausforderung.</string>
+    <string name="spiel3_reject_not_ours">Das ist keine Trailscape-Herausforderung oder die Datei ist beschädigt.</string>
+    <string name="spiel3_reject_own_route">Diese Herausforderung stammt von einer eigenen Strecke. Eigene Strecken lassen sich aus Datenschutzgründen nicht teilen.</string>
+    <string name="spiel3_reject_route">Die Strecke in der Datei ist nicht lesbar.</string>
+    <string name="spiel3_reject_curve">Die Zeiten in der Datei sind nicht stimmig. Sie wird nicht verwendet.</string>
+
+    <!-- Teilen der eigenen Tour (Blatt „Teilen" im Tourdetail) -->
+    <string name="spiel3_share_title">Herausforderung teilen</string>
+    <string name="spiel3_share_title_reply">Als Antwort teilen</string>
+    <string name="spiel3_share_failed">Diese Tour lässt sich nicht als Herausforderung teilen. Teilbar sind Touren auf bekannten Strecken und der Teststrecke, ab dem Start und mit Zeitangaben.</string>
+    <string name="spiel3_share_name_label">Dein Name in der Datei</string>
+    <string name="spiel3_share_name_hint">Frei wählbar, höchstens %1$d Zeichen</string>
+    <string name="spiel3_share_date_switch">Datum der Tour mitgeben</string>
+    <string name="spiel3_share_preview_title">Das steckt in der Datei</string>
+    <string name="spiel3_share_privacy">Die Datei geht nur dorthin, wohin du sie schickst. Trailscape sieht sie nicht und lädt nichts hoch.</string>
+    <string name="spiel3_share_action">Teilen</string>
+    <string name="spiel3_share_entry">Herausforderung teilen</string>
+
+    <!-- Auswertung -->
+    <string name="spiel3_result_eyebrow">Gegen die Herausforderung</string>
+    <string name="spiel3_result_seconds">%1$d s</string>
+    <string name="spiel3_result_minutes">%1$d:%2$02d min</string>
+    <string name="spiel3_result_unknown">Für diese Fahrt gibt es keinen Vergleich.</string>
+    <string name="spiel3_result_even">Gleichauf mit %1$s</string>
+    <string name="spiel3_result_behind">%1$s hinter %2$s</string>
+    <string name="spiel3_result_ahead">%1$s vor %2$s</string>
+    <string name="spiel3_result_reply">Als Antwort teilen</string>
+    <string name="spiel3_result_share_hint">Nach dem Speichern kannst du diese Tour als Herausforderung verschicken: Tour ansehen → Teilen.</string>
+    <string name="spiel3_result_share_hint_reply">Nach dem Speichern kannst du deine Zeit als Antwort verschicken: Tour ansehen → Teilen.</string>
+
+    <!-- Mitfahrer-Auswahl -->
+    <string name="spiel3_ghost_pill">Herausforderung</string>
+    <string name="spiel3_ghost_challenge_body">Du fährst gegen die Zeit aus der Herausforderung.</string>
+    <string name="spiel3_fallback_name">Herausforderung</string>
+</resources>

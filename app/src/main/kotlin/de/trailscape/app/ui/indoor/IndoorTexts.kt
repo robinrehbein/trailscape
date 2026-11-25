@@ -32,6 +32,9 @@ interface IndoorTexts {
     /** Geist mit fester Vergleichsleistung. */
     fun ghostConstantPowerLabel(watts: Int): String
 
+    /** Anzeigename einer Herausforderung ohne Namen des Absenders. */
+    fun challengeFallbackName(): String = "Herausforderung"
+
     /** Titel der lockeren Runde an einem Tag ohne Planeinheit (Einheit des Tages). */
     fun dayEasyTitle(): String = "Lockere Runde"
 
@@ -73,6 +76,8 @@ class ContextIndoorTexts(
 
     override fun ghostConstantPowerLabel(watts: Int): String =
         context().getString(R.string.indoor_app_ghost_power_label, watts)
+
+    override fun challengeFallbackName(): String = context().getString(R.string.spiel3_fallback_name)
 
     override fun dayEasyTitle(): String = context().getString(R.string.indoor_app_day_easy_title)
 

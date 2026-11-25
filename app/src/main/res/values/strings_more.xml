@@ -23,15 +23,21 @@
     <string name="more_screen_title">Einstellungen</string>
     <string name="more_page_profile_title">Profil</string>
     <string name="more_page_health_title">Uhr &amp; Gesundheitsdaten</string>
-    <string name="more_page_sensors_title">Sensoren</string>
+    <string name="more_page_sensors_title">Sensoren &amp; Trainer</string>
     <string name="more_page_recording_title">Aufzeichnung &amp; Ansagen</string>
-    <string name="more_page_reminders_title">Erinnerungen</string>
+    <string name="more_page_reminders_title">Erinnerungen &amp; Motivation</string>
     <string name="more_page_offline_title">Karten offline</string>
-    <string name="more_page_backup_title">Import &amp; Backup</string>
+    <string name="more_page_backup_title">Backup</string>
     <string name="more_page_strava_title">Strava</string>
     <string name="more_page_sync_title">Sync mit eigenem Server</string>
     <string name="more_page_about_title">Über Trailscape</string>
+    <string name="more_list_group_you">Du</string>
+    <string name="more_list_group_devices">Geräte</string>
+    <string name="more_list_group_riding">Fahren</string>
+    <string name="more_list_group_data">Daten</string>
     <string name="more_list_group_app">App</string>
+    <string name="more_list_indoor_title">Indoor</string>
+    <string name="more_list_indoor_status">Schaltung, Fahrgefühl, 3D-Ansicht, Speicher &amp; Diagnose</string>
     <!-- %1$s = Versionsnummer -->
     <string name="more_list_about_status">Version %1$s</string>
     <string name="more_recording_section_recording">Aufzeichnung</string>
@@ -158,12 +164,10 @@
     <string name="more_backup_imported_with_profile">%1$s · Profil übernommen</string>
     <string name="more_backup_read_error">Die Backup-Datei konnte nicht gelesen werden. Wähle die JSON-Datei aus, die Trailscape unter „Backup exportieren“ angelegt hat.</string>
     <string name="more_backup_archive_read_error">Das Archiv konnte nicht gelesen werden. Erwartet wird eine ZIP-Datei mit GPX- oder FIT-Dateien darin, etwa der Strava- oder Garmin-Export.</string>
-    <string name="more_backup_hint">Sichere Touren und Profil in einer Datei — oder hole GPX, FIT und ganze Strava-/Garmin-Exporte (ZIP) herein.</string>
+    <string name="more_backup_hint">Sichere Touren und Profil in einer Datei und hole sie daraus zurück. Touren aus GPX, FIT oder ZIP importierst du im Verlauf über „+“.</string>
     <string name="more_backup_privacy_hint">Das Backup ist unverschlüsselt und enthält jeden GPS-Punkt und deine Gesundheitsdaten — gib es nur vertraulich weiter.</string>
     <string name="more_backup_export_action">Backup exportieren</string>
     <string name="more_backup_import_action">Backup importieren</string>
-    <string name="more_backup_import_rides_action">Touren importieren (GPX/FIT)</string>
-    <string name="more_backup_import_archive_action">Archiv importieren (ZIP)</string>
     <string name="more_backup_archive_progress_title">Archiv wird importiert …</string>
     <!-- %1$d = bisher importiert, %2$d = gesamt -->
     <string name="more_backup_archive_progress_known">%1$d von %2$d importiert …</string>
@@ -186,17 +190,17 @@
     <string name="more_backup_archive_empty_hint">Keine GPX- oder FIT-Dateien im Archiv gefunden.</string>
 
     <!-- HealthCard.kt -->
-    <string name="more_health_intro">Workouts und Vitalwerte deiner Uhr kommen über Health Connect.</string>
+    <string name="more_health_intro">Touren und Vitalwerte deiner Uhr kommen über Health Connect.</string>
     <string name="more_health_checking_status">Prüfe Verbindung …</string>
     <string name="more_health_install_action">Health Connect installieren</string>
     <string name="more_health_connect_action">Verbinden</string>
     <string name="more_health_fetch_action">Neue Touren holen</string>
     <string name="more_health_reimport_action">Alles neu importieren</string>
-    <string name="more_health_history_denied_status">Ohne Freigabe bleiben ältere Fahrten außen vor. Erlauben lässt sie sich in Health Connect unter „App-Berechtigungen → Trailscape“.</string>
+    <string name="more_health_history_denied_status">Ohne Freigabe bleiben ältere Touren außen vor. Erlauben lässt sie sich in Health Connect unter „App-Berechtigungen → Trailscape“.</string>
     <!-- %1$s = Datum, %2$s = Uhrzeit -->
     <string name="more_health_last_sync">Letzter Sync: %1$s, %2$s</string>
     <string name="more_health_debug_action">Diagnose-Details</string>
-    <string name="more_health_no_workouts_hint">Keine Workouts gefunden — schreibt die App deiner Uhr (Samsung Health, Garmin Connect, Fitbit …) nach Health Connect?</string>
+    <string name="more_health_no_workouts_hint">Keine Touren gefunden — schreibt die App deiner Uhr (Samsung Health, Garmin Connect, Fitbit …) nach Health Connect?</string>
     <plurals name="more_health_route_consent_count">
         <item quantity="one">Route freigeben</item>
         <item quantity="other">Routen freigeben (%1$d)</item>
@@ -206,18 +210,18 @@
         <item quantity="other">%1$d Touren kamen ohne Route. Erlaube in Health Connect „App-Berechtigungen → Trailscape → Trainingsrouten“ dauerhaft.</item>
     </plurals>
     <string name="more_health_route_hint">Für die Route: in Health Connect „App-Berechtigungen → Trailscape → Trainingsrouten“ dauerhaft erlauben.</string>
-    <string name="more_health_reimport_year_hint">„Alles neu importieren“ holt die Radfahrten der letzten 12 Monate erneut.</string>
+    <string name="more_health_reimport_year_hint">„Alles neu importieren“ holt die Radtouren der letzten 12 Monate erneut.</string>
     <!-- %1$d = Tage (fest 30) -->
     <string name="more_health_reimport_days_hint">„Alles neu importieren“ holt die letzten %1$d Tage erneut.</string>
     <string name="more_health_debug_copied_status">Diagnose kopiert.</string>
     <!-- %1$d = gefundene Radfahrten, %2$d = schon vorhanden -->
     <plurals name="more_health_summary_found_count">
-        <item quantity="one">%1$d Radfahrt gefunden · %2$d schon vorhanden</item>
-        <item quantity="other">%1$d Radfahrten gefunden · %2$d schon vorhanden</item>
+        <item quantity="one">%1$d Radtour gefunden · %2$d schon vorhanden</item>
+        <item quantity="other">%1$d Radtouren gefunden · %2$d schon vorhanden</item>
     </plurals>
-    <string name="more_health_history_title">Ältere Fahrten</string>
-    <string name="more_health_history_body">Ohne Freigabe sieht Trailscape keine Fahrten, die mehr als 30 Tage vor dem Verbinden liegen. Mit Freigabe holt Trailscape einmalig deine Radfahrten der letzten 12 Monate — Training und Form starten dann mit deiner Vorgeschichte statt bei null.</string>
-    <string name="more_health_history_action">Ältere Fahrten freigeben</string>
+    <string name="more_health_history_title">Ältere Touren</string>
+    <string name="more_health_history_body">Ohne Freigabe sieht Trailscape keine Touren, die mehr als 30 Tage vor dem Verbinden liegen. Mit Freigabe holt Trailscape einmalig deine Radtouren der letzten 12 Monate — Training und Form starten dann mit deiner Vorgeschichte statt bei null.</string>
+    <string name="more_health_history_action">Ältere Touren freigeben</string>
     <string name="more_health_debug_title">Diagnose-Details</string>
     <string name="more_health_debug_copy_action">Kopieren</string>
 
@@ -227,6 +231,7 @@
     <!-- OfflineMapsCard.kt -->
     <string name="more_offline_maps_list_error">Die gespeicherten Offline-Karten ließen sich nicht auflisten. Starte die App neu; bleibt es dabei, hilft ein Blick in die Karte, die den Kartenspeicher selbst öffnet.</string>
     <string name="more_offline_maps_hint">Damit du offline etwas siehst. Neue Ausschnitte lädst du auf der Karte.</string>
+    <string name="more_offline_maps_open_map_action">Neuen Ausschnitt auf der Karte wählen</string>
     <string name="more_offline_maps_loading">Lade …</string>
     <string name="more_offline_maps_empty">Keine Offline-Karten gespeichert.</string>
     <string name="more_offline_maps_delete_all_action">Alle löschen</string>
@@ -313,7 +318,7 @@
     <string name="more_profile_defaults_hint">Noch nicht eingetragen — bis dahin rechnen wir grob mit %1$d Jahren und %2$s kg.</string>
     <string name="more_profile_weekly_hours_label">Zeit pro Woche (Stunden, optional)</string>
     <string name="more_profile_weekly_hours_hint">Deckelt das Wochenziel auf das, was in dieser Zeit machbar ist.</string>
-    <string name="more_profile_advanced_action">Erweitert: Puls und FTP</string>
+    <string name="more_profile_values_title">Puls und FTP</string>
     <string name="more_profile_advanced_hint">Ohne eigene Werte schätzen wir HFmax und Schwelle aus deinem Alter.</string>
     <string name="more_profile_hr_max_learn_more">Die Schätzung ist 208 − 0,7 × Alter. Genauer wird es mit einem HFmax-Feldtest: nach gutem Aufwärmen ein harter Anstieg über 3–5 Minuten mit maximalem Endspurt.</string>
     <string name="more_profile_hr_max_label">HFmax (bpm, optional)</string>
@@ -365,8 +370,8 @@
     <string name="more_reminder_weekly_time_label">Uhrzeit sonntags</string>
     <string name="more_reminder_nudge_title">Anstupser</string>
     <plurals name="more_reminder_nudge_hint_count">
-        <item quantity="one">Nach %1$d Tag ohne Fahrt, höchstens einmal pro Woche.</item>
-        <item quantity="other">Nach %1$d Tagen ohne Fahrt, höchstens einmal pro Woche.</item>
+        <item quantity="one">Nach %1$d Tag ohne Tour, höchstens einmal pro Woche.</item>
+        <item quantity="other">Nach %1$d Tagen ohne Tour, höchstens einmal pro Woche.</item>
     </plurals>
     <string name="more_reminder_permission_notice">Benachrichtigungen sind nicht erlaubt — die Erinnerungen bleiben still.</string>
     <string name="more_reminder_permission_action">Benachrichtigungen erlauben</string>
@@ -400,10 +405,10 @@
     <!-- HealthPermissionsRationaleActivity.kt -->
     <string name="more_health_rationale_title">Gesundheitsdaten in Trailscape</string>
     <string name="more_health_rationale_intro_body">Trailscape liest Gesundheitsdaten ausschließlich aus Health Connect und schreibt nichts zurück. Alles wird nur auf diesem Gerät verarbeitet; es gibt keinen Trailscape-Server, und der Entwickler hat keinen Zugriff auf deine Daten.</string>
-    <string name="more_health_rationale_workouts_body">Trainings, Trainingsrouten, Distanz und Kalorien: um die Fahrten deiner Uhr als Touren zu importieren.</string>
+    <string name="more_health_rationale_workouts_body">Trainings, Trainingsrouten, Distanz und Kalorien: um die Aufzeichnungen deiner Uhr als Touren zu importieren.</string>
     <string name="more_health_rationale_heart_rate_body">Herzfrequenz: für Puls-Kennzahlen deiner Touren und — falls deine Uhr keinen Ruhepuls liefert — für einen aus dem Nacht-Puls abgeleiteten Ruhepuls.</string>
     <string name="more_health_rationale_recovery_body">Ruhepuls, HRV, Schlaf und VO₂max: für die Erholungs- und Formberechnung (Readiness, Trainingsempfehlung).</string>
-    <string name="more_health_rationale_history_body">Verlauf älter als 30 Tage (optional): damit die Baselines für Ruhepuls und HRV nicht erst nach Wochen stehen und der erste Import einmalig deine Radfahrten der letzten 12 Monate übernehmen kann.</string>
+    <string name="more_health_rationale_history_body">Verlauf älter als 30 Tage (optional): damit die Baselines für Ruhepuls und HRV nicht erst nach Wochen stehen und der erste Import einmalig deine Radtouren der letzten 12 Monate übernehmen kann.</string>
     <string name="more_health_rationale_sync_body">Die Daten verlassen das Gerät nur, wenn du selbst den optionalen Sync mit deinem eigenen Server eingerichtet hast.</string>
     <string name="more_health_rationale_privacy_action">Vollständige Datenschutzerklärung</string>
 
