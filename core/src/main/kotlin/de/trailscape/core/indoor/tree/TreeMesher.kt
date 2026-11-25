@@ -60,10 +60,10 @@ internal class TreeMeshes(val bark: MeshBuilder, val leaves: MeshBuilder, val sk
  * **Rinde:** Jeder Ast ist eine sich verjuengende Roehre mit parallel
  * mitgefuehrtem Rahmen (kein Verdrillen), Ringseiten nach Ordnung und Stufe
  * ([TreeBudget.sides]), am Stammfuss feinere Ringe mit Wurzelanlauf. Rinden-UV:
- * u einmal rundum **innerhalb der Spalte** der Art im Rindenatlas, v 0,5 je
- * Meter (kachelnd) und vom Elternast fortgefuehrt. Vertexfarbe: Rindenton ×
+ * u einmal rundum **innerhalb der Spalte** der Art im Rindenatlas, v kachelnd
+ * entlang des Asts. Vertexfarbe: Rindenton ×
  * Verschattung (Fuss dunkler, Aeste im Kroneninnern dunkler; Baeume empfangen
- * keine Schatten, `render.md`).
+ * keine Schatten, `render.md`). v je Meter haengt vom Umfang ab (Rinde unverzerrt).
  *
  * **Laub:** Jedes Zweigbueschel sind [SpeciesParams.cardsPerCluster]
  * gekreuzte Karten entlang der Wuchsrichtung, das Motiv beginnt am Ansatz.
@@ -94,7 +94,7 @@ internal object TreeMesher {
         var branches = s.branches.filter { it.level <= maxLevel }
         val barkCap = (budget * 0.3).toInt()
         while (true) {
-            val est = branches.sumOf { tubeTriangles(it, lod) }
+            val est = branches.sumOf { tubeTriangles(it, lod, p) }
             if (est <= barkCap) break
             val top = branches.filter { it.level > 0 }.maxOfOrNull { it.level } ?: break
             val thin = branches.filter { it.level == top }.sortedBy { it.radii[0] * it.length }
@@ -104,10 +104,11 @@ internal object TreeMesher {
         }
         for (b in branches) tube(bark, b, p, s, lod)
         // Laub
-        var clusters = if (lod == TreeLod.NEAR) s.clusters else merge(s.clusters, p.clusterM * p.midClusterScale)
+        var clusters = if (lod == TreeLod.NEAR) s.clusters else merge(s.clusters, min(p.clusterM * p.midClusterScale, min(s.crownRx, s.crownRy) * 0.8), min(s.crownRx, s.crownRy) * 0.9)
         val cardTris = 4 // zwei Dreiecke, beide Wicklungen
         val cards = if (lod == TreeLod.NEAR) p.cardsPerCluster else 2
-        val room = budget - bark.triangleCount
+        // ein Zehntel bleibt fuer die Kernkarten
+        val room = budget - bark.triangleCount - budget / 10
         val maxClusters = max(1, room / (cardTris * cards))
         if (clusters.size > maxClusters) {
             val keep = maxClusters.toDouble() / clusters.size
@@ -124,6 +125,10 @@ internal object TreeMesher {
             clusters = picked.take(maxClusters)
         }
         for (c in clusters) cluster(leaves, c, p, s, cards)
+        // Kernkarten: dunkle Laubmasse im Kroneninneren schliesst den Durchblick (Schatten statt
+        // Himmel in den Luecken) — aus dem Rest des Budgets, hoechstens ein Achtel davon
+        val coreBudget = min((budget - bark.triangleCount - leaves.triangleCount), budget / 8)
+        cores(leaves, s, p, coreBudget / 4, if (p.leafMotif == LeafMotif.NEEDLE || p.leafMotif == LeafMotif.PINE) TreeTextures.region(p.leafMotif) else TreeTextures.MASS)
         return TreeMeshes(bark, leaves, s, lod)
     }
 
@@ -131,13 +136,25 @@ internal object TreeMesher {
     // Rinde
     // -----------------------------------------------------------------------
 
-    private fun ringCount(b: Branch): Int = b.points.size + (if (b.level == 0) 3 else 0)
+    private fun tubeTriangles(b: Branch, lod: TreeLod, p: SpeciesParams): Int = (stations(b, lod, p).size - 1) * TreeBudget.sides(b.level, lod, b.radii[0]) * 2
 
-    private fun tubeTriangles(b: Branch, lod: TreeLod): Int = (ringCount(b) - 1) * TreeBudget.sides(b.level, lod, b.radii[0]) * 2
-
-    /** Stuetzstellen der Ringe: die Polylinie, am Stamm unten zusaetzlich 0,15 / 0,45 / 0,9 m ueber dem Boden. */
-    private fun stations(b: Branch): List<Triple<Vec3, Vec3, Double>> {
+    /**
+     * Stuetzstellen der Ringe: die Polylinie; am Stamm in der Nahstufe zusaetzlich Ringe im
+     * Wurzelanlauf, in der mittleren Stufe nur jeder zweite Punkt des Stamms.
+     */
+    private fun stations(b: Branch, lod: TreeLod, p: SpeciesParams): List<Triple<Vec3, Vec3, Double>> {
         val out = ArrayList<Triple<Vec3, Vec3, Double>>()
+        if (b.level == 0 && (lod == TreeLod.MID || p.flare <= 0.0)) {
+            val n = b.points.size - 1
+            val step = if (lod == TreeLod.MID) 2 else 1
+            var i = 0
+            while (true) {
+                out += b.at(i / n.toDouble())
+                if (i >= n) break
+                i = min(n, i + step)
+            }
+            return out
+        }
         if (b.level != 0) {
             for (i in b.points.indices) {
                 val d = if (i < b.points.size - 1) b.points[i + 1] - b.points[i] else b.points[i] - b.points[i - 1]
@@ -156,12 +173,16 @@ internal object TreeMesher {
 
     private fun tube(m: MeshBuilder, b: Branch, p: SpeciesParams, s: Skeleton, lod: TreeLod) {
         val sides = TreeBudget.sides(b.level, lod, b.radii[0])
-        val st = stations(b)
+        val st = stations(b, lod, p)
         if (st.size < 2) return
         val col = p.barkMotif.column
         // Spalte im Atlas (4 Spalten), etwas eingerueckt gegen Uebersprechen der Nachbarspalten
         val u0 = (col + 0.04) / 4.0
         val u1 = (col + 0.96) / 4.0
+        // v je Meter so, dass die Rinde nicht verzerrt: eine Spalte (128 px) = Umfang am Ansatz,
+        // Bildhoehe (512 px) = 4 Umfaenge; geklemmt, damit duenne Aeste nicht flimmern und dicke
+        // Staemme nicht verschwimmen
+        val vPerM = (1.0 / (4 * 2 * PI * max(0.01, b.radii[0]))).coerceIn(0.12, 2.0)
         var frameU = TreeGrowth.perp(st[0].second, 0.0)
         var vAcc = b.vStart
         var prevP = st[0].first
@@ -187,7 +208,7 @@ internal object TreeMesher {
                 val nrm = frameU * cos(a) + frameW * sin(a)
                 val q = pos + nrm * (r * rib)
                 val u = u0 + (u1 - u0) * j / sides
-                m.vertex(q.x, q.y, q.z, nrm.x, nrm.y, nrm.z, u, vAcc * 0.5, color)
+                m.vertex(q.x, q.y, q.z, nrm.x, nrm.y, nrm.z, u, vAcc * vPerM, color)
             }
         }
         for (k in 0 until st.size - 1) {
@@ -219,7 +240,7 @@ internal object TreeMesher {
     // -----------------------------------------------------------------------
 
     /** Fasst Bueschel in einem Raster der Kante [cell] zusammen (Mittel der Lage und Richtung, groessere Kante). */
-    private fun merge(clusters: List<LeafCluster>, cell: Double): List<LeafCluster> {
+    private fun merge(clusters: List<LeafCluster>, cell: Double, maxSize: Double): List<LeafCluster> {
         class Acc { var x = 0.0; var y = 0.0; var z = 0.0; var dx = 0.0; var dy = 0.0; var dz = 0.0; var n = 0; var size = 0.0; var tint = 0.0; var first: LeafCluster? = null }
         val cells = LinkedHashMap<Long, Acc>()
         for (c in clusters) {
@@ -238,10 +259,47 @@ internal object TreeMesher {
         return cells.values.map { a ->
             val n = a.n.toDouble()
             val f = a.first!!
-            LeafCluster(
-                Vec3(a.x / n, a.y / n, a.z / n), Vec3(a.dx, a.dy, a.dz).normalized(f.dir),
-                max(a.size, cell * 0.85) * min(1.35, 0.85 + 0.12 * a.n), a.tint / n, f.flip, f.spin,
+            val dir = Vec3(a.dx, a.dy, a.dz).normalized(f.dir)
+            val size = min(maxSize, max(a.size, cell * 0.85) * min(1.35, 0.85 + 0.12 * a.n))
+            // die groessere Karte um die Mitte der zusammengefassten Bueschel legen (Silhouette bleibt)
+            val mid = Vec3(a.x / n, a.y / n, a.z / n) + dir * (a.size * 0.5)
+            LeafCluster(mid - dir * (size * 0.5), dir, size, a.tint / n, f.flip, f.spin)
+        }
+    }
+
+    /**
+     * Bis zu [count] Kernkarten: Bueschel in einem groben Raster zusammengefasst, um 30 % zur
+     * Kronenmitte gerueckt, Vorderseite nach aussen, Motiv Laubmasse, dunkel.
+     */
+    private fun cores(m: MeshBuilder, s: Skeleton, p: SpeciesParams, count: Int, reg: TreeTextures.Region) {
+        if (count <= 0 || s.clusters.isEmpty()) return
+        var cell = max(1.5, min(s.crownRx, s.crownRy) * 0.55)
+        var cells = merge(s.clusters, cell, cell * 1.4)
+        while (cells.size > count) {
+            cell *= 1.25
+            cells = merge(s.clusters, cell, cell * 1.4)
+        }
+        for (c in cells) {
+            val mid = c.pos + c.dir * (c.size * 0.5)
+            val inward = s.crownCenter + (mid - s.crownCenter) * 0.7
+            val radial = s.rel(inward).normalized(Vec3.UP)
+            val up = (Vec3.UP - radial * (Vec3.UP dot radial)).normalized(TreeGrowth.perp(radial, 0.0))
+            val across = (up cross radial).normalized()
+            val half = c.size * 0.55
+            val idx = IntArray(4)
+            val corners = arrayOf(
+                inward - across * half - up * half, inward + across * half - up * half,
+                inward + across * half + up * half, inward - across * half + up * half,
             )
+            val ss = doubleArrayOf(0.0, 1.0, 1.0, 0.0)
+            val ts = doubleArrayOf(0.0, 0.0, 1.0, 1.0)
+            for (q in 0 until 4) {
+                val pt = corners[q]
+                val n = (s.rel(pt).normalized(Vec3.UP) * 0.8 + Vec3(0.0, 0.25, 0.0)).normalized()
+                idx[q] = m.vertex(pt.x, pt.y, pt.z, n.x, n.y, n.z, reg.u(ss[q], ts[q]), reg.v(ss[q], ts[q]), linColor(p.leafSrgb, 0.5 * c.tint))
+            }
+            m.quad(idx[0], idx[1], idx[2], idx[3])
+            m.quad(idx[0], idx[3], idx[2], idx[1])
         }
     }
 

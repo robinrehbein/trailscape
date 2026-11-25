@@ -149,11 +149,15 @@ internal object TreeGrowth {
                 continue
             }
             if (b.level == 0) continue
-            leavesAlong(p, b, if (b.level >= 2) 0.1 else 0.4, 1.0, rnd, clusters, h)
+            leavesAlong(p, b, if (b.level >= 2) 0.1 else if (p.stems > 1) 0.12 else 0.4, 1.0, rnd, clusters, h)
         }
         // Hauptaeste mit Kindern tragen im aeusseren Teil ebenfalls Laub (nicht modellierte Kurztriebe)
         for (b in branches) {
-            if (b.level == 1 && b.hasChildren) leavesAlong(p, b, 0.55, 0.98, rnd, clusters, h, density = 0.55)
+            if (b.level == 1 && b.hasChildren) {
+                // Nadelbaeume: der ganze Ast ist benadelt; Laubbaeume: nur der aeussere Teil
+                if (p.whorls) leavesAlong(p, b, 0.2, 0.98, rnd, clusters, h, density = 0.8)
+                else leavesAlong(p, b, 0.55, 0.98, rnd, clusters, h, density = 0.55)
+            }
         }
         return Skeleton(kind, v, h, branches, clusters)
     }
@@ -230,7 +234,9 @@ internal object TreeGrowth {
                 val rel = ((y - crownBase) / max(0.5, h - crownBase)).coerceIn(0.0, 1.0)
                 var len = h * lv.lengthRatio * p.shape.ratio(rel) * widthF * rnd.range(0.82, 1.18)
                 // Laubbaeume mit kurzem Stamm: Aeste am Stammende streben zur Kronenspitze
-                if (p.trunkTop < 0.99 && f > 0.75) len = max(len, (h - y) * rnd.range(0.7, 0.95))
+                if (p.trunkTop < 0.9 && f > 0.75) len = max(len, (h - y) * rnd.range(0.7, 0.95))
+                // keine Laubkugeln an Stummeln: Hauptaeste mindestens 45 % der laengsten
+                len = max(len, h * lv.lengthRatio * widthF * 0.45)
                 if (len < 0.25) continue
                 val steep = if (p.whorls) 0.25 else 0.5
                 val down = lv.downAngle * (1 - steep * rel) + lv.downAngleVar * rnd.sym()
@@ -291,6 +297,13 @@ internal object TreeGrowth {
             // positive Kruemmung hebt die Spitze
             dir = rotate(dir, bendAxis, -c)
             dir = rotate(dir, perp(dir, rnd.range(0.0, 2 * PI)), lv.gnarl * rnd.range(0.0, 1.0))
+            // nicht ueber die Baumhoehe hinaus: der Ast endet unter der Spitze
+            if (cur.y + dir.y * segLen > h * 0.97 && dir.y > 0.05) {
+                val k = ((h * 0.97 - cur.y) / (dir.y * segLen)).coerceIn(0.15, 1.0)
+                cur += dir * (segLen * k)
+                pts += cur
+                break
+            }
             cur += dir * segLen
             if (cur.y < 0.15) cur = Vec3(cur.x, 0.15, cur.z)
             pts += cur
@@ -315,7 +328,8 @@ internal object TreeGrowth {
         for (k in 0 until n) {
             val t = if (k == n - 1) to else from + (to - from) * ((k + 0.3 + 0.4 * rnd.next()) / n)
             val (pos0, dir, _) = b.at(t)
-            val size = p.clusterM * rnd.range(0.82, 1.18) * (if (k == n - 1) 1.0 else 0.92)
+            // kleine Varianten mit kleineren Bueschel (Massstab der Art bleibt)
+            val size = p.clusterM * sqrt(h / p.heights[0]).coerceIn(0.7, 1.12) * rnd.range(0.82, 1.18) * (if (k == n - 1) 1.0 else 0.92)
             val out0 = (pos0 - center).let { Vec3(it.x, it.y * 0.6, it.z) }.normalized(Vec3.UP)
             val jitter = perp(dir, rnd.range(0.0, 2 * PI))
             // Bueschel stehen raeumlich um den Zweig (Klumpen statt Wedel): Richtung aus Zweig, aussen, Zufall

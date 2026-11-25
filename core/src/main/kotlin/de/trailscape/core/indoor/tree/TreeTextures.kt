@@ -54,6 +54,9 @@ internal object TreeTextures {
     val PINE = Region(256, 128, 256, 128, baseLeft = true)
     val SMALL = Region(0, 256, 256, 256, baseLeft = false)
 
+    /** Dichte Laubmasse mit gelapptem Rand (Kernkarten im Kroneninneren, Deckung ≥ 80 %). */
+    val MASS = Region(256, 256, 256, 256, baseLeft = false)
+
     fun region(m: LeafMotif): Region = when (m) {
         LeafMotif.BROAD -> BROAD
         LeafMotif.SMALL -> SMALL
@@ -240,11 +243,11 @@ internal object TreeTextures {
                 val ang = side * rnd.range(0.7, 1.0)
                 shoots += doubleArrayOf(x, axisY(x), x + cos(ang) * len * 0.9 + len * 0.35, axisY(x) + sin(ang) * len)
                 side = -side
-                x += rnd.range(14.0, 22.0)
+                x += rnd.range(9.0, 13.0)
             }
             fun needles(ax: Double, ay: Double, bx: Double, by: Double, nl: Double, lum: Double) {
                 val len = sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay))
-                val n = (len / 1.6).toInt()
+                val n = (len / 1.1).toInt()
                 val dx = (bx - ax) / len
                 val dy = (by - ay) / len
                 for (i in 0..n) {
@@ -258,60 +261,100 @@ internal object TreeTextures {
                         val sa = sin(ang)
                         val nx = dx * ca - dy * sa
                         val ny = dx * sa + dy * ca
-                        twig(sub, px, py, px + nx * l, py + ny * l, 1.5, 0.8, lum * rnd.range(0.8, 1.1))
+                        twig(sub, px, py, px + nx * l, py + ny * l, 1.9, 0.9, lum * rnd.range(0.75, 1.1))
                     }
                 }
             }
-            for (s in shoots) needles(s[0], s[1], s[2], s[3], 9.0, 0.78)
+            for (s in shoots) needles(s[0], s[1], s[2], s[3], 10.0, 0.7)
             needles(xs, axisY(xs), xe, axisY(xe), 12.0, 0.9)
             twig(sub, xs, axisY(xs), xe, axisY(xe), 3.0, 1.0, 0.28)
         } else {
-            // Kiefer: duenner Zweig nach rechts, an den Enden Nadelbuesche (lange Nadeln, strahlig)
+            // Kiefer: Zweig nach rechts, rundum dichte Nadelbuersten (je Knoten ein Buschel langer
+            // Nadeln, nach vorn gerichtet) — eine laengliche, dichte Nadelmasse statt einzelner Sterne
             val xs = 2.0
-            val xe = w * 0.62
-            twig(sub, xs, axisY(xs), xe, axisY(xe), 4.0, 2.0, 0.34)
-            val tufts = listOf(doubleArrayOf(xe, axisY(xe), 1.0), doubleArrayOf(w * 0.4, axisY(w * 0.4) - 18, 0.75), doubleArrayOf(w * 0.45, axisY(w * 0.45) + 20, 0.75))
-            twig(sub, w * 0.32, axisY(w * 0.32), w * 0.4, axisY(w * 0.4) - 18, 2.0, 1.4, 0.34)
-            twig(sub, w * 0.36, axisY(w * 0.36), w * 0.45, axisY(w * 0.45) + 20, 2.0, 1.4, 0.34)
-            for (t in tufts) {
-                val n = (120 * t[2]).toInt()
+            val xe = w * 0.86
+            twig(sub, xs, axisY(xs), xe, axisY(xe), 4.0, 1.6, 0.32)
+            var x = w * 0.12
+            while (x < xe) {
+                val y = axisY(x)
+                val n = 34
                 for (i in 0 until n) {
-                    val ang = rnd.range(-1.25, 1.25) + 0.1 * (rnd.next() - 0.5)
-                    val l = (w * 0.36) * t[2] * rnd.range(0.6, 1.0)
-                    val sx = t[0] - 10 * t[2] + rnd.range(0.0, 14.0) * t[2]
-                    val sy = t[1] + rnd.range(-3.0, 3.0)
-                    twig(sub, sx, sy, sx + cos(ang) * l, sy + sin(ang) * l * 0.85, 1.6, 0.7, rnd.range(0.62, 1.0))
+                    val spread = rnd.range(-1.15, 1.15)
+                    val l = h * rnd.range(0.26, 0.4) * (1 - 0.3 * abs(spread))
+                    val ang = spread * 0.95 - 0.12
+                    twig(sub, x, y, x + cos(ang) * l, y + sin(ang) * l * 1.1, 1.7, 0.8, rnd.range(0.55, 0.95))
                 }
+                x += rnd.range(9.0, 13.0)
+            }
+            // Endbuschel nach vorn
+            for (i in 0 until 50) {
+                val ang = rnd.range(-0.7, 0.7)
+                val l = h * rnd.range(0.25, 0.38)
+                twig(sub, xe, axisY(xe), xe + cos(ang) * l * 0.6, axisY(xe) + sin(ang) * l, 1.7, 0.8, rnd.range(0.6, 1.0))
             }
         }
         blit(c, sub, ox, oy)
     }
 
-    /** Birkenzweig: duenne, haengende Zweige mit kleinen dreieckig-spitzen Blaettern, locker. */
+    /** Birkenzweig: duenne, haengende Zweige mit kleinen dreieckig-spitzen Blaettern, nach unten dichter. */
     private fun birchSpray(c: Canvas, ox: Int, oy: Int, w: Int, h: Int, seed: Long) {
         val rnd = Rnd(seed)
         val sub = Canvas(w, h)
-        val leaves = ArrayList<DoubleArray>()
-        // vier Zweiglein vom Ansatz unten Mitte, auffaechernd
-        for (k in 0 until 5) {
+        val back = ArrayList<DoubleArray>()
+        val front = ArrayList<DoubleArray>()
+        // sieben Zweiglein vom Ansatz unten Mitte, auffaechernd, mit Seitenzweiglein
+        for (k in 0 until 7) {
             var x = w / 2.0 + rnd.range(-6.0, 6.0)
             var y = h - 2.0
-            var ang = -0.7 + 1.4 * k / 4 + rnd.range(-0.1, 0.1)
-            val segs = 9
-            val step = h * rnd.range(0.085, 0.1)
+            var ang = -0.62 + 1.24 * k / 6 + rnd.range(-0.08, 0.08)
+            val segs = 10
+            val step = h * rnd.range(0.07, 0.082)
             for (i in 0 until segs) {
                 val nx = x + sin(ang) * step
                 val ny = y - cos(ang) * step
                 twig(sub, x, y, nx, ny, 1.8 * (1 - i / segs.toDouble()) + 0.6, 1.6 * (1 - (i + 1) / segs.toDouble()) + 0.6, 0.3)
                 for (s2 in listOf(-1.0, 1.0)) {
-                    if (rnd.next() < 0.85) leaves += doubleArrayOf(nx, ny, ang + s2 * rnd.range(0.5, 1.1), rnd.range(11.0, 17.0), rnd.range(8.0, 11.0), rnd.range(0.72, 1.0), rnd.range(-1.0, 1.0))
+                    val la = ang + s2 * rnd.range(0.4, 1.2)
+                    front += doubleArrayOf(nx, ny, la, rnd.range(13.0, 19.0), rnd.range(9.0, 12.0), rnd.range(0.72, 1.0), rnd.range(-1.0, 1.0))
+                    back += doubleArrayOf(nx + rnd.range(-8.0, 8.0), ny + rnd.range(-6.0, 6.0), rnd.range(0.0, 2 * PI), rnd.range(12.0, 17.0), rnd.range(8.0, 11.0), rnd.range(0.45, 0.6), rnd.range(-1.0, 1.0))
                 }
                 x = nx; y = ny
                 ang += rnd.range(-0.15, 0.15)
             }
         }
-        leaves.shuffle(java.util.Random(seed))
-        for ((i, l) in leaves.withIndex()) leaf(sub, l[0], l[1], l[2], l[3], l[4], l[5] * (if (i < leaves.size / 3) 0.75 else 1.0), l[6], tipPow = 1.3)
+        for (l in back) leaf(sub, l[0], l[1], l[2], l[3], l[4], l[5], l[6], tipPow = 1.3)
+        front.shuffle(java.util.Random(seed))
+        for (l in front) leaf(sub, l[0], l[1], l[2], l[3], l[4], l[5], l[6], tipPow = 1.3)
+        blit(c, sub, ox, oy)
+    }
+
+    /** Laubmasse: viele Blaetter in einem gelappten, fast geschlossenen Umriss, innen dunkler. */
+    private fun leafMass(c: Canvas, ox: Int, oy: Int, w: Int, h: Int, seed: Long) {
+        val rnd = Rnd(seed)
+        val sub = Canvas(w, h)
+        // Lappen: einige Kreise, deren Vereinigung den Umriss bildet
+        val lobes = ArrayList<DoubleArray>()
+        lobes += doubleArrayOf(w * 0.5, h * 0.52, w * 0.24)
+        for (k in 0 until 7) {
+            val a = 2 * PI * k / 7 + rnd.range(-0.3, 0.3)
+            lobes += doubleArrayOf(w * 0.5 + cos(a) * w * 0.25, h * 0.52 + sin(a) * h * 0.23, w * rnd.range(0.12, 0.16))
+        }
+        fun inside(x: Double, y: Double): Double {
+            var best = 0.0
+            for (l in lobes) {
+                val d = sqrt((x - l[0]) * (x - l[0]) + (y - l[1]) * (y - l[1])) / l[2]
+                best = max(best, 1 - d)
+            }
+            return best
+        }
+        repeat(1400) {
+            val x = rnd.range(0.0, w.toDouble())
+            val y = rnd.range(0.0, h.toDouble())
+            val f = inside(x, y)
+            if (f <= 0.0) return@repeat
+            val depth = f.coerceIn(0.0, 1.0)
+            leaf(sub, x, y, rnd.range(0.0, 2 * PI), rnd.range(16.0, 24.0), rnd.range(8.0, 12.0), rnd.range(0.55, 0.9) * (1 - 0.35 * depth), rnd.range(-1.0, 1.0))
+        }
         blit(c, sub, ox, oy)
     }
 
@@ -330,8 +373,9 @@ internal object TreeTextures {
         needleSpray(c, NEEDLE.x + 4, NEEDLE.y + 4, NEEDLE.w - 8, NEEDLE.h - 8, 0x5EED1, pine = false)
         needleSpray(c, PINE.x + 4, PINE.y + 4, PINE.w - 8, PINE.h - 8, 0x913E, pine = true)
         birchSpray(c, SMALL.x + 4, SMALL.y + 4, SMALL.w - 8, SMALL.h - 8, 0xB12C4)
+        leafMass(c, MASS.x + 4, MASS.y + 4, MASS.w - 8, MASS.h - 8, 0x3A55)
         val img = RgbaImage(LEAF_SIZE, LEAF_SIZE)
-        for (reg in listOf(BROAD, NEEDLE, PINE, SMALL, Region(256, 256, 256, 256, false))) {
+        for (reg in listOf(BROAD, NEEDLE, PINE, SMALL, MASS)) {
             // mittlere Farbe der gedeckten Pixel als Farbe der durchsichtigen
             var sr = 0.0; var sg = 0.0; var sb = 0.0; var n = 0.0
             for (y in reg.y until reg.y + reg.h) for (x in reg.x until reg.x + reg.w) {
@@ -441,17 +485,45 @@ internal object TreeTextures {
         return l.coerceIn(0.05, 1.0) to 0.2
     }
 
-    /** Gefurcht (Eiche, Kiefer unten, Pappel, Obstbaum): senkrechte Borkenrippen, dunkle Furchen, Querrisse. */
+    /**
+     * Zellen (Voronoi, kachelnd mit [nx] × [ny] Zellen): Abstand zur naechsten und zweitnaechsten
+     * Zellmitte und Kennzahl der Zelle. [sy] streckt senkrecht (< 1: hohe, schmale Zellen).
+     */
+    private fun cells(u: Double, v: Double, nx: Int, ny: Int, sy: Double, seed: Int): Triple<Double, Double, Int> {
+        val x = u * nx
+        val y = v * ny
+        var d1 = 9.0
+        var d2 = 9.0
+        var id = 0
+        for (j in -1..1) for (i in -1..1) {
+            val cx = floor(x).toInt() + i
+            val cy = floor(y).toInt() + j
+            val px = cx + 0.15 + 0.7 * cellHash(cx, cy, nx, ny, seed)
+            val py = cy + 0.15 + 0.7 * cellHash(cx, cy, nx, ny, seed + 1)
+            val dx = x - px
+            val dy = (y - py) * sy
+            val d = sqrt(dx * dx + dy * dy)
+            if (d < d1) { d2 = d1; d1 = d; id = Math.floorMod(cx, nx) * 977 + Math.floorMod(cy, ny) } else if (d < d2) d2 = d
+        }
+        return Triple(d1, d2, id)
+    }
+
+    /**
+     * Gefurcht (Eiche, Kiefer unten, Pappel, Obstbaum): lange, schmale Borkenplatten mit tiefen,
+     * dunklen Furchen dazwischen, Querrisse, Platten innen leicht gewoelbt.
+     */
     private fun furrowedBark(u: Double, v: Double): Pair<Double, Double> {
-        val warp = (fbm(u * 4, v * 6, 4, 6, 21, 3) - 0.5) * 0.9
-        val ridges = 7.0
-        val ph = (u * ridges + warp) % 1.0
-        val ridge = sin(PI * ((ph + 1) % 1.0)).pow(0.6)
-        val cracks = vnoise(u * ridges * 2, v * 22, (ridges * 2).toInt(), 22, 23)
-        var l = 0.12 + 0.55 * ridge
-        if (cracks > 0.78 && ridge > 0.3) l *= 0.45
-        l *= 0.85 + 0.3 * (fbm(u * 16, v * 48, 16, 48, 24, 2) - 0.5)
-        return l.coerceIn(0.03, 1.0) to 0.6
+        val wu = u + (fbm(u * 3, v * 4, 3, 4, 21, 3) - 0.5) * 0.12
+        val (d1, d2, id) = cells(wu, v, 7, 9, 0.32, 22)
+        val edge = ((d2 - d1) * 2.6).coerceIn(0.0, 1.0)
+        val plate = 0.5 + 0.25 * ((id * 0.618) % 1.0)
+        // Furche: steiler Abfall, Plattenrand etwas heller (Licht auf der Kante)
+        val ridge = if (edge < 0.32) (edge / 0.32).pow(1.5) * 0.3 else 0.3 + 0.7 * (1 - (edge - 0.32) / 0.68 * 0.45)
+        var l = 0.06 + plate * ridge
+        val cracks = vnoise(u * 14, v * 30, 14, 30, 23)
+        if (cracks > 0.8 && edge > 0.25) l *= 0.55
+        l *= 0.82 + 0.36 * (fbm(u * 24, v * 64, 24, 64, 24, 2) - 0.5) * 2 * 0.5 + 0.18
+        return l.coerceIn(0.03, 1.0) to 0.55
     }
 
     /** Birke: weiss mit waagrechten dunklen Korkporen-Strichen und einzelnen dunklen Flecken. */
@@ -467,30 +539,12 @@ internal object TreeTextures {
         return l.coerceIn(0.03, 1.0) to 0.05
     }
 
-    /** Fichte: rotbraune, schuppige Platten mit dunklen Fugen (Zellen). */
+    /** Fichte: rotbraune, kleine, runde Schuppen mit dunklen Fugen (flacher als bei der Kiefer). */
     private fun scalyBark(u: Double, v: Double): Pair<Double, Double> {
-        val nx = 6
-        val ny = 26
-        val x = u * nx
-        val y = v * ny
-        var d1 = 9.0
-        var d2 = 9.0
-        var id = 0
-        for (j in -1..1) for (i in -1..1) {
-            val cx = floor(x) + i
-            val cy = floor(y) + j
-            val hx = cellHash(cx.toInt(), cy.toInt(), nx, ny, 41)
-            val hy = cellHash(cx.toInt(), cy.toInt(), nx, ny, 42)
-            val px = cx + 0.15 + 0.7 * hx
-            val py = cy + 0.15 + 0.7 * hy
-            val dx = (x - px) * 1.0
-            val dy = (y - py) * 1.6
-            val d = sqrt(dx * dx + dy * dy)
-            if (d < d1) { d2 = d1; d1 = d; id = (Math.floorMod(cx.toInt(), nx) * 31 + Math.floorMod(cy.toInt(), ny)) } else if (d < d2) d2 = d
-        }
-        val edge = ((d2 - d1) * 4).coerceIn(0.0, 1.0)
-        val plate = 0.5 + 0.2 * ((id * 0.618) % 1.0)
-        val l = 0.1 + plate * edge.pow(0.6) * (0.9 + 0.2 * fbm(u * 20, v * 80, 20, 80, 43, 2))
+        val (d1, d2, id) = cells(u, v, 9, 40, 1.4, 41)
+        val edge = ((d2 - d1) * 3.2).coerceIn(0.0, 1.0)
+        val plate = 0.42 + 0.22 * ((id * 0.618) % 1.0)
+        val l = 0.2 + plate * (0.55 + 0.45 * edge.pow(0.4)) * (0.85 + 0.3 * fbm(u * 20, v * 80, 20, 80, 43, 2))
         return l.coerceIn(0.03, 1.0) to 0.8
     }
 }
