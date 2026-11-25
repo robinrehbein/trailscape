@@ -90,7 +90,7 @@ internal class TreeInstancer(
     private var autoInstancing = false
     private var lastCamX = Double.NaN
     private var lastCamZ = Double.NaN
-    private var lastBudget: TreeInstanceBudget? = null
+    private var lastDetail = 0
     private var dirty = true
 
     /** Diagnose: Instanzen je Stufe, ihre Dreiecke, angelegte Vorlagen. */
@@ -170,8 +170,10 @@ internal class TreeInstancer(
         if (wanted != null && state == State.IDLE && tiles.isNotEmpty()) startLoading()
         val budget = if (state == State.READY) wanted else null
         setAutoInstancing(budget != null)
-        if (budget !== lastBudget) {
-            lastBudget = budget
+        // Stufe gewechselt (oder Bibliothek eben fertig): sofort neu waehlen.
+        val detail = if (budget == null) 0 else settings.treeDetail
+        if (detail != lastDetail) {
+            lastDetail = detail
             dirty = true
         }
         if (budget == null && shown.isEmpty() && !dirty) return false

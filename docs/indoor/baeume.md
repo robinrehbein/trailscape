@@ -1,18 +1,208 @@
-# Indoor — Bäume aus der Nähe (Prototyp)
+# Indoor — Bäume aus der Nähe
 
-Stand: 25.11.2026, Branch `claude/grafik-baeume`. Teil des Grafik-Schwarms
+Stand: 25.11.2026, Branch `claude/grafik-baeume-einbau`. Teil des Grafik-Schwarms
 (Auftrag: „deutlicher Schritt nach vorn, quasi fotorealistisch“); dieser Teil
-behandelt **nur Bäume in der Nahzone**. Der Prototyp ist **nicht eingebaut**:
-Weltbau (`core/**/indoor/world/**`), Streckenformat, `.mat`-Dateien und
-Renderer sind unverändert. Einzige Änderung außerhalb des neuen Pakets: eine
-Zeile in `tool/indoor-dev/.../Main.kt` (Kommando `tree-proto`).
+behandelt **nur Bäume in der Nahzone**.
+
+Das Dokument hat zwei Teile: den **Einbau** (was jetzt in Weltbau, App und
+Werkzeug steckt — der folgende Abschnitt) und darunter unverändert den
+**Prototyp** (Generator, Budget, Messung, Bilder alt/neu, Einbauplan), auf dem
+der Einbau beruht.
 
 **Ehrlich vorweg:** Fotorealismus ist das nicht. Es ist der Schritt von
 „Kronenlappen aus großen Laubkarten an einem Rohr“ zu „Baum mit echtem Stamm,
-Ästen, Zweigen und kleinen Blättern“. Alles ist nur in Bildern aus dem
-three.js-Betrachter (SwiftShader) und dem Filament-Referenzrenderer (Filament
-1.75.1 auf Mesa llvmpipe) geprüft, **nichts auf einem Gerät** (Galaxy S25),
-keine Bildrate gemessen.
+Ästen, Zweigen und kleinen Blättern“. Alles ist nur im Filament-Referenzrenderer
+(Filament 1.75.1 auf Mesa llvmpipe) geprüft, **nichts auf einem Gerät**
+(Galaxy S25), keine Bildrate gemessen. Der App-Teil ist in dieser Sitzung
+**nicht über Gradle gebaut** (siehe „Bauen und Prüfen“).
+
+## Einbau
+
+### Kurzfassung
+
+- **Bibliothek als App-Asset:** `app/src/main/assets/indoor/models/trees.glb`
+  (72 Vorlagen: 9 Arten × 4 Varianten × nah/mittel, beide Atlanten), 6,47 MB,
+  gzip −9 4,38 MB (≈ Anteil am APK). Sie wird **nicht auf dem Gerät erzeugt**
+  und liegt in **keinem Streckenpaket**.
+- **Weltbau** (`WORLD_BUILDER_ID` **`indoor-world/15`**, vorher `/14`): Bäume
+  bis 20 m neben der Streckenmitte stehen wie bisher gebacken in der Kachel,
+  aber je 32 m Strecke in einem eigenen Knoten `x_trees_bin_<k>` unter `trees`;
+  dazu je Baum ein leerer Knoten `x_treei_<art>_<variante>_<k>` mit Lage,
+  Drehung und Maßstab. **Server und Katalog müssen neu gebaut werden.**
+- **App:** `TreeInstancer` zeigt auf den Grafikstufen **Hoch** und **Ultra** nah
+  an der Kamera Bäume der Bibliothek an diesen Stellen und blendet dafür den
+  gebackenen Abschnitt aus. Jede Vorlage liegt einmal im Grafikspeicher; alle
+  Bäume derselben Vorlage teilen Vertexpuffer, Indexpuffer und Materialinstanzen
+  und werden über Filaments automatische Instanzierung gezeichnet.
+- **Standard** (Vorgabe) und der sichere Modus zeigen **genau die bisherige
+  Darstellung**: dieselben gebackenen Bäume, dieselben Dreiecke.
+- **Wind und Schatten** wie bei den gebackenen Bäumen: Laub läuft über
+  dasselbe `foliage.mat` (Wind, Atlas-Modus 1), Bäume werfen Schatten und
+  empfangen keine.
+
+### Entscheidungen (und Abweichungen vom Einbauplan unten)
+
+| Punkt | Einbauplan | Umgesetzt | Warum |
+|---|---|---|---|
+| Asset | 72 Dateien oder eine je Art, Test prüft Gleichheit | **eine** GLB, eingecheckt; `TreeLibraryAssetTest` prüft sie gegen den Generator (Vorlagen, Eckpunkte, Indizes, Lagen auf 1 mm) | Eine Datei = Atlanten nur einmal; inhaltlicher Vergleich statt Byte für Byte, weil PNG-Kompression und letzte Stellen der Winkelfunktionen je nach JVM abweichen dürfen |
+| eingecheckt oder im Build erzeugt | „wie `rider.glb`“ | **eingecheckt** (`indoor-dev tree-library --out …`) | Der App-Build bleibt ohne `:indoor-dev`-Lauf; das Asset ist deterministisch und ändert sich nur mit dem Generator; der Test schlägt an, wenn Generator und Datei auseinanderlaufen |
+| gebackene Bandbäume | nur die Fernstufe (134–150 Dreiecke) | **unverändert** die bisherigen Stufen (nah/mittel/fern nach Budget), nur nach Abschnitten gruppiert | Die niedrigste Grafikstufe und ältere App-Versionen sehen exakt das alte Bild; das Kachelbudget ändert sich nicht. Preis: keine Ersparnis auf der Platte |
+| Kennung der Bibliothek | Feld im Manifest | steckt im **Präfix** `x_treei_` (Bibliothek `trees/1`) | Kein neues Manifestfeld, das Manifestformat bleibt. Eine unverträgliche Bibliothek bekäme ein neues Präfix — ältere Apps zeigen dann die gebackenen Bäume |
+| Instanzierung | `AssetLoader.createInstancedAsset` mit festem Vorrat | **eigene Vertex-/Indexpuffer je Vorlage**, ein Renderable je Baum, `Engine.setAutomaticInstancingEnabled(true)` | gltfio instanziert nur ganze Assets (alle 72 Vorlagen auf einmal, Materialinstanzen je Instanz — keine gemeinsamen Zeichenaufrufe). Die Java-API 1.75.1 hat keinen `InstanceBuffer`; die automatische Instanzierung fasst Renderables mit gleicher Geometrie und gleicher Materialinstanz zusammen und lässt jedem Baum seinen eigenen Umriss (Sichtkegel) |
+| Abschnitt ausblenden | „solange einer seiner Bäume als Instanz steht“ | Abschnitt wird **als Ganzes** umgeschaltet: alle seine Bäume Instanz (nah oder mittel) oder alle gebacken | So fehlt nie ein Baum und keiner steht doppelt |
+| Ton je Baum | im Instanzknoten | **entfällt** | Alle Instanzen teilen eine Materialinstanz (Voraussetzung der Instanzierung); Vielfalt kommt aus 4 Varianten, Drehung und Maßstab |
+| Betrachter (three.js) | zeigt Instanzen | zeigt weiter die **gebackenen** Bäume | Die Abschnitte liegen unter `trees`; die Instanzknoten sind leer und stören nicht. Maßgeblich für die Instanzen ist filarender |
+
+### Vertrag Weltbau ↔ Darstellung (`TreeInstanceNames`, `docs/indoor.md` 7.3)
+
+- `x_trees_bin_<k>`: Kind von `trees`, mit Netz, ohne Transformation.
+  `k` = Laufmeter der nächsten Streckenstelle / 32 m, abgerundet. Enthält die
+  gebackenen Bäume (Stamm, Krone) des Abschnitts dieser Kachel.
+- `x_treei_<art>_<variante>_<k>`: Kind von `trees`, **ohne Netz**, mit
+  `translation` (Fußpunkt in Kachelkoordinaten), `rotation` (um die Hochachse)
+  und gleichmäßigem `scale` = Baumhöhe / Höhe der Vorlage. `art` ist der
+  Name aus `TreeKind` in Kleinbuchstaben (`beech`, `oak`, `birch`, `poplar`,
+  `spruce`, `pine`, `aleppo_pine`, `fruit`, `shrub`), `variante` 0–3.
+  Reines glTF, **keine Erweiterung**. `checkTileGlb` lässt eine Transformation
+  nur an diesen leeren Knoten zu.
+- Zuordnung (`TreeInstanceMapping`, getestet): Wuchsform des gebackenen Baums →
+  Art (Esche ≈ Buche, Feldbaum ≈ Obstbaum; südlich von 42° Breite Aleppo- statt
+  Waldkiefer). Variante aus dem Samen unter denen, deren Höhe höchstens um den
+  Faktor 1,3 abweicht, sonst die nächstpassende.
+- Eine App, die beides nicht kennt, zeigt die gebackenen Bäume (Abschnitte
+  zählen zur Knotenart `trees`: Schalter, Schatten). Kennt die App eine Art
+  oder Variante eines Abschnitts nicht, bleibt dieser Abschnitt gebacken.
+
+### Auswahl je Bild (`TreeInstancePlanner` in `:core`, getestet)
+
+| `RenderSettings.treeDetail` | Grafikstufe | nah bis | Abschnitt instanziert bis | höchstens nah | höchstens insgesamt |
+|---|---|---|---|---|---|
+| 0 | Standard, sicherer Modus | — | — | — | — |
+| 1 | Hoch | 18 m | 45 m | 10 | 40 |
+| 2 | Ultra | 25 m | 60 m | 16 | 56 |
+
+Abstand zur **Kamera** (waagrecht). Abschnitte kommen von der Kamera nach
+außen dran, solange einer ihrer Bäume in Reichweite ist und die Obergrenze
+reicht (der nächste Abschnitt immer). In den aktiven Abschnitten bekommen die
+nächsten Bäume bis zur Nahgrenze die Nahstufe, alle anderen die mittlere.
+Hysterese 3 m an beiden Grenzen; neu gewählt wird erst nach 0,5 m
+Kamerabewegung. Der Schalter `RenderSettings.trees` schaltet auch die Instanzen
+ab.
+
+### App (`app/…/indoor/render/TreeInstancer.kt`)
+
+- **Laden:** erst, wenn eine Stufe mit `treeDetail` > 0 läuft und eine Kachel
+  Instanzknoten hat. Datei lesen und zerlegen auf dem E/A-Thread
+  (`TreeLibraryFile` in `:core`); auf dem Hauptthread geht eine winzige GLB mit
+  den zwei Materialien und Atlanten (`TreeLibraryFile.materialsGlb`, reines
+  Umpacken) durch gltfio — also durch `GlbPatch` und `WorldMaterialProvider`
+  wie jede Kachel. Die Netze einer Vorlage entstehen bei ihrem ersten Baum
+  (Lage, Tangentenrahmen aus der Normale — `TangentFrames` in `:core`, UV,
+  Farbe).
+- **Sichtbarkeit:** Baumabschnitte sind eine eigene Knotenart
+  (`nodeCategory`), Grundart `trees`. `TileStreamer` blendet die Abschnitte aus,
+  die `TreeInstancer.hiddenBins` nennt — im selben Bild, in dem die Instanzen
+  erscheinen.
+- **Rückfall:** Fehlt die Bibliothek, ist sie unvollständig oder lässt sich ein
+  Puffer nicht anlegen, bleibt es für die Sitzung bei den gebackenen Bäumen;
+  kein Fehler nach außen.
+- **Diagnose:** Zeile „Bibliotheksbäume (nah / mittel / Dreiecke / Vorlagen)“
+  auf der Diagnoseseite; `–` aus, `…` lädt, `×` nicht verfügbar.
+
+### Kosten
+
+Gemessen im Referenzrenderer an der Testwelt (`indoor-dev testworld --quality
+HIGH`, 3 km, 568 Instanzknoten in 46 Abschnitten, im Mittel 12, höchstens 26
+Bäume je Abschnitt), Kamera auf der Strecke in Fahrtrichtung:
+
+| Stelle | Stufe | Instanzen nah / mittel | Dreiecke der Instanzen | Vorlagen im Speicher | Abschnitte ausgeblendet |
+|---|---|---|---|---|---|
+| Ortsdurchfahrt (780 m) | Ultra | 2 / 3 | 8 456 | 5 | 3 |
+| Mischwald, Schotterweg (1740 m) | Ultra | 16 / 31 | 67 172 | 25 | 5 |
+| Wald (2080 m) | Ultra | 16 / 28 | 98 166 | 21 | 3 |
+| Fichtenwald (2440 m) | Ultra | 16 / 34 | 81 906 | 21 | 3 |
+| Fichtenwald (2440 m) | Hoch | 10 / 23 | 54 814 | 13 | 2 |
+
+- **Dreiecke:** bis ~100 000 zusätzlich (Obergrenze rechnerisch 16 × 6 000 +
+  40 × 1 500 = 156 000) gegenüber 460 000–530 000, die eine Welt gleichzeitig
+  zeigt; dafür entfallen die gebackenen Bäume der ausgeblendeten Abschnitte.
+- **Zeichenaufrufe:** ohne Instanzierung 2 je Baum (Rinde, Laub), also bis
+  112, im Schattendurchgang je Kaskade noch einmal. Mit automatischer
+  Instanzierung höchstens 2 je **Vorlage im Bild** (oben 5–25 Vorlagen → 10–50).
+  Wie viele Aufrufe Filament wirklich zusammenfasst, zeigt die Engine nicht an
+  — **nicht gemessen**.
+- **Grafikspeicher:** Atlanten 2,8 MB mit Mip-Stufen; Netze ~36 B je Dreieck,
+  bei 25 Vorlagen rund 2–3 MB; alle 72 Vorlagen wären 6,2 MB.
+- **Arbeitsspeicher:** die gelesene Bibliothek (6,5 MB) bleibt geladen,
+  solange die Welt läuft (Vorlagen entstehen bei Bedarf).
+- **APK:** +4,4 MB.
+- **Platte je Welt:** +0,4 % in Stufe 0 (Testwelt: 151 kB von 38,6 MB für
+  Instanzknoten und die Aufteilung in Abschnitte). Gebackene Dreiecke
+  unverändert.
+- **Laden:** Vorlagen entstehen beim ersten Baum auf dem Hauptthread
+  (einige Millisekunden je Vorlage) — beim ersten Einfahren in einen Wald
+  können mehrere in einem Bild zusammenkommen. Nicht gemessen.
+
+### Belegbilder (`docs/indoor/bilder/baeume/einbau-*.jpg`)
+
+Dieselbe gebaute Welt (Testwelt, `indoor-world/15`), dieselbe Kamera, derselbe
+Himmel (`indoor-dev sky --time NOON`); links die gebackenen Bäume (Standard),
+rechts mit Instanzen. Gerendert mit filarender, 960 × 600 je Hälfte.
+
+| Datei | Stelle | rechts |
+|---|---|---|
+| `einbau-0780m.jpg` | Ortsdurchfahrt, zwei Laubbäume | Ultra |
+| `einbau-1740m.jpg` | Schotterweg im Mischwald | Ultra |
+| `einbau-2080m.jpg` | Wald | Ultra |
+| `einbau-2440m.jpg` | Fichtenwald | Ultra |
+| `einbau-hoch-2440m.jpg` | Fichtenwald | Hoch |
+
+Geprüft an diesen Bildern: Die Instanzen stehen an den Stellen der gebackenen
+Bäume, kein Baum doppelt, keiner fehlt; sie werfen Schatten auf Weg und Boden.
+**Wind:** dieselbe Szene zu zwei Zeitpunkten (0 s / 1,7 s) gerendert — mit Wind
+ändern sich mit Instanzen 2 742 Bildpunkte (640 × 400), ohne Wind 224
+(Wolkenzug); bei den gebackenen Bäumen 2 195 bzw. 314.
+
+### Bekannte Schwächen des Einbaus
+
+- **Sprung beim Umschalten:** Ein Abschnitt wechselt als Ganzes zwischen
+  gebackenen Bäumen und Instanzen — Umriss, Laubfarbe und Rinde unterscheiden
+  sich sichtbar (die Bibliothek ist heller und lichter, siehe Bilder). Kein
+  Überblenden. Bei 45–60 m ist der Wechsel klein im Bild, aber nicht
+  unsichtbar.
+- **Kein Ton je Baum** (siehe Entscheidungen); gleiche Vorlagen nebeneinander
+  unterscheiden sich nur in Drehung und Größe.
+- **Fichten am Weg:** Der Weltbau stutzt gebackene Fichten nah am Weg in der
+  Höhe; die Instanz wird nur gleichmäßig skaliert und kann breiter über die
+  Fahrbahn ragen.
+- **Hänge:** Die Instanz steht senkrecht am Fußpunkt; der Wurzelanlauf reicht
+  0,3 m unter den Boden, an steilen Böschungen kann talseitig der Stammfuß
+  frei stehen.
+- **Automatische Instanzierung gilt für die ganze Engine**, solange Instanzen
+  an sind; Filament nennt dafür „etwas Aufwand“, wenn sonst nichts gleich ist.
+  Auf den Stufen ohne Instanzen bleibt sie aus.
+
+### Offen — nur auf einem Gerät zu klären
+
+1. Bildrate und Wärme auf Hoch/Ultra mit und ohne Instanzen (Wald- und
+   Alleestrecke; die Probefahrt der Diagnoseseite fährt die Testwelt je Stufe).
+   Stellschrauben: `TreeInstanceBudget.forDetail`.
+2. Ob die automatische Instanzierung auf dem Adreno die Zeichenaufrufe
+   wirklich zusammenfasst, und was sie für den Rest der Szene kostet.
+3. Alpha-Maske nah (Laub mit `discard`, mehrere Lagen im Bild) — der
+   erwartete Engpass, siehe Hochrechnung unten.
+4. Ruckeln beim ersten Anlegen der Vorlagen.
+5. Sichtbarkeit des Sprungs beim Umschalten in Fahrt; Hysterese und Radien.
+6. Speicher auf kleinen Geräten (Bibliothek im Arbeitsspeicher, Vorlagen im
+   Grafikspeicher).
+
+---
+
+# Prototyp (Stand vor dem Einbau)
+
+Der Rest des Dokuments beschreibt den Generator und die Messungen des
+Prototyps (`claude/grafik-baeume`), unverändert bis auf diesen Hinweis. Wo dort
+„nicht eingebaut“ steht, gilt jetzt der Abschnitt „Einbau“ oben.
 
 ## Was es gibt
 
@@ -186,7 +376,7 @@ filarender mit verschobener Sonnenrichtung, Himmelsbild unverändert).
   Laubmaterial der App) unterscheiden sich in Helligkeit und Kontrast des
   Laubs, besonders im Gegenlicht; maßgeblich ist filarender.
 
-## Einbauplan (für die Orchestrierung, nach Abschluss „Streckenqualität“)
+## Einbauplan (umgesetzt — Abweichungen siehe „Einbau“ oben)
 
 Ziel: Bäume im Band **≤ 20 m neben der Strecke** werden zur Laufzeit als
 Instanzen der Bibliothek gezeigt (nah ≤ 25 m, mittel ≤ 60 m Abstand zur
@@ -274,16 +464,33 @@ danach festlegen.
 ## Bauen und Prüfen
 
 ```
-./gradlew --no-daemon :core:test --tests 'de.trailscape.core.indoor.tree.*'
-./gradlew --no-daemon :indoor-dev:run --args="tree-proto --out tool/indoor-dev/out/baeume"
-./gradlew --no-daemon :indoor-dev:run --args="sky --time NOON --out tool/indoor-dev/out/sky"
+./gradlew :core:test :app:testDebugUnitTest :indoor-dev:test
+# Bibliothek neu erzeugen (nur nach Aenderungen am Generator)
+./gradlew :indoor-dev:run --args="tree-library --out app/src/main/assets/indoor/models/trees.glb"
+# Belegbilder des Einbaus
+./gradlew :indoor-dev:run --args="testworld --out tool/indoor-dev/out/testwelt --quality HIGH"
+./gradlew :indoor-dev:run --args="sky --time NOON --out tool/indoor-dev/out/sky"
+tool/indoor-dev/filament/build.sh
+python3 tool/indoor-dev/baeume/einbau.py tool/indoor-dev/out/testwelt --sky tool/indoor-dev/out/sky \
+        --out tool/indoor-dev/out/baeume-einbau --at 780,1740,2080,2440 --jpeg-out docs/indoor/bilder/baeume
+# Bilder des Prototyps (alt/neu, gebacken)
+./gradlew :indoor-dev:run --args="tree-proto --out tool/indoor-dev/out/baeume"
 python3 tool/indoor-dev/baeume/render.py tool/indoor-dev/out/baeume --sky tool/indoor-dev/out/sky \
         --renderer both --jpeg-out docs/indoor/bilder/baeume
 ```
 
-**In dieser Sitzung über Gradle UNGEBAUT:** Maven Central lieferte HTTP 429
-(dreimal versucht). Übersetzt und getestet wurde mit eigenständigem
-`kotlinc` 2.3.20 (ganzes `:core`-Hauptverzeichnis + `:indoor-dev`, Plugin
-kotlinx-serialization, BRouter-Quellen mit `javac`) und der
-JUnit-Plattform-Konsole 1.11.4: alle 9 Tests des Pakets grün. Die übrigen
-Tests von `:core` und `:indoor-dev` sind hier **nicht** gelaufen.
+**In dieser Sitzung über Gradle UNGEBAUT:** Maven Central lieferte HTTP 429,
+ein Android-SDK gibt es im Container nicht. Stattdessen:
+
+- `:core` (Haupt- und Testquellen) und `:indoor-dev` mit eigenständigem
+  `kotlinc` 2.3.20 übersetzt (kotlinx-serialization 1.9.0 aus der
+  Gradle-Distribution statt 1.7.3, BRouter-Quellen mit `javac`); **alle
+  Testklassen von `:core`** mit JUnit 4 über `kotlin-test-junit` ausgeführt
+  (die Annotation `org.junit.jupiter.api.Timeout` durch einen leeren Ersatz
+  vertreten): grün. Ebenso die beiden Testklassen von `:indoor-dev`.
+- `:app`: **nicht gebaut, Tests nicht gelaufen.** Die Dateien der Darstellung
+  ohne Oberfläche (u. a. `TreeInstancer.kt`, `TileStreamer.kt`,
+  `FilamentAssets.kt`, `RenderSupport.kt`) sind gegen die Java-Quellen von
+  Filament/gltfio 1.75.1 typgeprüft; `FilamentWorldRenderer.kt`,
+  `DiagnosticsScreen.kt` und `TilePlannerTest.kt` sind nur gegengelesen.
+- filarender (C++) gebaut und für die Bilder oben benutzt.

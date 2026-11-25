@@ -532,7 +532,15 @@ den mitgelieferten Ubershader hat:
   Alpha für weiche Ränder mit `alphaMode = BLEND`). Laub: `alphaMode = MASK`,
   `doubleSided`. Keine Tangenten nötig (keine Normal-Maps im Prototyp).
 - Bäume sind **in die Kachel gebacken** (ein Netz je Material), nicht
-  instanziert.
+  instanziert. Seit `indoor-world/15` zusätzlich: Die Bäume bis 20 m neben
+  der Strecke liegen je 32 m Strecke in einem Kindknoten `x_trees_bin_<k>` von
+  `trees` (mit Netz, ohne Transformation), und je solchem Baum gibt es einen
+  **leeren** Kindknoten `x_treei_<art>_<variante>_<k>` von `trees` mit
+  `translation`, `rotation` (um die Hochachse) und gleichmäßigem `scale` —
+  die **einzigen** Kachelknoten mit Transformation. Die Darstellung darf einen
+  Abschnitt ausblenden und an den Stellen seiner Instanzknoten Bäume der
+  Bibliothek der App zeigen (`docs/indoor/baeume.md`); wer die Knoten nicht
+  kennt, zeigt die gebackenen Bäume.
 - Kacheln: keine Kameras, Lichter, Animationen, Skins.
 - Was über die Namensliste hinausgeht, heißt `x_…`.
 
