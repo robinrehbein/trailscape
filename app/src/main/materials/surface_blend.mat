@@ -181,6 +181,9 @@ fragment {
         if (dot(pW, pW) > 0.0) {
             pW -= dot(pW, nGeo) * nGeo;
             vec3 nW = normalize(nGeo + pW);
+            // Fahrbahn: gekippte Normalen dunkeln im Mittel ab (cos des Kippwinkels); ausgleichen,
+            // damit beim Ausblenden in der Ferne kein Helligkeitsverlauf entsteht.
+            if (nA.x > 0.0) c.rgb *= 1.0 / max(dot(nW, nGeo), 0.55);
             nTs = vec3(dot(nW, getWorldTangentFrame()[0]), dot(nW, getWorldTangentFrame()[1]), dot(nW, getWorldTangentFrame()[2]));
         }
         material.normal = nTs;

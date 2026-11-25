@@ -197,6 +197,11 @@ def sand(n):
     return norm01(h)
 
 
+# Kantenlaenge je Karte im Paket: gezeichnet wird immer in --size (512), die selteneren Belaege
+# werden auf 256 verkleinert (Massstab bleibt, nur Strukturen unter 2 Texeln fallen weg).
+STORE = {"asphalt": 512, "gravel": 512}
+STORE_DEFAULT = 256
+
 MAPS = {
     "asphalt": asphalt,
     "concrete": concrete,
@@ -246,7 +251,7 @@ def encode(h, slope_scale):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--size", type=int, default=512)
-    ap.add_argument("--quality", type=int, default=90)
+    ap.add_argument("--quality", type=int, default=85)
     ap.add_argument("--preview", default=None)
     a = ap.parse_args()
     os.makedirs(OUT, exist_ok=True)
@@ -255,6 +260,11 @@ def main():
     slopes = {}
     for name, fn in MAPS.items():
         h = fn(n)
+        m = min(n, STORE.get(name, STORE_DEFAULT))
+        if m < n:
+            f = n // m
+            h = h.reshape(m, f, m, f).mean(axis=(1, 3))
+            h = norm01(h)
         # Gefaelle so skaliert, dass das 99. Perzentil den Wertebereich fuellt; der Faktor
         # steht in detail.json (slope), damit das Material die echte Neigung kennt.
         gx = (np.roll(h, -1, axis=1) - np.roll(h, 1, axis=1)) * 0.5
@@ -274,6 +284,7 @@ def main():
         "comment": "Erzeugt von tool/indoor-dev/filament/nahdetail.py — nicht von Hand aendern.",
         "version": 1,
         "size": n,
+        "sizes": {k: min(n, STORE.get(k, STORE_DEFAULT)) for k in MAPS},
         "rangeM": RANGE_M,
         "reliefRangeM": RELIEF_RANGE_M,
         "maps": {k: {"file": k + ".jpg", "slopeScale": slopes[k]} for k in MAPS},
@@ -285,7 +296,8 @@ def main():
     tot = sum(sizes.values())
     for k, v in sizes.items():
         print(f"{k}.jpg {v} Bytes")
-    print(f"zusammen {tot} Bytes; Grafikspeicher je geladene Karte {n * n * 4 * 4 // 3} Bytes (RGBA8 mit Mip-Stufen)")
+    gpu = {k: min(n, STORE.get(k, STORE_DEFAULT)) ** 2 * 4 * 4 // 3 for k in MAPS}
+    print(f"zusammen {tot} Bytes; Grafikspeicher (RGBA8 mit Mip-Stufen) je geladene Karte: {gpu}")
 
 
 if __name__ == "__main__":

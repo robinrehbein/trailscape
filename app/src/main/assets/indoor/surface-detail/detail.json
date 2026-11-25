@@ -139,15 +139,15 @@
   },
   "concrete": {
    "file": "concrete.jpg",
-   "slopeScale": 1.673
+   "slopeScale": 1.461
   },
   "dirt": {
    "file": "dirt.jpg",
-   "slopeScale": 1.779
+   "slopeScale": 1.455
   },
   "grass": {
    "file": "grass.jpg",
-   "slopeScale": 1.668
+   "slopeScale": 1.355
   },
   "gravel": {
    "file": "gravel.jpg",
@@ -155,15 +155,24 @@
   },
   "sand": {
    "file": "sand.jpg",
-   "slopeScale": 1.626
+   "slopeScale": 1.375
   },
   "stone": {
    "file": "stone.jpg",
-   "slopeScale": 1.423
+   "slopeScale": 1.436
   }
  },
  "rangeM": 32.0,
  "reliefRangeM": 40.0,
  "size": 512,
+ "sizes": {
+  "asphalt": 512,
+  "concrete": 256,
+  "dirt": 256,
+  "grass": 256,
+  "gravel": 512,
+  "sand": 256,
+  "stone": 256
+ },
  "version": 1
 }
