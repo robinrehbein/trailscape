@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -158,7 +159,12 @@ private fun ClimbOnPanel(c: ClimbLive.On) {
                 Text(text = "  ·  $it", style = hudStyle(MaterialTheme.typography.labelLarge, HudColors.inkMuted), maxLines = 1)
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(top = 2.dp)) {
+        // Bricht auf schmalen Geraeten und bei grosser Schrift in eine zweite Zeile um.
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.padding(top = 2.dp),
+        ) {
             TrailValue(stringResource(R.string.trail_hud_label_left), stringResource(R.string.common_value_km, formats.decimal(c.remainingM / 1000.0, 1)))
             TrailValue(stringResource(R.string.trail_hud_label_gain), stringResource(R.string.common_value_elevation, formats.decimal(c.remainingGainM, 0)))
             TrailValue(
