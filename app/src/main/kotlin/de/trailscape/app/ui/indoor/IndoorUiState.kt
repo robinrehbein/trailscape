@@ -43,6 +43,9 @@ enum class IndoorStage {
     WORLD,
     RIDE,
     SUMMARY,
+
+    /** 3D-Vorschau einer Strecke ohne Trainer (Idee 4, docs/indoor/vorschau.md). */
+    PREVIEW,
 }
 
 // ---------------------------------------------------------------------------

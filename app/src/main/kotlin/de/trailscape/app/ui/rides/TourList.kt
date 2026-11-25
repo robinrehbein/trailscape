@@ -583,6 +583,10 @@ fun RideDetailHost(
         onRename = { renameTarget = summary },
         onShare = { shareOpen = true },
         onDelete = { onDelete(loaded.id) },
+        onPreview3d = {
+            onBack()
+            appViewModel.requestIndoorPreview(loaded.id)
+        },
     )
 
     renameTarget?.let { target ->

@@ -67,6 +67,8 @@ import de.trailscape.core.indoor.ShifterEvent
 import de.trailscape.core.indoor.TrainerCapabilities
 import de.trailscape.core.indoor.TrainerConnection
 import de.trailscape.core.indoor.VirtualGearTable
+import de.trailscape.core.indoor.preview.PreviewPlayer
+import de.trailscape.core.indoor.preview.PreviewTimeline
 import de.trailscape.core.indoor.sky.IndoorDaylight
 import de.trailscape.core.indoor.sky.IndoorTimeOfDay
 import de.trailscape.core.indoor.world.CameraMode
@@ -263,6 +265,21 @@ class IndoorViewModel(
 
     /** Die Laufzeit der laufenden Fahrt — fuer Tests (Takt von Hand). */
     var activeRuntime: IndoorRideRuntime? = null
+        private set
+
+    // Vorschau „Strecke vor der Tour ansehen" (Idee 4, docs/indoor/vorschau.md)
+    private val _preview = MutableStateFlow<IndoorPreviewUi?>(null)
+
+    /** Die laufende 3D-Vorschau, `null` ausserhalb von [IndoorStage.PREVIEW]. */
+    val preview: StateFlow<IndoorPreviewUi?> = _preview.asStateFlow()
+
+    /** Der Abspieler der Vorschau — fuer Tests (Takt von Hand). */
+    var activePreview: IndoorPreviewController? = null
+        private set
+    private var previewCollectJob: Job? = null
+
+    /** Der Ablauf wurde zum Ansehen geoeffnet ([openPreview]): kein Trainer, keine Fahrt, Zurueck verlaesst ihn. */
+    var previewMode: Boolean = false
         private set
 
     // -----------------------------------------------------------------------
@@ -846,7 +863,7 @@ class IndoorViewModel(
                 }
             }
             commitWorld(token, ui)
-            if (token === worldToken) openServerFor(option, ui)
+            if (token === worldToken && !previewMode) openServerFor(option, ui)
         }
     }
 
@@ -926,6 +943,8 @@ class IndoorViewModel(
         token.dir?.let { worldDir = it }
         _world.value = ui
         if (token.autoStart && ui is IndoorWorldUi.Ready && _stage.value == IndoorStage.WORLD) startRide(withWorld = true)
+        // Vorschau: Ist die 3D-Ansicht bereit (vorhanden oder gerade vorbereitet), geht es direkt in die Vorschau.
+        if (previewMode && ui is IndoorWorldUi.Ready && _stage.value == IndoorStage.WORLD) startPreview(withWorld = true)
     }
 
     private fun resetWorld() {
@@ -1625,6 +1644,7 @@ class IndoorViewModel(
     /** Die App verlaesst den Vordergrund — die Fahrt pausiert. */
     fun onAppBackground() {
         activeRuntime?.onAppBackground()
+        activePreview?.onAppBackground()
     }
 
     fun onAppForeground() {
@@ -1746,8 +1766,17 @@ class IndoorViewModel(
         IndoorStage.WORLD -> {
             cancelRunningWorldJob()
             serverController.close()
-            _stage.value = IndoorStage.ROUTE
-            true
+            // Zum Ansehen geoeffnet: Zurueck verlaesst den Ablauf (dorthin, woher die Vorschau kam).
+            if (previewMode) {
+                false
+            } else {
+                _stage.value = IndoorStage.ROUTE
+                true
+            }
+        }
+        IndoorStage.PREVIEW -> {
+            closePreview()
+            false
         }
         IndoorStage.RIDE -> {
             val runtime = activeRuntime
@@ -1799,7 +1828,126 @@ class IndoorViewModel(
         rideCollectJob?.cancel()
         activeRuntime?.close()
         activeRuntime = null
+        closePreview()
         destroyRenderer()
+    }
+
+    // -----------------------------------------------------------------------
+    // Vorschau „Strecke vor der Tour ansehen" (Idee 4, docs/indoor/vorschau.md)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Oeffnet den Ablauf zum **Ansehen** der Tour [rideId] (geplant oder
+     * gefahren): derselbe Weg wie vor einer Fahrt — vorhandene 3D-Ansicht
+     * direkt, sonst „Strecke vorbereiten" mit Voranschlag und Datenmenge —,
+     * danach die Vorschau statt der Fahrt. Braucht keinen Trainer.
+     */
+    fun openPreview(rideId: String) {
+        if (activeRuntime != null || rideId.isBlank()) return
+        previewMode = true
+        val option = _route.value.options.filterIsInstance<IndoorRouteOption.Saved>().firstOrNull { it.rideId == rideId }
+            ?: IndoorRouteOption.Saved(rideId = rideId, name = "", distanceKm = 0.0, ascentM = 0.0, createdAt = 0L, planned = false)
+        selectRoute(option)
+        _stage.value = IndoorStage.WORLD
+        prepareWorld(autoStart = false)
+    }
+
+    /**
+     * Startet die Vorschau auf der aufbereiteten Strecke — mit 3D-Ansicht
+     * ([withWorld] und eine fertige Welt liegt vor) oder nur auf dem
+     * Hoehenprofil. Die Darstellung entsteht wie in [startRide] ueber
+     * `parts.createRenderer()` und laedt die Welt ueber `loadWorld` — es gibt
+     * keinen zweiten Ladeweg.
+     */
+    fun startPreview(withWorld: Boolean = true) {
+        if (activeRuntime != null) return
+        closePreview()
+        val manifest = worldManifest
+        val dir = worldDir
+        val useWorld = withWorld && manifest != null && dir != null
+        val routeResult: Result<IndoorRoute> = when {
+            useWorld -> indoorCatching(IndoorPart.CORE) { worldRouteOf(manifest, routeName) }
+            baseRoute != null -> Result.success(baseRoute!!)
+            manifest != null -> indoorCatching(IndoorPart.CORE) { worldRouteOf(manifest, routeName) }
+            else -> Result.failure(IllegalStateException("keine Strecke aufbereitet"))
+        }
+        val route = routeResult.getOrElse {
+            _world.value = IndoorWorldUi.RouteUnavailable(problemOf(IndoorPart.APP, it))
+            return
+        }
+        val rider = indoorCatching(IndoorPart.CORE) { parts.riderSetup(profile()) }.getOrElse { fallbackRiderSetup(profile()) }
+        // Gefahrene Tour: 1× = ihr Schnitt (Strecke / Bewegungszeit); Planung: das Modell.
+        val rideAvgMps = selectedRide?.takeIf { !it.planned && !it.indoor }?.stats?.let { s ->
+            s.movingTimeS?.takeIf { it > 0 }?.let { t -> s.distanceKm * 1000.0 / t }
+        }?.takeIf { it.isFinite() && it in PreviewTimeline.MIN_TARGET_SPEED_MPS..PreviewTimeline.MAX_TARGET_SPEED_MPS }
+        val timeline = indoorCatching(IndoorPart.CORE) { PreviewTimeline.of(route, rider, targetAvgSpeedMps = rideAvgMps) }
+            .getOrElse {
+                _world.value = IndoorWorldUi.RouteUnavailable(problemOf(IndoorPart.CORE, it))
+                return
+            }
+
+        var renderer: WorldRenderer? = null
+        var initialRender: IndoorRenderUi = IndoorRenderUi.NoWorld
+        if (useWorld) {
+            indoorCatching(IndoorPart.RENDER) { parts.createRenderer() }.fold(
+                onSuccess = {
+                    renderer = it
+                    initialRender = IndoorRenderUi.Loading(0, 0)
+                },
+                onFailure = { initialRender = IndoorRenderUi.Failed(null, problemOf(IndoorPart.RENDER, it)) },
+            )
+        }
+        val controller = IndoorPreviewController(
+            player = PreviewPlayer(timeline),
+            renderer = renderer,
+            scope = scope,
+            clock = clock,
+            autoLoop = autoLoop,
+            routeName = routeName,
+            profile = runCatching { indoorProfileOf(route) }.getOrNull(),
+            attribution = if (useWorld) manifest.attribution else emptyList(),
+            initialRender = initialRender,
+            paceFromRide = rideAvgMps != null,
+            paceWatts = (rider.ftpW * PreviewTimeline.ENDURANCE_FTP_SHARE).takeIf { it.isFinite() && it > 0 }
+                ?.roundToInt() ?: PreviewTimeline.FALLBACK_POWER_W.roundToInt(),
+        )
+        activePreview = controller
+        renderer?.let { r ->
+            val loaded = indoorCatching(IndoorPart.RENDER) {
+                r.setListener(controller.rendererListener)
+                r.loadWorld(dir!!, manifest!!)
+            }
+            skyOrigin = manifest?.origin
+            loaded.exceptionOrNull()?.let { e ->
+                controller.rendererListener.onFailure(RenderFailure.INTERNAL, problemOf(IndoorPart.RENDER, e).detail)
+            }
+            _renderer.value = r
+            applySky(force = true)
+            indoorCatching(IndoorPart.RENDER) { r.setOtherRidersEnabled(_pair.value.otherRiders) }
+        }
+        _preview.value = controller.ui.value
+        previewCollectJob = scope.launch { controller.ui.collect { _preview.value = it } }
+        _stage.value = IndoorStage.PREVIEW
+        controller.start()
+    }
+
+    fun previewTogglePlay() = activePreview?.togglePlay()
+
+    fun previewCycleSpeed() = activePreview?.cycleSpeed()
+
+    fun previewSeek(distM: Double) = activePreview?.seekTo(distM)
+
+    fun previewSetCamera(mode: CameraMode) = activePreview?.setCamera(mode)
+
+    /** Beendet die Vorschau und gibt die Darstellung frei. */
+    fun closePreview() {
+        previewCollectJob?.cancel()
+        previewCollectJob = null
+        val controller = activePreview ?: return
+        activePreview = null
+        controller.close()
+        destroyRenderer()
+        _preview.value = null
     }
 
     override fun onCleared() {

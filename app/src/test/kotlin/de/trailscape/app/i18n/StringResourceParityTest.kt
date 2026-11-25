@@ -46,6 +46,8 @@ class StringResourceParityTest {
         "strings_indoor_app.xml" to "indoor_app_",
         "strings_indoor_ble.xml" to "indoor_ble_",
         "strings_indoor_render.xml" to "indoor_render_",
+        // Idee 4: Strecke vor der Tour ansehen (docs/indoor/vorschau.md).
+        "strings_idee04.xml" to "idee04_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */

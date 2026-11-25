@@ -116,6 +116,8 @@ fun IndoorFlowScreen(
     }
     // Von „Heute" gewaehlter Vorschlag der Einheit des Tages.
     LaunchedEffect(vm) { appViewModel.consumeIndoorDayPick()?.let(vm::preferDaySuggestion) }
+    // „In 3D ansehen" im Tourdetail: direkt in die Vorschau (Idee 4, docs/indoor/vorschau.md).
+    LaunchedEffect(vm) { appViewModel.consumeIndoorPreviewPick()?.let(vm::openPreview) }
     // Die Startseite ist der Anfang: Strecken einmal lesen (nach einer Drehung nicht erneut).
     LaunchedEffect(vm) { vm.ensureRouteOptions() }
 
@@ -137,10 +139,66 @@ fun IndoorFlowScreen(
         IndoorStage.ROUTE -> HomeStage(vm, onExit)
         IndoorStage.PAIR -> PairStage(vm)
         IndoorStage.SETTINGS -> SettingsStage(vm, onOpenWorlds, onOpenDiagnostics)
-        IndoorStage.WORLD -> WorldStage(vm)
+        IndoorStage.WORLD -> if (vm.previewMode) PreviewWorldStage(vm, onExit) else WorldStage(vm)
         IndoorStage.RIDE -> RideStage(vm)
         IndoorStage.SUMMARY -> SummaryStage(vm, onExit)
+        IndoorStage.PREVIEW -> PreviewStage(vm, onExit)
     }
+}
+
+/**
+ * „Strecke vorbereiten" vor der Vorschau: derselbe Bildschirm wie vor einer
+ * Fahrt (Voranschlag, Datenmenge, Fortschritt), ohne Server-Bau; statt
+ * „Ohne 3D-Ansicht fahren" steht „Nur Höhenprofil ansehen". Zurueck verlaesst
+ * den Ablauf (die Vorschau kam aus dem Tourdetail).
+ */
+@Composable
+private fun PreviewWorldStage(vm: IndoorViewModel, onExit: () -> Unit) {
+    val ui by vm.world.collectAsStateWithLifecycle()
+    val leave = { if (!vm.back()) onExit() }
+    BackHandler {
+        if (ui is IndoorWorldUi.Building) vm.cancelWorldBuild() else leave()
+    }
+    IndoorWorldScreen(
+        ui = ui,
+        onLoad = vm::loadWorld,
+        onCancel = vm::cancelWorldBuild,
+        onRideWithoutWorld = { vm.startPreview(withWorld = false) },
+        onRetry = vm::retryWorld,
+        onBack = leave,
+        onContinue = { vm.startPreview(withWorld = true) },
+        withoutWorldLabel = stringResource(R.string.idee04_world_without_action),
+        continueLabel = stringResource(R.string.idee04_world_continue_action),
+    )
+}
+
+/** Die 3D-Vorschau selbst; Zurueck schliesst sie und verlaesst den Ablauf. */
+@Composable
+private fun PreviewStage(vm: IndoorViewModel, onExit: () -> Unit) {
+    val preview by vm.preview.collectAsStateWithLifecycle()
+    val renderer by vm.renderer.collectAsStateWithLifecycle()
+    val leave = { if (!vm.back()) onExit() }
+    BackHandler { leave() }
+    val ui = preview
+    if (ui == null) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        }
+        return
+    }
+    IndoorPreviewScreen(
+        ui = ui,
+        worldSurface = { modifier ->
+            renderer?.let { r -> WorldSurface(renderer = r, modifier = modifier) }
+        },
+        onBack = leave,
+        onTogglePlay = { vm.previewTogglePlay() },
+        onCycleSpeed = { vm.previewCycleSpeed() },
+        onSeek = { vm.previewSeek(it) },
+        onCameraChange = { vm.previewSetCamera(it) },
+    )
 }
 
 @Composable
