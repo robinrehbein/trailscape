@@ -46,7 +46,10 @@ internal class LoadedAsset(private val core: FilamentCore, val asset: FilamentAs
         for ((e, cat) in categories) {
             val ri = rm.getInstance(e)
             if (ri == 0) continue
-            val (cast, receive) = all ?: shadowFlags(baseCategory(cat))
+            val base = baseCategory(cat)
+            val (flagCast, receive) = all ?: shadowFlags(base)
+            // Stufe Ultra: auch das Gelaende wirft Schatten (Haenge, Kuppen).
+            val cast = flagCast || (all == null && core.terrainCastsShadows && base == WorldNames.NODE_TERRAIN)
             rm.setCastShadows(ri, cast)
             rm.setReceiveShadows(ri, receive)
         }

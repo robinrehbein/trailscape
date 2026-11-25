@@ -61,23 +61,28 @@ internal object RouteTextures {
         val key: String,
         /** Meter je Wiederholung (quadratisch, in Weltkoordinaten aufgelegt). */
         val sizeM: Double,
-        /** Mittlere Farbe der Textur in linearem Licht — die Textur wird exakt darauf normiert. */
+        /**
+         * Mittlere Farbe der Textur in linearem Licht — die Textur wird exakt darauf normiert. Seit
+         * `indoor-world/12` deutlich heller als die Farben, die am Weg vorkommen: Die Vertexfarbe
+         * (hoechstens 1) kann nur abdunkeln, und vorher konnte der Streifen helle Luftbilder (trockene
+         * Wiese, Kalkfels, Winterfeld) nicht erreichen — er lief als dunkles, knallgruenes Band daneben.
+         */
         val meanLinear: FloatArray,
     ) {
         /** Wiese/Grasnarbe aus der Naehe. */
-        GRASS("verge_grass", 5.12, floatArrayOf(0.190f, 0.270f, 0.080f)),
+        GRASS("verge_grass", 5.12, floatArrayOf(0.330f, 0.420f, 0.190f)),
 
         /** Waldboden: Laubstreu, Zweige, Moos. */
-        FOREST("verge_forest", 5.12, floatArrayOf(0.147f, 0.119f, 0.080f)),
+        FOREST("verge_forest", 5.12, floatArrayOf(0.255f, 0.215f, 0.150f)),
 
-        /** Bankett: Schotter und Erde, schuetter bewachsen. */
-        SHOULDER("verge_shoulder", 2.56, floatArrayOf(0.170f, 0.150f, 0.115f)),
+        /** Bankett: Schotter und Erde, schuetter bewachsen (auch Rand ueber Fels und kahlem Boden). */
+        SHOULDER("verge_shoulder", 2.56, floatArrayOf(0.430f, 0.395f, 0.330f)),
 
         /** Gehwegplatten. */
         SIDEWALK("verge_sidewalk", 2.56, floatArrayOf(0.300f, 0.295f, 0.280f)),
     }
 
-    /** Mittlere Farbe (linear) der Wiesenweg-Textur — hell wie [Verge.GRASS], damit dieselbe Abtoenung passt. */
+    /** Mittlere Farbe (linear) der Wiesenweg-Textur; die Vertexfarbe des Wiesenwegs wird auf sie bezogen. */
     val GRASS_WAY_MEAN = floatArrayOf(0.205f, 0.265f, 0.095f)
 
     /** Meter, die die Fransenkante ([fringe]) laengs und quer deckt. */

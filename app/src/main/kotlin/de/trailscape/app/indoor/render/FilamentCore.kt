@@ -27,6 +27,7 @@ import com.google.android.filament.gltfio.ResourceLoader
 import com.google.android.filament.gltfio.UbershaderProvider
 import de.trailscape.core.indoor.sky.SkyClouds
 import de.trailscape.core.indoor.sky.SkyShading
+import de.trailscape.core.indoor.water.WaterShading
 import de.trailscape.core.indoor.world.RenderSettings
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -51,7 +52,9 @@ internal class FilamentCore {
     val view: View
     val cameraEntity: Int
     val camera: Camera
-    val sunEntity: Int
+    /** Die Sonne; [RenderQuality.shadowOptions] bauen sie bei anderen Kaskaden neu (neue Entity). */
+    var sunEntity: Int
+        private set
     val worldRoot: Int
     /** Ubershader plus eigene Materialien fuer Gelaende, Laub und Belaege ([WorldMaterialProvider]). */
     val worldMaterials: WorldMaterialProvider
@@ -60,6 +63,19 @@ internal class FilamentCore {
         private set
 
     private var indirectLight: IndirectLight? = null
+    private var reflectionsTexture: Texture? = null
+
+    // Grafikstufen Hoch/Ultra (RenderQuality); Vorgaben = Bild wie vorher.
+    private var reflectionsEnabled = false
+    private var whiteBalanceEnabled = false
+    private var sunShadowConfig = Triple(3, SHADOW_FAR_M.toDouble(), false)
+    private var lastSky: SkyLighting? = null
+
+    private var temporalAAWanted = false
+
+    /** Gelaende wirft Schatten (Stufe Ultra); liest [LoadedAsset.applyShadows]. */
+    var terrainCastsShadows = false
+        private set
     private var skybox: Skybox? = null
     private var skyTexture: Texture? = null
 
@@ -165,6 +181,22 @@ internal class FilamentCore {
         updateProjection()
     }
 
+    /** Groesse der Zeichenflaeche in px (nach fester Skalierung, vor der dynamischen Aufloesung); 0 = unbekannt. */
+    val viewportWidth: Int get() = viewportW
+    val viewportHeight: Int get() = viewportH
+
+    private val dynScaleOut = FloatArray(2)
+
+    /**
+     * Zuletzt benutzter Faktor der dynamischen Aufloesung (Mittel beider Achsen,
+     * `View.getLastDynamicResolutionScale`, Filament 1.75.1); `null`, wenn der Aufruf scheitert.
+     */
+    fun lastDynamicResolutionScale(): Double? = runCatching {
+        view.getLastDynamicResolutionScale(dynScaleOut)
+        val v = (dynScaleOut[0] + dynScaleOut[1]) / 2.0
+        v.takeIf { it > 0.0 && it <= 4.0 }
+    }.getOrNull()
+
     /** Lenkerperspektive: eigener Bildwinkel, nahe Ebene und Verschiebung des Bildes (siehe [projectionFor]). */
     var handlebarView: Boolean = false
         set(value) {
@@ -198,9 +230,13 @@ internal class FilamentCore {
 
     fun applySettings(s: RenderSettings, fogDensity: Double, fogColor: Rgb, fogHeight: Double) {
         view.setShadowingEnabled(s.shadows)
+        runCatching { ensureSunShadows(s.shadowCascades, s.shadowFarM, s.stableShadows) }
         engine.lightManager.getInstance(sunEntity).takeIf { it != 0 }?.let {
             engine.lightManager.setShadowCaster(it, s.shadows)
         }
+        terrainCastsShadows = s.terrainShadows
+        temporalAAWanted = s.temporalAA
+
         view.isPostProcessingEnabled = s.postProcessing
         applyAntiAliasing(s.antiAliasing)
         // PCF: DPCF ist in Filament 1.75.1 veraltet und faellt auf PCSS zurueck — damit
@@ -213,21 +249,21 @@ internal class FilamentCore {
             }
         }.onFailure { runCatching { view.setShadowType(View.ShadowType.PCF) } }
         view.dithering = if (s.postProcessing) View.Dithering.TEMPORAL else View.Dithering.NONE
-        view.ambientOcclusionOptions = view.ambientOcclusionOptions.apply {
-            enabled = s.ambientOcclusion
-            radius = 0.4f
-            intensity = 1.0f
-        }
-        view.bloomOptions = view.bloomOptions.apply {
-            enabled = s.bloom
-            strength = 0.08f
-        }
-        view.dynamicResolutionOptions = view.dynamicResolutionOptions.apply {
-            enabled = s.dynamicResolution
-            minScale = 0.6f
-            maxScale = 1.0f
+        RenderQuality.applyAmbientOcclusion(view, s)
+        RenderQuality.applyBloom(view, s)
+        RenderQuality.applyDynamicResolution(view, s)
+        runCatching { RenderQuality.applyVignette(view, s.vignette && s.postProcessing) }
+        // Spiegelungs-Umgebungslicht und Weissabgleich: bei Aenderung Licht und Farbweg neu.
+        if (s.reflections != reflectionsEnabled || s.whiteBalance != whiteBalanceEnabled) {
+            reflectionsEnabled = s.reflections
+            whiteBalanceEnabled = s.whiteBalance
+            lastSky?.let { l ->
+                applyGrading(l)
+                runCatching { applyIndirectLight(l) }
+            }
         }
         applyFog(s.fog, fogDensity, fogColor, fogHeight)
+        setWaterDetail(s.groundDetail)
         val hz = runCatching { renderer.displayInfo.refreshRate }.getOrDefault(60f).takeIf { it > 1f } ?: 60f
         renderer.frameRateOptions = renderer.frameRateOptions.apply {
             // In Einheiten der Anzeigerate: bei 60 Hz und 30 Bildern ist das 2 (fuer die dynamische Aufloesung).
@@ -241,6 +277,13 @@ internal class FilamentCore {
      * Jeder Schritt einzeln abgesichert — ein Fehler hier kostet nur die Glaettung.
      */
     private fun applyAntiAliasing(enabled: Boolean) {
+        // Stufe Ultra: zeitliche Kantenglaettung statt MSAA/FXAA (RenderQuality.applyTemporalAA).
+        if (enabled && temporalAAWanted && RenderQuality.applyTemporalAA(view, true)) {
+            runCatching { view.multiSampleAntiAliasingOptions = view.multiSampleAntiAliasingOptions.apply { this.enabled = false } }
+            view.antiAliasing = View.AntiAliasing.NONE
+            return
+        }
+        if (view.temporalAntiAliasingOptions.enabled) RenderQuality.applyTemporalAA(view, false)
         val msaa = enabled && runCatching {
             view.multiSampleAntiAliasingOptions = view.multiSampleAntiAliasingOptions.apply {
                 this.enabled = true
@@ -289,12 +332,16 @@ internal class FilamentCore {
     private fun applyGrading(l: SkyLighting) {
         val g = l.daylight.grade
         runCatching {
-            val cg = ColorGrading.Builder()
+            val b = ColorGrading.Builder()
                 .toneMapper(ToneMapper.PBRNeutralToneMapper())
                 .contrast(g.contrast.toFloat())
                 .vibrance(g.vibrance.toFloat())
                 .saturation(g.saturation.toFloat())
-                .build(engine)
+            if (whiteBalanceEnabled) {
+                val (t, tint) = de.trailscape.core.indoor.sky.PhotoGrade.whiteBalance(l.daylight)
+                b.whiteBalance(t.toFloat(), tint.toFloat())
+            }
+            val cg = b.build(engine)
             view.colorGrading = cg
             colorGrading?.let { old -> runCatching { engine.destroyColorGrading(old) } }
             colorGrading = cg
@@ -413,6 +460,11 @@ internal class FilamentCore {
             val m = buildMaterial(bytes).also { waterMaterial = it }
             val mi = m.createInstance()
             mi.setParameter("waves", ensureCloudTexture(), cloudSampler)
+            // Wellenkarte binden, bevor die Instanz an ein Renderable geht (ungebundener Sampler = Abbruch)
+            if (m.hasParameter(WaterSurface.WAVE_NORMALS)) {
+                val wn = waveNormals ?: WaterSurface.buildWaveNormals(engine).also { waveNormals = it }
+                mi.setParameter(WaterSurface.WAVE_NORMALS, wn, cloudSampler)
+            }
             waterInstance = mi
             lastLighting?.let { applyWaterParameters(it) }
             mi
@@ -423,11 +475,24 @@ internal class FilamentCore {
     }
 
     private var lastLighting: SkyLighting? = null
+    private var waveNormals: Texture? = null
+
+    /** Qualitaet des Wassers: `true` drei Wellenlagen und gespiegelte Wolken, `false` eine Lage (niedrige Stufe). */
+    private var waterDetail = true
+
+    private fun setWaterDetail(full: Boolean) {
+        if (full == waterDetail) return
+        waterDetail = full
+        lastLighting?.let { applyWaterParameters(it) }
+    }
 
     private fun applyWaterParameters(l: SkyLighting) {
         lastLighting = l
+        // Wellenkarte schon beim Himmel (Start) im Hintergrund rechnen, nicht erst beim ersten Wasser
+        if (materialPackages.containsKey(WATER_MATERIAL)) WaterSurface.prefetch()
         val mi = waterInstance ?: return
-        runCatching { setParameters(mi, SkyShading.water(l.daylight)) }
+        // nur deklarierte Parameter (WaterSurface.declared): ein aelteres water.filamat stuerzt so nie ab
+        runCatching { setParameters(mi, WaterSurface.declared(waterMaterial, WaterShading.params(l.daylight, if (waterDetail) 1.0 else 0.0))) }
     }
 
     /** Uhr der Materialien (Wolkenzug, Wellen) in Sekunden; je Bild. */
@@ -466,15 +531,9 @@ internal class FilamentCore {
 
         // Belichtung je Tageszeit (gemessen, docs/indoor/render.md „Licht und Farbe")
         runCatching { camera.setExposure(SkyModel.APERTURE, l.shutterS, SkyModel.ISO) }
+        lastSky = l
         applyGrading(l)
-
-        val newIbl = IndirectLight.Builder()
-            .radiance(3, SkyModel.radianceSh(l))
-            .intensity(l.ambientLux.toFloat())
-            .build(engine)
-        scene.indirectLight = newIbl
-        indirectLight?.let { old -> runCatching { engine.destroyIndirectLight(old) } }
-        indirectLight = newIbl
+        applyIndirectLight(l)
 
         val oldSky = skybox
         val oldTex = skyTexture
@@ -506,6 +565,69 @@ internal class FilamentCore {
         skyTexture = tex
         oldSky?.let { runCatching { engine.destroySkybox(it) } }
         oldTex?.let { runCatching { engine.destroyTexture(it) } }
+    }
+
+    /**
+     * Umgebungslicht: SH fuer den diffusen Anteil, mit [reflectionsEnabled] dazu die
+     * vorgefilterte Spiegelungs-Cubemap ([RenderQuality.buildReflections]). Ohne sie
+     * bindet Filament eine schwarze Cubemap — kein spekulares Umgebungslicht.
+     */
+    private fun applyIndirectLight(l: SkyLighting) {
+        val refl = if (reflectionsEnabled) RenderQuality.buildReflections(engine, l) else null
+        val builder = IndirectLight.Builder()
+            .radiance(3, SkyModel.radianceSh(l))
+            .intensity(l.ambientLux.toFloat())
+        if (refl != null) builder.reflections(refl)
+        var usedRefl = refl
+        val newIbl = runCatching { builder.build(engine) }.getOrElse {
+            refl?.let { t -> runCatching { engine.destroyTexture(t) } }
+            usedRefl = null
+            IndirectLight.Builder().radiance(3, SkyModel.radianceSh(l)).intensity(l.ambientLux.toFloat()).build(engine)
+        }
+        scene.indirectLight = newIbl
+        indirectLight?.let { old -> runCatching { engine.destroyIndirectLight(old) } }
+        reflectionsTexture?.let { old -> runCatching { engine.destroyTexture(old) } }
+        indirectLight = newIbl
+        reflectionsTexture = usedRefl
+    }
+
+    /**
+     * Baut die Sonne neu, wenn sich Kaskaden, Reichweite oder Stabilitaet der Schatten
+     * aendern (Java kennt in 1.75.1 keine Schattenoptionen zur Laufzeit). Erst die neue
+     * Sonne bauen und zeigen, dann die alte entfernen — scheitert der Bau, bleibt die alte.
+     */
+    private fun ensureSunShadows(cascades: Int, farM: Double, stable: Boolean) {
+        val want = Triple(cascades.coerceIn(1, 4), farM.coerceIn(50.0, 2_000.0), stable)
+        if (want == sunShadowConfig) return
+        val lm = engine.lightManager
+        val old = sunEntity
+        val oi = lm.getInstance(old)
+        if (oi == 0) return
+        val dir = FloatArray(3).also { lm.getDirection(oi, it) }
+        val col = FloatArray(3).also { lm.getColor(oi, it) }
+        val lux = lm.getIntensity(oi)
+        val e = EntityManager.get().create()
+        try {
+            LightManager.Builder(LightManager.Type.SUN)
+                .color(col[0], col[1], col[2])
+                .intensity(lux)
+                .direction(dir[0], dir[1], dir[2])
+                .castShadows(true)
+                .shadowOptions(RenderQuality.shadowOptions(want.first, want.second, want.third))
+                .sunAngularRadius(1.2f)
+                .sunHaloSize(8f)
+                .sunHaloFalloff(80f)
+                .build(engine, e)
+        } catch (t: Throwable) {
+            runCatching { EntityManager.get().destroy(e) }
+            throw t
+        }
+        scene.addEntity(e)
+        sunEntity = e
+        sunShadowConfig = want
+        runCatching { scene.removeEntity(old) }
+        runCatching { lm.destroy(old) }
+        runCatching { EntityManager.get().destroy(old) }
     }
 
     /**
@@ -613,6 +735,7 @@ internal class FilamentCore {
         skybox?.let { runCatching { engine.destroySkybox(it) } }
         skyTexture?.let { runCatching { engine.destroyTexture(it) } }
         indirectLight?.let { runCatching { engine.destroyIndirectLight(it) } }
+        reflectionsTexture?.let { runCatching { engine.destroyTexture(it) } }
         if (skyEntity != 0) {
             runCatching { scene.removeEntity(skyEntity) }
             runCatching { engine.destroyEntity(skyEntity) }
@@ -629,6 +752,7 @@ internal class FilamentCore {
         // Wasser erst nach den Kacheln (die es noch benutzen koennten) freigeben.
         waterInstance?.let { runCatching { engine.destroyMaterialInstance(it) } }
         waterMaterial?.let { runCatching { engine.destroyMaterial(it) } }
+        waveNormals?.let { runCatching { engine.destroyTexture(it) } }
         runCatching { worldMaterials.destroy() }
         cloudTexture?.let { runCatching { engine.destroyTexture(it) } }
         runCatching { engine.lightManager.destroy(sunEntity) }
