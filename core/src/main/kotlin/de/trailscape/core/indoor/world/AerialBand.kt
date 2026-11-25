@@ -93,6 +93,8 @@ internal object AerialBand {
     fun apply(ctx: TileContext, out: TileOutput, options: AerialBandOptions, fetch: (Double, Double, Double, Double) -> RgbaImage?): Int {
         val spec = ctx.spec
         if (spec.level != 0 || ctx.aerialTexture == null) return 0
+        // LOW hat 128 MB Texturbudget und 512-px-Kacheln: dort kein Band (Grafikspeicher).
+        if (ctx.quality == IndoorQuality.LOW) return 0
         val base = out.level0Mesh(WorldNames.NODE_TERRAIN, WorldNames.MAT_TERRAIN) ?: return 0
         val perSide = (spec.cellM / options.cellM).toInt()
         val cells = cellsNear(spec, ctx.track.track, options.bandM, options.cellM, options.maxCellsPerTile)

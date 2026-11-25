@@ -1067,3 +1067,11 @@ Ursache, und die App zeigt sie als kopierbare „Technische Einzelheit“.
       abgebrochen …“ auf dem Handy (laufende Kacheln/Anfragen)? Bei mehr als
       einigen Sekunden `isCancelled` auch innerhalb einer Kachel abfragen.
 - [ ] Wirkt der Wald im Gegenlicht und bei tiefer Sonne nicht zu dunkel?
+
+## Luftbild im Streckenband (25.11.2026, Branch `claude/grafik-luftbild-20cm`)
+
+Für Katalog- und Server-Bau wählbar (`--aerial-band band`): 32-m-Felder bis
+20 m neben der Fahrlinie bekommen ein eigenes Luftbild mit 12,5 cm je Pixel
+(Material `x_mat_terrain_band_<n>_<i>_<r>`, in der App `terrain_band.mat` mit
+Software-Anisotropie). Bestandsaufnahme, Optionen, Kosten und Bilder:
+`docs/indoor/luftbild-band.md`. Der Bau auf dem Gerät ist unverändert.
