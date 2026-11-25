@@ -146,7 +146,7 @@ Nach der Rückmeldung „ruppig und kantig“ (siehe `docs/indoor/world.md`,
 | Was | vorher | jetzt | Rückfall |
 |---|---|---|---|
 | Kantenglättung | FXAA | **4× MSAA** (`multiSampleAntiAliasingOptions`, `sampleCount = 4`); FXAA nur, wenn MSAA nicht gesetzt werden kann | FXAA |
-| Schattenart | PCF (Filament-Standard, harte Treppen) | **DPCF** (`setShadowType`), `softShadowOptions.penumbraScale = 1,5` | PCF |
+| Schattenart | PCF (Filament-Standard, harte Treppen) | **PCF** (`setShadowType`). DPCF ist in Filament 1.75.1 veraltet und fällt auf PCSS zurück; damit erschien auf dem Gerät kein Schatten | PCF |
 | Schattenkarten | 1024², Standard-Kaskadengrenzen | **2048²**, `cascadeSplitPositions = [0,05, 0,2]` (≈ 15 m / 60 m bei 300 m Reichweite) | – (Builder-Werte) |
 
 `RenderSettings.antiAliasing = false` schaltet MSAA und FXAA ab; ohne
