@@ -82,4 +82,6 @@
     <string name="indoor_render_diag_switch_fps30">Höchstens 30 Bilder je Sekunde</string>
     <string name="indoor_render_diag_resolution">Auflösung: %1$d %%</string>
     <string name="indoor_render_diag_failure_detail">Details für einen Fehlerbericht</string>
+    <string name="indoor_render_diag_safe_mode">Sicherer Grafikmodus aktiv: Beim letzten Laden einer Welt wurde die App beendet. Bodendetails, Wind, Wasser, Vögel und andere Radfahrer sind deshalb aus.</string>
+    <string name="indoor_render_diag_safe_mode_reset">Sicheren Modus aufheben</string>
 </resources>

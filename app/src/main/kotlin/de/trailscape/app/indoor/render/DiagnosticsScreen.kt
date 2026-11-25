@@ -101,6 +101,7 @@ internal fun DiagnosticsScreen(onBack: () -> Unit, modifier: Modifier = Modifier
     var testWorldNote by remember { mutableStateOf<String?>(null) }
     var testWorldBusy by remember { mutableStateOf(false) }
 
+    var safeMode by remember { mutableStateOf(RenderGuard.isSafeMode(context)) }
     val renderer = remember(generation) { FilamentWorldRenderer(context) }
     DisposableEffect(renderer) {
         renderer.setListener(object : WorldRendererListener {
@@ -231,6 +232,21 @@ internal fun DiagnosticsScreen(onBack: () -> Unit, modifier: Modifier = Modifier
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
+            }
+
+            if (safeMode) {
+                Text(
+                    stringResource(R.string.indoor_render_diag_safe_mode),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                OutlinedButton(onClick = {
+                    RenderGuard.reset(context)
+                    safeMode = false
+                    generation++
+                    status = DiagStatus.Idle
+                    scene = DiagScene.NONE
+                }) { Text(stringResource(R.string.indoor_render_diag_safe_mode_reset)) }
             }
 
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
