@@ -573,7 +573,7 @@ class IndoorScreenshotTest {
                             modifier = Modifier.fillMaxSize().padding(16.dp),
                             verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
                         ) {
-                            IndoorCatalogList(previewUi, "catalog:alpe-dhuez") {}
+                            IndoorCatalogList(previewUi, "catalog:alpe-dhuez", onSelect = {})
                         }
                     }
                 }
