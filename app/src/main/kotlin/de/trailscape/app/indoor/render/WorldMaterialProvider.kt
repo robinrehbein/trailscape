@@ -183,6 +183,14 @@ internal class WorldMaterialProvider(
                 mi.setParameter("detailMap", ensureDetailTexture(), detailSampler)
                 mi.setParameter("macroMap", noiseTexture(), repeatSampler)
             }
+            WorldMaterialRules.Kind.TERRAIN_BAND -> {
+                // Wie TERRAIN; die eigenen Parameter nur, wenn das Paket sie deklariert (Absturzschutz).
+                setParameters(mi, SkyShading.terrain())
+                mi.setParameter("detailMap", ensureDetailTexture(), detailSampler)
+                mi.setParameter("macroMap", noiseTexture(), repeatSampler)
+                val c = WorldMaterialRules.bandCell(label) ?: floatArrayOf(0f, 0f, 0f)
+                if (mi.material.hasParameter("bandCell")) mi.setParameter("bandCell", c[0], c[1], c[2])
+            }
             WorldMaterialRules.Kind.FOLIAGE -> {
                 setParameters(mi, SkyShading.foliage())
                 mi.setParameter("time", 0f)
@@ -203,6 +211,10 @@ internal class WorldMaterialProvider(
         when (kind) {
             WorldMaterialRules.Kind.TERRAIN ->
                 mi.setParameter("detailRange", if (groundDetail) SkyShading.TERRAIN_DETAIL_RANGE_M.toFloat() else 0f)
+            WorldMaterialRules.Kind.TERRAIN_BAND -> {
+                mi.setParameter("detailRange", if (groundDetail) SkyShading.TERRAIN_DETAIL_RANGE_M.toFloat() else 0f)
+                if (mi.material.hasParameter("anisoRange")) mi.setParameter("anisoRange", if (aniso) TERRAIN_BAND_ANISO_RANGE_M else 0f)
+            }
             WorldMaterialRules.Kind.FOLIAGE -> mi.setParameter("windStrength", if (wind) 1f else 0f)
             WorldMaterialRules.Kind.SURFACE, WorldMaterialRules.Kind.SURFACE_BLEND -> {
                 mi.setParameter("detailRange", if (groundDetail) SkyShading.SURFACE_DETAIL_RANGE_M.toFloat() else 0f)
@@ -227,5 +239,8 @@ internal class WorldMaterialProvider(
     companion object {
         private const val TAG = "WorldMaterials"
         const val DETAIL_ANISOTROPY = 8f
+
+        /** Software-Anisotropie im Streckenband bis hierher (Meter); weiter weg ein Zugriff wie terrain.mat. */
+        const val TERRAIN_BAND_ANISO_RANGE_M = 90f
     }
 }

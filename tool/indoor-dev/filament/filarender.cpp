@@ -159,7 +159,8 @@ static Material* loadMaterial(Engine* engine, const std::string& path) {
 // (`x_mat_tree_cards`, `mat_tree_leaves`) → foliage.mat, Belaege und Randstreifen →
 // surface.mat, ihre Auslaeufe → surface_blend.mat; alles andere der Ubershader. gltfio setzt
 // danach dieselben Parameter (baseColorFactor …) und bindet die Textur an `baseColorMap`.
-enum Kind { UBER = 0, TERRAIN = 1, FOLIAGE = 2, SURFACE = 3, SURFACE_BLEND = 4 };
+enum Kind { UBER = 0, TERRAIN = 1, FOLIAGE = 2, SURFACE = 3, SURFACE_BLEND = 4, TERRAIN_BAND = 5 };
+static const int KIND_COUNT = 6;
 
 static bool startsWith(const std::string& s, const char* p) { return s.rfind(p, 0) == 0; }
 static bool endsWith(const std::string& s, const char* p) {
@@ -172,6 +173,7 @@ static Kind kindFor(const std::string& l, gltfio::AlphaMode a, bool tex, bool un
     if (!tex || unlit) return UBER;
     using gltfio::AlphaMode;
     if (l == "mat_terrain") return a == AlphaMode::OPAQUE ? TERRAIN : UBER;
+    if (startsWith(l, "x_mat_terrain_band_")) return a == AlphaMode::OPAQUE ? TERRAIN_BAND : UBER;
     if (l == "x_mat_tree_cards" || l == "mat_tree_leaves") return a == AlphaMode::MASK ? FOLIAGE : UBER;
     if (a == AlphaMode::OPAQUE && (startsWith(l, "mat_route_") || (startsWith(l, "x_mat_road_") && !endsWith(l, "_edge")) ||
             (startsWith(l, "x_mat_route_verge_") && !endsWith(l, "_fade")) || l == "x_mat_route_shoulder" || l == "x_mat_route_sidewalk"))
@@ -179,6 +181,13 @@ static Kind kindFor(const std::string& l, gltfio::AlphaMode a, bool tex, bool un
     if (a == AlphaMode::BLEND && ((startsWith(l, "x_mat_route_") && endsWith(l, "_fade")) || l == "x_mat_route_fringe"))
         return SURFACE_BLEND;
     return UBER;
+}
+
+// Spiegel von WorldMaterialRules.bandCell: (Spalte nach Osten, Zeile von Norden, Felder je Kante).
+static float3 bandCell(const std::string& l) {
+    int n = 0, i = 0, r = 0;
+    if (sscanf(l.c_str(), "x_mat_terrain_band_%d_%d_%d", &n, &i, &r) != 3 || n < 1 || i < 0 || r < 0 || i >= n || r >= n) return { 0, 0, 0 };
+    return { float(i), float(r), float(n) };
 }
 
 // Spiegel von WorldMaterialRules.detailClass: Gewichte Wiese, Erde, Waldboden, Schotter.
@@ -192,10 +201,10 @@ static float4 detailClass(const std::string& l) {
 
 struct WorldProvider : public gltfio::MaterialProvider {
     gltfio::MaterialProvider* uber;
-    Material* mats[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+    Material* mats[KIND_COUNT] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
     std::function<void(MaterialInstance*, int, const std::string&)> setup;
     mutable std::vector<const Material*> all;
-    size_t counts[5] = { 0, 0, 0, 0, 0 };
+    size_t counts[KIND_COUNT] = { 0, 0, 0, 0, 0, 0 };
 
     explicit WorldProvider(gltfio::MaterialProvider* u) : uber(u) {}
 
@@ -220,12 +229,12 @@ struct WorldProvider : public gltfio::MaterialProvider {
     const Material* const* getMaterials() const noexcept override {
         all.clear();
         for (size_t i = 0; i < uber->getMaterialsCount(); i++) all.push_back(uber->getMaterials()[i]);
-        for (int k = 1; k < 5; k++) if (mats[k]) all.push_back(mats[k]);
+        for (int k = 1; k < KIND_COUNT; k++) if (mats[k]) all.push_back(mats[k]);
         return all.data();
     }
     size_t getMaterialsCount() const noexcept override {
         size_t n = uber->getMaterialsCount();
-        for (int k = 1; k < 5; k++) if (mats[k]) n++;
+        for (int k = 1; k < KIND_COUNT; k++) if (mats[k]) n++;
         return n;
     }
     void destroyMaterials() override { uber->destroyMaterials(); }
@@ -499,6 +508,10 @@ int main(int argc, char** argv) {
             cloudTex->generateMipmaps(*engine);
         }
     }
+    // Streckenband (terrain_band.mat): nur mit dem Gelaende-Material; `settings.terrainBand` = false → Ubershader.
+    if (wp->mats[TERRAIN] && opt(settings, "terrainBand", true) && std::ifstream(matDir + "/terrain_band.filamat")) {
+        wp->mats[TERRAIN_BAND] = loadMaterial(engine, matDir + "/terrain_band.filamat");
+    }
     if (!matDir.empty() && L.contains("foliage") && opt(settings, "foliageMaterial", true) && std::ifstream(matDir + "/foliage.filamat")) {
         wp->mats[FOLIAGE] = loadMaterial(engine, matDir + "/foliage.filamat");
     }
@@ -507,11 +520,16 @@ int main(int argc, char** argv) {
         wp->mats[SURFACE_BLEND] = loadMaterial(engine, matDir + "/surface_blend.filamat");
     }
     wp->setup = [&](MaterialInstance* mi, int kind, const std::string& label) {
-        if (kind == 1) {
+        if (kind == TERRAIN || kind == TERRAIN_BAND) {
             setParams(mi, L["terrain"]);
             if (!groundDetail) mi->setParameter("detailRange", 0.f);
             mi->setParameter("detailMap", detailTex, detailSampler);
             mi->setParameter("macroMap", cloudTex, cloudSampler);
+            if (kind == TERRAIN_BAND) {
+                // wie WorldMaterialProvider: TERRAIN_BAND_ANISO_RANGE_M = 90
+                mi->setParameter("bandCell", bandCell(label));
+                mi->setParameter("anisoRange", opt(settings, "aniso", true) ? 90.f : 0.f);
+            }
         } else if (kind == SURFACE || kind == SURFACE_BLEND) {
             setParams(mi, L["surface"]);
             if (!groundDetail) mi->setParameter("detailRange", 0.f);
@@ -648,8 +666,8 @@ int main(int argc, char** argv) {
     stbi_write_png(argv[2], W, H, 4, px.data(), W * 4);
     auto tEnd = std::chrono::steady_clock::now();
     auto ms = [](auto a, auto b) { return (long)std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count(); };
-    printf("{\"renderables\": %zu, \"primitives\": %zu, \"waterPrimitives\": %zu, \"terrainMi\": %zu, \"foliageMi\": %zu, \"surfaceMi\": %zu, \"uberMi\": %zu, \"loadMs\": %ld, \"renderMs\": %ld}\n",
-        renderables, primitives, waterPrims, wp->counts[TERRAIN], wp->counts[FOLIAGE], wp->counts[SURFACE] + wp->counts[SURFACE_BLEND], wp->counts[UBER], ms(t0, tLoad), ms(tLoad, tEnd));
+    printf("{\"renderables\": %zu, \"primitives\": %zu, \"waterPrimitives\": %zu, \"terrainMi\": %zu, \"terrainBandMi\": %zu, \"foliageMi\": %zu, \"surfaceMi\": %zu, \"uberMi\": %zu, \"loadMs\": %ld, \"renderMs\": %ld}\n",
+        renderables, primitives, waterPrims, wp->counts[TERRAIN], wp->counts[TERRAIN_BAND], wp->counts[FOLIAGE], wp->counts[SURFACE] + wp->counts[SURFACE_BLEND], wp->counts[UBER], ms(t0, tLoad), ms(tLoad, tEnd));
     fflush(stdout);
     // Aufraeumen ueberlassen wir dem Prozessende (Werkzeug, kein Dauerlauf).
     _exit(0);

@@ -62,6 +62,8 @@ internal class WorldBuilderImpl(
     private val threads: Int = defaultWorldThreads(),
     /** Datenstufe „Laser" (DGM1, nDOM, LoD2; siehe [LaserWorldParts]); `null` = bisheriger Datensatz. */
     private val laser: LaserOptions? = null,
+    /** Streckenband: feineres Luftbild nah an der Fahrlinie ([AerialBand]); `null` = aus (Geraet). */
+    private val aerialBand: AerialBandOptions? = null,
 ) : WorldBuilder {
 
     // -----------------------------------------------------------------------
@@ -198,6 +200,7 @@ internal class WorldBuilderImpl(
                 map = map,
                 degradedOf = loader::vectorMissing,
                 aerial = if (plan.aerial.isEmpty()) null else AerialStore(deps.fetcher, deps.decoder, origin, plan.aerial, quality),
+                aerialBand = if (plan.aerial.isEmpty() || aerialBand == null) null else AerialBandStore(deps.fetcher, deps.decoder, origin, plan.aerial, aerialBand),
                 aerialSources = plan.aerial,
                 baseAttribution = attribution,
                 createdAtMs = clock(),
@@ -296,6 +299,8 @@ internal class WorldBuilderImpl(
         val createdAtMs: Long,
         /** Kennung der Laserdaten (Quelle, Bloecke, Gebaeude) fuer den Fingerabdruck; `null` ohne. */
         val laserId: String? = null,
+        /** Streckenband ([AerialBand]); `null` = aus. */
+        val aerialBand: AerialBandStore? = null,
     )
 
     /** Die Laserdaten des letzten Baus (fuer Messungen im Werkzeug), sonst `null`. */
@@ -400,6 +405,9 @@ internal class WorldBuilderImpl(
             ctx.meshHeight = parts.terrainMesh(ctx)
             val out = TileOutput(spec)
             for (layer in parts.layers(spec.level)) layer.build(ctx, out)
+            inputs.aerialBand?.let { band ->
+                AerialBand.apply(ctx, out, band.options) { e0, n0, e1, n1 -> band.fetch(aerial?.image?.source, e0, n0, e1, n1) }
+            }
             parts.tileDone(spec)
             val bytes = out.toGlb().toBytes()
             val info = parseGlb(bytes)
@@ -472,6 +480,7 @@ internal class WorldBuilderImpl(
             tiles = tiles,
             budget = WorldBudget(maxTex, maxTri, tileBytes),
             attribution = attribution,
+            aerialBand = inputs.aerialBand?.options?.let { WorldAerialBand(it.bandM, it.cellM, it.px) },
         )
         // diskBytes enthaelt das Manifest selbst: so lange rechnen, bis die Laenge stabil ist.
         var json = manifest.toJson()
@@ -499,6 +508,7 @@ internal class WorldBuilderImpl(
         sb.append('|').append(sha256Hex(inputs.track.toJson().toString()))
         sb.append('|').append(inputs.origin.toJson().toString())
         inputs.laserId?.let { sb.append("|laser=").append(it) }
+        inputs.aerialBand?.options?.let { sb.append("|band=").append(it.toString()) }
         for (p in inputs.planned) sb.append(';').append(p.spec.id)
         return sha256Hex(sb.toString())
     }

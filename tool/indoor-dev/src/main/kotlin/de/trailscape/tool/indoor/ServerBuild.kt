@@ -15,7 +15,6 @@ import de.trailscape.core.indoor.world.WorldManifest
 import de.trailscape.core.indoor.world.aerialSources
 import de.trailscape.core.indoor.world.checkWorld
 import de.trailscape.core.indoor.world.createGeoPipeline
-import de.trailscape.core.indoor.world.createLaserWorldBuilder
 import de.trailscape.core.indoor.world.createWorldBuilder
 import de.trailscape.core.indoor.world.laserBuildStats
 import de.trailscape.core.indoor.world.laserSources
@@ -72,7 +71,12 @@ private fun fail(job: File, code: String, detail: String): Int {
     return 1
 }
 
-fun serverBuild(jobDir: File, cacheDir: File, limits: ServerRouteLimits): Int {
+fun serverBuild(
+    jobDir: File,
+    cacheDir: File,
+    limits: ServerRouteLimits,
+    aerialBand: de.trailscape.core.indoor.world.AerialBandOptions? = null,
+): Int {
     if (!jobDir.isDirectory) return 2
     val job = jobDir.canonicalFile
     File(job, "result.json").delete()
@@ -89,7 +93,7 @@ fun serverBuild(jobDir: File, cacheDir: File, limits: ServerRouteLimits): Int {
     val route = request.route
     val preview = laserPreviewOf(route)
     val laserOpts = if (request.laser && preview.source != null) toolLaserOptions(cacheDir, offline = false, radiusM = null) else null
-    val builder = laserOpts?.let { createLaserWorldBuilder(it) } ?: createWorldBuilder()
+    val builder = createWorldBuilder(laserOpts, aerialBand)
     val register = aerialSources + catalogAerialSources
     val plan = builder.plan(route, request.quality).let { it.copy(aerial = aerialFor(route, register)) }
     if (request.expectedWorldId != null && request.expectedWorldId != plan.worldId) {

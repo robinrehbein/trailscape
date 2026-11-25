@@ -53,7 +53,7 @@ fun main(args: Array<String>) {
 }
 
 private const val USAGE = """Aufruf:
-  build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>] [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--offline] [--laser [--laser-radius m] [--lod2-corridor <datei>] [--laser-profile e0,n0,e1,n1[,schritt]]]
+  build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>] [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--offline] [--laser [--laser-radius m] [--lod2-corridor <datei>] [--laser-profile e0,n0,e1,n1[,schritt]]] [--aerial-band aus|band|band-breit]
   lod2-cut --gpx <datei> --out <datei.tsl2> [--lod2-radius m] [--offline]
   plan --gpx <datei> [--quality LOW|MEDIUM|HIGH] [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--laser]
   testworld --out <dir> [--quality LOW|MEDIUM|HIGH]
@@ -61,11 +61,11 @@ private const val USAGE = """Aufruf:
   check <dir>
   models --out <dir>
   catalog-routes [--only a,b]
-  catalog-build --out <dir> [--only a,b] [--quality LOW|MEDIUM|HIGH] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline] [--laser]
+  catalog-build --out <dir> [--only a,b] [--quality LOW|MEDIUM|HIGH] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline] [--laser] [--aerial-band aus|band|band-breit]
   catalog-preview --out <dir> [--only a,b] [--prepare]   (Vorschau: --prepare = Welten bereitlegen + plan.tsv, sonst Profil/Laser/Bild in catalog.json)
   sky --time AUTO|MORNING|NOON|EVENING [--lat 51.3] [--lon 9.5] [--epoch-ms ms] [--quality LOW|MEDIUM|HIGH] --out <dir>
   server-info
-  server-build --job <dir> --cache <dir> [--max-km n] [--max-points n]
+  server-build --job <dir> --cache <dir> [--max-km n] [--max-points n] [--aerial-band aus|band|band-breit]
   server-request --gpx <datei> --out <request.json> [--laser] [--quality LOW|MEDIUM|HIGH] [--from-km a --to-km b]"""
 
 /** Cache der Geodaten (git-ignoriert). */
@@ -130,6 +130,7 @@ private fun run(all: List<String>): Int {
                     maxLengthM = a.double("max-km")?.let { it * 1000 } ?: base.maxLengthM,
                     maxPoints = a.opt("max-points")?.toIntOrNull() ?: base.maxPoints,
                 ),
+                aerialBand = aerialBandOf(a),
             )
         }
         "server-request" -> Args(rest, setOf("laser")).let { a ->
@@ -145,6 +146,7 @@ private fun run(all: List<String>): Int {
                 noAerial = a.flag("no-aerial"),
                 offline = a.flag("offline"),
                 laser = a.flag("laser"),
+                aerialBand = aerialBandOf(a),
             )
         }
         "catalog-preview" -> Args(rest, setOf("prepare")).let { a ->
@@ -200,18 +202,28 @@ private fun aerialRegister(a: Args): List<de.trailscape.core.indoor.world.Aerial
     if (a.flag("catalog-aerial")) de.trailscape.core.indoor.world.aerialSources + catalogAerialSources else de.trailscape.core.indoor.world.aerialSources
 
 /** Der Weltbau: mit `--laser` die Datenstufe „Laser" (DGM1, nDOM, LoD2 — NRW und Baden-Wuerttemberg, nach Lage der Strecke). */
-private fun builderFor(a: Args): de.trailscape.core.indoor.world.WorldBuilder =
-    if (a.flag("laser")) {
+private fun builderFor(a: Args): de.trailscape.core.indoor.world.WorldBuilder {
+    val laser = if (a.flag("laser")) {
         var opts = toolLaserOptions(File(CACHE_DIR), a.flag("offline"), a.double("laser-radius"))
         a.opt("lod2-corridor")?.let { f ->
             val file = File(f)
             if (!file.isFile) throw UsageError("LoD2-Korridor nicht gefunden: $file")
             opts = de.trailscape.core.indoor.world.LaserOptions(opts.fetcher, radiusM = opts.radiusM, lod2Corridor = file.readBytes())
         }
-        de.trailscape.core.indoor.world.createLaserWorldBuilder(opts)
+        opts
     } else {
-        createWorldBuilder()
+        null
     }
+    return createWorldBuilder(laser, aerialBandOf(a))
+}
+
+/** `--aerial-band aus|band|band-breit` (Paketqualitaet des Luftbilds, docs/indoor/luftbild-band.md); Vorgabe aus. */
+private fun aerialBandOf(a: Args): de.trailscape.core.indoor.world.AerialBandOptions? {
+    val id = a.opt("aerial-band") ?: return null
+    val level = de.trailscape.core.indoor.world.AerialBandLevel.fromId(id)
+        ?: throw UsageError("--aerial-band: aus, band oder band-breit")
+    return level.options
+}
 
 /** LoD2 auf den Korridor der Strecke zuschneiden und im kompakten Format schreiben (docs/indoor/lidar.md). */
 private fun lod2Cut(a: Args): Int {

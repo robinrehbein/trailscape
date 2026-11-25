@@ -58,6 +58,12 @@ const MAX_JOBS = Math.floor(num('MAX_JOBS', 20)); // wartend + laufend
 const KEEP_DAYS = num('KEEP_DAYS', 30); // fertige Pakete ohne Abruf
 const MAX_PACKAGES_BYTES = num('MAX_PACKAGES_GB', 20) * 1024 ** 3;
 const CACHE_DAYS = num('CACHE_DAYS', 180);
+// Paketqualität des Luftbilds (Streckenband, docs/indoor/luftbild-band.md): aus | band | band-breit.
+const AERIAL_BAND = (() => {
+  const v = (process.env.AERIAL_BAND || 'aus').trim().toLowerCase();
+  if (!['aus', 'band', 'band-breit'].includes(v)) throw new Error(`AERIAL_BAND: aus, band oder band-breit erwartet, nicht ${v}`);
+  return v;
+})();
 const CACHE_MAX_BYTES = num('CACHE_MAX_GB', 20) * 1024 ** 3;
 const BUILD_TIMEOUT_MS = num('BUILD_TIMEOUT_MIN', 90) * 60 * 1000;
 const CLEANUP_EVERY_MS = 60 * 60 * 1000;
@@ -247,7 +253,7 @@ function requestKey(req) {
   const route = { ...req.route, name: '' };
   return crypto
     .createHash('sha256')
-    .update(JSON.stringify([req.builderId, req.quality, req.laser, route]))
+    .update(JSON.stringify(AERIAL_BAND === 'aus' ? [req.builderId, req.quality, req.laser, route] : [req.builderId, req.quality, req.laser, route, AERIAL_BAND]))
     .digest('hex');
 }
 
@@ -355,6 +361,7 @@ async function startNext() {
     '--cache', CACHE_DIR,
     '--max-km', String(LIMITS.maxLengthM / 1000),
     '--max-points', String(LIMITS.maxPoints),
+    ...(AERIAL_BAND === 'aus' ? [] : ['--aerial-band', AERIAL_BAND]),
   ];
   console.log(`${new Date().toISOString()} Bau ${job.id} startet (Versuch ${job.attempts})`);
   const log = fs.createWriteStream(path.join(dir, 'build.log'), { flags: 'a' });

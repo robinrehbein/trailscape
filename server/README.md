@@ -176,6 +176,7 @@ JAVA_OPTS=-Xmx3g node server/worlds/worlds.mjs` (Java 21, Node ≥ 18).
 | `MAX_PACKAGES_GB` | `20` | darüber werden die am längsten nicht abgerufenen Pakete gelöscht |
 | `CACHE_DAYS` | `180` | Geodaten im Zwischenspeicher älter als das werden gelöscht |
 | `CACHE_MAX_GB` | `20` | darüber werden die ältesten Geodaten gelöscht (bis 90 %) |
+| `AERIAL_BAND` | `aus` | Paketqualität des Luftbilds: `band` = Streckenband ±20 m mit 12,5 cm, `band-breit` = ±30 m (`docs/indoor/luftbild-band.md`); geht in den Auftragsschlüssel ein |
 | `JAVA_OPTS` | `-Xmx3g -XX:+ExitOnOutOfMemoryError` | Speicher des Weltbaus |
 | `PORT`, `DATA_DIR`, `TRUST_PROXY` | `8081`, `/data`, aus | wie beim Sync-Server |
 

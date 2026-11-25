@@ -24,6 +24,9 @@ internal object WorldMaterialRules {
 
         /** Auslaeufe der Randstreifen und Graskante (durchsichtig). */
         SURFACE_BLEND("surface_blend"),
+
+        /** Gelaende im Streckenband (`x_mat_terrain_band_<n>_<i>_<r>`): feineres Luftbild, Detail, Anisotropie. */
+        TERRAIN_BAND("terrain_band"),
     }
 
     /** glTF-`alphaMode` wie in gltfios `MaterialKey.alphaMode`. */
@@ -33,10 +36,16 @@ internal object WorldMaterialRules {
 
     const val MAT_TREE_CARDS = "x_mat_tree_cards"
 
+    /** Materialname der Bandfelder (Weltbau `AerialBand.MATERIAL_PREFIX`). */
+    const val MAT_TERRAIN_BAND_PREFIX = "x_mat_terrain_band_"
+
     fun kindFor(label: String?, alphaMode: Int, hasBaseColorTexture: Boolean, unlit: Boolean): Kind {
         val l = label ?: return Kind.UBER
         if (!hasBaseColorTexture || unlit) return Kind.UBER
         if (l == WorldNames.MAT_TERRAIN) return if (alphaMode == ALPHA_OPAQUE) Kind.TERRAIN else Kind.UBER
+        if (l.startsWith(MAT_TERRAIN_BAND_PREFIX)) {
+            return if (alphaMode == ALPHA_OPAQUE && bandCell(l) != null) Kind.TERRAIN_BAND else Kind.UBER
+        }
         if (l == MAT_TREE_CARDS || l == WorldNames.MAT_TREE_LEAVES) return if (alphaMode == ALPHA_MASK) Kind.FOLIAGE else Kind.UBER
         if (alphaMode == ALPHA_OPAQUE && (
                 l.startsWith(WorldNames.MAT_ROUTE_PREFIX) ||
@@ -63,6 +72,22 @@ internal object WorldMaterialRules {
             l == "x_mat_route_fringe" -> floatArrayOf(0.7f, 0f, 0f, 0f)
             else -> floatArrayOf(0f, 0f, 0f, 0f)
         }
+    }
+
+    /**
+     * `bandCell` eines Bandfelds aus dem Namen `x_mat_terrain_band_<n>_<i>_<r>`: (Spalte nach Osten,
+     * Zeile von Norden, Felder je Kachelkante); `null`, wenn der Name nicht passt.
+     */
+    fun bandCell(label: String?): FloatArray? {
+        val l = label ?: return null
+        if (!l.startsWith(MAT_TERRAIN_BAND_PREFIX)) return null
+        val p = l.removePrefix(MAT_TERRAIN_BAND_PREFIX).split('_')
+        if (p.size != 3) return null
+        val n = p[0].toIntOrNull() ?: return null
+        val i = p[1].toIntOrNull() ?: return null
+        val r = p[2].toIntOrNull() ?: return null
+        if (n !in 1..64 || i !in 0 until n || r !in 0 until n) return null
+        return floatArrayOf(i.toFloat(), r.toFloat(), n.toFloat())
     }
 
     /** `atlasMode` des Laubs: 1 = Atlas von FoliageAtlas (Gewicht aus der Lage), 0 = Kronendach. */

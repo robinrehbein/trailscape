@@ -290,6 +290,7 @@ fun catalogBuild(
     noAerial: Boolean,
     offline: Boolean,
     laser: Boolean = false,
+    aerialBand: de.trailscape.core.indoor.world.AerialBandOptions? = null,
 ): Int {
     val src = readCatalogSource()
     val register = aerialSources + catalogAerialSources
@@ -304,7 +305,7 @@ fun catalogBuild(
         println("== ${e.id} (v${e.version})")
         try {
             val useLaser = laser || e.laser
-            built += buildOne(e, out, qualityOverride ?: e.quality, register, pipeline, noAerial, if (useLaser) toolLaserOptions(File(CACHE_DIR_TOOL), offline, null) else null)
+            built += buildOne(e, out, qualityOverride ?: e.quality, register, pipeline, noAerial, if (useLaser) toolLaserOptions(File(CACHE_DIR_TOOL), offline, null) else null, aerialBand)
         } catch (x: Exception) {
             System.err.println("${e.id}: gescheitert: ${x.message}")
             x.cause?.let { System.err.println("  Ursache: $it") }
@@ -337,13 +338,14 @@ private fun buildOne(
     pipeline: de.trailscape.core.indoor.world.GeoFetcher,
     noAerial: Boolean,
     laser: de.trailscape.core.indoor.world.LaserOptions? = null,
+    aerialBand: de.trailscape.core.indoor.world.AerialBandOptions? = null,
 ): CatalogEntry {
     check(e.gpx.isFile) { "${e.gpx} fehlt — erst catalog-routes" }
     val (_, points) = readGpx(e.gpx)
     val surfaces = e.surfaces.takeIf { it.isFile }?.let(::readSurfaceFile)
     val full = cumulative(points).last()
     val (route, _) = indoorRouteOf(e.name.de, points, surfaces, full, 0.0, full)
-    val builder = laser?.let { de.trailscape.core.indoor.world.createLaserWorldBuilder(it) } ?: createWorldBuilder()
+    val builder = createWorldBuilder(laser, aerialBand)
     val plan = builder.plan(route, quality).let { p -> p.copy(aerial = if (noAerial) emptyList() else aerialFor(route, register)) }
     val worldDir = File(out, "worlds/${e.id}")
     // Ein Rest eines anderen Plans (andere Strecke/Stufe) wuerde den Bau verwirren.
@@ -351,7 +353,7 @@ private fun buildOne(
         val old = runCatching { WorldManifest.parse(f.readText()) }.getOrNull()
         if (old == null || old.worldId != plan.worldId) worldDir.deleteRecursively()
     }
-    println("  ${"%.2f".format(route.lengthM / 1000)} km, ${plan.tileCount} Kacheln, Luftbild: ${plan.aerial.joinToString { it.label }.ifEmpty { "keines" }}, Laser: ${if (laser != null) "ja" else "nein"}")
+    println("  ${"%.2f".format(route.lengthM / 1000)} km, ${plan.tileCount} Kacheln, Luftbild: ${plan.aerial.joinToString { it.label }.ifEmpty { "keines" }}, Laser: ${if (laser != null) "ja" else "nein"}, Band: ${aerialBand?.let { "±${it.bandM.toInt()} m, ${(it.metersPerPixel * 100)} cm" } ?: "aus"}")
     val start = System.nanoTime()
     val manifest = try {
         builder.build(plan, WorldBuildDeps(pipeline, ImageIoDecoder), worldDir, ConsoleProgress())

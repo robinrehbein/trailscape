@@ -72,6 +72,8 @@ data class WorldManifest(
     val tiles: List<WorldTile>,
     val budget: WorldBudget,
     val attribution: List<WorldAttribution>,
+    /** Optional: Streckenband ([WorldAerialBand]); fehlt in aelteren Paketen und Geraetewelten. */
+    val aerialBand: WorldAerialBand? = null,
 ) {
     fun toJson(): String = buildJsonObject {
         put("format", FORMAT)
@@ -88,6 +90,7 @@ data class WorldManifest(
         put("tiles", buildJsonArray { tiles.forEach { add(it.toJson()) } })
         put("budget", budget.toJson())
         put("attribution", buildJsonArray { attribution.forEach { add(it.toJson()) } })
+        aerialBand?.let { put("aerialBand", it.toJson()) }
     }.toString()
 
     companion object {
@@ -125,6 +128,7 @@ data class WorldManifest(
                 budget = WorldBudget.fromJson(o.requiredObject("budget")),
                 attribution = (o["attribution"] as? JsonArray).orEmpty()
                     .mapNotNull { (it as? JsonObject)?.let(WorldAttribution::fromJson) },
+                aerialBand = (o["aerialBand"] as? JsonObject)?.let(WorldAerialBand::fromJson),
             )
         } catch (e: IllegalArgumentException) {
             throw e

@@ -587,6 +587,17 @@ internal class TileOutput(val spec: TileSpec) {
         return parts.getOrPut(key) { Part(node, sub, material, MeshBuilder(256, 256)) }.mesh
     }
 
+    /** Das Netz von [node] mit dem Material [materialName] in Stufe 0, sonst `null` (Streckenband, [AerialBand]). */
+    fun level0Mesh(node: String, materialName: String): MeshBuilder? =
+        if (spec.level == 0) parts["$node|-1|$materialName"]?.mesh else null
+
+    /** Ersetzt das Netz von [node] mit dem Material [materialName] in Stufe 0 (Streckenband, [AerialBand]). */
+    fun replaceLevel0Mesh(node: String, materialName: String, mesh: MeshBuilder) {
+        val key = "$node|-1|$materialName"
+        val p = parts[key] ?: return
+        parts[key] = Part(p.node, p.sub, p.material, mesh)
+    }
+
     /** Index der Teilflaeche `i·4 + j` (i nach Osten, j nach Norden) einer Stelle, auf die Kachel geklemmt. */
     fun subIndex(e: Double, n: Double): Int {
         val f = WORLD_LEVEL_FACTOR
