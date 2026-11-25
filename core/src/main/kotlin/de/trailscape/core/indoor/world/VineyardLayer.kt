@@ -17,7 +17,7 @@ import kotlin.math.sqrt
  * Strecken (Lemberg, Bottwar-, Enztal) praegen Weinberge das Bild (`docs/indoor/detailtreue.md`, Mangel 6).
  *
  * Jetzt stehen in Stufe 0 bis [NEAR_M] neben der Strecke **Rebzeilen**: ein schmales Laubband
- * (Λ-Querschnitt, 0,25–1,7 m ueber dem Boden, 0,6 m breit), Zeilenabstand [ROW_M].
+ * (0,45–1,4 m ueber dem Boden, 0,25–0,4 m breit, darunter frei wie die Stammzone), Zeilenabstand [ROW_M].
  * Die **Zeilenrichtung kommt aus dem Luftbild** des Weinbergs (Strukturtensor der Helligkeit: die Zeilen
  * sind im Bild Streifen); nur wo das Bild keine klare Richtung zeigt (Kohaerenz < [MIN_COHERENCE]), laufen
  * die Zeilen in Fallrichtung des Gelaendes (die haeufigste Anlage in Steillagen). Die Lage der einzelnen
@@ -189,8 +189,8 @@ internal class VineyardLayer : TileLayer {
             val g0 = ctx.ground.heightAt(e0, n0)
             val g1 = ctx.ground.heightAt(e1, n1)
             val tone = 0.85 + 0.3 * Noise.hash01(p.seed, i, 0x7173)
-            val leaf = RouteGeometry.linColor(0.075 * tone, 0.13 * tone, 0.035 * tone)
-            val low = RouteGeometry.linColor(0.05 * tone, 0.08 * tone, 0.03 * tone)
+            val leaf = RouteGeometry.linColor(0.30 * tone, 0.40 * tone, 0.13 * tone)
+            val low = RouteGeometry.linColor(0.20 * tone, 0.25 * tone, 0.10 * tone)
             for (side in intArrayOf(-1, 1)) {
                 val bo = BASE_HALF_M * side
                 val to = TOP_HALF_M * side
@@ -223,10 +223,10 @@ internal class VineyardLayer : TileLayer {
         /** Laenge eines Abschnitts (m). */
         const val STEP_M = 3.0
 
-        const val BASE_M = 0.25
-        const val TOP_M = 1.7
-        const val BASE_HALF_M = 0.3
-        const val TOP_HALF_M = 0.08
+        const val BASE_M = 0.45
+        const val TOP_M = 1.4
+        const val BASE_HALF_M = 0.2
+        const val TOP_HALF_M = 0.12
 
         /** Mindest-Kohaerenz des Strukturtensors fuer eine Richtung aus dem Luftbild. */
         const val MIN_COHERENCE = 0.12

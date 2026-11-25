@@ -1,7 +1,7 @@
 # Indoor — Detailtreue: sieht die Strecke aus wie in echt?
 
-Stand: 25.11.2026, Branch `claude/grafik-detailtreue` (auf `main` + `claude/indoor-weltqualitaet`,
-Welt-Version `indoor-world/12`).
+Stand: 25.11.2026, Branch `claude/grafik-detailtreue` (auf `main` + `claude/indoor-weltqualitaet`;
+Welt-Version `indoor-world/13`).
 
 Auftrag des Inhabers: „Die Welten sollen nicht nur fotorealistisch aussehen, sondern wenn ich eine
 Strecke von mir virtuell fahre, soll sie aussehen wie in der echten Welt.“ Gemeint ist
@@ -118,6 +118,57 @@ keiner der genutzten Quellen; das Luftbild ist ein Schnappschuss einer Befliegun
 Winter, unbelaubt), das DOM1 ist älter als das Luftbild (Kahlschläge werden über das Luftbild
 ausgeglichen, Neupflanzungen fehlen); außerhalb von NRW und BW gibt es weder Gelände 1 m noch
 Bäume an echter Stelle noch LoD2, außerhalb der Luftbild-Länder nicht einmal den echten Boden.
+
+## 3 Umsetzung (Welt-Version `indoor-world/13`)
+
+Alles in neuen Dateien, mit wenigen Zeilen eingehängt (Abstimmung mit der Sitzung Streckenqualität,
+deren Stand `indoor-world/12` eingemergt ist). Keine neuen Materialerweiterungen (Issue 106): neue
+Materialien sind gltfio-Standard (`x_mat_roof_aerial`, `x_mat_vines`), die übrigen Objekte nutzen das
+Kleinteil-Material `x_mat_props`.
+
+| Mangel | Änderung | Datei / Einhänger | Daten | Stufen |
+|---|---|---|---|---|
+| 2, 3 Dachfarbe/-bild | Dach in Stufe 0 mit dem **Luftbild der eigenen Kachel** (dieselbe Bildtextur wie der Boden, kein Texturspeicher extra, +1 Zeichenaufruf je Kachel); Sonnenseite auf die mittlere Dachhelligkeit abgedunkelt, Grundabschlag 18 % (die Sonne steckt schon im Bild). Rückfall auf das alte Dach bei Kronen über dem Dach (> 35 % grüne Proben), Schlagschatten, Gebäuden über 22 m (Kippen im Orthofoto) und Dachpunkten > 1 m außerhalb der Kachel | `AerialRoofs.kt`; 2 Zeilen in `BuildingsLayer`, 3 in `LaserParts` | Luftbild | **alle mit Luftbild, auch Handy-Bau** |
+| 7 Ortsliste | Manifestfeld `places: [{name, distM}]` (optional, nur wenn nicht leer; ältere Leser überspringen es): Orte der Ebene `place` mit Einzugsradius je Klasse, jede Annäherung einzeln, Laufmeter der nächsten Stelle | `WorldPlaces.kt`; Feld in `WorldManifest`, 1 Zeile in `WorldBuilderImpl` | Vektorkacheln | alle |
+| 5 echte Punktobjekte | Bushaltestellen (H-Schild am Mast), Schranken (Baum hochgeklappt), Tore (offen am Rand), Umlaufsperren (Mitte frei), Poller (nur abseits der Strecke), Wanderwegweiser, Infotafeln, Schutzhütten **an der echten Stelle**, von der Fahrbahn an deren Rand geschoben; erfundene Wegweiser entfallen, wo die Karte im Umkreis von 1,5 km echte führt | `PoiLayer.kt`; Ebene in `FullWorldParts`, `MapData.pois` (`WorldSources`), 2 Stellen in `PropsLayer` | POI-Ebene der Vektorkacheln | alle |
+| 6 Weinberg | Rebzeilen (0,45–1,4 m, 2 m Abstand) bis 70 m neben der Strecke; **Zeilenrichtung aus dem Luftbild** (Strukturtensor), sonst Fallrichtung; nur was die Kachel an Dreiecken frei hat | `VineyardLayer.kt`; Ebene in `FullWorldParts` | Vektorkacheln (`vineyard`) + Luftbild | alle |
+| 4, 8 Hecken, Zäune, Mauern, Leitplanken, Lärmschutz, Strom, Windräder, Masten, Laternen | aus vollen OSM-Daten (Overpass) an der echten Stelle; erfundene Laternen/Weidezäune entfallen, wo die Daten welche führen; ODbL-Vermerk im Manifest | `OsmDetail.kt`, `OsmDetailLayer.kt`, Werkzeug `OsmDetailFetch.kt`; Ebene in allen drei Stufen, `MapData.osmFeatures`, Parameter in `WorldBuilderImpl`, `createWorldBuilder(laser, osm)` | OpenStreetMap (Overpass) | **nur Katalog** (Standard) und `build --osm-detail`; Server-Bau und Handy nie |
+| 1 Wald im Korridor | **nicht geändert** — Baustelle der Sitzung Streckenqualität (Waldkörper), gemeldet | – | – | – |
+
+### Belege (Betrachter three.js/SwiftShader, nicht Gerät)
+
+Ausschnitte der Katalogstrecken, je einmal mit dem Stand vor dieser Runde (`6df29a9`, „vorher“) und
+mit diesem Branch („nachher“) gebaut (`build --from-km … --to-km … --laser --catalog-aerial`, MEDIUM),
+gleiche Blickpunkte; Luftbild direkt vom WMS. Bilder unter `docs/indoor/bilder/detailtreue/`:
+
+| Bild | Stelle | gesehen |
+|---|---|---|
+| `dach-marbach-bahnhof-oben.jpg`, `-fahrer.jpg` | Marbach km 0,5 (Laser) | oranges Dach jetzt orange, Solar- und Gründächer sichtbar, Dachfarben je Haus wie im Luftbild; Silotürme (> 22 m) unverändert dunkel |
+| `dach-marbach-ohne-laser-oben.jpg` | dieselbe Stelle **ohne Laser** (wie der Handy-Bau) | größter Gewinn: vorher anthrazit/grau gewürfelte Großdächer, jetzt Ziegelrot, Orange, Blech mit Oberlichtern wie echt |
+| `dach-marbach-km9-oben.jpg` | Marbach km 9 | dunkles Solardach statt Rot, Halle grau statt Rot; der erfundene Weidezaun bleibt (ohne OSM-Zusatzdaten, siehe unten) |
+| `dach-wermelskirchen-oben.jpg`, `-fahrer.jpg` | Balkantrasse km 0,2 (NRW) | bergische Schieferdächer dunkelgrau statt ziegelrot, helle Hallendächer mit Oberlichtern |
+| `glemseck-oben.jpg` | Solitude km 7 | rotes Dach am Parkplatz jetzt dunkel wie echt; Wald im Korridor unverändert licht (Mangel 1) |
+| `weinberg-lemberg.jpg` | Marbach km 15,3 (Lemberg) | Rebzeilen hangabwärts wie im Luftbild; das Winterluftbild darunter bleibt kahl (Jahreszeit) |
+
+Messwerte je Ausschnitt (Dreiecke gleichzeitig, Platte der Kacheln, Texturen; vorher → nachher):
+
+| Ausschnitt | Dreiecke | Platte | Texturen |
+|---|---|---|---|
+| Marbach km 0–1,5 (Laser) | 361 998 → 362 308 | 36,9 → 36,9 MB | 146,9 MB gleich |
+| Marbach km 8–10 | 323 972 → 324 078 | 42,4 → 42,3 MB | 162,7 MB gleich |
+| Marbach km 14–16 (Weinberg) | 389 104 → 396 748 (+2 %) | 40,1 → 40,6 MB | 174,3 MB gleich |
+| Balkantrasse km 0–1,2 | 418 157 → 418 529 | 36,1 → 36,1 MB | 184,7 MB gleich |
+| Solitude km 6,3–7,7 | 434 487 → 434 797 | 43,1 → 43,1 MB | 169,9 MB gleich |
+| Marbach km 0–1,5 ohne Laser | 367 418 → 367 728 | 35,6 → 35,6 MB | 146,9 MB gleich |
+
+Zeichenaufrufe: +1 je Kachel der Stufe 0 mit Luftbild-Dächern (im Ausschnitt Marbach km 14–16 12 von
+23 Kacheln), +1 je Kachel mit Rebzeilen. Alle Welten bestehen `checkWorld`.
+
+**Nicht belegt:** Die OSM-Zusatzdaten (Overpass) konnten in dieser Umgebung nicht abgerufen werden
+(`overpass-api.de` ist hier nicht erreichbar, die Verbindung wird beim Aufbau zurückgesetzt); der Bau
+läuft dann ohne sie. Geprüft sind sie nur im Test mit erfundenen Objekten. POI-Objekte sind gebaut,
+aber in den Bildern nicht gezielt aufgesucht. `:core:test`/`:indoor-dev:test` liefen hier wegen der
+Maven-Drosselung (429 auf Testabhängigkeiten) nicht — Vollcheck bei der Orchestrierung. Gerät: nicht gesehen.
 
 ## 4 Weitere Datenquellen (Bewertung, abgerufen am 25.11.2026)
 
