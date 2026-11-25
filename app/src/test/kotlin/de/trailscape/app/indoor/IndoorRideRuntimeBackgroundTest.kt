@@ -81,7 +81,12 @@ class IndoorRideRuntimeBackgroundTest {
             journal = sink,
         )
         rt.start()
-        rt.ticks(10) // erster Takt (READY) und Phasenwechsel zu RUNNING
+        // Die Attrappe meldet READY erst 1 s nach dem ersten Takt; der Wechsel
+        // READY → RUNNING (Takt 11/12) sichert sofort. 20 Takte decken beides ab,
+        // die naechste Sicherung nach Frist faellt dann erst rund 5 s spaeter.
+        rt.ticks(20)
+        assertEquals(IndoorPhase.RUNNING, rt.state.value.session?.phase, "Vorbedingung: die Fahrt laeuft")
+        assertEquals(IndoorPhase.RUNNING, sink.states.last().phase, "der Phasenwechsel ist schon gesichert")
         val afterStart = sink.batches.size
         rt.ticks(30) // 3 s: noch keine weitere Sicherung
         assertEquals(afterStart, sink.batches.size, "zwischen zwei Sicherungen nichts")
