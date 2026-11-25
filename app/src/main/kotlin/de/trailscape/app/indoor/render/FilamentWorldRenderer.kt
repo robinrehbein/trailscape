@@ -63,6 +63,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     private val guard = RenderGuard(appContext)
 
     /** Im sicheren Modus (siehe [RenderGuard]) bleiben die Zusaetze der Grafik-Pakete aus. */
+    @set:JvmName("assignSettings")
     private var settings: RenderSettings = RenderSettings.forQuality(IndoorQuality.MEDIUM)
         set(value) {
             field = if (guard.safeMode) value.copy(groundDetail = false, wind = false, birds = false, otherRiders = 0) else value
