@@ -69,7 +69,7 @@ class AuswertungIndoorTest {
         val f = facts(
             summary("aussen", monday, 40.0, speed = 24.0),
             // Simuliert und schneller — darf den Tempo-Rekord nicht halten.
-            summary("rolle", monday.plusDays(1), 50.0, indoor = true, speed = 33.0),
+            summary("rolle", monday.plusDays(1), 60.0, indoor = true, speed = 33.0),
         )
         val records = personalRecords(f).associateBy { it.kind }
         assertEquals("aussen", records.getValue(RecordKind.SPEED).rideId)
