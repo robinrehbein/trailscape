@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte der Idee 4 „Strecke vor der Tour ansehen“ (3D-Vorschau einer Strecke ohne Trainer).
+    Quellen: ui/indoor/IndoorPreviewScreen.kt, ui/indoor/IndoorFlowScreen.kt (Vorschau-Stufen),
+    ui/rides/RideDetailScreen.kt (Einstieg). Doku: docs/indoor/vorschau.md.
+
+    Schluessel-Praefix: idee04_
+    Regeln (Schluesselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstueck in values-en/strings_idee04.xml — gleiche Schluessel, gleiche Reihenfolge.
+-->
+<resources>
+    <!-- RideDetailScreen.kt -->
+    <string name="idee04_detail_preview_action">In 3D ansehen</string>
+    <!-- IndoorFlowScreen.kt: Strecke vorbereiten im Vorschau-Modus -->
+    <string name="idee04_world_without_action">Nur Höhenprofil ansehen</string>
+    <string name="idee04_world_continue_action">Vorschau starten</string>
+    <!-- IndoorPreviewScreen.kt -->
+    <string name="idee04_preview_eyebrow">3D-Vorschau</string>
+    <string name="idee04_preview_back_cd">Vorschau schließen</string>
+    <string name="idee04_preview_play_cd">Wiedergabe</string>
+    <string name="idee04_preview_pause_cd">Anhalten</string>
+    <string name="idee04_preview_replay_cd">Noch einmal von vorn</string>
+    <string name="idee04_preview_speed_label">%1$d×</string>
+    <string name="idee04_preview_speed_cd">Geschwindigkeit %1$d-fach. Tippen zum Ändern.</string>
+    <string name="idee04_preview_camera_cd">Kamera: %1$s. Tippen zum Wechseln.</string>
+    <string name="idee04_preview_camera_chase">Verfolger</string>
+    <string name="idee04_preview_camera_drone">Drohne</string>
+    <string name="idee04_preview_camera_handlebar">Lenker</string>
+    <string name="idee04_preview_distance_label">km</string>
+    <string name="idee04_preview_elevation_label">Höhe</string>
+    <string name="idee04_preview_grade_label">Steigung</string>
+    <string name="idee04_preview_position">%1$s von %2$s km</string>
+    <string name="idee04_preview_elevation_value">%1$s m</string>
+    <string name="idee04_preview_grade_value">%1$s %%</string>
+    <string name="idee04_preview_remaining">noch %1$s</string>
+    <string name="idee04_preview_finished">Ziel erreicht</string>
+    <string name="idee04_preview_waiting">Strecke lädt nach …</string>
+    <string name="idee04_preview_profile_cd">Höhenprofil, Stelle bei %1$s km. Tippen oder ziehen, um zu springen.</string>
+    <string name="idee04_preview_pace_ride">1× ist so schnell wie bei dieser Tour.</string>
+    <string name="idee04_preview_pace_model">1× ist eine lockere Ausdauerfahrt mit %1$d W.</string>
+    <string name="idee04_preview_no3d_title">Keine 3D-Ansicht</string>
+    <string name="idee04_preview_no3d_body">Die Vorschau läuft auf dem Höhenprofil weiter.</string>
+    <string name="idee04_preview_profile_only_body">Vorschau auf dem Höhenprofil, ohne 3D-Ansicht.</string>
+</resources>

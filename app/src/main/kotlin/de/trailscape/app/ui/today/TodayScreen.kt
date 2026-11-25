@@ -382,6 +382,19 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     )
                 }
 
+                item(key = "ort") {
+                    // Draussen oder drinnen zur Einheit des Tages
+                    // (`core/…/TodayPlace.kt`, docs/trainingswissenschaft.md 17).
+                    val placeNow = rememberHourNow().atZone(java.time.ZoneId.systemDefault())
+                    TodayPlaceEntry(
+                        decision = decision,
+                        rides = rides,
+                        rideLoads = remember(insights) { insights.rideLoads.mapValues { it.value.load } },
+                        now = placeNow,
+                        onPlanRoute = { target -> appViewModel.requestRouteGeneration(target) },
+                    )
+                }
+
                 item(key = "indoor") {
                     // Einheit des Tages fahren: passende Strecke zur Einheit
                     // (docs/indoor/app.md), sonst der allgemeine Einstieg.

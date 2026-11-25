@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texts for idea 4 "preview the route before the ride" (3D preview without a trainer).
+    German original: values/strings_idee04.xml — same keys, same order.
+-->
+<resources>
+    <!-- RideDetailScreen.kt -->
+    <string name="idee04_detail_preview_action">View in 3D</string>
+    <!-- IndoorFlowScreen.kt -->
+    <string name="idee04_world_without_action">Elevation profile only</string>
+    <string name="idee04_world_continue_action">Start preview</string>
+    <!-- IndoorPreviewScreen.kt -->
+    <string name="idee04_preview_eyebrow">3D preview</string>
+    <string name="idee04_preview_back_cd">Close preview</string>
+    <string name="idee04_preview_play_cd">Play</string>
+    <string name="idee04_preview_pause_cd">Pause</string>
+    <string name="idee04_preview_replay_cd">Play again from the start</string>
+    <string name="idee04_preview_speed_label">%1$d×</string>
+    <string name="idee04_preview_speed_cd">Speed %1$d times. Tap to change.</string>
+    <string name="idee04_preview_camera_cd">Camera: %1$s. Tap to switch.</string>
+    <string name="idee04_preview_camera_chase">Chase</string>
+    <string name="idee04_preview_camera_drone">Drone</string>
+    <string name="idee04_preview_camera_handlebar">Handlebar</string>
+    <string name="idee04_preview_distance_label">km</string>
+    <string name="idee04_preview_elevation_label">Elevation</string>
+    <string name="idee04_preview_grade_label">Grade</string>
+    <string name="idee04_preview_position">%1$s of %2$s km</string>
+    <string name="idee04_preview_elevation_value">%1$s m</string>
+    <string name="idee04_preview_grade_value">%1$s %%</string>
+    <string name="idee04_preview_remaining">%1$s left</string>
+    <string name="idee04_preview_finished">Finish reached</string>
+    <string name="idee04_preview_waiting">Loading the route …</string>
+    <string name="idee04_preview_profile_cd">Elevation profile, position at %1$s km. Tap or drag to jump.</string>
+    <string name="idee04_preview_pace_ride">1× is as fast as on this ride.</string>
+    <string name="idee04_preview_pace_model">1× is an easy endurance ride at %1$d W.</string>
+    <string name="idee04_preview_no3d_title">No 3D view</string>
+    <string name="idee04_preview_no3d_body">The preview continues on the elevation profile.</string>
+    <string name="idee04_preview_profile_only_body">Preview on the elevation profile, without the 3D view.</string>
+</resources>

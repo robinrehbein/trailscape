@@ -637,6 +637,10 @@ fun RideDetailHost(
             onBack()
             appViewModel.requestIndoorRide(loaded.id)
         },
+        onPreview3d = {
+            onBack()
+            appViewModel.requestIndoorPreview(loaded.id)
+        },
     )
 
     renameTarget?.let { target ->

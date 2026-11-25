@@ -404,6 +404,18 @@ class AppViewModel(
     /** Holt die Tour ab (einmal; der Indoor-Ablauf ruft es beim Anlegen). */
     fun consumeIndoorRidePick(): String? = indoorRidePick.also { indoorRidePick = null }
 
+    /** Tour, deren Strecke der Indoor-Ablauf als 3D-Vorschau zeigen soll (Idee 4, docs/indoor/vorschau.md). */
+    private var indoorPreviewPick: String? = null
+
+    /** „In 3D ansehen" im Tourdetail: oeffnet den Indoor-Ablauf direkt mit der Vorschau dieser Tour. */
+    fun requestIndoorPreview(rideId: String) {
+        indoorPreviewPick = rideId
+        requestIndoor(IndoorDestination.FLOW)
+    }
+
+    /** Holt die Tour fuer die Vorschau ab (einmal; der Indoor-Ablauf ruft es beim Anlegen). */
+    fun consumeIndoorPreviewPick(): String? = indoorPreviewPick.also { indoorPreviewPick = null }
+
     // -------------------------------------------------------------------------
     // Trainingsempfehlung → Routenziel
     // -------------------------------------------------------------------------

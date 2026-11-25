@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Idee 2: Trainingsplan steuert drinnen, draußen und Uhr (docs/trainingswissenschaft.md 17). -->
+<resources>
+    <!-- TodayPlaceCard.kt -->
+    <string name="idee02_place_eyebrow">Wo fährst du heute?</string>
+    <string name="idee02_place_title_outdoor">Heute draußen</string>
+    <string name="idee02_place_title_indoor">Heute drinnen</string>
+    <string name="idee02_place_title_outdoor_chosen">Heute draußen · deine Wahl</string>
+    <string name="idee02_place_title_indoor_chosen">Heute drinnen · deine Wahl</string>
+    <string name="idee02_place_suggested_was_outdoor">Vorgeschlagen war draußen.</string>
+    <string name="idee02_place_suggested_was_indoor">Vorgeschlagen war drinnen.</string>
+    <string name="idee02_place_reason_dark_before">Noch dunkel – Sonnenaufgang erst um %1$s</string>
+    <string name="idee02_place_reason_dark_after">Schon dunkel – die Sonne ging um %1$s unter</string>
+    <string name="idee02_place_reason_dark_share">Sonnenuntergang um %1$s – für %2$d min reicht das Licht nicht</string>
+    <string name="idee02_place_reason_dark_polar">Heute geht die Sonne nicht auf</string>
+    <string name="idee02_place_reason_dusk">Das Ende fällt in die Dämmerung (Sonnenuntergang %1$s) – Licht mitnehmen</string>
+    <string name="idee02_place_reason_daylight">Hell bis %1$s – das reicht für %2$d min</string>
+    <string name="idee02_place_reason_intervals">Intervalle laufen auf der Rolle sauberer: keine Ampeln, die Leistung bleibt stehen</string>
+    <string name="idee02_place_reason_long">Lange Grundlage (%1$d min) fährt sich draußen leichter als auf der Rolle</string>
+    <string name="idee02_place_reason_rain">Regen angesagt</string>
+    <string name="idee02_place_reason_storm">Starker Wind angesagt</string>
+    <string name="idee02_place_reason_frost">Frost – Glättegefahr</string>
+    <string name="idee02_place_reason_none">Nichts spricht gegen draußen</string>
+    <string name="idee02_place_route_outdoor">Runde: %1$s · etwa %2$d min</string>
+    <string name="idee02_place_route_indoor">Die passende Strecke für die Rolle steht in der Karte darunter.</string>
+    <string name="idee02_place_plan_action">Runde planen</string>
+    <string name="idee02_place_flip_to_indoor_action">Lieber drinnen</string>
+    <string name="idee02_place_flip_to_outdoor_action">Lieber draußen</string>
+    <string name="idee02_place_done_title">Einheit erledigt</string>
+    <string name="idee02_place_done_indoor">Drinnen gefahren</string>
+    <string name="idee02_place_done_outdoor">Draußen gefahren</string>
+    <string name="idee02_place_done_both">Draußen und drinnen gefahren</string>
+    <string name="idee02_place_done_minutes">%1$s · %2$d min</string>
+    <string name="idee02_place_done_km">%1$s · %2$s</string>
+</resources>
