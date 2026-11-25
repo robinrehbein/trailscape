@@ -84,6 +84,20 @@ internal fun <T : RideInfo> filterRidesByName(rides: List<T>, query: String): Li
     return rides.filter { it.name.contains(needle, ignoreCase = true) }
 }
 
+/**
+ * Welche gefahrenen Touren die Liste zeigt: alle, nur draussen gefahrene oder
+ * nur Fahrten auf dem Rollentrainer ([RideInfo.indoor]). Planungen gehoeren zu
+ * keiner der beiden Arten und stehen nur unter [ALL] im Abschnitt „Geplant".
+ */
+internal enum class RideKindFilter { ALL, OUTDOOR, INDOOR }
+
+/** Siehe [RideKindFilter]. */
+internal fun <T : RideInfo> filterRidesByKind(rides: List<T>, kind: RideKindFilter): List<T> = when (kind) {
+    RideKindFilter.ALL -> rides
+    RideKindFilter.OUTDOOR -> rides.filter { !it.indoor }
+    RideKindFilter.INDOOR -> rides.filter { it.indoor }
+}
+
 /** Deutsche zweibuchstabige Wochentagskuerzel ohne Punkt — „Di", nicht „Di.". */
 private val weekdayShortDe: Map<DayOfWeek, String> = mapOf(
     DayOfWeek.MONDAY to "Mo",
@@ -183,12 +197,14 @@ internal fun <T : RideInfo> splitHistory(
     today: LocalDate,
     localOf: (Long) -> LocalDateTime,
     language: AppLanguage,
+    kind: RideKindFilter = RideKindFilter.ALL,
 ): HistorySections<T> {
     val ridden = riddenRides(rides)
-    val planned = rides.filter { it.planned }
+    // Planungen sind weder drinnen noch draussen gefahren: nur unter „Alle".
+    val planned = if (kind == RideKindFilter.ALL) rides.filter { it.planned } else emptyList()
 
     val plannedHits = filterRidesByName(planned, query)
-    val riddenHits = filterRidesByName(ridden, query)
+    val riddenHits = filterRidesByName(filterRidesByKind(ridden, kind), query)
     val months = groupRidesByMonth(riddenHits, today, localOf, language)
 
     val part = when {

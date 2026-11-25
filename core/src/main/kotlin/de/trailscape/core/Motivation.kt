@@ -33,6 +33,13 @@ data class RideFact(
     /** Fahrzeit in Sekunden — Bewegungszeit, ersatzweise Gesamtdauer. */
     val timeS: Int?,
     val avgSpeedKmh: Double?,
+    /**
+     * Fahrt auf dem Rollentrainer ([RideInfo.indoor]). Distanz, Zeit und
+     * Hoehenmeter zaehlen wie draussen; der **Tempo-Bestwert** nicht — das
+     * Tempo ist simuliert und mit Wind, Windschatten und echtem Belag nicht
+     * vergleichbar (siehe `docs/auswertung.md`).
+     */
+    val indoor: Boolean = false,
 )
 
 /**
@@ -52,6 +59,7 @@ fun <T : RideInfo> rideFacts(rides: List<T>, dateOf: (Long) -> LocalDate): List<
                 ascentM = it.stats.ascentM.takeIf(Double::isFinite) ?: 0.0,
                 timeS = it.stats.movingTimeS ?: it.stats.durationS,
                 avgSpeedKmh = it.stats.avgSpeedKmh?.takeIf(Double::isFinite),
+                indoor = it.indoor,
             )
         }
 
@@ -134,7 +142,7 @@ enum class RecordKind {
     /** Laengste Fahrzeit in Sekunden. */
     TIME,
 
-    /** Hoechster Schnitt in km/h — nur Touren ab [fastestMinKm]. */
+    /** Hoechster Schnitt in km/h — nur Touren ab [fastestMinKm], nur draussen gefahrene. */
     SPEED,
 }
 
@@ -163,7 +171,9 @@ private fun valueOf(fact: RideFact, kind: RecordKind): Double? = when (kind) {
     RecordKind.DISTANCE -> fact.distanceKm.takeIf { it > 0 }
     RecordKind.ASCENT -> fact.ascentM.takeIf { it > 0 }
     RecordKind.TIME -> fact.timeS?.takeIf { it > 0 }?.toDouble()
-    RecordKind.SPEED -> fact.avgSpeedKmh?.takeIf { fact.distanceKm >= fastestMinKm && it in plausibleSpeedKmh }
+    RecordKind.SPEED -> fact.avgSpeedKmh?.takeIf {
+        !fact.indoor && fact.distanceKm >= fastestMinKm && it in plausibleSpeedKmh
+    }
 }
 
 /** Ein Bestwert samt der Tour, die ihn haelt. */
