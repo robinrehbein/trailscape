@@ -176,14 +176,15 @@ class IndoorChallengeController(
     }
 
     fun setShareName(name: String) {
-        val current = _share.value ?: return
+        // Erst merken, dann prüfen: Der Name gilt auch, wenn die Vorschau noch nicht offen ist.
         kv.setString(KEY_NAME, name)
+        val current = _share.value ?: return
         if (shareContext != null) rebuildShare(name, current.includeDate) else _share.value = current.copy(name = name)
     }
 
     fun setShareIncludeDate(include: Boolean) {
-        val current = _share.value ?: return
         kv.setString(KEY_DATE, if (include) "1" else "0")
+        val current = _share.value ?: return
         if (shareContext != null) rebuildShare(current.name, include) else _share.value = current.copy(includeDate = include)
     }
 
