@@ -335,8 +335,8 @@ internal class LaserBuildingsLayer(
                     // flache „Gebaeude“; quer auf der Strecke lagen sie als graue Platte (schoenbuch km 7).
                     if (dist < 40.0 && coversTrack(ctx, b)) continue
                     // Flache LoD2-Koerper (Bodenplatten, Silo- und Mistplatten, Behaelterdeckel unter
-                    // ~1,2 m) standen als graue Platte mit harten Kanten auf der Wiese
-                    // (welzheimer-wald km 25). Sie entfallen — auch der Kartengrundriss an ihrer Stelle.
+                    // ~1,2 m, z. B. 29 × 11 m bei 0,1 m Hoehe nahe welzheimer-wald km 25) lagen als graue
+                    // Platten auf der Wiese. Sie entfallen — auch der Kartengrundriss an ihrer Stelle.
                     if (b.topU - b.groundU < FLAT_LOD2_M) { flat += b; continue }
                     val m = mesher.mesh(b) ?: continue
                     if (m.triangles > budget) continue
