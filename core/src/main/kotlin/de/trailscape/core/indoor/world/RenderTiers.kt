@@ -45,7 +45,7 @@ object RenderTiers {
         effectQuality = 2,
         shadowCascades = 4,
         shadowFarM = ULTRA_SHADOW_FAR_M,
-        stableShadows = true,
+        // Nicht `stableShadows`: zusammen mit 800 m verschwanden im Referenzrenderer alle Schatten.
         terrainShadows = true,
         vignette = true,
     )

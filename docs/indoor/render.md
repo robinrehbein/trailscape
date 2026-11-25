@@ -688,6 +688,188 @@ weiter weg und damit nur wenige Pixel groß.
       — vorher/nachher; LOW mit allem aus wie vorher.
 - [ ] Speicher bei HIGH mit 5 Mitfahrern (≈ 4 MB mehr).
 
+## Renderqualität: Grafikstufen Hoch und Ultra (25.11.2026, Branch `claude/indoor-renderqualitaet`)
+
+Auftrag des Inhabers: „dass die Qualität der Grafik nochmal einen deutlichen
+Schritt nach vorne macht und quasi fotorealistisch aussieht“ (Galaxy S25).
+Bereich dieser Arbeit ist nur die **Bildentstehung** (Licht, Schatten,
+Umgebungslicht, Nachbearbeitung, Kantenglättung, Stufen) — nicht Inhalt,
+Materialien oder Streckenbau. Ehrlich vorweg: Fotorealismus ist mit
+automatisch gebauten Strecken (Laubkarten, 1-m-Gelände, Luftbild als
+Bodentextur) und Handy-Leistung nicht erreichbar; der größte Hebel dafür liegt
+im Inhalt (Liste am Ende).
+
+### Bestandsaufnahme (gegen die Quellen von Filament 1.75.1 geprüft)
+
+| Thema | vorher | Befund |
+|---|---|---|
+| Schatten | DPCF, 3 Kaskaden 2048², 300 m | **DPCF ist in 1.75.1 veraltet und fällt auf PCSS (EVSM) zurück** (`Options.h`). Damit erschien im Referenzrenderer auf zwei Backends (llvmpipe-GL, lavapipe-Vulkan) kein einziger Schatten, auf dem Gerät des Inhabers ebenfalls nicht (bestätigt). Kosten nebenbei ~130 MB RGBA16F-Schattenkarten mit 8 Mips. Vorgabe ist seit Commit 2621a75 (Orchestrierung) PCF; dieser Branch übernimmt das zeilengleich. |
+| Spiegelndes Umgebungslicht | keins | Ohne `IndirectLight.Builder.reflections()` bindet Filament eine **schwarze** 1×1-Cubemap (`Engine.cpp` `mDefaultIblTexture`, `ColorPassDescriptorSet.cpp`): kein Himmelsglanz, keine Fresnel-Aufhellung, Metall schwarz. |
+| SSAO, Bloom | nur Stufe HIGH | `RenderSettings` folgen `manifest.quality`; alle Katalogwelten sind MEDIUM → **SSAO und Bloom waren in der App nie an.** |
+| Kantenglättung | 4× MSAA | Laubkarten (Alpha-Maske) und feine Texturen flimmern weiter; MSAA erfasst sie nicht. |
+| Gelände | wirft keinen Schatten | Hänge und Kuppen verschatten nichts (`shadowFlags`: nur Gebäude und Bäume). |
+| Farbe | PBR Neutral + Kontrast/Lebendigkeit je Tageszeit | gut; kein Weißabgleich, mittags kühlgrauer Asphalt. |
+| Bildrate | `FrameMeter` (fps, P95 je Sekunde) | keine längere Messung, kein 1-%-Wert, keine GPU-Zeit. |
+| Referenzrenderer | `lispsm` | Java-Vorgabe `false`, C++ `true` — filarender rechnete Schatten anders als die App; angeglichen. |
+
+### Was neu ist
+
+**Grafikstufe** in den Indoor-Einstellungen unter „3D-Ansicht“
+(`IndoorGraphicsCard.kt`, gemerkt als `trailscape.indoor.graphics`):
+**Standard** (Vorgabe, unverändert = `RenderSettings.forQuality(Weltqualität)`),
+**Hoch**, **Ultra** (`core/…/indoor/world/RenderTiers.kt`, getestet). Die
+Stufe ist von der Paketqualität getrennt (kein neuer Weltbau nötig).
+
+| Effekt | Standard | Hoch | Ultra | Datei |
+|---|---|---|---|---|
+| Spiegelungs-Umgebungslicht aus dem Himmelsmodell | – | ✓ | ✓ | `core/…/sky/SkyReflections.kt`, `RenderQuality.buildReflections` |
+| SSAO | – | ✓ (Güte MITTEL, Radius 0,5) | ✓ (Güte HOCH, Radius 0,55) | `RenderQuality.applyAmbientOcclusion` |
+| Bloom | – | ✓ (MITTEL) | ✓ (HOCH) | `RenderQuality.applyBloom` |
+| Hochskalierung der dyn. Auflösung | bilinear | FSR (MITTEL) | FSR (HOCH) | `RenderQuality.applyDynamicResolution` |
+| Weißabgleich je Tageszeit | – | ✓ | ✓ | `core/…/sky/PhotoGrade.kt` |
+| Kantenglättung | 4× MSAA | 4× MSAA | **TAA** (Varianz-Box, Schärfe 0,25) | `RenderQuality.applyTemporalAA` |
+| Schatten | PCF, 3 Kaskaden, 300 m | wie Standard | **4 Kaskaden (8/30/100 m), 800 m** | `RenderQuality.shadowOptions`, `FilamentCore.ensureSunShadows` |
+| Gelände wirft Schatten | – | – | ✓ | `FilamentAssets.applyShadows`, `TileStreamer` |
+| Vignette | – | – | sehr dezent | `RenderQuality.applyVignette` |
+| Mitfahrer | 3 | 5 | 5 | (HIGH-Grundlage) |
+
+Alles einzeln schaltbar auf der Diagnoseseite (neue Schalter am Ende der
+Liste, Voreinstellungen „Hoch“ und „Ultra“). Im **sicheren Grafikmodus**
+(`RenderGuard`) sind alle neuen Effekte aus (`RenderTiers.withoutTierExtras`
+im Setter von `FilamentWorldRenderer.settings`). Es wird **kein
+Materialparameter** gesetzt — nur View-, Licht- und Texturoptionen.
+
+**Spiegelungs-Umgebungslicht** (`SkyReflections`): Cubemap 64² mit 7
+Mip-Stufen aus dem sichtbaren Himmel (`SkyLook` samt Wolken) geteilt durch
+`skyScale` — im selben Maß wie die SH des Umgebungslichts (geprüft: Mittag
+Horizont 0,74/0,86/1,02 gegen `iblHorizon` 0,73/0,77/0,83); unter dem Horizont
+der Boden des Umgebungslichts, abgeglichen auf die Helligkeit des sichtbaren
+Horizonts (`groundFor`). Vorfilterung mit GGX nach Filaments Abbildung
+`lod = (N−1)·p·(2−p)` (`surface_light_indirect.fs`); Stärke 0,85, weil Filament
+Umgebungslicht nicht durch Geometrie verdeckt. Rechenzeit auf dem
+Entwicklerrechner unter 50 ms, einmal je Tageszeitwechsel; Textur ≈ 130 kB.
+Wirkung: dezent (mittlere Abweichung 2–3 von 255) — Straße und Gelände sind
+rau, physikalisch richtig wenig Glanz; sichtbar als Aufhellung der Straße im
+Gegenlicht und Glanz an Rad, Helm, Dächern.
+
+**Sonne neu bauen:** Java kennt in 1.75.1 keine Schattenoptionen zur Laufzeit.
+`ensureSunShadows` baut bei anderen Kaskaden/Reichweite/Stabilität eine neue
+Sonne (neue Entity, Richtung/Farbe/Stärke übernommen), zeigt sie und entfernt
+erst dann die alte.
+
+**Bildratenmessung** (Diagnose, „Bildrate je Stufe“): lädt die Testwelt, fährt
+selbst und misst Standard, Hoch und Ultra je 30 s nach 3 s Vorlauf
+(`RenderBench`): mittlere Bildzeit, **1 % niedrig** (99. Perzentil der
+Bildzeit) und mittlere **GPU-Zeit** aus `Renderer.getFrameInfoHistory`
+(falls der Treiber sie liefert, sonst „–“). Die Bildzeit ist durch die
+Obergrenze von 60 B/s gedeckelt; erst die GPU-Zeit zeigt die Reserve.
+
+**Referenzrenderer:** neue Schalter (`settings.reflections`, `taa`,
+`effectQuality`, `cascades`, `shadowFarM`, `stableShadows`, `terrainShadows`,
+`whiteBalance`, `vignette`, `shadowType`, `lispsm`, …), `--seti`/`--sets`/
+`--frames` in `filashots.mjs`, Bildsatz `filament/renderqualitaet.sh`.
+**Wichtig:** Unter Mesa llvmpipe (OpenGL) zeigt Filament auch mit PCF keine
+Schatten (nur der Debug-Typ PCFd); mit `FILARENDER_BACKEND=vulkan` (lavapipe,
+`apt-get install mesa-vulkan-drivers`, Materialien mit `matc -a opengl -a
+vulkan`) erscheinen sie. Die Bilder unten sind deshalb mit Vulkan gerechnet —
+das Gerät nutzt OpenGL ES; Shader und Abbildung sind dieselben.
+
+### Bilder (`docs/indoor/bilder/renderqualitaet/`)
+
+Je Strecke dieselbe Kamera (Verfolger, Hochformat 900 × 1200), links
+Standard (wie bisher, aber schon mit PCF-Schatten), Mitte Hoch, rechts Ultra.
+Gerechnet mit `tool/indoor-dev/filament/renderqualitaet.sh` (Filament 1.75.1,
+lavapipe-Vulkan; Ultra mit 16 Bildern für TAA), Strecken aus dem Release
+`indoor-worlds-v1` (v11). In Klammern die mittlere Abweichung zu Standard (0–255).
+
+| Bild | Strecke, Tageszeit | Was man sieht |
+|---|---|---|
+| `alpe-dhuez-EVENING-03000.jpg` | Alpe d'Huez, Abend, km 3 | Hoch (5,5): Tiefe im Laub und an der Böschung (SSAO). Ultra (11,1): **der Hang links verschattet die Straße** (Sonne 11° hinter dem Grat) — physikalisch plausibel, nimmt aber die Baumschatten-Flecken weg; Geschmackssache, einzeln abschaltbar („Gelände wirft Schatten“). |
+| `arenberg-NOON-01500.jpg` | Wald von Arenberg, Mittag | Hoch (2,9): wärmerer Asphalt statt kühlgrau (Weißabgleich), leichter Himmelsglanz auf der Straße in der Ferne. Ultra (7,1): ruhigere Kanten am Horizont, Vignette. |
+| `monte-sante-marie-EVENING-05000.jpg` | Crete Senesi, Abend | offenes Gelände: wenig Unterschied (3,3 / 7,5) — Wiese und Weg bekommen etwas Tiefe, Ränder dunkler. |
+| `sa-calobra-NOON-03000.jpg` | Sa Calobra, Mittag | Hoch (2,9): dichterer Wald (SSAO unter Büschen), Fahrerschatten wie Standard. Ultra (5,7): glattere Laubkanten. |
+
+Zur Einordnung: Der **größte sichtbare Schritt dieses Branches ist der
+Schatten selbst** (vorher erschien keiner — auf dem Gerät bestätigt; jetzt in
+allen Stufen über die Orchestrierung). Hoch/Ultra legen Tiefe, Glanz, Farbe und
+ruhige Kanten darauf; das ist ein deutlicher, aber kein fotorealistischer
+Sprung. TAA wirkt vor allem in Bewegung (Flimmern), was ein Standbild kaum zeigt.
+Spiegelungs-IBL, Weißabgleich, Vignette, TAA nur im Referenzrenderer geprüft;
+FSR-Hochskalierung (dyn. Auflösung) und die Bildratenmessung gar nicht im Bild
+(nur auf dem Gerät wirksam).
+
+### Erwartete Kosten je Effekt (geschätzt, nicht gemessen — dafür die Messung in der Diagnose)
+
+| Effekt | GPU-Kosten (S25-Klasse, 1080×2340) | Speicher |
+|---|---|---|
+| Spiegelungs-IBL | ≈ 0 (ein Texturzugriff je Pixel) | 130 kB |
+| SSAO MITTEL / HOCH | ≈ 1,0 / 1,5–2 ms | ~10 MB (halbe Auflösung) |
+| Bloom MITTEL / HOCH | ≈ 0,3 / 0,5 ms | ~5 MB |
+| FSR statt bilinear | ≈ 0,3 ms, nur bei Skalierung < 1 | – |
+| TAA statt 4× MSAA | ≈ gleich (MSAA auf Kachel-GPUs billig, TAA ein Vollbilddurchgang); Verlaufspuffer | ~20 MB |
+| 4. Kaskade + 800 m + Geländeschatten | ≈ +1–2 ms (mehr Werfer im Schattendurchgang) | +8 MB (Tiefe 2048²) |
+| Vignette, Weißabgleich | ≈ 0 (im Farbweg) | – |
+| PCF statt DPCF/PCSS (alle Stufen) | **billiger** (keine EVSM-Mips) | **−~120 MB** |
+
+### Auf dem Gerät zu prüfen (Prüfliste für den Inhaber)
+
+Alles in **Indoor → Einstellungen** bzw. **Diagnose** (Einstellungen → Erweitert → Diagnose).
+
+1. **Diagnose → „Messen (Standard, Hoch, Ultra je 30 s)“** (unter „Bildrate je
+   Stufe“). Lädt die Testwelt und fährt selbst; ~2 Minuten Bildschirm an
+   lassen, Handy nicht bewegen. **Bitte melden (Foto genügt):** je Stufe die
+   drei Zahlen „Ø … ms“, „1 % niedrig … ms“ und „GPU … ms“. Faustregel:
+   GPU unter 14 ms = 60 B/s mit Reserve; „1 % niedrig“ über 25 ms = spürbares Ruckeln.
+2. **Einstellungen → 3D-Ansicht → Grafikstufe Ultra**, dann eine echte Strecke
+   (am besten Alpe d'Huez oder Sa Calobra, Tageszeit Abend und Mittag):
+   - Wirft der Fahrer einen Schatten auf die Straße? Bäume auf den Weg?
+   - **Schatten-Akne** (streifige/gesprenkelte dunkle Muster auf Straße und
+     Hängen), **schwebende Schatten** (Lücke zwischen Rad und Schatten),
+     **sichtbare Kaskadengrenze** (Schatten wird ab einer Entfernung schlagartig
+     gröber, besonders bei 8 m und 30 m vor dem Fahrer).
+   - Flimmern Laub und Schotter bei Fahrt weniger als in Standard (TAA)? Gibt es
+     **Schlieren/Geisterbilder** hinter dem Fahrer oder an Laubrändern?
+   - Ist die Straße am Abend in den Bergen plausibel im Hangschatten, oder
+     wirkt es nur dunkler? (Sonst in der Diagnose „Gelände wirft Schatten“ aus
+     und vergleichen.)
+3. **Stufe Hoch** dasselbe kurz: Laub und Böschungen mit mehr Tiefe? Farben
+   mittags wärmer, nicht gelbstichig? Abends nicht orange überzogen?
+4. **Diagnose → Schalter einzeln** (am Ende der Liste): Spiegelung des Himmels,
+   TAA, Gelände wirft Schatten, Stabile Schatten, Weißabgleich, Vignette,
+   Effekte in hoher Güte — jeder soll sofort wirken und nichts zum Absturz
+   bringen. „Stabile Schatten“ ruhig testen: im Referenzrenderer verschwanden
+   damit bei 800 m Reichweite die Schatten.
+5. **Sicherer Modus:** Falls die App mit Hoch/Ultra abstürzt, startet sie beim
+   nächsten Mal im sicheren Grafikmodus (alle neuen Effekte aus) — bitte melden,
+   welche Stufe und welche Strecke.
+6. 20 Minuten Ultra fahren: wird das Handy heiß, sinkt die Bildrate
+   (Diagnose → Messwerte, „Skalierung“ unter 100 % = dynamische Auflösung greift)?
+
+Wenn Hoch flüssig läuft (GPU deutlich unter 16 ms), kann Hoch die Vorgabe
+werden (eine Zeile: `IndoorViewModel.readGraphics`, Rückfall `STANDARD`).
+
+### Offen
+
+- Kontaktschatten (`screenSpaceContactShadows`) und SSCT geprüft, im
+  Referenzrenderer ohne sichtbare Wirkung → nicht eingebaut.
+- Weiche Schatten: DPCF/PCSS/VSM zeigen in 1.75.1 nichts; PCF bleibt hart
+  (2×2-Filter). Weiche Kanten erst mit einer neueren Filament-Version prüfen.
+- Dunstfarbe aus dem IBL (`fogColorFromIbl`) nicht eingebaut (Farbe würde mit
+  der Spiegelungs-Cubemap multipliziert; ohne Gerät nicht abstimmbar).
+- Stufe Ultra bleibt Wahl des Inhabers; ob Hoch Vorgabe werden kann, entscheidet
+  die Messung auf dem Gerät.
+
+### Für einen weiteren großen Schritt nötig — außerhalb dieses Bereichs
+
+| Was | Wirkung | Aufwand | Paketgröße | Lizenz |
+|---|---|---|---|---|
+| PBR-Texturen mit Normal-/Rauheitskarten für Asphalt, Schotter, Wiese, Waldboden (gekachelt, 1–2 K) | sehr hoch: echtes Relief und Glanz aus der Nähe; nutzt dann das neue Spiegelungs-IBL voll | Materialien `surface.mat`/`terrain.mat` um Normal-/Rauheitskarten erweitern, Mischen nach Belag; 1–2 Wochen | +10–25 MB einmalig in der App (nicht je Strecke) | CC0 von ambientCG / Poly Haven |
+| Echte 3D-Baummodelle (wenige Arten, LOD, Instanzen) statt Laubkarten | sehr hoch: Wald ist heute der künstlichste Teil | Weltbau + Instanzierung im Renderer; 2–4 Wochen | +5–15 MB App, je Strecke kaum mehr (nur Positionen) | CC0 (Poly Haven, Quaternius) oder selbst modelliert; SpeedTree nicht (Lizenz) |
+| Höher aufgelöstes Luftbild (20 cm statt 1 m) nahe der Strecke | hoch für Bodennähe | Weltbau; je Land unterschiedlich | ×4–×10 Textur in einem 100-m-Band (~+50–150 MB je Strecke) | DOP20 offen in BW/NRW/Hessen (dl-de/by-2.0), anderswo oft nicht frei |
+| Straßenmarkierungen, Bordsteine, Leitpfosten, Zäune als Geometrie | mittel-hoch: Maßstab und Glaubwürdigkeit | Weltbau aus OSM; 1–2 Wochen | gering | ODbL (OSM) |
+| Gelände feiner als 1 m nahe der Strecke + Detail-Normalen | mittel | Weltbau | moderat | Laserdaten je Land |
+| Neuere Filament-Version (weiche Schatten, bessere TAA/FSR) | mittel | AGP/compileSdk 37 nötig (siehe app/build.gradle.kts) | – | Apache 2.0 |
+
 ## Abweichungen vom Vertrag
 
 1. **Fahrer ohne Datei möglich.** Vertrag 7.6 nennt „Modelle“ als Startstufe

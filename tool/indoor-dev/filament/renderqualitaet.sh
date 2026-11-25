@@ -12,7 +12,7 @@ cd "$(dirname "$0")/../viewer"
 export FILARENDER_BACKEND=vulkan
 STANDARD=""  # seit dem Geraetebefund auch PCF (Vorgabe des Referenzrenderers)
 HIGH="--set reflections=1 --set ambientOcclusion=1 --set bloom=1 --seti effectQuality=1 --set whiteBalance=1"
-ULTRA="$HIGH --seti effectQuality=2 --set taa=1 --frames 16 --seti cascades=4 --seti shadowFarM=800 --set stableShadows=1 --set terrainShadows=1 --set vignette=1"
+ULTRA="$HIGH --seti effectQuality=2 --set taa=1 --frames 16 --seti cascades=4 --seti shadowFarM=800 --set terrainShadows=1 --set vignette=1"
 for sc in $SCENES; do
   IFS=: read -r id t d <<< "$sc"
   for tier in standard hoch ultra; do
