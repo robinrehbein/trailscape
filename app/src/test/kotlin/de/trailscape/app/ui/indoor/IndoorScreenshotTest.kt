@@ -27,6 +27,7 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureScreenRoboImage
@@ -415,14 +416,20 @@ class IndoorScreenshotTest {
         compose.onNodeWithText("Ride feel").assertExists()
     }
 
-    /** Pause: „Weiter" und „Fahrt beenden" auf der Startpunkt-Karte. */
+    /** Pause: „Weiter" und „Fahrt beenden" auf der Startpunkt-Karte; der Tipp fragt nach. */
     @Test
-    fun pauseMitBeenden() = shot("$flowFile-nachher-12-pause-beenden") {
-        RideScreen(
-            ride(session = session(phase = IndoorPhase.PAUSED, ghost = null), ghostLabel = null).copy(
-                start = IndoorStartUi(selectedM = 4_260.0, maxM = 11_900.0, resumeM = null, held = false),
-            ),
-        )
+    fun pauseMitBeenden() {
+        shot("$flowFile-nachher-12-pause-beenden") {
+            RideScreen(
+                ride(session = session(phase = IndoorPhase.PAUSED, ghost = null), ghostLabel = null).copy(
+                    start = IndoorStartUi(selectedM = 4_260.0, maxM = 11_900.0, resumeM = null, held = false),
+                ),
+            )
+        }
+        compose.onNodeWithText("Fahrt beenden").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Fahrt angehalten").assertExists()
+        captureScreenRoboImage("build/outputs/roborazzi/$flowFile-nachher-13-pause-beenden-rueckfrage.png")
     }
 
     private fun catalogItem(

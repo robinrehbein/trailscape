@@ -821,10 +821,25 @@ Doku und Bildern selbst zusammengetragen. Vorher/Nachher-Bilder:
    eingeklappt) → „Vorbereiten“ → Fortschritt → „Losfahren“.
 8. **Fahrt:** HUD wie bisher. Neu: In der Pause steht auf der
    Startpunkt-Karte (bzw. der Pausenkarte) neben „Weiter“ der Knopf
-   **„Fahrt beenden“** — ein Tipp, weil die Fahrt ohnehin steht. Während der
+   **„Fahrt beenden“** — ein Tipp, weil die Fahrt ohnehin steht, mit einer
+   Rückfrage („Fahrt angehalten … Abbrechen / Fahrt beenden“), denn aus der
+   Auswertung führt kein Weg zurück in die Fahrt. Während der
    Fahrt bleibt Beenden beim Halten des runden Knopfs; Zurück fragt wie
    bisher „Weiterfahren / Fahrt beenden“. Danach Auswertung mit
    „Speichern“/„Verwerfen“ (unverändert).
+
+**Bedienung während der Fahrt (geprüft im Code, nicht auf dem Gerät)**
+
+- Gänge: −/+ an den Rändern (64 dp), am leichtesten bzw. schwersten Gang
+  gesperrt; im ERG-Modus verschieben sie das Ziel um 5 % FTP. Unverändert.
+- Pause: runder Knopf (ein Tipp, umkehrbar); Auto-Pause bei Trainerverlust.
+- Beenden während der Fahrt: nur durch Halten (1,1 s) — ein versehentlicher
+  Tipp zeigt nur „Zum Beenden gedrückt halten“. In der Pause: „Fahrt beenden“
+  mit Rückfrage (neu).
+- Zurück-Taste: hält die Fahrt an und fragt „Weiterfahren / Fahrt beenden“;
+  „Weiterfahren“ setzt nur fort, wenn erst die Rückfrage angehalten hat.
+- Versehentlicher Tipp auf die Welt: blendet nur Nebenanzeigen aus/ein.
+- Auswertung: Zurück bei ungespeicherter Fahrt fragt „Verwerfen?“.
 
 **Was umgezogen ist** (nichts entfällt)
 
@@ -883,7 +898,7 @@ dem Umbau (gleiche Tests, Commit `f0b4d87`), `nachher-01` nichts bereit,
 `-02` Trainer fehlt, `-03` Bluetooth aus, `-04` Herunterladen, `-05` lädt,
 `-06` bereit (Demo), `-07` Download-Fehler, `-08` eigene Strecke wird
 vorbereitet, `-09` Einstellungen, `-10`/`-11` englisch, `-12` Pause mit
-„Fahrt beenden“, dazu Koppeln, Strecke vorbereiten und Bereit.
+„Fahrt beenden“, `-13` deren Rückfrage, dazu Koppeln, Strecke vorbereiten und Bereit.
 
 **Offen für den Inhaber**
 
