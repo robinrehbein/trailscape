@@ -166,7 +166,7 @@ class IndoorRideService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
-            .setCategory(NotificationCompat.CATEGORY_WORKOUT)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(openRideIntent(this))
