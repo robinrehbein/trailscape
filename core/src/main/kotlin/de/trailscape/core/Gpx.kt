@@ -197,6 +197,15 @@ private fun findName(root: Element): String? {
         }
     }
 
+    // Routen (`<rte>`, z. B. Komoot) tragen ihren Namen am Routen-Element.
+    for (el in nameEls) {
+        val parent = el.parentNode as? Element
+        if (parent != null && localName(parent) == "rte") {
+            val text = el.textContent.trim()
+            if (text.isNotEmpty()) return text
+        }
+    }
+
     for (el in nameEls) {
         val parent = el.parentNode as? Element
         if (parent != null && localName(parent) == "metadata") {
