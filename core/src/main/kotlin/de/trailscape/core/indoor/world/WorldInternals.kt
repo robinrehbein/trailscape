@@ -361,6 +361,9 @@ internal interface MapData {
     /** Punkte der POI-Ebene im Rechteck ([PoiLayer], Detailtreue); ohne Daten leer. */
     fun pois(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapPoi> = emptyList()
 
+    /** Zusatzobjekte aus vollen OSM-Daten ([OsmDetail], nur Katalog-/Server-Bau); ohne Daten leer. */
+    fun osmFeatures(minE: Double, minN: Double, maxE: Double, maxN: Double): List<OsmFeature> = emptyList()
+
     fun buildings(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapBuilding>
     fun roads(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapRoad>
     fun areas(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapArea>

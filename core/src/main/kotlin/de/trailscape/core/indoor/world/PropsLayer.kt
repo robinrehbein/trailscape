@@ -351,7 +351,15 @@ internal class PropsLayer : TileLayer {
 
         // --- Laternen und Ortstafel ---------------------------------------------
 
-        private fun streetLamps() = eachGrid(36.0) { k, d ->
+        /** Die vollen OSM-Daten ([OsmDetail]) fuehren im Umkreis Laternen bzw. Zaeune — dann gelten nur diese. */
+        private fun osmHas(kind: OsmKind, r: Double): Boolean {
+            val s = ctx.spec
+            return ctx.map.osmFeatures(s.minE - r, s.minN - r, s.maxE + r, s.maxN + r).any { it.kind == kind }
+        }
+        private val realLamps by lazy { osmHas(OsmKind.STREET_LAMP, 500.0) }
+        private val realFences by lazy { osmHas(OsmKind.FENCE, 1500.0) }
+
+        private fun streetLamps() = if (realLamps) Unit else eachGrid(36.0) { k, d ->
             val p = poseAt(d + 11.0) ?: return@eachGrid
             val side = if (k % 2 == 0) 1 else -1
             if (edgeStyleOf(p.sec, landAt(p, side)) != EdgeStyle.URBAN) return@eachGrid
@@ -468,6 +476,7 @@ internal class PropsLayer : TileLayer {
         // --- Weidezaun -----------------------------------------------------------
 
         private fun fences() {
+            if (realFences) return
             val block = 120.0
             val spacing = 3.0
             val perBlock = (block / spacing).toInt()

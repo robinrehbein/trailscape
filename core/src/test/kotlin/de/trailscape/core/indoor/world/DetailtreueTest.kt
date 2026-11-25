@@ -190,3 +190,65 @@ class DetailtreueTest {
         }
     }
 }
+
+/** Volle OSM-Attribute (Overpass-Auszug) und ihre Zeichenschicht. */
+class OsmDetailTest {
+    private val track = PreviewSupport.curvyTrack()
+
+    @Test
+    fun `Overpass-Antwort wird gelesen, unbekannte Objekte uebersprungen`() {
+        val json = """
+            {"version":0.6,"elements":[
+              {"type":"way","id":1,"tags":{"barrier":"hedge"},"geometry":[{"lat":50.0,"lon":7.0},{"lat":50.0001,"lon":7.0002}]},
+              {"type":"node","id":2,"lat":50.001,"lon":7.001,"tags":{"power":"generator","generator:source":"wind","height":"140"}},
+              {"type":"node","id":3,"lat":50.002,"lon":7.002,"tags":{"amenity":"bench"}},
+              {"type":"way","id":4,"tags":{"man_made":"silo"},"geometry":[{"lat":50.0,"lon":7.0},{"lat":50.0,"lon":7.0001},{"lat":50.0001,"lon":7.0001}]}
+            ]}
+        """.trimIndent()
+        val d = OsmDetail.parseOverpass(json)
+        assertEquals(3, d.size)
+        assertEquals(mapOf("hedge" to 1, "silo" to 1, "wind_turbine" to 1), d.counts())
+        val f = d.project(GeoOrigin(50.0, 7.0, 0.0))
+        val wind = f.first { it.kind == OsmKind.WIND_TURBINE }
+        assertEquals(140.0, wind.heightM()!!, 1e-9)
+        assertTrue(f.first { it.kind == OsmKind.SILO }.pts.size == 2, "Silo als Punkt")
+        assertTrue(OsmDetail.overpassQuery(doubleArrayOf(50.0, 7.0, 50.01, 7.01)).contains("around:120,50,7,50.01,7.01"))
+    }
+
+    @Test
+    fun `Hecke neben der Strecke und Windrad werden gezeichnet, nichts auf der Fahrbahn`() {
+        val i = 40
+        val e = track.e[i].toDouble()
+        val n = track.n[i].toDouble()
+        val spec = TileSpec.at(0, e, n)
+        val line = TrackLine(track)
+        val pose = line.poseAt(i * track.stepM)
+        val h = Math.toRadians(pose.headingDeg)
+        // Hecke laengs, 6 m rechts; eine zweite genau auf der Mittellinie (muss an den Rand)
+        fun along(off: Double) = doubleArrayOf(
+            e + kotlin.math.cos(h) * off - kotlin.math.sin(h) * 10, n - kotlin.math.sin(h) * off - kotlin.math.cos(h) * 10,
+            e + kotlin.math.cos(h) * off + kotlin.math.sin(h) * 10, n - kotlin.math.sin(h) * off + kotlin.math.cos(h) * 10,
+        )
+        val feats = listOf(
+            OsmFeature(OsmKind.HEDGE, along(6.0), emptyMap()),
+            OsmFeature(OsmKind.GUARD_RAIL, along(0.0), emptyMap()),
+            OsmFeature(OsmKind.WIND_TURBINE, doubleArrayOf(spec.minE + 30, spec.minN + 30), mapOf("height" to "100")),
+        )
+        val map = OsmDetailMap(MapData.EMPTY, feats)
+        val ctx = BuildingsTestSupport.context(spec, map, track = track)
+        val out = TileOutput(spec)
+        OsmDetailLayer().build(ctx, out)
+        assertTrue(out.triangles(WorldNames.NODE_PROPS) > 100)
+        val mesh = out.mesh(WorldNames.NODE_PROPS, TileMaterial(PropsLayer.MATERIAL, roughness = 0.85f))
+        var high = 0.0
+        for (v in 0 until mesh.vertexCount) {
+            val ve = mesh.positions[3 * v] + spec.anchorE
+            val vn = spec.anchorN - mesh.positions[3 * v + 2]
+            high = maxOf(high, mesh.positions[3 * v + 1].toDouble())
+            val hit = line.nearest(ve, vn, 30.0) ?: continue
+            assertTrue(hit.distance > line.halfWidthAt(hit.distM) + 0.2, "Teil auf der Fahrbahn")
+        }
+        assertTrue(high > 90.0, "Windrad fehlt (hoechster Punkt $high)")
+        assertEquals(emptyList(), checkTileGlb(out.toGlb().toBytes()))
+    }
+}

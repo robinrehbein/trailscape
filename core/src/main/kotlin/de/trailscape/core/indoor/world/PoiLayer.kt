@@ -45,7 +45,7 @@ internal class PoiLayer : TileLayer {
         private val buildings by lazy { ctx.spec.let { s -> ctx.map.buildings(s.minE - 8.0, s.minN - 8.0, s.maxE + 8.0, s.maxN + 8.0) } }
         private val mesh by lazy { out.mesh(WorldNames.NODE_PROPS, TileMaterial(PropsLayer.MATERIAL, roughness = 0.85f)) }
         private val scratch = MeshBuilder(64, 64)
-        private val budget = min(ctx.budget.props / 3, MAX_TRIANGLES)
+        private val budget = min(min(ctx.budget.props / 3, MAX_TRIANGLES), ctx.budget.props - out.triangles(WorldNames.NODE_PROPS))
         private var used = 0
         var placed = 0
             private set
