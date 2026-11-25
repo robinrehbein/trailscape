@@ -588,7 +588,7 @@ internal object TreeModels {
                 val sn = Vec3(d.x / lb.rh, d.y / lb.rv, d.z / lb.rh).normalized()
                 val nrm = (sn + facing(sn, cr) + rnd.unit() * (if (lod == Lod.NEAR) 0.3 else 0.18) + Vec3(0.0, -droop, 0.0)).normalized()
                 val sz = min(size * rnd.range(0.82, 1.15), maxCard)
-                val reg = if (lod == Lod.NEAR && form != Form.PINE && i % 3 == 0) FoliageAtlas.BROAD else if (form == Form.PINE && i % 2 == 0 && lod != Lod.FAR) FoliageAtlas.NEEDLE else FoliageAtlas.MASS
+                val reg = if (lod == Lod.NEAR && form != Form.PINE && i % 2 == 0) FoliageAtlas.BROAD else if (form == Form.PINE && i % 2 == 0 && lod != Lod.FAR) FoliageAtlas.NEEDLE else FoliageAtlas.MASS
                 tangentCard(crown, q, nrm, sz, rnd.range(0.0, 2 * PI), reg, cr, lb, leaf, lobeTint * rnd.range(0.92, 1.08), lobeHue + rnd.range(-0.12, 0.12), droop)
             }
             // Nah: zweite, dunklere Schale im Lappen statt des Kerns — Tiefe im Laub, durch die

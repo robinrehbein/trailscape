@@ -134,3 +134,9 @@ fun createGeoPipeline(
  * Exemplar darf mehrere Welten nacheinander bauen.
  */
 fun createWorldBuilder(): WorldBuilder = WorldBuilderImpl(FullWorldParts)
+
+/**
+ * Weltbau fuer Katalog und Server mit optionaler Laser-Stufe und vollen OSM-Attributen ([OsmDetail],
+ * Detailtreue). Auf dem Handy bleibt es bei [createWorldBuilder].
+ */
+fun createWorldBuilder(laser: LaserOptions?, osm: OsmDetail?): WorldBuilder = WorldBuilderImpl(FullWorldParts, laser = laser, osm = osm)

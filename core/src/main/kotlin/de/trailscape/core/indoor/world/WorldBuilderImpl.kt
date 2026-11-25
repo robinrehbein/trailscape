@@ -62,6 +62,8 @@ internal class WorldBuilderImpl(
     private val threads: Int = defaultWorldThreads(),
     /** Datenstufe „Laser" (DGM1, nDOM, LoD2; siehe [LaserWorldParts]); `null` = bisheriger Datensatz. */
     private val laser: LaserOptions? = null,
+    /** Volle OSM-Attribute entlang der Strecke (nur Katalog-/Server-Bau, [OsmDetail]); `null` = nur Vektorkacheln. */
+    private val osm: OsmDetail? = null,
 ) : WorldBuilder {
 
     // -----------------------------------------------------------------------
@@ -171,6 +173,8 @@ internal class WorldBuilderImpl(
             // rund 100 MB Vektor-Merkmale samt Tags) duerfen weg — auf dem Handy
             // ist das der Unterschied zwischen fertiger Welt und OutOfMemoryError.
             loader.releaseRawTiles()
+            val osmDetail = osm?.takeIf { it.size > 0 }
+            if (osmDetail != null) map = OsmDetailMap(map, osmDetail.project(origin))
 
             val attribution = ArrayList<WorldAttribution>()
             attribution += WorldAttribution(GeoSourceKind.ELEVATION, ELEVATION_ATTRIBUTION, ELEVATION_LICENSE, ELEVATION_ATTRIBUTION_URL)
@@ -180,6 +184,7 @@ internal class WorldBuilderImpl(
                 val s = laserData.source
                 attribution += WorldAttribution(GeoSourceKind.ELEVATION, s.attribution, s.license, s.licenseUrl)
             }
+            if (osmDetail != null) attribution += WorldAttribution(GeoSourceKind.VECTOR, OsmDetail.ATTRIBUTION, OsmDetail.LICENSE, OsmDetail.LICENSE_URL)
             lastLaser = laserData
 
             val inputs = WorldInputs(
@@ -201,7 +206,10 @@ internal class WorldBuilderImpl(
                 aerialSources = plan.aerial,
                 baseAttribution = attribution,
                 createdAtMs = clock(),
-                laserId = laserData?.let { "${it.source.id}:${it.blockCount}:${it.buildings.size}" },
+                laserId = listOfNotNull(
+                    laserData?.let { "${it.source.id}:${it.blockCount}:${it.buildings.size}" },
+                    osmDetail?.let { "osm=${it.size}" },
+                ).joinToString("|").ifEmpty { null },
             )
             return assemble(inputs, outDir, listener, parts)
         } catch (e: WorldBuildCancelled) {
@@ -472,6 +480,7 @@ internal class WorldBuilderImpl(
             tiles = tiles,
             budget = WorldBudget(maxTex, maxTri, tileBytes),
             attribution = attribution,
+            places = WorldPlaces.of(inputs.map, inputs.track),
         )
         // diskBytes enthaelt das Manifest selbst: so lange rechnen, bis die Laenge stabil ist.
         var json = manifest.toJson()
