@@ -39,8 +39,9 @@ class TrailTrackerTest {
     @Test
     fun `Ankuendigung, Einblendung und Ergebnis`() {
         val r = Ride(tracker())
-        val before = r.go(600.0, 10.0)
-        assertTrue(before.climb == null || before.climb !is ClimbLive.Ahead)
+        // 600 m vor dem Fuss: noch keine Ankuendigung (ANNOUNCE_M = 500 m)
+        val before = r.go(400.0, 10.0)
+        assertNull(before.climb)
         val ahead = r.go(700.0, 10.0).climb
         assertIs<ClimbLive.Ahead>(ahead)
         assertEquals(300.0, ahead.toStartM, 1e-6)
@@ -62,7 +63,7 @@ class TrailTrackerTest {
         assertEquals("ride:t@1000-2000", done.effort.climbKey)
 
         // Das Ergebnis bleibt RESULT_SHOW_MS stehen, danach nichts mehr.
-        assertIs<ClimbLive.Done>(r.wait(TrailTracker.RESULT_SHOW_MS - 2_000).climb)
+        assertIs<ClimbLive.Done>(r.wait(TrailTracker.RESULT_SHOW_MS - 4_000).climb)
         assertNull(r.wait(3_000).climb)
 
         val bests = r.t.drainNewBests()
@@ -171,9 +172,10 @@ class TrailTrackerTest {
             d = (d + 10.0) % 3_000.0
             last = t.update(now, true, d, 5.0, 0L)
         }
-        assertEquals(1, t.efforts().size)
-        assertEquals(2, t.efforts()[0].lap)
-        assertTrue(t.efforts()[0].ranked)
+        // Runde 1 und Runde 2, beide gewertet; die zweite vergleicht mit der ersten
+        assertEquals(listOf(1, 2), t.efforts().map { it.lap })
+        assertTrue(t.efforts().all { it.ranked })
+        assertEquals(t.efforts()[0].timeMs, t.efforts()[1].previousBestMs)
         assertNotNull(last)
     }
 
