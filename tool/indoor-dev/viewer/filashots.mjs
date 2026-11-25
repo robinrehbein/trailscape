@@ -149,7 +149,7 @@ for (const dist of a.dists) {
       fogHeight: here.u - 40,
       tiles,
       rider: showRider ? { file: join(a.models, 'rider.glb'), matrix: riderMatrix(rel(...enuLateral(here, lat)), here.headingDeg, here.gradePct), pedal: 0.15, roll: 0 } : null,
-      cockpit: pose.cockpit ? { file: a.cockpit, matrix: pose.cockpit, nodes: { x_cockpit_bars: steerMatrix(pose.steer) } } : null,
+      cockpit: pose.cockpit && existsSync(a.cockpit) ? { file: a.cockpit, matrix: pose.cockpit, nodes: { x_cockpit_bars: steerMatrix(pose.steer) } } : null,
     };
     const models = [];
     for (const r of a.riders) {

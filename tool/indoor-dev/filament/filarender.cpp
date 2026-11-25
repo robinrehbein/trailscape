@@ -61,6 +61,10 @@
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+// Nahdetail-Karten der Belaege (JPEG); eigene, statische Kopie — Filaments libstb bleibt unberuehrt.
+#define STB_IMAGE_STATIC
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 using namespace filament;
 using namespace filament::math;
@@ -179,6 +183,15 @@ static Kind kindFor(const std::string& l, gltfio::AlphaMode a, bool tex, bool un
     if (a == AlphaMode::BLEND && ((startsWith(l, "x_mat_route_") && endsWith(l, "_fade")) || l == "x_mat_route_fringe"))
         return SURFACE_BLEND;
     return UBER;
+}
+
+// Spiegel von SurfaceNearDetail.keyFor (Kotlin, getestet): Belag der Fahrbahn aus dem
+// Materialnamen (`mat_route_<belag>`, `x_mat_road_<belag>`), sonst leer (Randstreifen usw.).
+static std::string nearKey(const std::string& l, const json& kinds) {
+    std::string k;
+    if (startsWith(l, "mat_route_")) k = l.substr(10);
+    else if (startsWith(l, "x_mat_road_")) k = l.substr(11);
+    return kinds.contains(k) ? k : std::string();
 }
 
 // Spiegel von WorldMaterialRules.detailClass: Gewichte Wiese, Erde, Waldboden, Schotter.
@@ -506,6 +519,54 @@ int main(int argc, char** argv) {
         wp->mats[SURFACE] = loadMaterial(engine, matDir + "/surface.filamat");
         wp->mats[SURFACE_BLEND] = loadMaterial(engine, matDir + "/surface_blend.filamat");
     }
+    // Nahdetail der Fahrbahn (surface.mat, SurfaceNearDetail in der App): Karten und Parameter
+    // aus assets/indoor/surface-detail (nahdetail.py). `settings.nearDetail` = false nur fuer
+    // Vorher-Bilder; `groundDetail` = false schaltet es wie auf dem Geraet ab.
+    json nearMeta;
+    std::map<std::string, Texture*> nearMaps;
+    const bool nearDetail = opt(settings, "nearDetail", true) && groundDetail;
+    const std::string nearDir = matDir.empty() ? std::string() : matDir + "/../surface-detail";
+    if (wp->mats[SURFACE] && std::ifstream(nearDir + "/detail.json")) nearMeta = readJson(nearDir + "/detail.json");
+    auto makeTex = [&](int w, int h, const uint8_t* rgba) {
+        auto* buf = new uint8_t[size_t(w) * h * 4];
+        memcpy(buf, rgba, size_t(w) * h * 4);
+        Texture* t = Texture::Builder().width(w).height(h).levels(0xff).sampler(Texture::Sampler::SAMPLER_2D)
+                         .usage(Texture::Usage::DEFAULT | Texture::Usage::GEN_MIPMAPPABLE)
+                         .format(Texture::InternalFormat::RGBA8).build(*engine);
+        t->setImage(*engine, 0, Texture::PixelBufferDescriptor(buf, size_t(w) * h * 4, Texture::Format::RGBA, Texture::Type::UBYTE,
+                                    [](void* b, size_t, void*) { delete[] (uint8_t*)b; }));
+        t->generateMipmaps(*engine);
+        return t;
+    };
+    auto nearMap = [&](const std::string& map) -> Texture* {
+        auto it = nearMaps.find(map);
+        if (it != nearMaps.end()) return it->second;
+        Texture* t = nullptr;
+        if (!map.empty()) {
+            auto raw = readFile(nearDir + "/" + nearMeta["maps"][map]["file"].get<std::string>());
+            int w = 0, h = 0, ch = 0;
+            uint8_t* px = stbi_load_from_memory(raw.data(), (int)raw.size(), &w, &h, &ch, 4);
+            if (px) { t = makeTex(w, h, px); stbi_image_free(px); }
+        }
+        if (!t) {  // wie die App: immer etwas gebunden (neutral: kein Gefaelle, mittlere Hoehe)
+            const uint8_t flat[4] = { 128, 128, 128, 255 };
+            t = makeTex(1, 1, flat);
+        }
+        nearMaps[map] = t;
+        return t;
+    };
+    auto setupNear = [&](MaterialInstance* mi, const std::string& label) {
+        std::string key = nearMeta.is_null() ? std::string() : nearKey(label, nearMeta["kinds"]);
+        if (key.empty() || !nearDetail) {
+            mi->setParameter("nearMap", nearMap(""), detailSampler);
+            return;
+        }
+        const json& k = nearMeta["kinds"][key];
+        mi->setParameter("nearMap", nearMap(k["map"].get<std::string>()), detailSampler);
+        mi->setParameter("nearA", float4{ nearMeta["rangeM"].get<float>(), k["normal"].get<float>(), k["albedo"].get<float>(), k["relief"].get<float>() });
+        mi->setParameter("nearB", float4{ k["repeatM"].get<float>(), k["rough"].get<float>(), k["roughVar"].get<float>(), k["trackGloss"].get<float>() });
+        mi->setParameter("nearC", float4{ k["trackU"].get<float>(), nearMeta["reliefRangeM"].get<float>(), opt(k, "reliefTexels", 1.0f), opt(k, "reliefMip", 0.0f) });
+    };
     wp->setup = [&](MaterialInstance* mi, int kind, const std::string& label) {
         if (kind == 1) {
             setParams(mi, L["terrain"]);
@@ -518,6 +579,7 @@ int main(int argc, char** argv) {
             if (!opt(settings, "aniso", true)) mi->setParameter("anisoRange", 0.f);
             mi->setParameter("detailMap", detailTex, detailSampler);
             mi->setParameter("detailClass", detailClass(label));
+            if (wp->mats[kind]->hasParameter("nearA")) setupNear(mi, label);
         } else {
             setParams(mi, L["foliage"]);
             if (!wind) mi->setParameter("windStrength", 0.f);

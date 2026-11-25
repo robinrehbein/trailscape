@@ -1,0 +1,169 @@
+{
+ "comment": "Erzeugt von tool/indoor-dev/filament/nahdetail.py \u2014 nicht von Hand aendern.",
+ "kinds": {
+  "asphalt": {
+   "albedo": 0.2,
+   "map": "asphalt",
+   "normal": 0.75,
+   "relief": 2.0,
+   "reliefMip": 0.0,
+   "reliefTexels": 1.0,
+   "repeatM": 0.75,
+   "rough": 0.9,
+   "roughVar": 0.22,
+   "trackGloss": 0.0,
+   "trackU": 0.0
+  },
+  "cobble": {
+   "albedo": 0.15,
+   "map": "stone",
+   "normal": 0.6,
+   "relief": 2.4,
+   "reliefMip": 1.0,
+   "reliefTexels": 3.0,
+   "repeatM": 0.6,
+   "rough": 0.74,
+   "roughVar": 0.22,
+   "trackGloss": 0.0,
+   "trackU": 0.0
+  },
+  "compacted": {
+   "albedo": 0.28,
+   "map": "gravel",
+   "normal": 0.9,
+   "relief": 2.0,
+   "reliefMip": 0.0,
+   "reliefTexels": 1.0,
+   "repeatM": 0.7,
+   "rough": 0.95,
+   "roughVar": 0.1,
+   "trackGloss": 0.1,
+   "trackU": 0.242
+  },
+  "concrete": {
+   "albedo": 0.15,
+   "map": "concrete",
+   "normal": 0.6,
+   "relief": 2.0,
+   "reliefMip": 0.5,
+   "reliefTexels": 1.0,
+   "repeatM": 1.0,
+   "rough": 0.82,
+   "roughVar": 0.12,
+   "trackGloss": 0.0,
+   "trackU": 0.0
+  },
+  "dirt": {
+   "albedo": 0.3,
+   "map": "dirt",
+   "normal": 1.0,
+   "relief": 1.8,
+   "reliefMip": 0.5,
+   "reliefTexels": 1.5,
+   "repeatM": 1.5,
+   "rough": 0.95,
+   "roughVar": 0.08,
+   "trackGloss": 0.1,
+   "trackU": 0.242
+  },
+  "grass": {
+   "albedo": 0.35,
+   "map": "grass",
+   "normal": 1.0,
+   "relief": 2.0,
+   "reliefMip": 0.0,
+   "reliefTexels": 1.0,
+   "repeatM": 1.0,
+   "rough": 0.92,
+   "roughVar": 0.06,
+   "trackGloss": 0.05,
+   "trackU": 0.242
+  },
+  "gravel": {
+   "albedo": 0.32,
+   "map": "gravel",
+   "normal": 1.1,
+   "relief": 1.5,
+   "reliefMip": 0.0,
+   "reliefTexels": 1.0,
+   "repeatM": 1.2,
+   "rough": 0.96,
+   "roughVar": 0.08,
+   "trackGloss": 0.08,
+   "trackU": 0.242
+  },
+  "paving": {
+   "albedo": 0.15,
+   "map": "stone",
+   "normal": 0.6,
+   "relief": 2.0,
+   "reliefMip": 1.0,
+   "reliefTexels": 2.0,
+   "repeatM": 0.5,
+   "rough": 0.8,
+   "roughVar": 0.18,
+   "trackGloss": 0.0,
+   "trackU": 0.0
+  },
+  "sand": {
+   "albedo": 0.2,
+   "map": "sand",
+   "normal": 0.7,
+   "relief": 1.5,
+   "reliefMip": 0.5,
+   "reliefTexels": 1.5,
+   "repeatM": 1.0,
+   "rough": 0.97,
+   "roughVar": 0.04,
+   "trackGloss": 0.04,
+   "trackU": 0.242
+  },
+  "wood": {
+   "albedo": 0.15,
+   "map": "concrete",
+   "normal": 0.5,
+   "relief": 3.0,
+   "reliefMip": 1.0,
+   "reliefTexels": 1.5,
+   "repeatM": 0.7,
+   "rough": 0.84,
+   "roughVar": 0.1,
+   "trackGloss": 0.0,
+   "trackU": 0.0
+  }
+ },
+ "maps": {
+  "asphalt": {
+   "file": "asphalt.jpg",
+   "slopeScale": 1.531
+  },
+  "concrete": {
+   "file": "concrete.jpg",
+   "slopeScale": 1.673
+  },
+  "dirt": {
+   "file": "dirt.jpg",
+   "slopeScale": 1.779
+  },
+  "grass": {
+   "file": "grass.jpg",
+   "slopeScale": 1.668
+  },
+  "gravel": {
+   "file": "gravel.jpg",
+   "slopeScale": 1.832
+  },
+  "sand": {
+   "file": "sand.jpg",
+   "slopeScale": 1.626
+  },
+  "stone": {
+   "file": "stone.jpg",
+   "slopeScale": 1.423
+  }
+ },
+ "rangeM": 32.0,
+ "reliefRangeM": 40.0,
+ "size": 512,
+ "version": 1
+}
