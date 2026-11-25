@@ -341,7 +341,7 @@
     <string name="indoor_app_catalog_refresh_done">The list is up to date.</string>
     <string name="indoor_app_catalog_refresh_not_available">The list has not been published yet. You see the list that comes with the app.</string>
     <string name="indoor_app_catalog_refresh_failed">Couldn’t load the list. Check your connection and try again.</string>
-    <string name="indoor_app_catalog_privacy">The app fetches the list by itself at most once a day and each preview image once, worlds only after “Download” – all from Trailscape’s public GitHub release (github.com). Only the requested file is transferred – no account, no identifier.</string>
+    <string name="indoor_app_catalog_privacy">The app fetches the list by itself at most once a day and each preview image once, routes only after “Download” – all from Trailscape’s public GitHub release (github.com). Only the requested file is transferred – no account, no identifier.</string>
     <string name="indoor_app_catalog_laser">Extra detailed</string>
     <string name="indoor_app_catalog_new">New</string>
     <string name="indoor_app_catalog_preview_missing">No preview yet</string>
@@ -529,7 +529,7 @@
     <string name="indoor_app_settings_section_ride">Ride feel</string>
     <string name="indoor_app_settings_section_view">3D view</string>
     <string name="indoor_app_settings_section_advanced">Advanced</string>
-    <string name="indoor_app_settings_worlds_body">View and delete the 3D views of your routes and free up storage.</string>
+    <string name="indoor_app_settings_worlds_body">Delete routes and free up storage.</string>
     <string name="indoor_app_settings_diagnostics_title">Diagnostics</string>
     <string name="indoor_app_settings_diagnostics_body">Check whether the 3D view works on this device.</string>
     <string name="indoor_app_world_ready_page_title">Ready to ride</string>

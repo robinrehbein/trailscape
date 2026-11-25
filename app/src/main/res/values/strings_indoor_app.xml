@@ -341,7 +341,7 @@
     <string name="indoor_app_catalog_refresh_done">Die Liste ist auf dem neuesten Stand.</string>
     <string name="indoor_app_catalog_refresh_not_available">Die Liste ist noch nicht veröffentlicht. Angezeigt wird die Liste, die mit der App kommt.</string>
     <string name="indoor_app_catalog_refresh_failed">Die Liste konnte nicht geladen werden. Prüfe die Verbindung und versuche es noch einmal.</string>
-    <string name="indoor_app_catalog_privacy">Die Liste holt die App höchstens einmal am Tag von selbst, jedes Vorschaubild einmal, Welten nur nach „Laden“ – alles aus dem öffentlichen GitHub-Release von Trailscape (github.com). Dabei wird nur übertragen, welche Datei abgerufen wird – kein Konto, keine Kennung.</string>
+    <string name="indoor_app_catalog_privacy">Die Liste holt die App höchstens einmal am Tag von selbst, jedes Vorschaubild einmal, Strecken nur nach „Herunterladen“ – alles aus dem öffentlichen GitHub-Release von Trailscape (github.com). Dabei wird nur übertragen, welche Datei abgerufen wird – kein Konto, keine Kennung.</string>
     <string name="indoor_app_catalog_laser">Extra detailliert</string>
     <string name="indoor_app_catalog_new">Neu</string>
     <string name="indoor_app_catalog_preview_missing">Noch keine Vorschau</string>
@@ -529,7 +529,7 @@
     <string name="indoor_app_settings_section_ride">Fahrgefühl</string>
     <string name="indoor_app_settings_section_view">3D-Ansicht</string>
     <string name="indoor_app_settings_section_advanced">Erweitert</string>
-    <string name="indoor_app_settings_worlds_body">3D-Ansichten der Strecken ansehen, löschen und Speicher freigeben.</string>
+    <string name="indoor_app_settings_worlds_body">Strecken löschen und Speicher freigeben.</string>
     <string name="indoor_app_settings_diagnostics_title">Diagnose</string>
     <string name="indoor_app_settings_diagnostics_body">Prüfen, ob die 3D-Ansicht auf diesem Gerät läuft.</string>
     <string name="indoor_app_world_ready_page_title">Bereit zum Fahren</string>
