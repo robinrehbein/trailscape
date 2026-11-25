@@ -25,3 +25,4 @@ local.properties
 
 # Arbeitsverzeichnisse paralleler Claude-Agenten (git worktrees) — nie einchecken.
 .claude/worktrees/
+**/build-*.*.*/
