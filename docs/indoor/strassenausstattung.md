@@ -6,9 +6,8 @@ Fahrbahnrand, Ausstattung, Unregelmäßigkeiten der Fahrbahn. Abgeleitet nur aus
 Breite, Belag, Landnutzung und Geometrie der Strecke; was die Daten nicht hergeben, wird nicht
 erfunden (siehe „Bewusst nicht gemacht“).
 
-**Welt-Version:** `WORLD_BUILDER_ID` ist **nicht** angehoben. Beim Zusammenführen **nötig** (jede
-Welt mit Kraftverkehrsstraßen ändert sich: Linien, Bankettkante, Flicken, Leitpfosten, Planken),
-ebenso die Katalogversionen.
+**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/14` (auf `claude/grafik-detailtreue` mit `/13`
+aufgesetzt, der Branch ist eingemischt). Katalogversionen hier nicht angehoben.
 
 ## 1. Bestandsaufnahme (vorher)
 
@@ -121,16 +120,9 @@ OSM-Daten (`OsmDetail` → `OsmDetailMap.osmFeatures`, `OsmDetailLayer`). Damit 
 
 - `MapData.roadside(): RealRoadside` (Vorgabe `RealRoadside.NONE`). Ohne volle Daten gelten die Regeln
   überall.
-- `OsmDetailMap` überschreibt nach dem Zusammenführen `roadside()` und reicht `barrier=guard_rail`
-  als Linien durch (Skizze, ungebaut):
-
-```kotlin
-// in OsmDetailMap (OsmDetail.kt)
-override fun roadside(): RealRoadside = object : RealRoadside {
-    override fun guardRails(minE: Double, minN: Double, maxE: Double, maxN: Double) =
-        osmFeatures(minE, minN, maxE, maxN).filter { it.kind == OsmKind.GUARD_RAIL }.map { it.pts }
-}
-```
+- `OsmDetailMap` (Detailtreue, eingemischt) überschreibt `roadside()` und reicht `barrier=guard_rail`
+  als Linien durch (`OsmDetail.kt`). Nicht `authoritative`: Die Abfrage reicht nur 120 m weit, und
+  fehlendes `guard_rail` heißt in OSM nicht „keine Planke“.
 
 - Wirkung: Regel-Planke **und** Leitpfosten entfallen auf der Seite, wo eine echte Planke höchstens
   4 m neben ihrer Stelle liegt; die echte Planke zeichnet `OsmDetailLayer`. Mit `authoritative = true`

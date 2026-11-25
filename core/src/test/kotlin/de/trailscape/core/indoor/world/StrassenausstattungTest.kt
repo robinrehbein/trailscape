@@ -60,7 +60,17 @@ class StrassenausstattungTest {
         // Kurz vor der Begrenzung liegt eine Warnlinie.
         val firstSolid = (0 until line.count - 1).first { plan.centre[it] == MarkingPlan.Centre.SOLID }
         assertEquals(MarkingPlan.Centre.WARN, plan.centre[firstSolid - 1])
-        assertTrue(plan.sightFwd[line.count / 2] < 200.0, "Sichtweite in der Kurve ${plan.sightFwd[line.count / 2]}")
+        // Am Kurvenanfang (90° bei R 60 m) ist die Sicht kurz. Mitten im Bogen reicht sie ueber eine offene
+        // Wiese an der Innenseite (Versatz zur Ausfahrgeraden ~19 m < 20 m freier Raum) weit — mit Wald nicht.
+        val entry = (600.0 / line.stepM).toInt()
+        assertTrue(plan.sightFwd[entry] < 200.0, "Sichtweite am Kurvenanfang ${plan.sightFwd[entry]}")
+        val forest = object : LandMap {
+            override fun classAt(e: Double, n: Double) = LandClass.FOREST
+        }
+        val wooded = MarkingPlan.build(line, forest)
+        val mid = line.count / 2
+        assertTrue(wooded.sightFwd[mid] < 100.0, "Sichtweite im Waldbogen ${wooded.sightFwd[mid]}")
+        assertTrue(wooded.sightFwd[mid] < plan.sightFwd[mid], "Wald an der Innenseite verkuerzt die Sicht")
     }
 
     @Test
@@ -79,12 +89,19 @@ class StrassenausstattungTest {
         assertEquals(10, out.size)
         assertTrue(out.all { abs(it[1] - it[0] - 6.0) < 1e-9 })
         assertEquals(36.0, out[2][0], 1e-9)
-        // Ein Ausschnitt schneidet die Striche an den Enden, ohne die Phase zu verschieben.
+        // Ein Ausschnitt schneidet die Striche an den Enden, ohne die Phase zu verschieben:
+        // Strich 18–24 wird zu 20–24, Strich 36–42 zu 36–40.
         val cut = ArrayList<DoubleArray>()
         MarkingPlan.pattern(20.0, 40.0, 6.0, 18.0, cut)
-        assertEquals(1, cut.size)
-        assertEquals(36.0, cut[0][0], 1e-9)
-        assertEquals(40.0, cut[0][1], 1e-9)
+        assertEquals(2, cut.size)
+        assertEquals(20.0, cut[0][0], 1e-9)
+        assertEquals(24.0, cut[0][1], 1e-9)
+        assertEquals(36.0, cut[1][0], 1e-9)
+        assertEquals(40.0, cut[1][1], 1e-9)
+        // Reste unter 0,8 m entfallen (Strich 18–24 ab 23,5 m).
+        val tiny = ArrayList<DoubleArray>()
+        MarkingPlan.pattern(23.5, 30.0, 6.0, 18.0, tiny)
+        assertTrue(tiny.isEmpty())
     }
 
     @Test
@@ -213,16 +230,23 @@ class StrassenausstattungTest {
                 val e = m.x(i) + spec.anchorE
                 val n = spec.anchorN - m.z(i)
                 val above = m.y(i) + ctx.anchorU - scene.ground.heightAt(e, n)
-                if (above < 0.9) continue
+                // Oberkante der Leitpfosten (0,98–1,00 m), zwischen 0,6 und 0,9 m neben dem Fahrbahnrand — nicht
+                // Weidezaun- oder Plankenpfosten.
+                if (above < 0.95 || above > 1.03) continue
                 val hit = scene.line.nearest(e, n, 20.0) ?: continue
-                posts.add(Math.round(hit.distM) * 2 + if (hit.lateral > 0) 1 else 0)
+                val off = hit.distance - scene.line.halfWidthAt(hit.distM)
+                if (off < 0.6 || off > 0.9) continue
+                // Ein Pfosten je 2 m und Seite (ein Pfosten hat mehrere Eckpunkte).
+                posts.add(Math.round(hit.distM / 2.0) * 2 + if (hit.lateral > 0) 1 else 0)
             }
         }
         val arcLen = 50.0 * Math.toRadians(120.0)
-        fun count(a: Double, b: Double) = posts.count { (it / 2).toDouble() in a..b }
+        fun count(a: Double, b: Double) = posts.count { (it / 2) * 2.0 in a..b }
         val straight = count(20.0, 380.0) / 360.0
         val curve = count(410.0, 400.0 + arcLen - 10.0) / (arcLen - 20.0)
-        assertTrue(straight > 0.0 && curve > straight * 2.5, "Leitpfosten je Meter: Gerade $straight, Kurve $curve")
+        // Gerade: 2 Pfosten je 50 m (0,04/m); R 50 m: 2 je 12,5 m (0,16/m).
+        assertTrue(straight in 0.02..0.06, "Leitpfosten je Meter auf der Geraden: $straight")
+        assertTrue(curve > straight * 2.5, "Leitpfosten je Meter: Gerade $straight, Kurve $curve")
     }
 
     private class SlopeScene(val real: RealRoadside) {
