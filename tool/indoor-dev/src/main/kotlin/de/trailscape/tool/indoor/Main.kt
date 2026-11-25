@@ -118,6 +118,7 @@ private fun run(all: List<String>): Int {
         }
         "models" -> models(Args(rest, emptySet()))
         "trees" -> Args(rest, emptySet()).let { a -> de.trailscape.core.indoor.world.writeTreeSheet(File(a.req("out"))); println("Baumschau nach ${a.req("out")}"); 0 }
+        "tree-proto" -> Args(rest, emptySet()).let { a -> de.trailscape.core.indoor.tree.writeTreeComparison(File(a.req("out"))); println("Baum-Prototyp (alt/neu) nach ${a.req("out")}"); 0 }
         "catalog-routes" -> catalogRoutes(Args(rest, emptySet()).opt("only"))
         "lod2-cut" -> lod2Cut(Args(rest, setOf("offline")))
         "server-info" -> serverInfo()
