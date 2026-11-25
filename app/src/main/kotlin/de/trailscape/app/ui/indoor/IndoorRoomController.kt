@@ -137,7 +137,11 @@ class IndoorRoomController(
     private var phase = Phase.CLOSED
     private var client: RoomClient? = null
     private var invite: RoomInvite? = null
+    /** Die Wahl, mit der der Client beigetreten ist — und nach jedem Abbruch wieder beitritt. */
     private var joinedSharePower = false
+
+    /** Grund aus `ended`, auf dem Netz-Thread gemerkt: Der Status „zu" kann die Nachricht überholen. */
+    @Volatile private var endedReasonSeen: String? = null
     private var sharePower = false
     private var name = ""
     private var roomState = RoomState()
@@ -186,6 +190,12 @@ class IndoorRoomController(
 
     /** Schlüssel der Strecke des offenen Raums (`IndoorRouteOption.key`), sonst `null`. */
     fun openRouteKey(): String? = if (phase == Phase.OPEN) roomState.room?.route?.id else null
+
+    /** Wie [openRouteKey], aber nur, wenn die Strecke hier in der Version des Raums bereitliegt. */
+    fun rideableRouteKey(): String? {
+        val route = (if (phase == Phase.OPEN) roomState.room?.route else null) ?: return null
+        return route.id.takeIf { routeUiOf(route).availability == ChallengeAvailability.READY }
+    }
 
     // -----------------------------------------------------------------------
     // Anlegen, Beitreten, Verlassen
@@ -263,7 +273,11 @@ class IndoorRoomController(
         phase = Phase.CONNECTING
         publish()
         // Nachrichten kommen auf einem Netz-Thread: über den Scope hereinreichen (Reihenfolge bleibt).
-        c.setListener { message -> scope.launch { if (gen == generation) onMessage(message) } }
+        endedReasonSeen = null
+        c.setListener { message ->
+            if (message is ServerMessage.Ended) endedReasonSeen = message.reason
+            scope.launch { if (gen == generation) onMessage(message) }
+        }
         statusJob = scope.launch { c.status.collect { if (gen == generation) onStatus(it) } }
         c.connect(RoomJoinParams(invite, name, avatar = null, sharePower = sharePower, hostSecret = hostSecret))
         if (autoTick) {
@@ -279,8 +293,11 @@ class IndoorRoomController(
     /** „Raum verlassen" (auch: Beitritt oder Anlegen abbrechen). Der Platz wird sofort frei. */
     fun leave() {
         if (phase == Phase.CLOSED) return
-        client?.leave()
+        // Erst den eigenen Zustand schließen, dann den Client: Sein Status „zu" läuft sonst
+        // sofort zurück und schlösse mit den Vorgaben.
+        val c = client
         closeWith(null)
+        c?.leave()
     }
 
     /** Nur Gastgeber: „Raum beenden" — für alle. Die Bestätigung kommt vom Server. */
@@ -299,9 +316,7 @@ class IndoorRoomController(
     fun setSharePower(enabled: Boolean) {
         sharePower = enabled
         runCatching { kv.setString(KEY_SHARE_POWER, if (enabled) "1" else "0") }
-        if (phase == Phase.OPEN && client?.send(ClientMessage.Settings(sharePower = enabled)) == true) {
-            joinedSharePower = enabled
-        }
+        if (phase == Phase.OPEN) client?.send(ClientMessage.Settings(sharePower = enabled))
         publish()
     }
 
@@ -318,8 +333,9 @@ class IndoorRoomController(
     /** Der Ablauf wird abgebaut: Raum verlassen, ohne eine Fahrt freizugeben. */
     fun close() {
         if (phase == Phase.CLOSED) return
-        client?.leave()
+        val c = client
         closeWith(null, releaseHeldRide = false)
+        c?.leave()
     }
 
     // -----------------------------------------------------------------------
@@ -333,9 +349,8 @@ class IndoorRoomController(
             phase = Phase.OPEN
             // Der Client tritt nach einem Abbruch mit den Angaben des ersten Beitritts
             // wieder bei; eine inzwischen geänderte Wahl gleich nachreichen.
-            if (sharePower != joinedSharePower && client?.send(ClientMessage.Settings(sharePower = sharePower)) == true) {
-                joinedSharePower = sharePower
-            }
+            // Bei jedem `welcome` neu (der Server übernimmt beim Wiederbeitritt wieder die alte Wahl).
+            if (sharePower != joinedSharePower) client?.send(ClientMessage.Settings(sharePower = sharePower))
         }
         publish()
     }
@@ -369,11 +384,10 @@ class IndoorRoomController(
         CloseReason.DENIED -> if (phase == Phase.OPEN) RoomNotice.ENDED_SERVER else RoomNotice.DENIED
         CloseReason.ROOM_FULL -> RoomNotice.FULL
         CloseReason.VERSION -> RoomNotice.VERSION
-        CloseReason.ENDED -> when {
-            endingMyself -> null
-            roomState.endedReason == "host" -> RoomNotice.ENDED_BY_HOST
-            roomState.endedReason == "expired" -> RoomNotice.ENDED_EXPIRED
-            roomState.endedReason == "idle" -> RoomNotice.ENDED_IDLE
+        CloseReason.ENDED -> when (roomState.endedReason ?: endedReasonSeen) {
+            "host" -> if (endingMyself) null else RoomNotice.ENDED_BY_HOST
+            "expired" -> RoomNotice.ENDED_EXPIRED
+            "idle" -> RoomNotice.ENDED_IDLE
             else -> RoomNotice.ENDED_SERVER
         }
         CloseReason.REPLACED -> RoomNotice.REPLACED

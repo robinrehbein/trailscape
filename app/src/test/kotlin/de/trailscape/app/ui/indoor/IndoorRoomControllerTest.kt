@@ -485,6 +485,22 @@ class IndoorRoomControllerTest {
     }
 
     @Test
+    fun `im Raum eingeschaltete Leistung bleibt ueber jeden Abbruch hinweg gezeigt`() {
+        val s = joinAsGuest()
+        controller.setSharePower(true)
+        assertEquals(ClientMessage.Settings(sharePower = true), s.sentMessages().last())
+        var socket = s
+        repeat(2) { round ->
+            socket.drop()
+            scheduler.advance(1_000)
+            socket = transport.last
+            socket.listener.onOpen()
+            socket.receive(testWelcome(others = listOf(anna), rejoinKey = "key-${round + 2}"))
+            assertTrue(ClientMessage.Settings(sharePower = true) in socket.sentMessages(), "Runde $round")
+        }
+    }
+
+    @Test
     fun `der Gastgeber beendet den Raum - alle erfahren warum, wer wartet, haengt nicht fest`() {
         val s = joinAsGuest()
         me = RoomSelfState(0.0, 0.0, null, held = true)

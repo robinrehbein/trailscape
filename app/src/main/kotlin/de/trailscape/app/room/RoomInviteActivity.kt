@@ -26,7 +26,9 @@ class RoomInviteActivity : Activity() {
         val link = intent?.takeIf { it.action == Intent.ACTION_VIEW }?.dataString
         val valid = link?.takeIf { it.length <= MAX_LINK_CHARS && RoomInvite.parse(it) != null }
         val open = Intent(this, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            // SINGLE_TOP: Eine laufende MainActivity bekommt `onNewIntent` und wird nicht neu
+            // erzeugt — sonst gingen eine laufende Fahrt und ein offener Raum verloren.
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         if (valid != null) open.putExtra(EXTRA_ROOM_INVITE, valid)
         startActivity(open)
         finish()

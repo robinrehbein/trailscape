@@ -1248,7 +1248,8 @@ class IndoorViewModel(
     private fun roomSelfState(): RoomSelfState? {
         if (rideStatic?.roomRide != true) return null
         val rs = activeRuntime?.state?.value ?: return null
-        val s = rs.session ?: return null
+        // Noch kein erster Takt: schon „am Start", damit ein Raumende die gehaltene Fahrt freigibt.
+        val s = rs.session ?: return RoomSelfState(0.0, 0.0, null, held = rs.startHeld)
         if (rs.finished || s.phase == IndoorPhase.FINISHED) return null
         return RoomSelfState(
             distM = s.totals.distanceM,
@@ -1715,7 +1716,7 @@ class IndoorViewModel(
         // Fahrt im offenen Raum (docs/raum-protokoll.md): dieselbe Strecke wie der Raum.
         // Alle starten bei 0 und gemeinsam; Mitfahrer sind die anderen im Raum.
         val selectedKey = routeUi.selected?.key
-        val roomRide = !calibrationRequested && selectedKey != null && roomController?.openRouteKey() == selectedKey
+        val roomRide = !calibrationRequested && selectedKey != null && roomController?.rideableRouteKey() == selectedKey
         shareRoute = route
         shareRef = routeUi.selected?.let { challengeRefOf(it) }
         challengeOpponent = (routeUi.ghost as? IndoorGhostOption.Challenge)?.label?.takeIf { !roomRide }
