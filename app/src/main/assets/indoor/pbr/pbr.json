@@ -1,0 +1,458 @@
+{
+ "comment": "Erzeugt von tool/indoor-dev/filament/pbr.py — nicht von Hand aendern.",
+ "groups": {
+  "asphalt": {
+   "bytes": 5592728,
+   "color": "asphalt_c.ktx",
+   "layers": [
+    "Asphalt031",
+    "Road013A"
+   ],
+   "levels": 11,
+   "normal": "asphalt_n.ktx",
+   "size": 1024
+  },
+  "cobble": {
+   "bytes": 2796472,
+   "color": "cobble_c.ktx",
+   "layers": [
+    "PavingStones070"
+   ],
+   "levels": 11,
+   "normal": "cobble_n.ktx",
+   "size": 1024
+  },
+  "concrete": {
+   "bytes": 699312,
+   "color": "concrete_c.ktx",
+   "layers": [
+    "Concrete048"
+   ],
+   "levels": 10,
+   "normal": "concrete_n.ktx",
+   "size": 512
+  },
+  "earth": {
+   "bytes": 1398416,
+   "color": "earth_c.ktx",
+   "layers": [
+    "Ground106",
+    "Ground080"
+   ],
+   "levels": 10,
+   "normal": "earth_n.ktx",
+   "size": 512
+  },
+  "gravel": {
+   "bytes": 5592728,
+   "color": "gravel_c.ktx",
+   "layers": [
+    "Gravel022",
+    "Ground091"
+   ],
+   "levels": 11,
+   "normal": "gravel_n.ktx",
+   "size": 1024
+  },
+  "terrain": {
+   "bytes": 2796624,
+   "color": "terrain_c.ktx",
+   "layers": [
+    "Grass004",
+    "Ground103",
+    "Ground082S",
+    "Rock030"
+   ],
+   "levels": 10,
+   "normal": "terrain_n.ktx",
+   "size": 512
+  }
+ },
+ "kinds": {
+  "asphalt": {
+   "albedo": 0.9,
+   "alt": 1,
+   "altMeters": 3.0,
+   "altMix": 0.55,
+   "coord": 0,
+   "group": "asphalt",
+   "keepLod": 2.0,
+   "layer": 0,
+   "meters": 1.5,
+   "normal": 1.3,
+   "replace": 0.5,
+   "roughBias": 0.42,
+   "roughMix": 0.8,
+   "roughScale": 0.55,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "cobble": {
+   "albedo": 1.0,
+   "alt": -1,
+   "altMeters": 1.0,
+   "altMix": 0.0,
+   "coord": 1,
+   "group": "cobble",
+   "keepLod": 5.0,
+   "layer": 0,
+   "meters": 1.5,
+   "normal": 1.6,
+   "replace": 1.0,
+   "roughBias": 0.25,
+   "roughMix": 0.85,
+   "roughScale": 0.7,
+   "uvMetersU": 2.0,
+   "uvMetersV": 8.0
+  },
+  "compacted": {
+   "albedo": 0.85,
+   "alt": 0,
+   "altMeters": 1.5,
+   "altMix": 0.3,
+   "coord": 0,
+   "group": "gravel",
+   "keepLod": 2.5,
+   "layer": 1,
+   "meters": 2.0,
+   "normal": 1.0,
+   "replace": 0.6,
+   "roughBias": 0.6,
+   "roughMix": 0.7,
+   "roughScale": 0.4,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "concrete": {
+   "albedo": 0.8,
+   "alt": -1,
+   "altMeters": 1.0,
+   "altMix": 0.0,
+   "coord": 0,
+   "group": "concrete",
+   "keepLod": 3.0,
+   "layer": 0,
+   "meters": 2.0,
+   "normal": 0.8,
+   "replace": 0.5,
+   "roughBias": 0.35,
+   "roughMix": 0.7,
+   "roughScale": 0.6,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "dirt": {
+   "albedo": 0.9,
+   "alt": -1,
+   "altMeters": 1.0,
+   "altMix": 0.0,
+   "coord": 0,
+   "group": "earth",
+   "keepLod": 2.5,
+   "layer": 0,
+   "meters": 2.5,
+   "normal": 1.1,
+   "replace": 0.55,
+   "roughBias": 0.68,
+   "roughMix": 0.7,
+   "roughScale": 0.3,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "fringe": {
+   "albedo": 0.8,
+   "alt": -1,
+   "altMeters": 1.0,
+   "altMix": 0.0,
+   "coord": 0,
+   "group": "terrain",
+   "keepLod": 3.0,
+   "layer": 0,
+   "meters": 1.4,
+   "normal": 1.0,
+   "replace": 0.3,
+   "roughBias": 0.68,
+   "roughMix": 0.7,
+   "roughScale": 0.3,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "grass": {
+   "albedo": 0.9,
+   "alt": 1,
+   "altMeters": 2.0,
+   "altMix": 0.25,
+   "coord": 0,
+   "group": "terrain",
+   "keepLod": 3.0,
+   "layer": 0,
+   "meters": 1.4,
+   "normal": 1.0,
+   "replace": 0.6,
+   "roughBias": 0.68,
+   "roughMix": 0.7,
+   "roughScale": 0.3,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "gravel": {
+   "albedo": 0.9,
+   "alt": 1,
+   "altMeters": 2.0,
+   "altMix": 0.35,
+   "coord": 0,
+   "group": "gravel",
+   "keepLod": 2.5,
+   "layer": 0,
+   "meters": 1.5,
+   "normal": 1.2,
+   "replace": 0.65,
+   "roughBias": 0.6,
+   "roughMix": 0.7,
+   "roughScale": 0.4,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "paving": {
+   "albedo": 0.6,
+   "alt": -1,
+   "altMeters": 1.0,
+   "altMix": 0.0,
+   "coord": 0,
+   "group": "concrete",
+   "keepLod": 3.0,
+   "layer": 0,
+   "meters": 2.0,
+   "normal": 0.6,
+   "replace": 0.0,
+   "roughBias": 0.35,
+   "roughMix": 0.7,
+   "roughScale": 0.6,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "sand": {
+   "albedo": 0.7,
+   "alt": -1,
+   "altMeters": 1.0,
+   "altMix": 0.0,
+   "coord": 0,
+   "group": "earth",
+   "keepLod": 2.5,
+   "layer": 1,
+   "meters": 2.0,
+   "normal": 0.9,
+   "replace": 0.5,
+   "roughBias": 0.78,
+   "roughMix": 0.7,
+   "roughScale": 0.2,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "shoulder": {
+   "albedo": 0.8,
+   "alt": 3,
+   "altMeters": 3.0,
+   "altMix": 0.5,
+   "coord": 0,
+   "group": "terrain",
+   "keepLod": 3.0,
+   "layer": 1,
+   "meters": 2.0,
+   "normal": 1.0,
+   "replace": 0.4,
+   "roughBias": 0.66,
+   "roughMix": 0.7,
+   "roughScale": 0.3,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "sidewalk": {
+   "albedo": 0.6,
+   "alt": -1,
+   "altMeters": 1.0,
+   "altMix": 0.0,
+   "coord": 0,
+   "group": "concrete",
+   "keepLod": 3.0,
+   "layer": 0,
+   "meters": 2.0,
+   "normal": 0.6,
+   "replace": 0.0,
+   "roughBias": 0.35,
+   "roughMix": 0.7,
+   "roughScale": 0.6,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "verge_forest": {
+   "albedo": 0.9,
+   "alt": 1,
+   "altMeters": 2.0,
+   "altMix": 0.3,
+   "coord": 0,
+   "group": "terrain",
+   "keepLod": 3.0,
+   "layer": 2,
+   "meters": 1.2,
+   "normal": 1.1,
+   "replace": 0.5,
+   "roughBias": 0.66,
+   "roughMix": 0.7,
+   "roughScale": 0.3,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "verge_grass": {
+   "albedo": 0.9,
+   "alt": 1,
+   "altMeters": 2.0,
+   "altMix": 0.2,
+   "coord": 0,
+   "group": "terrain",
+   "keepLod": 3.0,
+   "layer": 0,
+   "meters": 1.4,
+   "normal": 1.0,
+   "replace": 0.5,
+   "roughBias": 0.68,
+   "roughMix": 0.7,
+   "roughScale": 0.3,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "verge_shoulder": {
+   "albedo": 0.8,
+   "alt": 3,
+   "altMeters": 3.0,
+   "altMix": 0.5,
+   "coord": 0,
+   "group": "terrain",
+   "keepLod": 3.0,
+   "layer": 1,
+   "meters": 2.0,
+   "normal": 1.0,
+   "replace": 0.4,
+   "roughBias": 0.66,
+   "roughMix": 0.7,
+   "roughScale": 0.3,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "verge_sidewalk": {
+   "albedo": 0.6,
+   "alt": -1,
+   "altMeters": 1.0,
+   "altMix": 0.0,
+   "coord": 0,
+   "group": "concrete",
+   "keepLod": 3.0,
+   "layer": 0,
+   "meters": 2.0,
+   "normal": 0.6,
+   "replace": 0.0,
+   "roughBias": 0.35,
+   "roughMix": 0.7,
+   "roughScale": 0.6,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  },
+  "wood": {
+   "albedo": 0.4,
+   "alt": -1,
+   "altMeters": 1.0,
+   "altMix": 0.0,
+   "coord": 0,
+   "group": "concrete",
+   "keepLod": 3.0,
+   "layer": 0,
+   "meters": 2.0,
+   "normal": 0.4,
+   "replace": 0.0,
+   "roughBias": 0.45,
+   "roughMix": 0.7,
+   "roughScale": 0.5,
+   "uvMetersU": 0.0,
+   "uvMetersV": 0.0
+  }
+ },
+ "rangeM": 30.0,
+ "sources": {
+  "Asphalt031": {
+   "license": "CC0-1.0",
+   "meters": 1.5,
+   "url": "https://ambientcg.com/a/Asphalt031"
+  },
+  "Concrete048": {
+   "license": "CC0-1.0",
+   "meters": 2.0,
+   "url": "https://ambientcg.com/a/Concrete048"
+  },
+  "Grass004": {
+   "license": "CC0-1.0",
+   "meters": 1.4,
+   "url": "https://ambientcg.com/a/Grass004"
+  },
+  "Gravel022": {
+   "license": "CC0-1.0",
+   "meters": 1.5,
+   "url": "https://ambientcg.com/a/Gravel022"
+  },
+  "Ground080": {
+   "license": "CC0-1.0",
+   "meters": 2.0,
+   "url": "https://ambientcg.com/a/Ground080"
+  },
+  "Ground082S": {
+   "license": "CC0-1.0",
+   "meters": 1.2,
+   "url": "https://ambientcg.com/a/Ground082S"
+  },
+  "Ground091": {
+   "license": "CC0-1.0",
+   "meters": 2.0,
+   "url": "https://ambientcg.com/a/Ground091"
+  },
+  "Ground103": {
+   "license": "CC0-1.0",
+   "meters": 2.0,
+   "url": "https://ambientcg.com/a/Ground103"
+  },
+  "Ground106": {
+   "license": "CC0-1.0",
+   "meters": 2.5,
+   "url": "https://ambientcg.com/a/Ground106"
+  },
+  "PavingStones070": {
+   "license": "CC0-1.0",
+   "meters": 1.5,
+   "url": "https://ambientcg.com/a/PavingStones070"
+  },
+  "Road013A": {
+   "license": "CC0-1.0",
+   "meters": 3.0,
+   "url": "https://ambientcg.com/a/Road013A"
+  },
+  "Rock030": {
+   "license": "CC0-1.0",
+   "meters": 3.0,
+   "url": "https://ambientcg.com/a/Rock030"
+  }
+ },
+ "terrain": {
+  "albedo": 0.7,
+  "group": "terrain",
+  "normal": 1.0,
+  "repeats": [
+   183,
+   128,
+   213,
+   85
+  ],
+  "roughBias": 0.68,
+  "roughMix": 0.6,
+  "roughScale": 0.3
+ },
+ "terrainRangeM": 55.0,
+ "version": 1
+}
