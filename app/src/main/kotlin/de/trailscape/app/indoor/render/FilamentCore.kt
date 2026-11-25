@@ -442,6 +442,8 @@ internal class FilamentCore {
 
     private fun applyWaterParameters(l: SkyLighting) {
         lastLighting = l
+        // Wellenkarte schon beim Himmel (Start) im Hintergrund rechnen, nicht erst beim ersten Wasser
+        if (materialPackages.containsKey(WATER_MATERIAL)) WaterSurface.prefetch()
         val mi = waterInstance ?: return
         // nur deklarierte Parameter (WaterSurface.declared): ein aelteres water.filamat stuerzt so nie ab
         runCatching { setParameters(mi, WaterSurface.declared(waterMaterial, WaterShading.params(l.daylight, if (waterDetail) 1.0 else 0.0))) }

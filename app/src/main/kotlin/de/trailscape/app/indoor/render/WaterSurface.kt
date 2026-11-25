@@ -6,6 +6,8 @@ import com.google.android.filament.Texture
 import de.trailscape.core.indoor.water.WaterWaves
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.FutureTask
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Hilfen fuer das Wassermaterial (`water.mat`), getrennt von [FilamentCore], damit dort nur
@@ -27,14 +29,27 @@ internal object WaterSurface {
         return params.filterKeys { runCatching { material.hasParameter(it) }.getOrDefault(false) }
     }
 
+    /** Die Pixel der Karte, im Hintergrund vorberechnet ([prefetch]); warm ≈ 25 ms auf dem Desktop, kalt mehr. */
+    private val pixels = FutureTask { WaterWaves.normalTexture(WaterWaves.SIZE) }
+    private val started = AtomicBoolean(false)
+
+    /** Beginnt die Berechnung der Karte in einem Hintergrund-Thread (einmal; danach ohne Wirkung). */
+    fun prefetch() {
+        if (started.compareAndSet(false, true)) {
+            runCatching { Thread(pixels, "trailscape-water").apply { isDaemon = true }.start() }
+                .onFailure { started.set(false) }
+        }
+    }
+
     /**
      * Die Wellen-Normalenkarte ([WaterWaves], 128² RGBA8, kachelbar) mit Mipmaps. RGBA8 ist in
      * OpenGL ES 3.0 filterbar und farbrenderbar (Voraussetzung fuer `generateMipmaps`).
-     * Erzeugen kostet einmalig rund 10–20 ms (56 Wellen × 16 384 Texel, nur Multiplikationen).
+     * Wartet hoechstens auf die schon laufende Vorberechnung; ohne [prefetch] rechnet es hier.
      */
     fun buildWaveNormals(engine: Engine): Texture {
         val n = WaterWaves.SIZE
-        val px = WaterWaves.normalTexture(n)
+        if (!started.getAndSet(true)) pixels.run()
+        val px = pixels.get()
         val tex = Texture.Builder()
             .width(n).height(n).levels(0xff)
             .sampler(Texture.Sampler.SAMPLER_2D)

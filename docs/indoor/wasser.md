@@ -93,8 +93,10 @@ Parameter (`core/…/indoor/water/WaterShading`): Namen exakt wie im Material
   jetzt immer schattiert (vorher konnte opakes Wasser ihn verdecken) und das
   Wasser darübergeblendet — einmal Geländematerial mehr auf der Wasserfläche.
   Wasser schreibt Tiefe (matc-Standard), Draw Calls unverändert.
-- Einmalig: Wellenkarte 64 KB (+ Mipmaps ≈ 85 KB), Erzeugen ≈ 10–20 ms beim
-  ersten Wasser. `water.filamat` 204 KB (vorher 206 KB).
+- Einmalig: Wellenkarte 64 KB (+ Mipmaps ≈ 85 KB). Die Pixel rechnet ein
+  Hintergrund-Thread beim Setzen des Himmels (Start der Fahrt) vor — gemessen
+  23 ms warm auf dem Desktop-JVM, auf dem Gerät kalt vermutlich 50–150 ms, also
+  nicht im Hauptthread. `water.filamat` 204 KB (vorher 206 KB).
 
 ## Messung Flimmern (Referenzrenderer)
 
