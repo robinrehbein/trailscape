@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stage 1 "Achievements" (docs/erfolge.md). Prefix erfolge_, sources ui/erfolge/**, data/ErfolgeStore.kt. -->
+<resources>
+    <!-- ErfolgeScreen.kt -->
+    <string name="erfolge_title">Achievements</string>
+    <string name="erfolge_level_title">Level %1$d</string>
+    <string name="erfolge_level_points">%1$d points</string>
+    <string name="erfolge_level_next">%1$d points to level %2$d</string>
+    <string name="erfolge_level_top">Top level reached</string>
+    <string name="erfolge_points_breakdown">Riding time %1$d · Plan %2$d · Weekly goals %3$d · Challenges %4$d</string>
+    <string name="erfolge_points_explain">You earn points for riding time (1 per minute, up to 180 a day), completed plan sessions, weekly goals and monthly challenges – not for speed, elevation or intensity. Rest days cost nothing.</string>
+    <string name="erfolge_points_since">Rides before %1$s count for badges but not for points.</string>
+    <string name="erfolge_streak_title">Weekly streak</string>
+    <string name="erfolge_streak_pause_this_week">This week as a break</string>
+    <string name="erfolge_streak_pause_last_week">Last week as a break</string>
+    <string name="erfolge_streak_pause_hint">Ill or on holiday? A break week keeps your streak without extending it – at most 2 in 12 weeks.</string>
+    <string name="erfolge_streak_pause_full">2 break weeks are already marked within the last 12 weeks.</string>
+    <string name="erfolge_group_rides">Rides</string>
+    <string name="erfolge_group_totals">Totals</string>
+    <string name="erfolge_group_routine">Keeping at it</string>
+    <string name="erfolge_group_plan">Training plan</string>
+    <string name="erfolge_group_indoor">Indoors</string>
+    <string name="erfolge_group_explore">Exploring</string>
+    <string name="erfolge_group_soon">Coming soon</string>
+    <string name="erfolge_soon_hint">These badges arrive with features that aren’t finished yet.</string>
+    <string name="erfolge_new_label">New</string>
+    <string name="erfolge_reached_on">Reached on %1$s</string>
+    <string name="erfolge_reached">Reached</string>
+    <string name="erfolge_reached_cd">Reached</string>
+    <string name="erfolge_open_cd">Not yet reached</string>
+    <string name="erfolge_progress_value">%1$s of %2$s</string>
+    <string name="erfolge_progress_km">%1$s of %2$s km</string>
+    <string name="erfolge_progress_meters">%1$s of %2$s m</string>
+    <string name="erfolge_progress_hours">%1$s of %2$s h</string>
+    <string name="erfolge_progress_weeks">Streak now: %1$s of %2$s weeks</string>
+    <string name="erfolge_progress_sessions">This week: %1$s of %2$s sessions</string>
+    <string name="erfolge_progress_percent">%1$s%% of sessions completed so far</string>
+    <string name="erfolge_progress_month">This month: %1$s of %2$s challenges</string>
+    <string name="erfolge_progress_tiles">%1$s of %2$s tiles</string>
+    <string name="erfolge_progress_square">Largest square: %1$s × %1$s</string>
+    <string name="erfolge_progress_rounds">Most ridden loop: %1$s of %2$s times</string>
+    <string name="erfolge_progress_no_goal">No year goal set yet</string>
+    <string name="erfolge_progress_no_plan">Reachable with a training plan</string>
+    <string name="erfolge_progress_no_plan_week">No plan sessions this week</string>
+    <string name="erfolge_progress_unknown">Calculating …</string>
+    <string name="erfolge_progress_open">Not yet</string>
+    <!-- ErfolgeSettings.kt -->
+    <string name="erfolge_settings_group">Motivation</string>
+    <string name="erfolge_settings_show_title">Show achievements</string>
+    <string name="erfolge_settings_show_body">Badges and levels under History → Achievements and after a ride. Nothing is lost while it’s off.</string>
+    <!-- ErfolgeHighlights.kt -->
+    <string name="erfolge_highlight_one">New badge: %1$s</string>
+    <plurals name="erfolge_highlight_more_count">
+        <item quantity="one">New badges: %1$s and %2$d more</item>
+        <item quantity="other">New badges: %1$s and %2$d more</item>
+    </plurals>
+    <plurals name="erfolge_streak_weeks_count">
+        <item quantity="one">%1$d week</item>
+        <item quantity="other">%1$d weeks</item>
+    </plurals>
+    <plurals name="erfolge_streak_best_count">
+        <item quantity="one">Longest streak: %1$d week</item>
+        <item quantity="other">Longest streak: %1$d weeks</item>
+    </plurals>
+    <!-- ErfolgeTexts.kt: Name und Bedingung je Abzeichen -->
+    <string name="erfolge_badge_first_ride_title">Off you go</string>
+    <string name="erfolge_badge_first_ride_body">Saved your first ride.</string>
+    <string name="erfolge_badge_ride_50km_title">Fifty</string>
+    <string name="erfolge_badge_ride_50km_body">A ride of at least 50 km.</string>
+    <string name="erfolge_badge_ride_100km_title">Century</string>
+    <string name="erfolge_badge_ride_100km_body">A ride of at least 100 km.</string>
+    <string name="erfolge_badge_ride_1000m_title">A thousand metres</string>
+    <string name="erfolge_badge_ride_1000m_body">A ride with at least 1000 m of elevation gain.</string>
+    <string name="erfolge_badge_ride_4h_title">Long haul</string>
+    <string name="erfolge_badge_ride_4h_body">A ride with at least 4 hours of riding time.</string>
+    <string name="erfolge_badge_rides_10_title">Ten rides</string>
+    <string name="erfolge_badge_rides_10_body">10 rides.</string>
+    <string name="erfolge_badge_rides_100_title">A hundred rides</string>
+    <string name="erfolge_badge_rides_100_body">100 rides.</string>
+    <string name="erfolge_badge_total_1000km_title">A thousand kilometres</string>
+    <string name="erfolge_badge_total_1000km_body">1000 km in total.</string>
+    <string name="erfolge_badge_total_earth_title">Around the world</string>
+    <string name="erfolge_badge_total_earth_body">40075 km in total – the length of the equator.</string>
+    <string name="erfolge_badge_total_everest_title">Everest</string>
+    <string name="erfolge_badge_total_everest_body">8849 m of elevation gain in total.</string>
+    <string name="erfolge_badge_streak_4_title">Four weeks in</string>
+    <string name="erfolge_badge_streak_4_body">4 weeks in a row with at least one ride.</string>
+    <string name="erfolge_badge_streak_12_title">A quarter year</string>
+    <string name="erfolge_badge_streak_12_body">12 weeks in a row with at least one ride.</string>
+    <string name="erfolge_badge_streak_52_title">A whole year</string>
+    <string name="erfolge_badge_streak_52_body">52 weeks in a row with at least one ride. Break weeks keep the streak.</string>
+    <string name="erfolge_badge_month_complete_title">Month complete</string>
+    <string name="erfolge_badge_month_complete_body">Reached all monthly challenges of a month.</string>
+    <string name="erfolge_badge_challenge_bonus_title">Encore</string>
+    <string name="erfolge_badge_challenge_bonus_body">Reached the bonus tier of a monthly challenge.</string>
+    <string name="erfolge_badge_year_goal_title">Year goal</string>
+    <string name="erfolge_badge_year_goal_body">Reached your year goal.</string>
+    <string name="erfolge_badge_plan_first_title">On plan</string>
+    <string name="erfolge_badge_plan_first_body">Completed the first session of your training plan.</string>
+    <string name="erfolge_badge_plan_full_week_title">Full week</string>
+    <string name="erfolge_badge_plan_full_week_body">Rode every session of a plan week, at least one in full.</string>
+    <string name="erfolge_badge_recovery_week_title">Recovery is training</string>
+    <string name="erfolge_badge_recovery_week_body">A recovery week with a ride that stayed within its weekly goal.</string>
+    <string name="erfolge_badge_plan_finished_title">Seen it through</string>
+    <string name="erfolge_badge_plan_finished_body" formatted="false">Finished a training plan with at least 80% of its sessions completed.</string>
+    <string name="erfolge_badge_indoor_first_title">Indoors</string>
+    <string name="erfolge_badge_indoor_first_body">Your first ride on the trainer.</string>
+    <string name="erfolge_badge_indoor_10h_title">Winter training</string>
+    <string name="erfolge_badge_indoor_10h_body">10 hours of riding on the trainer.</string>
+    <string name="erfolge_badge_ghost_beaten_title">Ghost beaten</string>
+    <string name="erfolge_badge_ghost_beaten_body">Finished ahead of the ghost of one of your earlier rides on the same route.</string>
+    <string name="erfolge_badge_known_route_title">Known route</string>
+    <string name="erfolge_badge_known_route_body">Rode a known route all the way.</string>
+    <string name="erfolge_badge_climb_repeat_title">Climb regular</string>
+    <string name="erfolge_badge_climb_repeat_body">Rode a climb for the second time.</string>
+    <string name="erfolge_badge_climb_faster_title">Faster to the top</string>
+    <string name="erfolge_badge_climb_faster_body">Improved your best time on a climb.</string>
+    <string name="erfolge_badge_round_5_title">Loop regular</string>
+    <string name="erfolge_badge_round_5_body">Rode the same loop five times.</string>
+    <string name="erfolge_badge_tiles_100_title">Cartographer</string>
+    <string name="erfolge_badge_tiles_100_body">100 explored tiles.</string>
+    <string name="erfolge_badge_tiles_square_5_title">Square</string>
+    <string name="erfolge_badge_tiles_square_5_body">A square of 5 × 5 explored tiles.</string>
+    <string name="erfolge_badge_new_ways_100km_title">New roads</string>
+    <string name="erfolge_badge_new_ways_100km_body">100 km on roads you hadn’t ridden before.</string>
+</resources>

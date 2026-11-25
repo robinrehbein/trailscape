@@ -30,6 +30,7 @@
     <string name="rides_screen_title">History</string>
     <string name="rides_screen_segment_tours">Rides</string>
     <string name="rides_screen_segment_progress">Progress</string>
+    <string name="rides_screen_segment_achievements">Achievements</string>
     <string name="rides_screen_search_cd">Search rides</string>
     <string name="rides_screen_search_close_cd">Close search</string>
     <string name="rides_screen_import_cd">Import rides</string>

@@ -133,6 +133,8 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                 data.yearGoal?.let { appViewModel.restoreYearGoal(it) }
                 // Bestzeiten an Anstiegen (Indoor-Bergwertung): je Anstieg gewinnt die schnellere Zeit.
                 withContext(Dispatchers.IO) { ClimbBestStore.merge(AppServices.keyValueStore, data.climbBests) }
+                // Erfolge: zusammengefuehrt, nie ueberschrieben (`docs/erfolge.md`).
+                data.progress?.let { de.trailscape.app.data.ErfolgeStore.shared.restore(it) }
                 DiagLog.shared.log(DiagEvent.BACKUP_IMPORT_OK, count = newRides.size.toLong())
 
                 appViewModel.showMessage(backupImportMessage(newRides.size, skipped, data.profile != null))

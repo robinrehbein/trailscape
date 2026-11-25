@@ -955,6 +955,8 @@ class AppViewModel(
                 profile = _profile.value,
                 yearGoal = _yearGoal.value,
                 climbBests = de.trailscape.app.indoor.ClimbBestStore.read(keyValueStore),
+                // Erfolge (`docs/erfolge.md`): der kleine gespeicherte Stand.
+                progress = de.trailscape.app.data.ErfolgeStore.shared.value,
             )
         }
     }
@@ -2752,6 +2754,35 @@ class AppViewModel(
                     // Touren — Planungen und Indoor-Fahrten behalten keinen Eintrag.
                     routeSignatureStore.retainAll(outdoorRides(summaries).mapTo(HashSet()) { it.id })
                     compareOnRoute(rideId, visible, signatures)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                } finally {
+                    routeSignatureStore.flush()
+                }
+            }
+        }
+    }
+
+    /**
+     * Fuer die Erfolge („Rundenkenner", `docs/erfolge.md`): wie oft die am
+     * haeufigsten gefahrene Runde gefahren wurde — aus denselben Signaturen
+     * und demselben Cache wie [routeComparisonFor]. `null` bei einem Fehler.
+     */
+    suspend fun achievementRounds(): de.trailscape.core.RoundAchievementFacts? {
+        val summaries = allSummaries
+        return routeComparisonMutex.withLock {
+            withContext(io) {
+                try {
+                    val signatures = collectRouteSignatures(
+                        rides = summaries,
+                        store = routeSignatureStore,
+                        loadRide = { rideStorage.loadRide(it) },
+                    )
+                    de.trailscape.core.roundAchievementFacts(summaries, signatures) {
+                        localOfEpochMs(it).toLocalDate()
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {

@@ -510,7 +510,12 @@ private fun SettingsPageContent(page: SettingsPage, appViewModel: AppViewModel) 
                     AnnouncementsCardContent()
                 }
             }
-            SettingsPage.REMINDERS -> SettingsSection { ReminderCardContent(appViewModel) }
+            // Zweiter Abschnitt: der Schalter „Erfolge anzeigen" (docs/erfolge.md,
+            // docs/ux/umbau.md) — beides sind Dinge, die zum Fahren anstossen.
+            SettingsPage.REMINDERS -> {
+                SettingsSection { ReminderCardContent(appViewModel) }
+                de.trailscape.app.ui.erfolge.ErfolgeSettingsSection()
+            }
             // Kartenbild und Routingdaten auf einer Seite: Beide laden etwas
             // fuers netzlose Fahren herunter, meinen aber Verschiedenes — die
             // beiden Abschnittstitel sagen den Unterschied.

@@ -120,6 +120,8 @@ class ScreenshotTest {
         shot("02-verlauf")
         segment("Fortschritt")
         shot("02b-verlauf-fortschritt")
+        segment("Erfolge")
+        shot("02c-verlauf-erfolge")
         tab("Indoor")
         shot("03-indoor")
         segment("Plan")

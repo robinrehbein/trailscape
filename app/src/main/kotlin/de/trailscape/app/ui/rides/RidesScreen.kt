@@ -45,6 +45,8 @@ import de.trailscape.app.R
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.HistorySegment
+import de.trailscape.app.data.ErfolgeStore
+import de.trailscape.app.ui.erfolge.ErfolgeHistoryContent
 import de.trailscape.app.ui.historySegments
 import de.trailscape.app.ui.resolveSegment
 import de.trailscape.app.ui.components.PillSegments
@@ -73,9 +75,9 @@ import kotlinx.coroutines.Job
  * Seit dem Umbau nach der Seitenkarte (`docs/ux/umbau.md`) hat der Verlauf
  * Segmente unter dem Titel ([historySegments]): „Touren" ist die Liste,
  * „Fortschritt" die fruehere erste Sicht des Tabs „Training"
- * ([ProgressContent]) — beides ist der Blick zurueck. Der Platz fuer
- * „Erfolge" ist festgelegt ([HistorySegment.ACHIEVEMENTS]), bleibt aber
- * unsichtbar, solange es die Funktion nicht gibt. Von aussen springt
+ * ([ProgressContent]) — beides ist der Blick zurueck. „Erfolge"
+ * ([HistorySegment.ACHIEVEMENTS], [ErfolgeHistoryContent]) ist das dritte
+ * Segment, solange „Erfolge anzeigen" eingeschaltet ist. Von aussen springt
  * [AppViewModel.requestProgress] direkt auf „Fortschritt".
  *
  * Zieldesign der Liste:
@@ -160,10 +162,11 @@ fun RidesScreen(appViewModel: AppViewModel) {
     val archiveImport = rememberArchiveImportAction(appViewModel)
     val importArchive = archiveImport.start
 
-    // Die Segmente des Tabs. Erfolge gibt es noch nicht — der Platz bleibt
-    // unsichtbar (docs/ux/umbau.md, „Erfolge": hier `achievementsVisible`
-    // an den Schalter „Erfolge anzeigen" binden).
-    val segments = historySegments(achievementsVisible = false)
+    // Die Segmente des Tabs. „Erfolge" haengt am Schalter „Erfolge anzeigen"
+    // (Einstellungen → Erinnerungen & Motivation): Ist er aus, fehlt das
+    // Segment; war es gerade offen, faellt [resolveSegment] auf „Touren".
+    val erfolgeProgress by ErfolgeStore.shared.state.collectAsStateWithLifecycle()
+    val segments = historySegments(achievementsVisible = !erfolgeProgress.hidden)
     var wantedSegment by rememberSaveable { mutableStateOf(HistorySegment.TOURS) }
     val pendingSegment by appViewModel.pendingHistorySegment.collectAsStateWithLifecycle()
     LaunchedEffect(pendingSegment) {
@@ -264,10 +267,10 @@ fun RidesScreen(appViewModel: AppViewModel) {
                             onImport = importAction.start,
                         )
 
-                        // Platz der Erfolge (docs/ux/umbau.md): Solange
-                        // [historySegments] das Segment nicht liefert, wird
-                        // dieser Zweig nie erreicht.
-                        HistorySegment.ACHIEVEMENTS -> Unit
+                        HistorySegment.ACHIEVEMENTS -> ErfolgeHistoryContent(
+                            appViewModel = appViewModel,
+                            header = header,
+                        )
                     }
                 }
             }
@@ -402,7 +405,6 @@ private fun historySegmentLabel(segment: HistorySegment): String = stringResourc
     when (segment) {
         HistorySegment.TOURS -> R.string.rides_screen_segment_tours
         HistorySegment.PROGRESS -> R.string.rides_screen_segment_progress
-        // Kommt mit den Erfolgen; bis dahin ist das Segment nie sichtbar.
-        HistorySegment.ACHIEVEMENTS -> R.string.rides_screen_segment_progress
+        HistorySegment.ACHIEVEMENTS -> R.string.rides_screen_segment_achievements
     },
 )

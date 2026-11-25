@@ -30,6 +30,7 @@
     <string name="rides_screen_title">Verlauf</string>
     <string name="rides_screen_segment_tours">Touren</string>
     <string name="rides_screen_segment_progress">Fortschritt</string>
+    <string name="rides_screen_segment_achievements">Erfolge</string>
     <string name="rides_screen_search_cd">Touren suchen</string>
     <string name="rides_screen_search_close_cd">Suche schließen</string>
     <string name="rides_screen_import_cd">Touren importieren</string>

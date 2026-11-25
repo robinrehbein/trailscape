@@ -151,6 +151,7 @@ fun buildBackupJson(
     exportedAtMs: Long = System.currentTimeMillis(),
     yearGoal: YearGoal? = null,
     climbBests: ClimbBestBook? = null,
+    progress: AchievementProgressData? = null,
 ): String {
     val json = buildJsonObject {
         put("app", backupAppName)
@@ -159,6 +160,8 @@ fun buildBackupJson(
         put("profile", profile?.toJson() ?: JsonNull)
         yearGoal?.let { put("yearGoal", it.toBackupJson()) }
         climbBests?.takeUnless { it.isEmpty() }?.let { put("climbBests", it.toJsonObject()) }
+        // Erfolge (`AchievementProgress.kt`): rein additiv wie `yearGoal`.
+        progress?.let { put("progress", it.toJson()) }
         put("rides", buildJsonArray { rides.forEach { add(it.toJson()) } })
     }
     return prettyJson.encodeToString(JsonObject.serializer(), json)
@@ -186,6 +189,7 @@ fun writeBackupJson(
     exportedAtMs: Long = System.currentTimeMillis(),
     yearGoal: YearGoal? = null,
     climbBests: ClimbBestBook? = null,
+    progress: AchievementProgressData? = null,
 ) {
     // Kopf als eigenes Objekt serialisieren und die schliessende Klammer
     // abschneiden — so stammen Escaping und Einrueckung aller Kopffelder
@@ -197,6 +201,7 @@ fun writeBackupJson(
         put("profile", profile?.toJson() ?: JsonNull)
         yearGoal?.let { put("yearGoal", it.toBackupJson()) }
         climbBests?.takeUnless { it.isEmpty() }?.let { put("climbBests", it.toJsonObject()) }
+        progress?.let { put("progress", it.toJson()) }
     }
     val headText = prettyJson.encodeToString(JsonObject.serializer(), head)
     // "…\n}" → "…" (der Kopf ist nie leer, die Klammer steht immer auf
@@ -250,6 +255,12 @@ data class BackupData(
      * `climbBests` (Format: `ClimbBestBook`); leer, wenn es fehlt oder unlesbar ist.
      */
     val climbBests: ClimbBestBook = ClimbBestBook(),
+    /**
+     * Gespeicherter Stand der Erfolge aus dem optionalen Feld `progress`
+     * ([AchievementProgressData]); `null`, wenn es fehlt oder kein Objekt ist.
+     * Tolerant gelesen: ein kaputter Eintrag darin macht nie das Backup ungueltig.
+     */
+    val progress: AchievementProgressData? = null,
 )
 
 /**
@@ -338,5 +349,6 @@ fun parseBackupJson(raw: String, texts: CoreTexts): BackupData {
         profile = profile,
         yearGoal = parseYearGoal(decoded["yearGoal"]),
         climbBests = ClimbBestBook.fromJsonObject(decoded["climbBests"] as? JsonObject),
+        progress = AchievementProgressData.fromJson(decoded["progress"]),
     )
 }
