@@ -46,6 +46,8 @@ class StringResourceParityTest {
         "strings_indoor_app.xml" to "indoor_app_",
         "strings_indoor_ble.xml" to "indoor_ble_",
         "strings_indoor_render.xml" to "indoor_render_",
+        // Idee 3 „Eine Auswertung für alles": Art-Filter der Tourenliste, FTP-Herkunft.
+        "strings_idee03.xml" to "idee03_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */
