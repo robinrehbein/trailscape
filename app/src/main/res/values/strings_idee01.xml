@@ -10,9 +10,6 @@
 -->
 <resources>
     <!-- IndoorFromRide.kt (Tourdetail) -->
-    <string name="idee01_detail_indoor_action">Indoor fahren</string>
-    <string name="idee01_detail_indoor_ridden_hint">Drinnen auf dem Trainer, deine Außenfahrt fährt als Mitfahrer mit.</string>
-    <string name="idee01_detail_indoor_planned_hint">Diese Planung drinnen auf dem Trainer fahren.</string>
     <!-- IndoorTexts.kt: Anzeigename der Außenfahrt als Mitfahrer -->
     <string name="idee01_ghost_outdoor_label">Außenfahrt vom %1$s</string>
     <!-- IndoorRideHud.kt: Abstand samt Leistung der Außenfahrt an ihrer Stelle -->

@@ -28,6 +28,9 @@
 
     <!-- RidesScreen.kt -->
     <string name="rides_screen_title">Verlauf</string>
+    <string name="rides_screen_segment_tours">Touren</string>
+    <string name="rides_screen_segment_progress">Fortschritt</string>
+    <string name="rides_screen_segment_achievements">Erfolge</string>
     <string name="rides_screen_search_cd">Touren suchen</string>
     <string name="rides_screen_search_close_cd">Suche schließen</string>
     <string name="rides_screen_import_cd">Touren importieren</string>
@@ -39,7 +42,7 @@
     <string name="rides_list_empty_body">Jede aufgezeichnete oder importierte Tour landet hier, nach Monaten sortiert.</string>
     <string name="rides_list_empty_record_action">Tour aufzeichnen</string>
     <string name="rides_list_empty_import_action">Touren importieren</string>
-    <string name="rides_list_nothing_ridden_title">Noch keine Fahrt</string>
+    <string name="rides_list_nothing_ridden_title">Noch keine Tour</string>
     <!-- %1$s = Suchtext -->
     <string name="rides_list_no_match">Keine Tour heißt „%1$s“.</string>
     <!-- %1$s = Suchtext -->
@@ -114,15 +117,26 @@
     <string name="rides_detail_back_label">Verlauf</string>
     <!-- %1$s = Wochentag und Datum, %2$s = Uhrzeit -->
     <string name="rides_detail_date_line">%1$s · %2$s</string>
-    <string name="rides_detail_date_line_planned">%1$s · %2$s · geplante Route</string>
+    <string name="rides_detail_date_line_planned">%1$s · %2$s · Planung</string>
     <string name="rides_detail_date_line_health_connect">%1$s · %2$s · aus Health Connect</string>
-    <string name="rides_detail_date_line_planned_health_connect">%1$s · %2$s · geplante Route · aus Health Connect</string>
+    <string name="rides_detail_date_line_planned_health_connect">%1$s · %2$s · Planung · aus Health Connect</string>
     <string name="rides_detail_planned_notice">Das ist eine gespeicherte Planung, keine gefahrene Tour. Sie zählt deshalb nicht für Wochenfortschritt, Fitness und Form.</string>
-    <string name="rides_detail_ride_again_action">Diese Tour nochmal fahren</string>
-    <string name="rides_detail_show_map_action">Karte zeigen</string>
+    <string name="rides_detail_ride_again_action">Nochmal fahren</string>
+    <string name="rides_detail_show_map_action">Auf der Karte zeigen</string>
     <string name="rides_detail_rename_action">Umbenennen</string>
     <string name="rides_detail_share_cd">Tour teilen</string>
-    <string name="rides_detail_delete_cd">Tour löschen</string>
+    <string name="rides_detail_menu_cd">Weitere Aktionen zur Tour</string>
+    <string name="rides_detail_route_hint_menu">Umwandeln kannst du sie oben im Menü der Tour.</string>
+
+    <!-- RideAgain.kt -->
+    <string name="rides_again_planned_action">Planung fahren</string>
+    <string name="rides_again_outdoor_title">Draußen mit Navigation</string>
+    <string name="rides_again_outdoor_body">Legt die Spur als Route auf die Karte.</string>
+    <string name="rides_again_indoor_title">Indoor fahren</string>
+    <string name="rides_again_indoor_body">Drinnen auf dem Trainer, deine Außenfahrt fährt als Mitfahrer mit.</string>
+    <string name="rides_again_indoor_planned_body">Diese Planung drinnen auf dem Trainer fahren.</string>
+    <string name="rides_again_preview_title">In 3D ansehen</string>
+    <string name="rides_again_preview_body">Die Strecke als Kamerafahrt, ohne Trainer.</string>
     <string name="rides_detail_all_values_action">Alle Werte</string>
     <string name="rides_detail_fewer_values_action">Weniger Werte</string>
     <!-- %1$s = Name der Tour -->
@@ -155,7 +169,7 @@
     <string name="rides_detail_decoupling_body" formatted="false">Vergleicht die zweite Tourhälfte mit der ersten: wie viel Leistung dein Puls am Ende noch trägt. Unter 5 % gilt die aerobe Ausdauer als gut, über 10 % lohnt sich mehr Grundlagenarbeit.</string>
     <string name="rides_detail_vo2max_label">VO₂max</string>
     <string name="rides_detail_vo2max_body">Aus den gleichmäßigen Abschnitten dieser Tour geschätzt (Herzfrequenz gegen geschätzte Leistung). Deshalb ein Band und kein Messwert.</string>
-    <string name="rides_detail_segments_body">Automatisch erkannte Anstiege, verglichen mit deinen früheren Fahrten über dasselbe Stück.</string>
+    <string name="rides_detail_segments_body">Automatisch erkannte Anstiege, verglichen mit deinen früheren Touren über dasselbe Stück.</string>
     <string name="rides_detail_segment_new_best_label">★ Neue Bestzeit</string>
     <string name="rides_detail_segment_time_label">Zeit</string>
     <string name="rides_detail_segment_best_label">Bestzeit</string>
@@ -175,7 +189,7 @@
     <string name="rides_share_card_avg_hr_label">Ø Puls</string>
     <string name="rides_share_card_load_label">Trainingslast</string>
     <!-- %1$s = Datum mit Jahr („23. September 2025") -->
-    <string name="rides_share_card_planned_date_line">Geplante Route · %1$s</string>
+    <string name="rides_share_card_planned_date_line">Planung · %1$s</string>
     <string name="rides_share_image_chooser_title">Tour-Bild teilen</string>
 
     <!-- ShareRideDialog.kt, RideShare.kt -->
@@ -256,9 +270,9 @@
     <string name="rides_route_delta_seconds">%1$d s</string>
     <string name="rides_route_delta_minutes">%1$s min</string>
     <string name="rides_route_delta_hours">%1$s h</string>
-    <string name="rides_route_recent_label">Letzte Fahrten</string>
+    <string name="rides_route_recent_label">Letzte Touren</string>
     <!-- %1$s = Datum -->
-    <string name="rides_route_effort_this">%1$s · diese Fahrt</string>
-    <string name="rides_route_effort_open_cd">Fahrt öffnen</string>
-    <string name="rides_route_caption">Verglichen werden ganze Fahrten auf (fast) derselben Strecke, nach Bewegungszeit – Ampelstopps zählen also nicht.</string>
+    <string name="rides_route_effort_this">%1$s · diese Tour</string>
+    <string name="rides_route_effort_open_cd">Tour öffnen</string>
+    <string name="rides_route_caption">Verglichen werden ganze Touren auf (fast) derselben Strecke, nach Bewegungszeit – Ampelstopps zählen also nicht.</string>
 </resources>

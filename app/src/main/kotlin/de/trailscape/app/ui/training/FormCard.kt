@@ -195,7 +195,7 @@ private fun FitnessAreaSparkline(
  *
  * @param showDetails ob die Detailkarten (Wochenlast, Fitnesslevel) Sinn
  *   haben — ohne Touren behaupteten sie etwas ohne Grundlage (siehe KDoc von
- *   [TrainingScreen]).
+ *   [ProgressContent]).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

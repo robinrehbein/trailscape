@@ -71,6 +71,8 @@ import de.trailscape.core.encodeRouteConsentRequests
 import de.trailscape.core.explorerTilesCacheGaps
 import de.trailscape.core.explorerTilesNewInRide
 import de.trailscape.core.formatDuration
+import de.trailscape.core.garage.RiderAvatar
+import de.trailscape.core.garage.RiderAvatarStore
 import de.trailscape.core.getSyncConfig
 import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.i18n.coreTexts
@@ -126,26 +128,58 @@ import kotlinx.serialization.json.JsonObject
 /**
  * Die Hauptbereiche als navigierbarer Wert (siehe [AppViewModel.requestTab]).
  *
- * Reihenfolge wie in der Navigationsleiste (`ui/TrailscapeApp.kt`): [HOME] ist
- * die Startseite „Heute" und damit der erste Tab, danach [MAP], [RIDES] und
- * [TRAINING] — vier gleichrangige Ziele in der schwebenden Kapsel.
+ * Reihenfolge wie in der Navigationsleiste (`ui/AppNavigation.kt`,
+ * [SHELL_TABS]): [HOME] ist die Startseite „Heute" und damit der erste Tab,
+ * danach [MAP], [INDOOR] und [RIDES] („Verlauf") — vier gleichrangige Ziele in
+ * der schwebenden Kapsel (Seitenkarte `docs/ux/seitenkarte.md`, Umbau
+ * `docs/ux/umbau.md`).
  *
- * [MORE] ist der eine Wert, der **kein** Tab ist: „Mehr" liegt seit der
- * Fuehrung „Eine Leiste" hinter dem Zahnrad in den Kopfzeilen von Heute,
- * Touren und Training und ist ein gepushtes Ziel der Route „mehr" (siehe
- * `ui/TrailscapeApp.kt`). Der Aufzaehlungswert bleibt trotzdem bestehen: Ein
+ * Den frueheren Tab „Training" gibt es nicht mehr: Der Plan liegt im
+ * Indoor-Tab ([IndoorSegment.PLAN], siehe [AppViewModel.requestPlan]), der
+ * Fortschritt im Verlauf ([HistorySegment.PROGRESS], siehe
+ * [AppViewModel.requestProgress]).
+ *
+ * [MORE] ist der eine Wert, der **kein** Tab ist: Die Einstellungen liegen
+ * hinter dem Zahnrad in den Kopfzeilen aller vier Tabs und sind ein gepushtes
+ * Ziel der Route „mehr". Der Aufzaehlungswert bleibt trotzdem bestehen: Ein
  * gutes Dutzend Aufrufer — Leerzustaende, Hinweise, [requestMoreSection] —
- * bittet weiterhin schlicht um „den Mehr-Bereich" und braucht den Unterschied
+ * bittet weiterhin schlicht um „die Einstellungen" und braucht den Unterschied
  * zwischen Tab und gepushtem Ziel nicht zu kennen. Die Huelle loest ihn auf.
  */
-enum class AppTab { HOME, MAP, RIDES, TRAINING, MORE }
+enum class AppTab { HOME, MAP, INDOOR, RIDES, MORE }
 
 /**
- * Die Indoor-Ziele im `NavHost` (siehe `TrailscapeApp.kt`): der Ablauf
- * Koppeln → Fahrt, die Weltverwaltung und die Diagnose der Darstellung.
- * Alle drei ohne Navigationsleiste.
+ * Die Sichten des Tabs „Verlauf" (Segmente unter dem Titel).
+ *
+ * [ACHIEVEMENTS] ist der festgelegte Platz fuer die Erfolge
+ * (`docs/ux/umbau.md`, „Erfolge"): Solange es die Funktion nicht gibt oder sie
+ * ausgeschaltet ist, liefert [historySegments] das Segment nicht — der Platz
+ * bleibt unsichtbar.
  */
-enum class IndoorDestination { FLOW, WORLDS, DIAGNOSTICS }
+enum class HistorySegment { TOURS, PROGRESS, ACHIEVEMENTS }
+
+/**
+ * Die Sichten des Tabs „Indoor" (Segmente unter dem Titel).
+ *
+ * [CHALLENGES] und [ROOM] sind die festgelegten Plaetze fuer Herausforderungen
+ * und den Raum fuer Gruppenfahrten (`docs/ux/umbau.md`); [indoorSegments]
+ * liefert sie erst, wenn es die Funktion gibt.
+ */
+enum class IndoorSegment { ROUTES, PLAN, CHALLENGES, ROOM }
+
+/**
+ * Die gepushten Indoor-Ziele im `NavHost` (siehe `TrailscapeApp.kt`), alle
+ * ohne Navigationsleiste. Die Indoor-Startseite selbst ist **kein** solches
+ * Ziel, sondern der Tab [AppTab.INDOOR].
+ *
+ *  * [FLOW] — der Ablauf mit einer vorgewaehlten Strecke (Einheit des Tages
+ *    von „Heute", „Indoor fahren" und „In 3D ansehen" aus dem Tourdetail);
+ *    Zurueck fuehrt dorthin, woher man kam.
+ *  * [SETTINGS] — „Einstellungen → Indoor".
+ *  * [WORLDS], [DIAGNOSTICS] — Strecken auf dem Geraet und die Diagnose der
+ *    Darstellung, beide unter „Einstellungen → Indoor".
+ */
+enum class IndoorDestination { FLOW, SETTINGS, WORLDS, DIAGNOSTICS }
 
 /**
  * Eine Unterseite der Einstellungen als Sprungziel (siehe
@@ -158,9 +192,6 @@ enum class IndoorDestination { FLOW, WORLDS, DIAGNOSTICS }
 enum class MoreSection {
     /** „Profil" — Alter, Gewicht, Zeitbudget, HFmax/FTP. */
     PROFILE,
-
-    /** „Daten & Backup" — Einzel-, Archiv- und Backup-Import. */
-    BACKUP,
 
     /** „Health Connect" — Uhr verbinden, Vitalwerte holen. */
     HEALTH,
@@ -357,15 +388,101 @@ class AppViewModel(
     private val _indoorRequest = MutableStateFlow<IndoorDestination?>(null)
 
     /**
-     * Bitte an die Navigationshuelle, ein Indoor-Ziel zu oeffnen — dasselbe
-     * Muster wie [tabRequest]: Heute-Karte, Bereit-Dialog und Mehr rufen
-     * [requestIndoor], `TrailscapeApp()` navigiert und quittiert mit
-     * [consumeIndoorRequest].
+     * Bitte an die Navigationshuelle, ein gepushtes Indoor-Ziel zu oeffnen —
+     * dasselbe Muster wie [tabRequest]: `TrailscapeApp()` navigiert und
+     * quittiert mit [consumeIndoorRequest]. Die Indoor-Startseite ist ein Tab:
+     * dafuer `requestTab(AppTab.INDOOR)`.
      */
     val indoorRequest: StateFlow<IndoorDestination?> = _indoorRequest.asStateFlow()
 
-    fun requestIndoor(destination: IndoorDestination = IndoorDestination.FLOW) {
+    /** Bewusst ohne Vorgabewert: Jeder Aufrufer sagt, welches Ziel er meint. */
+    fun requestIndoor(destination: IndoorDestination) {
         _indoorRequest.value = destination
+    }
+
+    private val _indoorTaskActive = MutableStateFlow(false)
+
+    /**
+     * Ob der Indoor-Tab gerade eine Aufgabe zeigt, die den ganzen Bildschirm
+     * braucht (Koppeln, Strecke vorbereiten, Fahrt, Auswertung) — dann treten
+     * Kapsel und Fahren-Knopf zurueck, wie bei [mapTaskActive] und
+     * [rideDetailOpen]. Auf der Startseite des Tabs ist der Wert `false`.
+     */
+    val indoorTaskActive: StateFlow<Boolean> = _indoorTaskActive.asStateFlow()
+
+    fun setIndoorTaskActive(active: Boolean) {
+        _indoorTaskActive.value = active
+    }
+
+    // -------------------------------------------------------------------------
+    // Segmente der Tabs „Indoor" und „Verlauf" als Sprungziel
+    // -------------------------------------------------------------------------
+
+    private val _pendingIndoorSegment = MutableStateFlow<IndoorSegment?>(null)
+
+    /**
+     * Das Segment, das der Indoor-Tab als Naechstes zeigen soll — dasselbe
+     * Muster wie [pendingRideDetail]: Der Wert wartet, bis der Tab in der
+     * Komposition ist, und wird mit [consumeIndoorSegmentRequest] quittiert.
+     */
+    val pendingIndoorSegment: StateFlow<IndoorSegment?> = _pendingIndoorSegment.asStateFlow()
+
+    fun consumeIndoorSegmentRequest() {
+        _pendingIndoorSegment.value = null
+    }
+
+    private val _pendingGoalEditor = MutableStateFlow(false)
+
+    /** Ob die Sicht „Plan" beim Erscheinen gleich das Blatt „Ziel festlegen" oeffnen soll. */
+    val pendingGoalEditor: StateFlow<Boolean> = _pendingGoalEditor.asStateFlow()
+
+    fun consumeGoalEditorRequest() {
+        _pendingGoalEditor.value = false
+    }
+
+    /**
+     * Oeffnet den Trainingsplan: Tab „Indoor", Segment „Plan". Jeder Knopf,
+     * der „Plan", „Diese Woche" oder „Dein Ziel" sagt, landet damit dort, wo
+     * er hinzeigt (Seitenkarte, Befund 9).
+     *
+     * @param openGoalEditor `true` oeffnet zusaetzlich das Blatt „Ziel
+     *   festlegen" — fuer den Knopf „Ziel festlegen" auf „Heute".
+     */
+    fun requestPlan(openGoalEditor: Boolean = false) {
+        _pendingGoalEditor.value = openGoalEditor
+        _pendingIndoorSegment.value = IndoorSegment.PLAN
+        requestTab(AppTab.INDOOR)
+    }
+
+    /** Oeffnet die Streckenwahl: Tab „Indoor", Segment „Strecken". */
+    fun requestIndoorRoutes() {
+        _pendingIndoorSegment.value = IndoorSegment.ROUTES
+        requestTab(AppTab.INDOOR)
+    }
+
+    /**
+     * Oeffnet die gespeicherten Herausforderungen: Tab „Indoor", Segment
+     * „Herausforderungen" — das Ziel von „Trailscape öffnen" nach dem Import
+     * einer Datei von aussen (`ChallengeImportActivity`).
+     */
+    fun requestChallenges() {
+        _pendingIndoorSegment.value = IndoorSegment.CHALLENGES
+        requestTab(AppTab.INDOOR)
+    }
+
+    private val _pendingHistorySegment = MutableStateFlow<HistorySegment?>(null)
+
+    /** Das Segment, das der Verlauf als Naechstes zeigen soll (wie [pendingIndoorSegment]). */
+    val pendingHistorySegment: StateFlow<HistorySegment?> = _pendingHistorySegment.asStateFlow()
+
+    fun consumeHistorySegmentRequest() {
+        _pendingHistorySegment.value = null
+    }
+
+    /** Oeffnet den Fortschritt: Tab „Verlauf", Segment „Fortschritt". */
+    fun requestProgress() {
+        _pendingHistorySegment.value = HistorySegment.PROGRESS
+        requestTab(AppTab.RIDES)
     }
 
     fun consumeIndoorRequest() {
@@ -712,23 +829,11 @@ class AppViewModel(
      * im Leerzustand und dem Erscheinen der Einstellungen liegt ein Wechsel,
      * den ein einmaliges Ereignis nicht ueberleben wuerde.
      *
-     * ## Warum ueberhaupt
-     * Vier Leerzustaende („Touren importieren") riefen bis hierher nur
-     * `requestTab(AppTab.MORE)`. Der Nutzer landete damit **oben** in einer
-     * Liste aus neun Karten und sah zuerst das Profilformular; die Import-
-     * Knoepfe liegen in der zweiten Karte und dort noch einmal tiefer. Genau
-     * dieser Handgriff ist aber der, den die Einfuehrung selbst als „Schritt 1
-     * von 3" fuehrt.
-     *
-     * ## Warum kein direkter Dateiwaehler
-     * Der Launcher aus `ui/ActivityFileImport.kt` haette sich auch an jedem
-     * Leerzustand aufhaengen lassen. Dagegen sprechen zwei Dinge: Es gibt
-     * **vier** Importwege (Einzeldatei, ZIP-Archiv, Backup, Health Connect),
-     * und welcher der richtige ist, weiss nur der Nutzer — ein direkt
-     * geoeffneter Dateiwaehler entscheidet das fuer ihn und verschweigt die
-     * anderen drei. Ausserdem lernt er dabei nicht, wo der Import wohnt, und
-     * sucht ihn beim naechsten Mal erneut. Das Sprungziel zeigt ihm die Karte
-     * mit allen Wegen — einmal — und er findet sie danach selbst wieder.
+     * ## Wofuer
+     * Hinweise und Leerzustaende verweisen auf genau eine Seite (Profil,
+     * Uhr & Gesundheitsdaten, Strava); ohne Sprungziel landete man oben in
+     * der Liste und muesste die Seite selbst suchen. Der Tour-Import ist kein
+     * Sprungziel mehr: Er liegt im Verlauf („+").
      */
     val pendingMoreSection: StateFlow<MoreSection?> = _pendingMoreSection.asStateFlow()
 
@@ -862,6 +967,10 @@ class AppViewModel(
                 profile = _profile.value,
                 yearGoal = _yearGoal.value,
                 climbBests = de.trailscape.app.indoor.ClimbBestStore.read(keyValueStore),
+                // Erfolge (`docs/erfolge.md`): der kleine gespeicherte Stand.
+                progress = de.trailscape.app.data.ErfolgeStore.shared.value,
+                // Garage: nur, wenn je etwas gewaehlt wurde (sonst bleibt das Backup wie bisher).
+                avatar = runCatching { RiderAvatarStore(keyValueStore).takeIf { it.hasSaved() }?.load() }.getOrNull(),
             )
         }
     }
@@ -938,13 +1047,19 @@ class AppViewModel(
      */
     private fun Ride.touchedNow(): Ride = copy(updatedAt = System.currentTimeMillis())
 
-    /** Speichert eine neue Tour, ergaenzt die Liste inkrementell und waehlt sie aus. */
-    fun addRide(ride: Ride) {
+    /**
+     * Speichert eine neue Tour, ergaenzt die Liste inkrementell und waehlt sie aus.
+     *
+     * @param selectAfter `false`, wenn die Tour nicht ausgewaehlt werden soll — die
+     *   Planung auf der Karte bleibt nach „Speichern" stehen, eine zusaetzlich
+     *   ausgewaehlte Tour laege dann unsichtbar unter ihr.
+     */
+    fun addRide(ride: Ride, selectAfter: Boolean = true) {
         viewModelScope.launch {
             val touched = ride.touchedNow()
             withContext(io) { rideStorage.saveRide(touched) }
             upsertSummary(touched.toSummary())
-            select(ride.id)
+            if (selectAfter) select(ride.id)
             // Segment-Bestleistungen im Hintergrund nachziehen — mit
             // Bestzeit-Hinweis, das hier ist eine neue Tour.
             refreshSegments(reportRideIds = setOf(ride.id))
@@ -2113,6 +2228,11 @@ class AppViewModel(
      * behaelt den Tag, ab dem das Soll laeuft ([YearGoal.since]) — sonst
      * liesse sich ein Rueckstand durch erneutes Speichern wegklicken.
      */
+    /** Aussehen aus einem Backup (Garage); ueberschreibt das gespeicherte. */
+    fun restoreAvatar(avatar: RiderAvatar) {
+        viewModelScope.launch { withContext(io) { RiderAvatarStore(keyValueStore).save(avatar) } }
+    }
+
     /**
      * Stellt ein Jahresziel aus einem Backup wieder her — mit [YearGoal.since]
      * wie gesichert (anders als [setYearGoalKm], das den Starttag neu setzt).
@@ -2653,6 +2773,35 @@ class AppViewModel(
                     // Touren — Planungen und Indoor-Fahrten behalten keinen Eintrag.
                     routeSignatureStore.retainAll(outdoorRides(summaries).mapTo(HashSet()) { it.id })
                     compareOnRoute(rideId, visible, signatures)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                } finally {
+                    routeSignatureStore.flush()
+                }
+            }
+        }
+    }
+
+    /**
+     * Fuer die Erfolge („Rundenkenner", `docs/erfolge.md`): wie oft die am
+     * haeufigsten gefahrene Runde gefahren wurde — aus denselben Signaturen
+     * und demselben Cache wie [routeComparisonFor]. `null` bei einem Fehler.
+     */
+    suspend fun achievementRounds(): de.trailscape.core.RoundAchievementFacts? {
+        val summaries = allSummaries
+        return routeComparisonMutex.withLock {
+            withContext(io) {
+                try {
+                    val signatures = collectRouteSignatures(
+                        rides = summaries,
+                        store = routeSignatureStore,
+                        loadRide = { rideStorage.loadRide(it) },
+                    )
+                    de.trailscape.core.roundAchievementFacts(summaries, signatures) {
+                        localOfEpochMs(it).toLocalDate()
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {

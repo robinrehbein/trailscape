@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import de.trailscape.app.R
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.prepareShareDirectory
 import de.trailscape.app.ui.withCause
 import de.trailscape.core.Ride
@@ -42,6 +43,12 @@ import kotlinx.coroutines.withContext
  * Der Schalter „Start und Ziel ausblenden" wird hier gelesen und gemerkt
  * (`ShareCardSettings.kt`): Die Wahl gilt fuer jedes kuenftige Tour-Bild,
  * egal von welcher der beiden Stellen aus geteilt wird.
+ *
+ * ## Weitere Zeilen
+ * Der Wirt setzt die Strava-Zeile ein ([StravaShareRow]). Ueber [extraRows]
+ * haengt ein Aufrufer weitere Wege darunter — der vorgesehene Platz fuer
+ * „Herausforderung teilen" einer Indoor-Tour (docs/ux/umbau.md). Ohne Angabe
+ * steht dort nichts.
  */
 @Composable
 internal fun RideShareDialog(
@@ -49,6 +56,7 @@ internal fun RideShareDialog(
     load: Double?,
     appViewModel: AppViewModel,
     onDismiss: () -> Unit,
+    extraRows: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -93,6 +101,18 @@ internal fun RideShareDialog(
                     appViewModel.showMessage(withCause(context.getString(R.string.rides_share_image_error), failure))
                 }
             }
+        },
+        extraRows = {
+            // Strava ist fuer jede hochladbare Tour sichtbar, auch ohne
+            // Verbindung; „verbinden" fuehrt auf Einstellungen → Strava.
+            StravaShareRow(
+                ride = ride,
+                onConnect = {
+                    onDismiss()
+                    appViewModel.requestMoreSection(MoreSection.STRAVA)
+                },
+            )
+            extraRows?.invoke()
         },
     )
 }

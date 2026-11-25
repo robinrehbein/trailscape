@@ -9,9 +9,9 @@ package de.trailscape.app.ui.map
  * [MapMode] ersetzt weder [de.trailscape.core.NavState] noch `navTarget`
  * selbst — die Punktliste, das Navigationsziel und der Live-Fortschritt der
  * Navigation bleiben eigene Zustaende in `MapScreen.kt`. Der Modus sagt nur,
- * **welche Bedienflaeche gerade gilt**: ob langes Druecken einen Wegpunkt
- * setzt, ob die Zurueck-Geste die Planung verlaesst, welche Stufe das
- * Kartenblatt zeigt. `searchOpen` gehoert bewusst nicht zu diesem Modus — die
+ * **welche Bedienflaeche gerade gilt**: ob ein Tipp auf die Karte einen Punkt
+ * markiert oder einen Wegpunkt anhaengt (`MapTapPlanning.kt`), ob die
+ * Zurueck-Geste die Planung verlaesst, welche Stufe das Kartenblatt zeigt. `searchOpen` gehoert bewusst nicht zu diesem Modus — die
  * Ortssuche ist in jedem der drei Modi erreichbar (siehe Klassen-KDoc von
  * `MapScreen.kt`, „Suche jederzeit") und damit orthogonal, kein vierter Wert.
  *
@@ -60,17 +60,17 @@ enum class MapMode {
 }
 
 /**
- * Die drei Stufen des **einen** Blatts am unteren Kartenrand — das Verhalten,
- * das der Nutzer am Karte-Screen von `docs/design/prototyp-eine-leiste.html`
- * freigegeben hat.
+ * Die Stufen des **einen** Blatts am unteren Kartenrand.
  *
- * Ueber der schwebenden Navigationskapsel liegt genau ein aufziehbares Blatt.
- * Eingeklappt zeigt es Griff und Suchzeile und laesst die Karte fast
- * vollstaendig frei; eine Stufe hoeher gibt es die Aktionszeile „Route planen ·
- * Kartenstil · Offline" frei; in der obersten Stufe steht an deren Stelle der
- * Planungsinhalt. Gewechselt wird per Tipp auf den Griff und per vertikalem
- * Ziehen (beides bringt [SwipeableSheet] mit), und die Stufe ueberlebt einen
- * Tabwechsel (`rememberSaveable` in `MapScreen.kt`).
+ * Ueber der schwebenden Navigationskapsel liegt genau ein Blatt. Beim
+ * Erkunden ist es das Blatt „Wohin?" (`ExploreSheet.kt`): Suchzeile mit
+ * Zahnrad und darunter die Knoepfe „Route planen" und „Runde bauen";
+ * hochgewischt zeigt es gespeicherte Routen und zuletzt gesuchte Orte (dieser
+ * Zustand hat eine eigene Variable in `MapScreen.kt`, keine Stufe hier). In
+ * der Planung steht an seiner Stelle der Planungsinhalt ([PLANEN]) oder nur
+ * dessen Kopf ([EINGEKLAPPT]). Die frueher hier beschriebene Aktionszeile
+ * „Route planen · Kartenstil · Offline" gibt es nicht mehr; [AUFGEZOGEN]
+ * bezeichnet seither nur noch „Planung beendet, zurueck auf Wohin?".
  *
  * ## Warum eine Ableitung und kein eigener gespeicherter Zustand
  * Die Stufe wird in `MapScreen.kt` aus [MapMode] und der Erkunden-Stufe
@@ -83,11 +83,11 @@ enum class MapMode {
  * weiterreicht.
  *
  * ## Warum die Stufe nicht dasselbe ist wie [MapMode]
- * [MapMode] sagt, **welche Bedienflaeche gilt** (setzt langes Druecken einen
- * Wegpunkt? verlaesst die Zurueck-Geste die Planung?). Die Stufe sagt nur, wie
+ * [MapMode] sagt, **welche Bedienflaeche gilt** (haengt ein Tipp auf die Karte
+ * einen Wegpunkt an? verlaesst die Zurueck-Geste die Planung?). Die Stufe sagt nur, wie
  * viel vom Blatt zu sehen ist. Deshalb hat [MapMode.PLANEN] zwei Stufen:
  * [PLANEN] mit vollem Planungsinhalt und [EINGEKLAPPT], sobald die Nutzerin
- * mit der Karte arbeitet und Wegpunkte setzt (siehe `onMapLongPress` in
+ * mit der Karte arbeitet und Wegpunkte setzt (siehe `appendWaypointOnMap` in
  * `MapScreen.kt`) — die Planung laeuft dann unveraendert weiter, das Blatt
  * gibt nur die Karte frei. Und [MapMode.NAVIGIEREN] hat gar keine: Waehrend
  * Navigation, Aufzeichnung, gewaehlter Tour, gewaehltem Ort oder offener
@@ -98,7 +98,7 @@ internal enum class MapSheetStage {
     /** Nur Griff und die eine Peek-Zeile — der Ruhezustand, maximale Kartensicht. */
     EINGEKLAPPT,
 
-    /** Zusaetzlich die Aktionszeile „Route planen · Kartenstil · Offline". */
+    /** Zurueck auf dem Blatt „Wohin?" — aus der Planung heraus beendet das die Planung. */
     AUFGEZOGEN,
 
     /** Statt der Aktionszeile der Planungsinhalt (`PlanningSheet` in `PlanningPanel.kt`). */

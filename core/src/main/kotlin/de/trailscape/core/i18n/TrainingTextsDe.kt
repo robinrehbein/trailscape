@@ -164,7 +164,7 @@ internal object TrainingTextsDe : TrainingTexts {
                 "zusammen rund ${args[6]} Minuten.$hill"
         }
         SessionTextKey.RECOVERY_LONG ->
-            "Die lange Fahrt dieser Woche bewusst kürzer und ruhig im Grundlagentempo – " +
+            "Die lange Tour dieser Woche bewusst kürzer und ruhig im Grundlagentempo – " +
                 "jetzt verarbeitet der Körper den Aufbau der letzten Wochen."
         SessionTextKey.FTP_TEST ->
             "${args[0]} Minuten einfahren mit zwei kurzen Steigerungen, dann ${args[1]} Minuten so " +
@@ -173,11 +173,11 @@ internal object TrainingTextsDe : TrainingTexts {
                 "${args[3]} Minuten."
         SessionTextKey.BENCHMARK_RIDE ->
             "Deine Vergleichsrunde über ${args[0]} km: gleichmäßig zügig fahren und Zeit sowie " +
-                "Durchschnittspuls mit früheren Fahrten vergleichen – so siehst du, was der Block gebracht hat."
+                "Durchschnittspuls mit früheren Touren vergleichen – so siehst du, was der Block gebracht hat."
     }
 
     override fun plainTitleEvent(km: Int) = "Rennen $km km"
-    override fun plainTitleLongRide(km: Int) = "Lange Fahrt $km km"
+    override fun plainTitleLongRide(km: Int) = "Lange Tour $km km"
     override fun plainTitleHard(km: Int) = "Hart $km km"
     override fun plainTitleEasy(km: Int) = "Locker $km km"
     override fun plainHintEvent() = "dein Ziel"
@@ -211,7 +211,7 @@ internal object TrainingTextsDe : TrainingTexts {
                 "Für die vollen $goalKm km reicht selbst ein Jahr Vorbereitung von deinem " +
                     "heutigen Umfang aus nicht — bau erst über eine Zwischendistanz auf."
         }
-        return "Die längste Fahrt in diesem Plan sind $longestKm km – nur $percent % deiner " +
+        return "Die längste Tour in diesem Plan sind $longestKm km – nur $percent % deiner " +
             "Zieldistanz von $goalKm km. Realistisch trägt dieser Plan ein Ziel um " +
             "$suggestedKm km. $outlook"
     }

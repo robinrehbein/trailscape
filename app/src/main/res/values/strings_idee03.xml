@@ -10,5 +10,5 @@
     <string name="idee03_filter_outdoor">Draußen</string>
     <string name="idee03_filter_indoor">Indoor</string>
     <string name="idee03_filter_empty">In dieser Auswahl ist keine Tour.</string>
-    <string name="idee03_load_scale_twenty_min_measured">Alle Lastwerte rechnen mit %1$d W Schwelle (%2$s W/kg), geschätzt aus deinen Touren. Grundlage ist dein bester 20-Minuten-Abschnitt aus gemessener Leistung (Leistungsmesser oder Rollentrainer). Eine eingetragene FTP wäre trotzdem genauer.</string>
+    <string name="idee03_load_scale_twenty_min_measured">Alle Lastwerte rechnen mit %1$d W Schwelle (%2$s W/kg), geschätzt aus deinen Touren. Grundlage ist dein bester 20-Minuten-Abschnitt aus gemessener Leistung (Leistungsmesser oder Trainer). Eine eingetragene FTP wäre trotzdem genauer.</string>
 </resources>

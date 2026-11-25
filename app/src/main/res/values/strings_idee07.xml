@@ -10,7 +10,7 @@
     <!-- ImportRecognition.kt: Dialog nach „Teilen"/„Öffnen mit" -->
     <string name="gpxplan_recognized_planned_title">Als Planung geöffnet</string>
     <string name="gpxplan_recognized_ridden_title">Als gefahrene Tour importiert</string>
-    <string name="gpxplan_recognized_planned_body">„%1$s“ hat keine Zeitstempel und ist deshalb eine Route, keine Fahrt. Du findest sie auf der Karte und unter den Planungen und kannst sie abfahren. In Statistik, Wochenfortschritt und Entdeckt-Kacheln zählt sie nicht.</string>
+    <string name="gpxplan_recognized_planned_body">„%1$s“ hat keine Zeitstempel und ist deshalb eine Planung, keine Tour. Du findest sie im Verlauf unter „Geplant“ und kannst sie abfahren. In Statistik, Wochenfortschritt und Entdeckt-Kacheln zählt sie nicht.</string>
     <string name="gpxplan_recognized_ridden_body">„%1$s“ hat Zeitstempel und ist deshalb eine Aufzeichnung. Sie zählt in Statistik, Wochenfortschritt und Entdeckt-Kacheln.</string>
     <string name="gpxplan_flip_to_ridden_action">Als gefahrene Tour importieren</string>
     <string name="gpxplan_flip_to_planned_action">Als Planung öffnen</string>

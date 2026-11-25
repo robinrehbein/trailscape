@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ShowChart
+import androidx.compose.material.icons.automirrored.outlined.DirectionsBike
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.Today
@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -61,15 +62,17 @@ import de.trailscape.app.ui.components.OneUiNavigationBarItem
 import de.trailscape.app.ui.components.RecButtonState
 import de.trailscape.app.ui.components.RecCapsuleButton
 import de.trailscape.app.ui.components.RecCapsuleButtonDefaults
+import de.trailscape.app.ui.indoor.IndoorFlowMode
 import de.trailscape.app.ui.indoor.IndoorFlowScreen
+import de.trailscape.app.ui.indoor.IndoorTabScreen
 import de.trailscape.app.ui.indoor.IndoorWorldsDestination
+import de.trailscape.app.ui.indoor.garage.GarageDestination
 import de.trailscape.app.ui.map.MapScreen
 import de.trailscape.app.ui.more.MoreScreen
 import de.trailscape.app.ui.onboarding.OnboardingScreen
 import de.trailscape.app.ui.rides.RidesScreen
 import de.trailscape.app.ui.theme.M3Transitions
 import de.trailscape.app.ui.today.TodayScreen
-import de.trailscape.app.ui.training.TrainingScreen
 import de.trailscape.core.i18n.coreTexts
 
 /**
@@ -83,43 +86,34 @@ import de.trailscape.core.i18n.coreTexts
  * ```kotlin
  * TodayScreen(appViewModel)
  * MapScreen(appViewModel)
+ * IndoorTabScreen(appViewModel, onOpenDiagnostics = …, onOpenWorlds = …, onOpenGarage = …)
  * RidesScreen(appViewModel)
- * TrainingScreen(appViewModel)
  * MoreScreen(appViewModel, onBack = …)
  * ```
  *
- * ## Die Fuehrung „Eine Leiste"
- * Hier stand bis zuletzt die Begruendung, warum „Touren" **kein** Tab sei
- * (Tourenliste als Blatt ueber der Karte) und warum „Mehr" einer sei. Beides
- * ist revidiert. Ergebnis der Designstudie
- * (`docs/design/ui-navigationsstudien.html`, Kapitel „Eine Leiste") und des
- * klickbaren Prototyps (`docs/design/prototyp-eine-leiste.html`) ist ein
- * anderer Zuschnitt derselben vier Plaetze:
+ * ## Die Struktur: Heute · Karte · Indoor · Verlauf
+ * Grundlage ist die Seitenkarte (`docs/ux/seitenkarte.md`); was umgesetzt ist
+ * und wo Kommendes eingehaengt wird, steht in `docs/ux/umbau.md`. **Was wohin
+ * fuehrt, entscheidet `ui/AppNavigation.kt`** — reine, getestete Logik
+ * ([SHELL_TABS], [navCommandFor], [navigationBarHidden]); diese Datei fuehrt
+ * es nur aus.
  *
- *  * **Touren wird Tab.** Die Karte ist die *raeumliche* Sicht auf den
- *    Bestand, die Liste die *chronologische* — das ist keine Dublette,
- *    sondern eine zweite Frage („wo war ich?" gegen „was habe ich gefahren?").
- *    Als aufziehbares Blatt hinter einem Griff am unteren Kartenrand war die
- *    Liste faktisch unauffindbar: Wer die App nicht kannte, fand seine Touren
- *    nicht. Sie hat deshalb wieder einen eigenen, beschrifteten Platz
- *    (`ui/rides/RidesScreen.kt`) und lebt jetzt **ausschliesslich** dort — das
- *    Blatt ueber der Karte (`ui/map/ExploreSheet.kt`) zeigt keine Tourenliste
- *    mehr. Eine Tour-Spur zeigt die Karte seither nur noch „auf Zuruf" aus dem
- *    Touren-Tab (`AppViewModel.requestShowRideOnMap`); das Blatt selbst ist auf
- *    Suche, Planung und Kartenwerkzeuge reduziert.
- *  * **Mehr wandert hinters Zahnrad.** „Mehr" war nie ein Ort, an den man
- *    geht, sondern eine Schublade, in der man etwas nachschlaegt — Profil,
- *    Import, Offline-Karten, Sync. Ein Viertel der immer sichtbaren
- *    Hauptnavigation dafuer auszugeben, war der teuerste Platz der App fuer
- *    den seltensten Handgriff. Der Bereich ist jetzt ein **gepushtes Ziel**
- *    (Route [MORE_ROUTE]) hinter einem ⚙ in den Kopfzeilen von Heute, Touren
- *    und Training, mit Zurueck-Pfeil und Systemzurueckgeste wie jede andere
- *    zweite Ebene.
+ *  * **Heute** beantwortet „Was fahre ich heute?".
+ *  * **Karte** ist alles fuer draussen: Ort suchen, Route planen, Runde bauen.
+ *  * **Indoor** ersetzt den frueheren Tab „Training" und buendelt Strecken,
+ *    den Trainingsplan und den Start der Indoor-Fahrt
+ *    (`ui/indoor/IndoorTabScreen.kt`). Vorher war der Indoor-Bereich nur ueber
+ *    eine Karte auf „Heute", einen Textknopf im Bereit-Dialog und eine Zeile
+ *    in den Einstellungen erreichbar.
+ *  * **Verlauf** ist der Blick zurueck: Touren und Fortschritt als Segmente
+ *    (`ui/rides/RidesScreen.kt`).
+ *  * **Die Einstellungen liegen hinterm Zahnrad** — auf allen vier Tabs, immer
+ *    dieselbe Seite, ein gepushtes Ziel (Route [AppRoutes.MORE]) mit
+ *    Zurueck-Pfeil und Systemzurueckgeste.
  *  * **Fahren ist kein Ziel, sondern ein Zustand.** Rechts neben der Kapsel
  *    schwebt der runde Aufnahme-Knopf ([RecCapsuleButton]) — abgesetzt, kein
- *    fuenfter Tab: Er teilt sich die Navigationsebene mit den vier Zielen,
- *    ohne eines von ihnen zu sein. Seine drei Zustaende (Ruhe, „Route
- *    bereit", „laeuft") bildet diese Datei aus [RecordingRepository] und
+ *    fuenfter Tab. Seine drei Zustaende (Ruhe, „Route bereit", „laeuft")
+ *    bildet diese Datei aus [RecordingRepository] und
  *    [AppViewModel.plannedRouteKm]; was ein Tipp bewirkt, steht in
  *    `ui/ReadyToRideDialog.kt`.
  *
@@ -128,15 +122,17 @@ import de.trailscape.core.i18n.coreTexts
  * | Datei | Rolle |
  * |---|---|
  * | `ui/TrailscapeApp.kt` (diese Datei) | Fundament: Navigationsleiste, Aufnahme-Knopf, `NavHost` |
+ * | `ui/AppNavigation.kt` | Fundament: Tabs, Routen, Sprungziele, Segmente als reine Logik |
  * | `ui/AppViewModel.kt` | Fundament: die API ist der Vertrag aller Screens |
  * | `ui/ReadyToRideDialog.kt` | Fundament: der Bereit-Dialog des Aufnahme-Knopfs |
  * | `ui/TrainingInsights.kt` | Fundament: reine Rechenschicht ueber `:core` |
  * | `ui/MapStyles.kt` | Fundament: Katalog der Kartenstile |
  * | `ui/today/TodayScreen.kt` | Startseite: Tagesempfehlung, Woche, letzte Tour |
  * | `ui/map/MapScreen.kt` | Karte, Suche/Aktionen/Planen, Navigation, Offline-Download |
- * | `ui/rides/RidesScreen.kt` | Touren-Tab: Vollbild-Liste und Detailansicht |
- * | `ui/rides/TourList.kt` | Baustein: Tourenliste und -detail |
- * | `ui/training/TrainingScreen.kt` | Trainingsplan und Auswertung |
+ * | `ui/indoor/IndoorTabScreen.kt` | Indoor-Tab: Strecken (Indoor-Ablauf) und Plan |
+ * | `ui/training/PlanScreen.kt` | Sicht „Plan" des Indoor-Tabs |
+ * | `ui/rides/RidesScreen.kt` | Verlauf-Tab: Touren, Fortschritt, Detailansicht |
+ * | `ui/training/ProgressContent.kt` | Sicht „Fortschritt" des Verlaufs |
  * | `ui/more/MoreScreen.kt` | Einstellungen, Health, Backup, Sync — hinterm Zahnrad |
  * | `ui/components/OneUiNavigationBar.kt` | Fundament: die schwebende Navigationskapsel |
  * | `ui/components/RecCapsuleButton.kt` | Fundament: der Aufnahme-Knopf neben der Kapsel |
@@ -152,9 +148,9 @@ import de.trailscape.core.i18n.coreTexts
  * Der Aufnahme-Knopf steht **neben** der Kapsel, bringt aber seine eigene
  * Hoehe mit — die gemeldete Bodenfreiheit ist deshalb die **gemessene** Hoehe
  * des ganzen Bandes und nicht laenger eine Konstante (Begruendung im Rumpf).
- * Auf der Route [MORE_ROUTE] gibt es weder Kapsel noch Knopf — dort meldet
- * [LocalFloatingNavigationBarSpace] nur noch die Gestenleiste, damit die
- * Einstellungsliste nicht gegen einen leeren Streifen scrollt.
+ * Wo die Leiste zuruecktritt ([navigationBarHidden]: gepushte Seiten, eine
+ * Aufgabe auf Karte, Verlauf oder Indoor), meldet
+ * [LocalFloatingNavigationBarSpace] nur noch die Gestenleiste.
  *
  * Neue Hilfs-Composables eines Screens gehoeren in **dessen** Paket
  * (`ui/map/…`, `ui/training/…`, `ui/more/…`) oder — wenn wirklich geteilt —
@@ -172,7 +168,9 @@ import de.trailscape.core.i18n.coreTexts
  *  * Alles Uebrige (Touren, Profil, Auswertung, Plan, Kartenstil, Health,
  *    Sync): das **eine** geteilte [AppViewModel], das hier unten mit
  *    `viewModel()` im Activity-Scope erzeugt und als Parameter
- *    durchgereicht wird. Screens erzeugen **kein** eigenes ViewModel.
+ *    durchgereicht wird. Screens erzeugen **kein** eigenes ViewModel
+ *    (Ausnahme: der Indoor-Ablauf haelt sein `IndoorViewModel` am eigenen
+ *    Backstack-Eintrag).
  *
  * ## Erststart
  * Beim allerersten Start liegt vor den vier Tabs die Einfuehrung
@@ -182,98 +180,63 @@ import de.trailscape.core.i18n.coreTexts
  * Navigationsleiste noch Aufnahme-Knopf: Die Einfuehrung ist kein Tab, sondern
  * ein Zustand davor.
  *
- * ## Tab-Wechsel aus einem Screen heraus
- * Statt eines `onShowMap`-Callbacks (so machte es die Flutter-App) ruft ein
- * Screen `appViewModel.requestTab(AppTab.MAP)`; die Huelle beobachtet
- * [AppViewModel.tabRequest] und navigiert. Deshalb kommen alle Screens mit
- * derselben, parameterlosen Signatur aus.
+ * ## Wechsel aus einem Screen heraus
+ * Ein Screen ruft `appViewModel.requestTab(AppTab.MAP)`; die Huelle beobachtet
+ * [AppViewModel.tabRequest] und navigiert. Deshalb kommen alle Screens ohne
+ * Navigations-Callbacks aus. Gezielte Spruenge haben eigene Funktionen, die
+ * dasselbe Muster nutzen: [AppViewModel.requestPlan] (Indoor → Plan),
+ * [AppViewModel.requestProgress] (Verlauf → Fortschritt),
+ * [AppViewModel.requestRideDetail], [AppViewModel.requestMoreSection] und
+ * [AppViewModel.requestIndoor] fuer die gepushten Indoor-Seiten.
  *
- * [AppTab.MORE] ist dabei die eine Ausnahme, die kein Tab mehr ist: Ein gutes
- * Dutzend Aufrufer — Leerzustaende, Hinweise,
- * [AppViewModel.requestMoreSection] — bittet weiterhin schlicht um „den
- * Mehr-Bereich" und soll dafuer nicht umgeschrieben werden muessen. Die Huelle
- * loest den Wunsch beim Auftreffen auf ein `navigate("mehr")` auf, also auf
- * ein gepushtes Ziel mit Zurueck-Weg statt auf einen Tab-Wechsel (siehe
- * [navigateToSettings] und `LaunchedEffect(tabRequest)` unten).
+ * [AppTab.MORE] ist dabei der eine Wert, der kein Tab ist: [navCommandFor]
+ * loest ihn auf ein gepushtes Ziel mit Zurueck-Weg auf statt auf einen
+ * Tab-Wechsel (siehe [navigateToSettings]).
  */
 
 /**
- * Die vier Hauptbereiche in der Reihenfolge der Navigationsleiste.
+ * Beschriftung und Symbol je Tab. Reihenfolge und Routen kommen aus
+ * [SHELL_TABS] (`ui/AppNavigation.kt`) — hier steht nur, was Compose braucht.
  *
  * ## Warum „Heute" vorne steht
  * Die App startete einmal auf der Karte. Wer sie morgens oeffnete, bekam damit
  * ein Werkzeug zu sehen, aber keine Auskunft: Die Verbindung aus
- * Ruhepuls/HRV/Schlaf, Trainingsplan und automatisch generierter Runde — das
- * Alleinstellungsmerkmal dieser App — lag drei Tabs weiter hinten am Ende einer
- * Karte. `HOME` ist deshalb das erste Ziel und die `startDestination`.
+ * Ruhepuls/HRV/Schlaf, Trainingsplan und automatisch generierter Runde lag
+ * drei Tabs weiter hinten. „Heute" ist deshalb das erste Ziel und die
+ * `startDestination`.
  *
  * ## Warum genau diese vier
  * Vier Ziele sind das Maximum, das die schwebende Kapsel
  * (`ui/components/OneUiNavigationBar.kt`) einzeilig beschriftet traegt — bei
  * fuenf steht das laengste Label auf einem 320-dp-Geraet vor der Ellipse. Die
- * Frage ist deshalb nicht, ob vier, sondern **welche** vier. Die Antwort der
- * Studie „Eine Leiste": die vier Dinge, die man taeglich tut — den Tag
- * ansehen, die Karte benutzen, die eigenen Touren nachschlagen, das Training
- * verfolgen. Alles Seltene (Profil, Import, Offline-Karten, Sync) liegt
- * hinterm Zahnrad, und das Fahren selbst hat den runden Knopf daneben, weil es
- * ein Zustand ist und kein Ort.
- *
- * Der frueher hier stehende Tab „Mehr" ist damit entfallen; „Touren" hat
- * seinen Platz zurueck. Die verbleibenden Beschriftungen bleiben kurz (das
- * laengste ist „Training"), und jedes Label ist einzeilig mit Ellipse gesetzt.
+ * Seitenkarte gibt den vierten Platz dem Indoor-Bereich, weil er nach Umfang
+ * der groesste Bereich der App ist und vorher keinen festen Platz hatte; Plan
+ * und Fortschritt des frueheren Tabs „Training" sind auf „Indoor" und
+ * „Verlauf" verteilt. Die Beschriftungen bleiben kurz („Indoor" ist kuerzer
+ * als „Training"), und jedes Label ist einzeilig mit Ellipse gesetzt.
  *
  * ## Duenne Symbole, die das sagen, was sie zeigen
  * One UI 8/9 zeichnet Systemsymbole duenn (outlined), nicht gefuellt — gefuellte
- * Icons sind dort dem *ausgewaehlten* Zustand vorbehalten, nicht der Ruhelage.
- * Deshalb sind alle vier Icons hier `Outlined`-Varianten. Zwei davon trugen
- * einmal eine Bedeutung, die nicht zum Tab passte: TRAINING zeigte ein Herz
- * (`Favorite`) — das Symbol fuer Favoriten bzw. Herzfrequenz, obwohl der Tab
- * Trainingskurven und Auswertung zeigt, keinen Puls. Das Herz bleibt deshalb
- * app-weit der Herzfrequenz vorbehalten; TRAINING bekommt `ShowChart`. MAP
- * zeigte eine einzelne Ortsmarke (`Place`); eine Karte ist aber kein einzelner
- * Ort, sondern die Flaeche selbst — `Map` trifft das ehrlicher. RIDES bekommt
- * `Route`: Eine gefahrene Tour ist eine Linie durch die Landschaft, kein
- * Listeneintrag — dasselbe Symbol, das die Karte fuer ihre Routen ohnehin
- * schon verwendet (`Icons.Filled.Route` in `ui/map/…`), hier in der duennen
- * Variante.
+ * Icons sind dort dem *ausgewaehlten* Zustand vorbehalten. Deshalb sind alle
+ * vier Icons `Outlined`-Varianten. Die Karte bekommt `Map` (die Flaeche, kein
+ * einzelner Ort), der Verlauf `Route` (eine gefahrene Tour ist eine Linie
+ * durch die Landschaft), Indoor das Fahrrad — dasselbe Symbol, das die
+ * Indoor-Startseite fuer den Trainer verwendet. Das Herz bleibt app-weit der
+ * Herzfrequenz vorbehalten.
  */
-private enum class TopLevelDestination(
-    val tab: AppTab,
-    val route: String,
-    @param:StringRes val labelRes: Int,
-    val icon: ImageVector,
-) {
-    HOME(AppTab.HOME, "heute", R.string.shell_nav_today_label, Icons.Outlined.Today),
-    MAP(AppTab.MAP, "karte", R.string.shell_nav_map_label, Icons.Outlined.Map),
-    RIDES(AppTab.RIDES, "touren", R.string.shell_nav_history_label, Icons.Outlined.Route),
-    TRAINING(AppTab.TRAINING, "training", R.string.shell_nav_training_label, Icons.AutoMirrored.Outlined.ShowChart),
+private data class TabLook(@param:StringRes val labelRes: Int, val icon: ImageVector)
+
+private fun tabLook(tab: AppTab): TabLook = when (tab) {
+    AppTab.HOME -> TabLook(R.string.shell_nav_today_label, Icons.Outlined.Today)
+    AppTab.MAP -> TabLook(R.string.shell_nav_map_label, Icons.Outlined.Map)
+    AppTab.INDOOR -> TabLook(R.string.shell_nav_indoor_label, Icons.AutoMirrored.Outlined.DirectionsBike)
+    AppTab.RIDES -> TabLook(R.string.shell_nav_history_label, Icons.Outlined.Route)
+    // Kein Tab (siehe [SHELL_TABS]); nur der Vollstaendigkeit des `when` wegen.
+    AppTab.MORE -> TabLook(R.string.shell_nav_today_label, Icons.Outlined.Today)
 }
 
-/**
- * Die Route des Mehr-Bereichs — kein Tab, sondern ein gepushtes Ziel hinterm
- * Zahnrad (siehe Datei-KDoc, „Mehr wandert hinters Zahnrad").
- */
-private const val MORE_ROUTE = "mehr"
-
-/**
- * Die Indoor-Ziele (docs/indoor.md, Abschnitt 10.1): der Ablauf Koppeln →
- * Fahrt, die Weltverwaltung und die Diagnose der Darstellung. Wie der
- * Mehr-Bereich gepushte Ziele ohne Kapsel und Aufnahme-Knopf — waehrend
- * einer Indoor-Fahrt haette eine Navigationsleiste nichts verloren.
- */
-private const val INDOOR_ROUTE = "indoor"
-private const val INDOOR_WORLDS_ROUTE = "indoor/welten"
-private const val INDOOR_DIAGNOSTICS_ROUTE = "indoor/diagnose"
-
-private fun IndoorDestination.route(): String = when (this) {
-    IndoorDestination.FLOW -> INDOOR_ROUTE
-    IndoorDestination.WORLDS -> INDOOR_WORLDS_ROUTE
-    IndoorDestination.DIAGNOSTICS -> INDOOR_DIAGNOSTICS_ROUTE
-}
-
-/** Gepushte zweite Ebene (Mehr, Indoor): Shared-Axis-Uebergang statt Fade through. */
-private fun isPushedRoute(route: String?): Boolean =
-    route == MORE_ROUTE || route == INDOOR_ROUTE || route == INDOOR_WORLDS_ROUTE || route == INDOOR_DIAGNOSTICS_ROUTE
+private fun NavDestination?.isOn(route: String): Boolean =
+    this?.hierarchy?.any { it.route == route } == true
 
 /**
  * Wurzel der Oberflaeche: stellt die Sprache bereit und zeichnet darin die
@@ -329,49 +292,43 @@ private fun TrailscapeAppContent() {
     val tabRequest by appViewModel.tabRequest.collectAsStateWithLifecycle()
     LaunchedEffect(tabRequest) {
         val requested = tabRequest ?: return@LaunchedEffect
-        // [AppTab.MORE] hat seit der Fuehrung „Eine Leiste" kein Ziel mehr in
-        // TopLevelDestination — `entries.first` wuerde dafuer werfen.
-        // Aufrufer (Leerzustaende, Hinweise, requestMoreSection) kennen und
-        // brauchen diesen Unterschied nicht: Sie bitten weiterhin um „den
-        // Mehr-Bereich", die Huelle loest das hier auf ein gepushtes Ziel mit
-        // Zurueck-Weg auf statt auf einen Tab-Wechsel.
-        if (requested == AppTab.MORE) {
-            navController.navigateToSettings()
-        } else {
-            val target = TopLevelDestination.entries.first { it.tab == requested }
-            navController.navigateToTab(target.route)
+        // Was der Wunsch bedeutet, entscheidet [navCommandFor]: die vier Tabs
+        // wechseln, [AppTab.MORE] wird als zweite Ebene gepusht. Aufrufer
+        // (Leerzustaende, Hinweise, requestMoreSection) kennen und brauchen
+        // diesen Unterschied nicht.
+        when (val command = navCommandFor(requested)) {
+            is NavCommand.SwitchTab -> navController.navigateToTab(command.route)
+            is NavCommand.Push -> navController.navigateToSettings()
         }
         appViewModel.consumeTabRequest()
     }
 
-    // Indoor-Ziele (Heute-Karte, Bereit-Dialog, Mehr): dasselbe Muster wie
-    // der Tab-Wunsch, aufgeloest auf ein gepushtes Ziel mit Zurueck-Weg.
+    // Gepushte Indoor-Seiten (Ablauf mit Vorwahl, Einstellungen → Indoor,
+    // Strecken auf dem Geraet, Diagnose): dasselbe Muster wie der Tab-Wunsch,
+    // aufgeloest auf ein gepushtes Ziel mit Zurueck-Weg.
     val indoorRequest by appViewModel.indoorRequest.collectAsStateWithLifecycle()
     LaunchedEffect(indoorRequest) {
         val requested = indoorRequest ?: return@LaunchedEffect
-        navController.navigate(requested.route()) { launchSingleTop = true }
+        navController.navigate(navCommandFor(requested).route) { launchSingleTop = true }
         appViewModel.consumeIndoorRequest()
     }
 
-    // Ob gerade der Mehr-Bereich offen ist. Er ist die einzige zweite Ebene
-    // im `NavHost` und traegt deshalb weder Kapsel noch Aufnahme-Knopf: Eine
-    // Navigationsleiste ohne markiertes Ziel behauptete, man sei nirgends,
-    // und der Aufnahme-Knopf haette ueber einem Einstellungsformular nichts
-    // verloren.
-    val settingsOpen = currentDestination?.hierarchy?.any { it.route == MORE_ROUTE } == true
-
-    // Solange die Karte eine Aufgabe zeigt (Ortskarte, „Runde ab hier",
-    // Vorschlaege, Planung), traegt sie ihre Blaetter selbst bis an den Rand;
-    // Kapsel und Fahren-Knopf treten zurueck (Fuehrung „Klartext").
+    // Wann Kapsel und Fahren-Knopf zuruecktreten, entscheidet
+    // [navigationBarHidden]: auf jeder gepushten Seite, und auf Karte, Verlauf
+    // und Indoor, solange dort eine Aufgabe den ganzen Bildschirm braucht
+    // (Planung, Tourdetail, Indoor-Fahrt).
+    val currentRoute = SHELL_TABS.firstOrNull { currentDestination.isOn(it.route) }?.route
+        ?: currentDestination?.route
     val mapTaskActive by appViewModel.mapTaskActive.collectAsStateWithLifecycle()
-    val onMap = currentDestination?.hierarchy?.any { it.route == TopLevelDestination.MAP.route } == true
-    // Die Tour-Detailansicht ist eine Ebene tiefer und nimmt den ganzen
-    // Bildschirm ein — wie die Einstellungen ohne Kapsel.
     val rideDetailOpen by appViewModel.rideDetailOpen.collectAsStateWithLifecycle()
-    val indoorOpen = currentDestination?.hierarchy?.any {
-        it.route == INDOOR_ROUTE || it.route == INDOOR_WORLDS_ROUTE || it.route == INDOOR_DIAGNOSTICS_ROUTE
-    } == true
-    val navHidden = settingsOpen || indoorOpen || rideDetailOpen || (onMap && mapTaskActive)
+    val indoorTaskActive by appViewModel.indoorTaskActive.collectAsStateWithLifecycle()
+    val onMap = currentRoute == AppRoutes.MAP
+    val navHidden = navigationBarHidden(
+        route = currentRoute,
+        mapTaskActive = mapTaskActive,
+        rideDetailOpen = rideDetailOpen,
+        indoorTaskActive = indoorTaskActive,
+    )
     val mapSheetUnderNav by appViewModel.mapSheetUnderNav.collectAsStateWithLifecycle()
 
     // Bodenfreiheit, die jeder Bildschirm unten einplanen muss: das schwebende
@@ -435,12 +392,12 @@ private fun TrailscapeAppContent() {
         CompositionLocalProvider(LocalFloatingNavigationBarSpace provides navigationBarSpace) {
             NavHost(
                 navController = navController,
-                startDestination = TopLevelDestination.HOME.route,
+                startDestination = AppRoutes.HOME,
                 // Oben und seitlich loest jedes Ziel die System-Insets ueber
                 // [InsetPadded] auf (das taten vorher die `innerPadding` des
                 // `Scaffold`, danach der `NavHost` selbst); unten ausdruecklich
                 // nicht — dort soll der Inhalt bis unter die Kapsel laufen.
-                // Ausnahme ist der Indoor-Ablauf: Seine Fahransicht legt die
+                // Ausnahme sind Indoor-Tab und Indoor-Ablauf: Die Fahransicht legt die
                 // 3D-Welt randlos unter Status- und Navigationsleiste und
                 // loest die Insets selbst auf (`IndoorRideScreen`,
                 // `IndoorPage`). `imePadding` haelt Eingabefelder ueber der
@@ -459,7 +416,7 @@ private fun TrailscapeAppContent() {
                             M3Transitions.sharedAxisXEnter(forward = true, density)
                         // Die Karte blendet nur ein; ihr Blatt faehrt selbst
                         // von unten herauf (siehe `MapScreen.kt`).
-                        targetState.destination.route == TopLevelDestination.MAP.route ->
+                        targetState.destination.route == AppRoutes.MAP ->
                             M3Transitions.topLevelEnter(scale = false)
                         else -> M3Transitions.topLevelEnter()
                     }
@@ -475,7 +432,7 @@ private fun TrailscapeAppContent() {
                     when {
                         isPushedRoute(initialState.destination.route) ->
                             M3Transitions.sharedAxisXEnter(forward = false, density)
-                        targetState.destination.route == TopLevelDestination.MAP.route ->
+                        targetState.destination.route == AppRoutes.MAP ->
                             M3Transitions.topLevelEnter(scale = false)
                         else -> M3Transitions.topLevelEnter()
                     }
@@ -488,39 +445,72 @@ private fun TrailscapeAppContent() {
                     }
                 },
             ) {
-                composable(TopLevelDestination.HOME.route) { InsetPadded { TodayScreen(appViewModel) } }
-                composable(TopLevelDestination.MAP.route) { InsetPadded { MapScreen(appViewModel) } }
-                composable(TopLevelDestination.RIDES.route) { InsetPadded { RidesScreen(appViewModel) } }
-                composable(TopLevelDestination.TRAINING.route) { InsetPadded { TrainingScreen(appViewModel) } }
+                val openDiagnostics = {
+                    navController.navigate(AppRoutes.INDOOR_DIAGNOSTICS) { launchSingleTop = true }
+                }
+                val openWorlds = {
+                    navController.navigate(AppRoutes.INDOOR_WORLDS) { launchSingleTop = true }
+                }
+                val openGarage = {
+                    navController.navigate(AppRoutes.INDOOR_GARAGE) { launchSingleTop = true }
+                }
+                composable(AppRoutes.HOME) { InsetPadded { TodayScreen(appViewModel) } }
+                composable(AppRoutes.MAP) { InsetPadded { MapScreen(appViewModel) } }
+                // Der Indoor-Tab: Strecken (der Indoor-Ablauf, sein ViewModel
+                // haengt an diesem Eintrag) und Plan. Ohne [InsetPadded] — die
+                // Fahransicht ist randlos, jede Seite loest die Insets selbst auf.
+                composable(AppRoutes.INDOOR) {
+                    IndoorTabScreen(
+                        appViewModel = appViewModel,
+                        onOpenDiagnostics = openDiagnostics,
+                        onOpenWorlds = openWorlds,
+                        onOpenGarage = openGarage,
+                    )
+                }
+                composable(AppRoutes.RIDES) { InsetPadded { RidesScreen(appViewModel) } }
                 // Zweite Ebene, kein Tab: Der Zurueck-Pfeil in der Kopfzeile
                 // und die Systemzurueckgeste (die der `NavHost` fuer ein
                 // gepushtes Ziel von selbst bedient) fuehren zurueck dorthin,
                 // von wo das Zahnrad angetippt wurde.
-                composable(MORE_ROUTE) {
+                composable(AppRoutes.MORE) {
                     InsetPadded { MoreScreen(appViewModel, onBack = { navController.popBackStack() }) }
                 }
-                // Indoor (docs/indoor.md 10.1): der Ablauf haelt sein
-                // ViewModel am eigenen Backstack-Eintrag; Diagnose und
-                // Weltverwaltung sind aus dessen Einstellungen erreichbar,
-                // die Diagnose auch unter Mehr.
-                composable(INDOOR_ROUTE) {
+                // Indoor-Ablauf mit vorgewaehlter Strecke (Einheit des Tages
+                // von „Heute", „Indoor fahren" und „In 3D ansehen" aus dem
+                // Tourdetail): eigenes ViewModel am eigenen Eintrag, Zurueck
+                // fuehrt zum Ausgangspunkt.
+                composable(AppRoutes.INDOOR_FLOW) {
                     IndoorFlowScreen(
                         appViewModel = appViewModel,
-                        // Gezielt bis einschliesslich `indoor`: Ein doppelt
+                        // Gezielt bis einschliesslich des Ablaufs: Ein doppelt
                         // ausgeloestes Verlassen raeumt so nie den Tab darunter ab.
-                        onExit = { navController.popBackStack(INDOOR_ROUTE, inclusive = true) },
-                        onOpenDiagnostics = {
-                            navController.navigate(INDOOR_DIAGNOSTICS_ROUTE) { launchSingleTop = true }
-                        },
-                        onOpenWorlds = {
-                            navController.navigate(INDOOR_WORLDS_ROUTE) { launchSingleTop = true }
-                        },
+                        onExit = { navController.popBackStack(AppRoutes.INDOOR_FLOW, inclusive = true) },
+                        onOpenDiagnostics = openDiagnostics,
+                        onOpenWorlds = openWorlds,
+                        mode = IndoorFlowMode.PUSHED,
                     )
                 }
-                composable(INDOOR_WORLDS_ROUTE) {
+                // „Einstellungen → Indoor": die Indoor-Einstellungen samt
+                // Fahrgefuehl; Strecken auf dem Geraet und Diagnose darunter.
+                composable(AppRoutes.INDOOR_SETTINGS) {
+                    IndoorFlowScreen(
+                        appViewModel = appViewModel,
+                        onExit = { navController.popBackStack(AppRoutes.INDOOR_SETTINGS, inclusive = true) },
+                        onOpenDiagnostics = openDiagnostics,
+                        onOpenWorlds = openWorlds,
+                        mode = IndoorFlowMode.SETTINGS,
+                    )
+                }
+                // Die Garage: gepusht vom Symbol in der Kopfzeile des Indoor-Tabs.
+                // Ohne [InsetPadded]: Die Seite loest ihre Insets wie der
+                // Indoor-Ablauf selbst auf (`IndoorPage`).
+                composable(AppRoutes.INDOOR_GARAGE) {
+                    GarageDestination(onBack = { navController.popBackStack() })
+                }
+                composable(AppRoutes.INDOOR_WORLDS) {
                     InsetPadded { IndoorWorldsDestination(onBack = { navController.popBackStack() }) }
                 }
-                composable(INDOOR_DIAGNOSTICS_ROUTE) {
+                composable(AppRoutes.INDOOR_DIAGNOSTICS) {
                     InsetPadded { IndoorDiagnosticsScreen(onBack = { navController.popBackStack() }) }
                 }
             }
@@ -576,16 +566,13 @@ private fun TrailscapeAppContent() {
                     horizontalMargin = 14.dp,
                     floating = !(onMap && mapSheetUnderNav),
                 ) {
-                    TopLevelDestination.entries.forEach { destination ->
-                        val selected = currentDestination?.hierarchy?.any {
-                            it.route == destination.route
-                        } == true
-
+                    SHELL_TABS.forEach { shellTab ->
+                        val look = tabLook(shellTab.tab)
                         OneUiNavigationBarItem(
-                            selected = selected,
-                            onClick = { navController.navigateToTab(destination.route) },
-                            icon = destination.icon,
-                            label = stringResource(destination.labelRes),
+                            selected = currentDestination.isOn(shellTab.route),
+                            onClick = { navController.navigateToTab(shellTab.route) },
+                            icon = look.icon,
+                            label = stringResource(look.labelRes),
                         )
                     }
                 }
@@ -677,5 +664,5 @@ private fun NavHostController.navigateToTab(route: String) {
  * Bereich doppelt stapelt.
  */
 private fun NavHostController.navigateToSettings() {
-    navigate(MORE_ROUTE) { launchSingleTop = true }
+    navigate(AppRoutes.MORE) { launchSingleTop = true }
 }

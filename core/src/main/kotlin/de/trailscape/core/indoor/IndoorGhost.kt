@@ -271,7 +271,16 @@ internal fun ghostRunner(spec: GhostSpec, route: IndoorRoute, rider: RiderSetup,
         GhostSpec.None -> null
         is GhostSpec.ConstantPower -> ConstantPowerGhost(route, rider, wind, spec.watts)
         is GhostSpec.PastRide -> pastRideCurve(route, spec.points)?.let { PastRideGhost(it, route) }
+        is GhostSpec.Shared -> PastRideGhost(spec.curve.toGhostCurve(), route)
     }
+
+/**
+ * Die Kurve einer eigenen Fahrt auf [route] als Herausforderung zum Teilen
+ * (`core/.../challenge`); `null`, wenn die Fahrt dafuer nicht taugt (zu kurz,
+ * ohne Zeitstempel, nicht auf der Strecke).
+ */
+fun challengeCurveOf(route: IndoorRoute, points: List<TrackPoint>): de.trailscape.core.challenge.ChallengeCurve? =
+    pastRideCurve(route, points)?.let { de.trailscape.core.challenge.ChallengeCurve.from(it) }
 
 /**
  * Stand des Geists relativ zum Fahrer. [GhostState.gapS] ist der Abstand

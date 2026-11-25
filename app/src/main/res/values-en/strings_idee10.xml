@@ -80,6 +80,6 @@
     <string name="indoor_i10_action_discard">Delete partial download</string>
     <string name="indoor_i10_action_choose">Select route</string>
     <string name="indoor_i10_action_chosen">Route selected. Continue with “Ride” at the bottom of the page.</string>
-    <string name="indoor_i10_hint_delete_installed">You delete a fully downloaded route in the indoor settings, where you can delete routes and free up storage.</string>
+    <string name="indoor_i10_hint_delete_installed">You delete a fully downloaded route under Settings → Indoor → Routes on this device, where you can delete routes and free up storage.</string>
     <string name="indoor_i10_detail_image_cd">Picture of the route %1$s</string>
 </resources>

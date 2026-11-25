@@ -29,24 +29,20 @@
 
     <!-- ExploreSheet.kt -->
     <string name="map_explore_search_placeholder">Where to?</string>
-    <string name="map_explore_round_trip_action">Loop from here</string>
+    <string name="map_explore_plan_route_action">Plan a route</string>
+    <string name="map_explore_build_loop_action">Build a loop</string>
     <string name="map_explore_saved_routes_label">Saved routes</string>
     <string name="map_explore_recent_label">Recent searches</string>
-    <string name="map_explore_map_label">Map</string>
-    <string name="map_explore_offline_title">Offline maps</string>
-    <string name="map_explore_offline_body">Download areas for riding without signal</string>
 
     <!-- LongPressHint.kt -->
-    <string name="map_long_press_hint_snackbar">Tip: Long-press the map to drop a pin – as a destination or the start of a loop.</string>
-    <string name="map_long_press_hint_line">Long-press the map: drop a pin</string>
+    <string name="map_long_press_hint_snackbar">Tip: Tap the map to drop a pin – as a destination or the start of a loop.</string>
+    <string name="map_long_press_hint_line">Tap the map: drop a pin</string>
 
     <!-- PlaceCard.kt -->
     <string name="map_place_close_cd">Close place</string>
     <string name="map_place_waypoint_action">As waypoint</string>
     <string name="map_place_route_here_action">Route here</string>
     <string name="map_place_round_trip_action">Loop from here</string>
-    <string name="map_place_add_waypoint_cd">Add place to the route as a waypoint</string>
-    <string name="map_place_add_waypoint_action">+ Waypoint</string>
     <string name="map_place_distance_away">%1$s km away</string>
 
     <!-- SearchSheet.kt -->
@@ -65,7 +61,7 @@
     <string name="map_search_failed_error">Place search failed.</string>
 
     <!-- RoundTripSetupSheet.kt -->
-    <string name="map_round_trip_title">Loop from here</string>
+    <string name="map_round_trip_title">Build a loop</string>
     <string name="map_round_trip_close_cd">Close</string>
     <string name="map_round_trip_length_cd">Loop length</string>
     <string name="map_round_trip_surface_mixed">Mixed</string>
@@ -93,7 +89,7 @@
     <!-- RouteGenerationSheet.kt -->
     <string name="map_generation_title">Matching loop</string>
     <string name="map_generation_discard_cd">Discard route suggestion</string>
-    <string name="map_generation_wind_tip">Tip: With “Consider wind” under “Loop from here” on the map, the search prefers loops with a tailwind on the way home.</string>
+    <string name="map_generation_wind_tip">Tip: With “Consider wind” under “Build a loop” on the map, the search prefers loops with a tailwind on the way home.</string>
     <string name="map_generation_map_center_hint">Your location wasn’t available – the loop starts at the centre of the map. “Search again” picks up the starting point afresh.</string>
     <string name="map_generation_offline_hint">Without signal, Trailscape also calculates on the device once the routing maps for this area are downloaded.</string>
     <string name="map_generation_locating_status">Finding your location …</string>
@@ -179,8 +175,8 @@
     <string name="map_compact_pause_cd">Pause recording</string>
     <string name="map_compact_end_action">End</string>
     <string name="map_compact_end_hold_hint">hold</string>
-    <string name="map_compact_data_action">Data</string>
-    <string name="map_compact_data_cd">To the ride mode data page</string>
+    <string name="map_compact_data_action">Ride mode</string>
+    <string name="map_compact_data_cd">Open ride mode</string>
     <string name="map_compact_speed_paused_value">Paused</string>
     <string name="map_compact_speed_auto_label">automatic</string>
     <string name="map_compact_speed_manual_label">recording</string>
@@ -232,7 +228,9 @@
     <string name="map_planning_remove_point_cd">Remove %1$s</string>
     <string name="map_planning_add_start_action">Add start</string>
     <string name="map_planning_add_point_action">Add point</string>
-    <string name="map_planning_add_point_hint">Search or long-press the map</string>
+    <string name="map_planning_add_point_hint">Search or tap the map</string>
+    <string name="map_planning_undo_cd">Undo: take back the last point</string>
+    <string name="map_planning_discard_action">Discard</string>
     <string name="map_planning_locating_status">Getting your location …</string>
     <string name="map_planning_use_position_action">My location as start</string>
     <string name="map_planning_surface_mixed">Mixed</string>
@@ -402,6 +400,8 @@
     <string name="map_screen_location_denied_notice">Location access was denied – you can’t continue here without it.</string>
     <string name="map_screen_location_imprecise_notice">Recording needs your precise location. In the prompt, choose “Precise” instead of “Approximate”.</string>
     <string name="map_screen_planning_cleared_status">Planning cleared.</string>
+    <string name="map_screen_planning_discarded_status">Planning discarded.</string>
+    <string name="map_screen_route_saved_status">Saved as a planned route. You’ll find it in History.</string>
     <string name="map_screen_round_trip_from_place">from %1$s</string>
     <string name="map_screen_round_trip_from_position">from your location</string>
     <string name="map_screen_route_name_title">Route name</string>

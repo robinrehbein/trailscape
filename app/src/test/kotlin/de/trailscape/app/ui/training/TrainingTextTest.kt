@@ -91,7 +91,7 @@ class TrainingTextTest {
         val note = prognosisNote(goalOn(today.plusWeeks(12)), prognosis(145, 128))
         assertEquals("Mit dem Plan kommst du bis zum Renntag auf ca. 2:08\u00A0h.", de(note.sentence))
         assertEquals("ca. 2:08\u00A0h", de(note.bold!!))
-        assertEquals("Das reicht für deine Zielzeit. Bleib bei den langen Fahrten dran.", de(note.hint!!))
+        assertEquals("Das reicht für deine Zielzeit. Bleib bei den langen Touren dran.", de(note.hint!!))
         // Die fette Zeit steht woertlich im Satz — sonst fande die Anzeige sie nicht.
         assertTrue(de(note.sentence).contains(de(note.bold!!)))
         assertTrue(en(note.sentence).contains(en(note.bold!!)))
@@ -99,7 +99,7 @@ class TrainingTextTest {
 
         val short = prognosisNote(goalOn(today.plusWeeks(12)), prognosis(150, 140))
         assertEquals(
-            "Für deine Zielzeit fehlen noch etwa 10 Min. Am meisten bringen die langen Fahrten.",
+            "Für deine Zielzeit fehlen noch etwa 10 Min. Am meisten bringen die langen Touren.",
             de(short.hint!!),
         )
         assertEquals(UiText.Res(R.string.training_goal_hint_short, listOf(10)), short.hint)

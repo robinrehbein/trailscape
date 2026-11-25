@@ -5,9 +5,6 @@
 -->
 <resources>
     <!-- IndoorFromRide.kt (ride detail) -->
-    <string name="idee01_detail_indoor_action">Ride indoors</string>
-    <string name="idee01_detail_indoor_ridden_hint">On the indoor trainer, with your outdoor ride as your riding partner.</string>
-    <string name="idee01_detail_indoor_planned_hint">Ride this planned route indoors on the trainer.</string>
     <!-- IndoorTexts.kt -->
     <string name="idee01_ghost_outdoor_label">Outdoor ride on %1$s</string>
     <!-- IndoorRideHud.kt -->

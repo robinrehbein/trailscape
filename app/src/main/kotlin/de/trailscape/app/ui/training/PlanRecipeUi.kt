@@ -36,7 +36,6 @@ import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.i18n.UiText
-import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.OneUiDialog
@@ -409,7 +408,7 @@ private fun ReadableRecipeDialog(appViewModel: AppViewModel, recipe: PlanRecipe)
                             listOf(recipe.title),
                         ),
                     )
-                    appViewModel.requestTab(AppTab.TRAINING)
+                    appViewModel.requestPlan()
                     PendingPlanRecipe.clear()
                 },
             ) {

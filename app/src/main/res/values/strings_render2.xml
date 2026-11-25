@@ -28,6 +28,7 @@
     <string name="render2_diag_bench_row">%1$s: Ø %2$.1f ms (%3$.0f B/s) · 1 %% niedrig %4$.1f ms (%5$.0f B/s) · GPU %6$s</string>
     <string name="render2_diag_bench_gpu_unknown">–</string>
     <string name="render2_diag_bench_note">Die Bildzeit ist durch die Obergrenze von 60 B/s begrenzt; die GPU-Zeit zeigt die Reserve (unter 16,7 ms = 60 B/s möglich).</string>
+    <string name="render2_diag_stat_trees">Bibliotheksbäume (nah / mittel / Dreiecke / Vorlagen)</string>
     <string name="render2_diag_res_title">Renderauflösung</string>
     <string name="render2_diag_res_surface">Zeichenfläche</string>
     <string name="render2_diag_res_dynamic">Dynamische Auflösung</string>

@@ -10,7 +10,7 @@
     <!-- ImportRecognition.kt: dialog after “Share”/“Open with” -->
     <string name="gpxplan_recognized_planned_title">Opened as a planned route</string>
     <string name="gpxplan_recognized_ridden_title">Imported as a ride</string>
-    <string name="gpxplan_recognized_planned_body">“%1$s” has no timestamps, so it is a route, not a ride. You can see it on the map and among your planned routes, and ride it. It does not count towards statistics, weekly progress or discovered tiles.</string>
+    <string name="gpxplan_recognized_planned_body">“%1$s” has no timestamps, so it is a planned route, not a ride. You can find it in History under “Planned”, and ride it. It does not count towards statistics, weekly progress or discovered tiles.</string>
     <string name="gpxplan_recognized_ridden_body">“%1$s” has timestamps, so it is a recording. It counts towards statistics, weekly progress and discovered tiles.</string>
     <string name="gpxplan_flip_to_ridden_action">Import as a ride</string>
     <string name="gpxplan_flip_to_planned_action">Open as a planned route</string>

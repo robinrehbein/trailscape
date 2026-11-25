@@ -62,7 +62,7 @@ class RiderModelTest {
             assertEquals(RiderNodes.SHANK_L, info.nodes[info.node(RiderNodes.FOOT_L)!!.parent!!].name)
             assertEquals(RiderNodes.CRANK, info.nodes[info.node(RiderNodes.PEDAL_R)!!.parent!!].name)
         }
-        assertEquals(RiderMat.entries.map { it.matName }, parseGlb(rider).materials.map { it.name })
+        assertEquals(RIDER_MATERIAL_NAMES, parseGlb(rider).materials.map { it.name })
         assertTrue(parseGlb(rider).materials.all { it.alphaMode == "OPAQUE" && it.metallicFactor == 0.0 && it.roughnessFactor >= 0.6 })
         val ghostMaterial = parseGlb(ghost).materials.single()
         assertEquals(GHOST_MATERIAL, ghostMaterial.name)
@@ -184,6 +184,7 @@ class RiderModelTest {
             writeIndoorModels(dir)
             assertContentEquals(rider, File(dir, WorldModels.RIDER).readBytes())
             assertContentEquals(ghost, File(dir, WorldModels.GHOST).readBytes())
+            assertContentEquals(buildRiderLodGlb(), File(dir, RiderModelFiles.RIDER_LOD).readBytes())
         } finally {
             dir.deleteRecursively()
         }
@@ -197,6 +198,7 @@ class RiderModelTest {
         val hint = "weicht von der Erzeugung ab — mit writeIndoorModels(File(\"${dir.path}\")) neu schreiben"
         assertTrue(File(dir, WorldModels.RIDER).readBytes().contentEquals(rider), "${WorldModels.RIDER} $hint")
         assertTrue(File(dir, WorldModels.GHOST).readBytes().contentEquals(ghost), "${WorldModels.GHOST} $hint")
+        assertTrue(File(dir, RiderModelFiles.RIDER_LOD).readBytes().contentEquals(buildRiderLodGlb()), "${RiderModelFiles.RIDER_LOD} $hint")
         assertTrue(File(dir, "LICENSES.md").isFile)
     }
 }

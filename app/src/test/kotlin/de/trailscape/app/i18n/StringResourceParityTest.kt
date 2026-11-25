@@ -42,6 +42,9 @@ class StringResourceParityTest {
         "strings_strava.xml" to "strava_",
         "strings_progress.xml" to "progress_",
         "strings_widget.xml" to "widget_",
+        // Etappe 1 „Erfolge" (docs/erfolge.md).
+        "strings_spiel1.xml" to "erfolge_",
+        "strings_spiel3.xml" to "spiel3_",
         "strings_idee07.xml" to "gpxplan_",
         // Indoor-Training: je Slice eine Datei (siehe docs/indoor.md, Abschnitt 3).
         "strings_indoor_app.xml" to "indoor_app_",
@@ -59,6 +62,8 @@ class StringResourceParityTest {
         // Idee 4: Strecke vor der Tour ansehen (docs/indoor/vorschau.md).
         "strings_idee04.xml" to "idee04_",
         "strings_render2.xml" to "render2_",
+        // Garage (Etappe 2, docs/konzept-spiel-community.md).
+        "strings_spiel2.xml" to "garage_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */

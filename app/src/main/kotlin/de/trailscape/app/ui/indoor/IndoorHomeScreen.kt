@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -94,6 +95,13 @@ private const val GHOST_WATTS_MAX = 1000
  *
  * [onGhostChange] bekommt bei „Frühere Fahrt" ein `PastRide` mit leerem Label
  * — das ViewModel setzt Namen und Datum selbst.
+ *
+ * ## Als Tab
+ * Im Tab „Indoor" (`IndoorTabScreen.kt`) ist diese Seite die Sicht
+ * „Strecken": [onBack] ist dann `null` (kein Zurueck-Pfeil), [title] der Name
+ * des Tabs, [headerExtra] traegt die Segmente, und das Zahnrad
+ * ([onOpenSettings]) oeffnet die eine Einstellungsseite der App. Daneben
+ * steht dann das Symbol der Garage ([onOpenGarage]).
  */
 @Composable
 fun IndoorHomeScreen(
@@ -104,7 +112,7 @@ fun IndoorHomeScreen(
     onModeChange: (IndoorMode) -> Unit,
     onGhostChange: (IndoorGhostOption) -> Unit,
     onRide: () -> Unit,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     onOpenPair: () -> Unit,
     onOpenSettings: () -> Unit,
     catalog: IndoorCatalogUi = IndoorCatalogUi(emptyList()),
@@ -121,6 +129,9 @@ fun IndoorHomeScreen(
     catalogExtras: IndoorCatalogExtras = IndoorCatalogExtras(),
     initialCatalogFilterOpen: Boolean = false,
     initialCatalogDetailId: String? = null,
+    title: String = stringResource(R.string.indoor_app_route_title),
+    headerExtra: (@Composable () -> Unit)? = null,
+    onOpenGarage: (() -> Unit)? = null,
 ) {
     val lang = LocalAppFormats.current.language.tag
     val readiness = indoorRouteReadiness(
@@ -131,9 +142,17 @@ fun IndoorHomeScreen(
     )
     val canRide = indoorCanRide(trainerIssue, route, readiness)
     IndoorPage(
-        title = stringResource(R.string.indoor_app_route_title),
+        title = title,
         onBack = onBack,
+        headerExtra = headerExtra,
         actions = {
+            // Garage: Fahrer und Rad anpassen (docs/indoor/garage.md) — der eine
+            // Einstieg, nur im Tab; im gepushten Ablauf ist [onOpenGarage] `null`.
+            if (onOpenGarage != null) {
+                IconButton(onClick = onOpenGarage) {
+                    Icon(Icons.Outlined.Palette, contentDescription = stringResource(R.string.garage_home_cd))
+                }
+            }
             IconButton(onClick = onOpenSettings) {
                 Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.indoor_app_home_settings_cd))
             }
@@ -493,6 +512,7 @@ private fun OptionsCard(
             IndoorGhostOption.None -> stringResource(R.string.indoor_app_ghost_none_body)
             is IndoorGhostOption.PastRide -> stringResource(R.string.indoor_app_ghost_past)
             is IndoorGhostOption.ConstantPower -> stringResource(R.string.indoor_app_ghost_power_label, g.watts)
+            is IndoorGhostOption.Challenge -> g.label
         },
     ).joinToString(" · ")
     Card(modifier = Modifier.fillMaxWidth().animateContentSize()) {
@@ -617,15 +637,20 @@ private fun RouteOptionRow(option: IndoorRouteOption, selected: Boolean, onSelec
 private fun GhostChooser(ui: IndoorRouteUi, onGhostChange: (IndoorGhostOption) -> Unit) {
     val ghost = ui.ghost
     // Ohne gefahrene Tour mit Zeitstempeln gibt es „Frühere Fahrt" nicht.
-    val labels = buildList {
+    val baseLabels = buildList {
         add(stringResource(R.string.indoor_app_ghost_none))
         if (ui.ghostPastRideAvailable) add(stringResource(R.string.indoor_app_ghost_past))
         add(stringResource(R.string.indoor_app_ghost_power))
     }
+    val powerIndex = baseLabels.lastIndex
+    // Eine gewählte Herausforderung bekommt einen eigenen Eintrag am Ende; gewählt wird sie im Segment „Herausforderungen".
+    val challengeIndex = if (ghost is IndoorGhostOption.Challenge) baseLabels.size else -1
+    val labels = if (challengeIndex >= 0) baseLabels + stringResource(R.string.spiel3_ghost_pill) else baseLabels
     val selectedIndex = when (ghost) {
         IndoorGhostOption.None -> 0
         is IndoorGhostOption.PastRide -> if (ui.ghostPastRideAvailable) 1 else 0
-        is IndoorGhostOption.ConstantPower -> labels.lastIndex
+        is IndoorGhostOption.ConstantPower -> powerIndex
+        is IndoorGhostOption.Challenge -> challengeIndex
     }
     PillSegments(
         options = labels,
@@ -635,6 +660,7 @@ private fun GhostChooser(ui: IndoorRouteUi, onGhostChange: (IndoorGhostOption) -
             val selectedRide = ui.selected as? IndoorRouteOption.Saved
             onGhostChange(
                 when {
+                    index == challengeIndex -> ghost
                     index == 0 -> IndoorGhostOption.None
                     index == pastIndex && selectedRide != null ->
                         IndoorGhostOption.PastRide(selectedRide.rideId, "")
@@ -648,6 +674,7 @@ private fun GhostChooser(ui: IndoorRouteUi, onGhostChange: (IndoorGhostOption) -
     when (ghost) {
         IndoorGhostOption.None -> MutedText(stringResource(R.string.indoor_app_ghost_none_body))
         is IndoorGhostOption.PastRide -> MutedText(stringResource(R.string.indoor_app_ghost_past_body))
+        is IndoorGhostOption.Challenge -> MutedText(stringResource(R.string.spiel3_ghost_challenge_body))
         is IndoorGhostOption.ConstantPower -> {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 IconButton(
