@@ -29,6 +29,9 @@ import java.nio.ByteOrder
  * entstehen die Assets). Eine Ausnahme darf nicht in den nativen Code zurueck: jeder Fehler
  * faellt auf den Ubershader zurueck, und das Material wird nicht wieder versucht.
  *
+ * **Nahdetail:** Fahrbahnen bekommen zusaetzlich eine Detailkarte je Belag ([SurfaceNearTextures],
+ * nur wenn das Material `nearMap`/`nearA…C` deklariert); es haengt am Schalter Boden-Detail.
+ *
  * **Laufzeit:** [apply] stellt Detail, Wind und Anisotropie auf allen lebenden Instanzen um
  * (Qualitaet, Schalter); [forget] vergisst die Instanzen eines Assets, bevor es zerstoert wird.
  */
@@ -43,6 +46,9 @@ internal class WorldMaterialProvider(
     private val materials = HashMap<WorldMaterialRules.Kind, Material>()
     private val failed = HashSet<WorldMaterialRules.Kind>()
     private var detailTexture: Texture? = null
+
+    /** Nahdetail der Fahrbahn (Karten aus `packages`, siehe [SurfaceNearDetail]). */
+    private val near = SurfaceNearTextures(engine, packages)
 
     /** Lebende eigene Instanzen: nativer Zeiger → (Art, Name). */
     private val live = HashMap<Long, Pair<MaterialInstance, Pair<WorldMaterialRules.Kind, String?>>>()
@@ -113,6 +119,7 @@ internal class WorldMaterialProvider(
         materials.clear()
         detailTexture?.let { runCatching { engine.destroyTexture(it) } }
         detailTexture = null
+        near.destroy()
     }
 
     override fun destroy() {
@@ -128,7 +135,7 @@ internal class WorldMaterialProvider(
         this.groundDetail = groundDetail
         this.wind = wind
         this.aniso = aniso
-        for ((mi, info) in live.values) runCatching { setSwitches(mi, info.first) }
+        for ((mi, info) in live.values) runCatching { setSwitches(mi, info.first, info.second) }
     }
 
     /** Vergisst die Instanzen, die mit einem Asset verschwinden (vor dessen Zerstoerung rufen). */
@@ -193,13 +200,14 @@ internal class WorldMaterialProvider(
                 mi.setParameter("detailMap", ensureDetailTexture(), detailSampler)
                 val c = WorldMaterialRules.detailClass(label)
                 mi.setParameter("detailClass", c[0], c[1], c[2], c[3])
+                near.setup(mi, label, groundDetail)
             }
             WorldMaterialRules.Kind.UBER -> Unit
         }
-        setSwitches(mi, kind)
+        setSwitches(mi, kind, label)
     }
 
-    private fun setSwitches(mi: MaterialInstance, kind: WorldMaterialRules.Kind) {
+    private fun setSwitches(mi: MaterialInstance, kind: WorldMaterialRules.Kind, label: String?) {
         when (kind) {
             WorldMaterialRules.Kind.TERRAIN ->
                 mi.setParameter("detailRange", if (groundDetail) SkyShading.TERRAIN_DETAIL_RANGE_M.toFloat() else 0f)
@@ -207,6 +215,7 @@ internal class WorldMaterialProvider(
             WorldMaterialRules.Kind.SURFACE, WorldMaterialRules.Kind.SURFACE_BLEND -> {
                 mi.setParameter("detailRange", if (groundDetail) SkyShading.SURFACE_DETAIL_RANGE_M.toFloat() else 0f)
                 mi.setParameter("anisoRange", if (aniso) SkyShading.SURFACE_ANISO_RANGE_M.toFloat() else 0f)
+                near.apply(mi, label, groundDetail)
             }
             WorldMaterialRules.Kind.UBER -> Unit
         }

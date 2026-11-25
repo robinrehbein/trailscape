@@ -13,6 +13,13 @@
 //    der Weltlage modulo 5,12 m (die Weltlage bleibt dank schwebendem Ursprung unter rund
 //    2,5 km — highp genuegt; gleiche Phase wie das Gelaende, weil Ursprung und Kacheln auf
 //    256 m = 50 × 5,12 m liegen).
+//  * Nahdetail der Fahrbahn (SurfaceNearDetail, Karten von nahdetail.py): je Belag eine
+//    kachelbare Karte in Weltkoordinaten (Gefaelle in R/G, Hoehe in B), in zwei Massstaeben
+//    (der zweite gedreht und 2,63-mal groesser, gegen sichtbare Wiederholung) — feine Koernung,
+//    Mikroschatten in Poren, Rauheit je Belag (Kornspitzen und Fahrspuren glatter). Dazu Relief
+//    aus dem Belagsbild selbst: Fugen, Risse und Steine der Belagstextur werden zu Rillen
+//    (Helligkeitsgefaelle → Normale, Richtung aus den Bildschirmableitungen von Lage und UV,
+//    ohne Tangenten). `nearA.x` = 0 schaltet alles ab (Randstreifen, „Bodendetails“ aus).
 //
 // Erzeugt von tool/indoor-dev/filament/surface-mats.py (nicht von Hand aendern), kompilieren:
 // tool/indoor-dev/filament/materials.sh (matc 1.75.1).
@@ -33,7 +40,11 @@ material {
         { type : float, name : detailStrength },
         { type : float, name : bumpStrength },
         { type : float, name : anisoRange },
-        { type : float, name : forestWarmth }
+        { type : float, name : forestWarmth },
+        { type : sampler2d, name : nearMap, precision : medium },
+        { type : float4, name : nearA },
+        { type : float4, name : nearB },
+        { type : float4, name : nearC }
     ],
     shadingModel : lit,
     blending : opaque,
@@ -73,6 +84,12 @@ fragment {
         float ar = materialParams.anisoRange;
         float near = ar > 0.0 ? 1.0 - smoothstep(ar * 0.7, ar, dist) : 0.0;
         vec4 c = sampleAniso(uv, near) * materialParams.baseColorFactor * getColor();
+        // Bildschirmableitungen fuer das Relief, vor jeder Verzweigung (in ungleichfoermigem
+        // Kontrollfluss sind dFdx/dFdy undefiniert).
+        highp vec3 dp1 = dFdx(wp);
+        highp vec3 dp2 = dFdy(wp);
+        highp vec2 du1 = dFdx(uv);
+        highp vec2 du2 = dFdy(uv);
 
         // Waldboden waermer (wie terrain.mat): Randstreifen im Wald sind ans kuehle Luftbild angeglichen.
         vec4 cls0 = materialParams.detailClass;
@@ -85,6 +102,9 @@ fragment {
         c.rgb = mix(c.rgb, vec3(lumc) * vec3(1.12, 1.06, 0.66) * 1.05, 0.65 * cool * step(0.001, materialParams.forestWarmth));
 
         vec3 nTs = vec3(0.0, 0.0, 1.0);
+        vec3 nGeo = normalize(getWorldTangentFrame()[2]);
+        vec3 pW = vec3(0.0);
+        float rough = materialParams.roughnessFactor;
         vec4 cls = materialParams.detailClass;
         float range = materialParams.detailRange;
         float fade = range > 0.0 ? 1.0 - smoothstep(range * 0.55, range, dist) : 0.0;
@@ -100,16 +120,75 @@ fragment {
             float gx = dot(hx - h0, cls);
             float gy = dot(hy - h0, cls);
             c.rgb *= max(1.0 + materialParams.detailStrength * fade * (h - 0.5) * 2.0, 0.0);
-            vec3 nGeo = normalize(getWorldTangentFrame()[2]);
-            vec3 p = -(gx * vec3(1.0, 0.0, 0.0) + gy * vec3(0.0, 0.0, 1.0)) * (materialParams.bumpStrength * fade);
-            p -= dot(p, nGeo) * nGeo;
-            vec3 nW = normalize(nGeo + p);
+            pW -= (gx * vec3(1.0, 0.0, 0.0) + gy * vec3(0.0, 0.0, 1.0)) * (materialParams.bumpStrength * fade);
+        }
+
+        // Nahdetail der Fahrbahn
+        vec4 nA = materialParams.nearA;  // Reichweite m, Normale, Helligkeit, Relief aus dem Belagsbild
+        if (nA.x > 0.0) {
+            vec4 nB = materialParams.nearB;  // Meter je Karte, Rauheit, Rauheit-Variation, Spurglanz
+            vec4 nC = materialParams.nearC;  // Spurlage u, Relief-Reichweite m, Relief-Abstand in Texeln, Relief-Mip mindestens
+            rough = nB.y;
+            float nf = 1.0 - smoothstep(nA.x * 0.55, nA.x, dist);
+            float rf = 1.0 - smoothstep(nC.y * 0.55, nC.y, dist);
+            // Fahrspuren der Zweispur-Wege (u quer, Wegmitte bei u = 0,5): verdichtet, glatter
+            float track = 0.0;
+            if (nC.x > 0.0) {
+                float du = (abs(fract(uv.x) - 0.5) - nC.x) / 0.09;
+                track = exp(-du * du);
+            }
+            rough -= nB.w * track;
+            if (nf > 0.001) {
+                highp vec2 w = getUserWorldPosition().xz;
+                // zweiter Massstab 37° gedreht, 2,63-mal groesser: bricht das Kachelmuster
+                const mat2 rot = mat2(0.7986, 0.6018, -0.6018, 0.7986);
+                highp vec2 q1 = w / nB.x;
+                highp vec2 q2 = (rot * w) / (nB.x * 2.63);
+                vec3 d1 = texture(materialParams_nearMap, q1).rgb;
+                vec3 d2 = texture(materialParams_nearMap, q2).rgb;
+                vec2 g = (d1.rg - 0.5) + 0.55 * (transpose(rot) * (d2.rg - 0.5));
+                float h = (d1.b - 0.5) + 0.55 * (d2.b - 0.5);
+                float k = nf * (1.0 - 0.45 * track);
+                c.rgb *= max(1.0 + nA.z * k * h * 2.0, 0.0);
+                pW -= (g.x * vec3(1.0, 0.0, 0.0) + g.y * vec3(0.0, 0.0, 1.0)) * (2.0 * nA.y * k);
+                rough -= nB.z * nf * h;
+            }
+            if (rf > 0.001 && nA.w > 0.0) {
+                // Relief aus dem Belagsbild: Helligkeitsgefaelle (dunkel = tief), zentrale
+                // Differenzen ueber ±nC.z Texel (breitere Fasen an Steinkanten, glatte Kuppen)
+                // (Mip-Stufe explizit: mindestens nC.w, damit Sprenkel im Stein die Flaeche nicht
+                // kippen; textureLod ist auch in ungleichfoermigen Verzweigungen definiert).
+                highp vec2 bts = vec2(textureSize(materialParams_baseColorMap, 0));
+                highp vec2 o = nC.z / bts;
+                float lod = max(0.5 * log2(max(max(dot(du1 * bts, du1 * bts), dot(du2 * bts, du2 * bts)), 1e-8)), nC.w);
+                const vec3 lw = vec3(0.2126, 0.7152, 0.0722);
+                float lu = dot(textureLod(materialParams_baseColorMap, uv + vec2(o.x, 0.0), lod).rgb, lw);
+                float lu0 = dot(textureLod(materialParams_baseColorMap, uv - vec2(o.x, 0.0), lod).rgb, lw);
+                float lv = dot(textureLod(materialParams_baseColorMap, uv + vec2(0.0, o.y), lod).rgb, lw);
+                float lv0 = dot(textureLod(materialParams_baseColorMap, uv - vec2(0.0, o.y), lod).rgb, lw);
+                float inv = 0.5 / max(0.25 * (lu + lu0 + lv + lv0), 0.03);
+                // Richtung von u und v in der Welt (Kotangenten-Rahmen aus den Ableitungen)
+                vec3 dp2p = cross(dp2, nGeo);
+                vec3 dp1p = cross(nGeo, dp1);
+                vec3 tU = dp2p * du1.x + dp1p * du2.x;
+                vec3 tV = dp2p * du1.y + dp1p * du2.y;
+                tU *= inversesqrt(max(dot(tU, tU), 1e-20));
+                tV *= inversesqrt(max(dot(tV, tV), 1e-20));
+                pW -= ((lu - lu0) * tU + (lv - lv0) * tV) * (2.0 * inv * nA.w * rf);
+            }
+        }
+        if (dot(pW, pW) > 0.0) {
+            pW -= dot(pW, nGeo) * nGeo;
+            vec3 nW = normalize(nGeo + pW);
+            // Fahrbahn: gekippte Normalen dunkeln im Mittel ab (cos des Kippwinkels); ausgleichen,
+            // damit beim Ausblenden in der Ferne kein Helligkeitsverlauf entsteht.
+            if (nA.x > 0.0) c.rgb *= 1.0 / max(dot(nW, nGeo), 0.55);
             nTs = vec3(dot(nW, getWorldTangentFrame()[0]), dot(nW, getWorldTangentFrame()[1]), dot(nW, getWorldTangentFrame()[2]));
         }
         material.normal = nTs;
         prepareMaterial(material);
         material.baseColor = vec4(c.rgb, 1.0);
         material.metallic = 0.0;
-        material.roughness = materialParams.roughnessFactor;
+        material.roughness = clamp(rough, 0.45, 1.0);
     }
 }

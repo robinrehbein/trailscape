@@ -283,8 +283,11 @@ internal class RouteEnv(val ctx: TileContext) {
                     p.inner[side] = 1.8; p.end[side] = 6.0
                 }
             }
+            // Farbe des Streifens ohne Luftbild, absolut (linear): Abtoenung × Textur, wie sie bis
+            // `indoor-world/11` aussah (DEFAULT_TINT war gegen die damaligen, dunkleren Texturen gewaehlt).
             val t = DEFAULT_TINT.getValue(land)
-            p.tint[side][0] = t[0]; p.tint[side][1] = t[1]; p.tint[side][2] = t[2]
+            val base = LEGACY_VERGE_MEAN.getValue(p.verge[side]!!)
+            for (c in 0..2) p.tint[side][c] = t[c] * base[c]
             // Luftbildfarbe ein Stueck draussen (nicht auf der echten Strasse im Bild), in die Kachel geklemmt.
             val off = (hw + p.shoulderW[side] + max(1.5, p.inner[side] * 0.8)) * sgn
             val s = ctx.spec
@@ -304,6 +307,9 @@ internal class RouteEnv(val ctx: TileContext) {
                     }
                 }
                 p.aerial[side] = near
+                // Ueber kahlem Boden, Fels, Schotter oder Pflaster (kaum Gruen im Luftbild, nicht im Schatten)
+                // ist der Rand kein Gras: Schotter-/Erdtextur in der Farbe des Bodens statt eines gruenen Bands.
+                if (p.verge[side] == RouteTextures.Verge.GRASS && isBareGround(near)) p.verge[side] = RouteTextures.Verge.SHOULDER
             }
         }
         p.nearRoad = roads.roads.isNotEmpty() && roads.clearance(ce, cn) < hw + 14.0
@@ -414,7 +420,49 @@ internal class RouteEnv(val ctx: TileContext) {
         /** Laufmeter-Abstand, ab dem ein Streckenteil als „anderer" gilt. */
         const val OTHER_GAP_M = 50.0
 
-        /** Abtoenung der Randtextur ohne Luftbild (die Texturen sind hell gemalt, damit die Farbe auch aufhellen kann). */
+        /**
+         * Mittlere Farben der Randtexturen bis `indoor-world/11`: [DEFAULT_TINT] ist gegen sie gewaehlt, die Grundfarbe
+         * des Streifens (Abtoenung × Textur) bleibt dadurch dieselbe, obwohl die Texturen jetzt heller sind.
+         */
+        val LEGACY_VERGE_MEAN: Map<RouteTextures.Verge, FloatArray> = mapOf(
+            RouteTextures.Verge.GRASS to floatArrayOf(0.190f, 0.270f, 0.080f),
+            RouteTextures.Verge.FOREST to floatArrayOf(0.147f, 0.119f, 0.080f),
+            RouteTextures.Verge.SHOULDER to floatArrayOf(0.170f, 0.150f, 0.115f),
+            RouteTextures.Verge.SIDEWALK to floatArrayOf(0.300f, 0.295f, 0.280f),
+        )
+
+        private fun lum(c: FloatArray): Double = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+        /**
+         * Boden ohne Bewuchs im Luftbild (linear): kaum Gruenueberschuss und nicht im Schatten. Trockene Wiese
+         * (Gruenueberschuss um 0,12) bleibt Gras; Kalkfels, Erde, Winterfeld, Pflaster liegen unter 0,05.
+         */
+        fun isBareGround(a: FloatArray): Boolean {
+            val sum = a[0] + a[1] + a[2]
+            if (sum <= 1e-4f || lum(a) < 0.11) return false
+            return (2 * a[1] - a[0] - a[2]) / sum < 0.05f
+        }
+
+        /**
+         * Zielfarbe des Streifens (linear) aus seiner Grundfarbe [base] und dem Luftbild daneben [aerial]: die Farbe
+         * des Luftbilds, seine Helligkeit auf das 0,55- bis 2,8-Fache der Grundfarbe begrenzt (ein heller Wagen
+         * oder eine dunkle Hecke im Bild faerbt den Streifen nicht weiss oder schwarz). Bis `indoor-world/11` war
+         * jeder Kanal auf das 0,5- bis 1,7-Fache begrenzt — der Farbton blieb gruen, auch neben Fels.
+         * Waldboden ([forest]) wird nie dunkler als 85 % der Grundfarbe (das Luftbild zeigt die Kronen).
+         */
+        fun vergeTarget(base: FloatArray, aerial: FloatArray, forest: Boolean): DoubleArray {
+            val lb = max(1e-4, lum(base))
+            val la = max(1e-4, lum(aerial))
+            val k = la.coerceIn(lb * 0.55, lb * 2.8) / la
+            val out = DoubleArray(3) { aerial[it] * k }
+            if (forest) {
+                val lo = 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2]
+                if (lo < lb * 0.85) for (c in 0..2) out[c] = out[c] * lb * 0.85 / max(1e-4, lo)
+            }
+            return out
+        }
+
+        /** Abtoenung der Randtextur ohne Luftbild, bezogen auf [LEGACY_VERGE_MEAN]. */
         val DEFAULT_TINT: Map<LandClass, FloatArray> = mapOf(
             LandClass.MEADOW to floatArrayOf(0.60f, 0.62f, 0.58f),
             LandClass.PARK to floatArrayOf(0.52f, 0.63f, 0.50f),
@@ -810,7 +858,9 @@ private class RouteEmitter(
             if (s0 == EdgeStyle.BANKETT && s1 == EdgeStyle.BANKETT) {
                 val m = shoulderMesh()
                 strip(lanes[base], m, j, 2) { st ->
-                    val col = roadColor(st)
+                    // Bankett: Farbe der Fahrbahn auf der (seit indoor-world/12 helleren) Schottertextur — auf
+                    // deren alte Helligkeit zurueckgerechnet, sonst stand ein weisser Streifen neben dem Belag.
+                    val col = shoulderTone(roadColor(st))
                     val slope = sgn * (st.h2[side] - st.h1[side]) / max(0.05, st.t2[side] - st.hw)
                     val v = (st.dist - runStartDist) / 2.56
                     if (side == 0) {
@@ -853,8 +903,8 @@ private class RouteEmitter(
         var cr = cl
         if (sec.kind.visual == SurfaceKind.GRASS) {
             // Ein Wiesenweg hat die Farbe der Wiese, durch die er fuehrt.
-            cl = vergeColor(st, 0, RouteTextures.Verge.GRASS, 0.7, alpha)
-            cr = vergeColor(st, 1, RouteTextures.Verge.GRASS, 0.7, alpha)
+            cl = vergeColor(st, 0, RouteTextures.Verge.GRASS, 0.7, alpha, RouteTextures.GRASS_WAY_MEAN)
+            cr = vergeColor(st, 1, RouteTextures.Verge.GRASS, 0.7, alpha, RouteTextures.GRASS_WAY_MEAN)
             cc = Argb.mix(cl, cr, 0.5)
         }
         val i0 = vert(m, st, -st.hw, roadH(st, st.hw) + lift, st.crown, 0.5 + (-st.hw + shift) / spec.widthM, v, cl)
@@ -967,32 +1017,33 @@ private class RouteEmitter(
         }
     }
 
-    /** Farbe des Uebergangsstreifens: Abtoenung, je weiter draussen desto staerker am Luftbild. */
-    private fun vergeColor(st: Station, side: Int, kind: RouteTextures.Verge, strength: Double, alpha: Double): Int {
+    private fun shoulderTone(c: Int): Int {
+        val old = RouteEnv.LEGACY_VERGE_MEAN.getValue(RouteTextures.Verge.SHOULDER)
+        val now = RouteTextures.Verge.SHOULDER.meanLinear
+        fun ch(v: Int, k: Int) = (v * old[k] / now[k] + 0.5f).toInt().coerceIn(0, 255)
+        return Argb.of(Argb.alpha(c), ch(Argb.red(c), 0), ch(Argb.green(c), 1), ch(Argb.blue(c), 2))
+    }
+
+    /**
+     * Farbe des Uebergangsstreifens (Vertexfarbe zur Textur [kind]): Grundfarbe der Landnutzung, je weiter
+     * draussen ([strength]) desto staerker an der Farbe des Luftbilds daneben ([RouteEnv.vergeTarget]).
+     */
+    private fun vergeColor(st: Station, side: Int, kind: RouteTextures.Verge, strength: Double, alpha: Double, mean: FloatArray = kind.meanLinear): Int {
         val t = st.tint[side]
         val tone = 0.88 + 0.12 * st.tone
         var r = t[0].toDouble()
         var g = t[1].toDouble()
         var b = t[2].toDouble()
         if (st.hasAerial[side]) {
-            val a = st.aerial[side]
-            val m = kind.meanLinear
-            if (kind == RouteTextures.Verge.GRASS) {
-                // Gras nimmt Farbe und Helligkeit des Luftbilds an (Wiese, Rain und Rasen sehen von oben aus wie von nah).
-                r += ((a[0] / m[0]).toDouble().coerceIn(r * 0.5, r * 1.7) - r) * strength
-                g += ((a[1] / m[1]).toDouble().coerceIn(g * 0.5, g * 1.7) - g) * strength
-                b += ((a[2] / m[2]).toDouble().coerceIn(b * 0.5, b * 1.7) - b) * strength
-            } else {
-                // Waldboden und Schotter: frueher nur zum Rand hin (Staerke hoch drei) ans Luftbild angeglichen —
-                // solange der Streifen durchschien, passte das. Deckend stand er dunkelbraun und hart begrenzt neben
-                // Weg und Boden. Jetzt wie Gras an die Farbe des Bodens daneben angeglichen, etwas weniger stark.
-                val s = strength * 0.85
-                r += ((a[0] / m[0]).toDouble().coerceIn(r * 0.4, r * 2.0) - r) * s
-                g += ((a[1] / m[1]).toDouble().coerceIn(g * 0.4, g * 2.0) - g) * s
-                b += ((a[2] / m[2]).toDouble().coerceIn(b * 0.4, b * 2.0) - b) * s
-            }
+            val target = RouteEnv.vergeTarget(t, st.aerial[side], kind == RouteTextures.Verge.FOREST)
+            // Waldboden: Das Luftbild zeigt dort die Kronen, nicht den Boden — nur zur Haelfte angleichen.
+            val s = if (kind == RouteTextures.Verge.FOREST) strength * 0.5 else strength
+            r += (target[0] - r) * s
+            g += (target[1] - g) * s
+            b += (target[2] - b) * s
         }
-        return RouteGeometry.linColor(min(1.0, r * tone), min(1.0, g * tone), min(1.0, b * tone), alpha.coerceIn(0.0, 1.0))
+        val m = mean
+        return RouteGeometry.linColor(min(1.0, r / m[0] * tone), min(1.0, g / m[1] * tone), min(1.0, b / m[2] * tone), alpha.coerceIn(0.0, 1.0))
     }
 
     /**

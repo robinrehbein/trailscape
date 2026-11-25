@@ -61,6 +61,10 @@
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+// Nahdetail-Karten der Belaege (JPEG); eigene, statische Kopie — Filaments libstb bleibt unberuehrt.
+#define STB_IMAGE_STATIC
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 using namespace filament;
 using namespace filament::math;
@@ -181,6 +185,15 @@ static Kind kindFor(const std::string& l, gltfio::AlphaMode a, bool tex, bool un
     return UBER;
 }
 
+// Spiegel von SurfaceNearDetail.keyFor (Kotlin, getestet): Belag der Fahrbahn aus dem
+// Materialnamen (`mat_route_<belag>`, `x_mat_road_<belag>`), sonst leer (Randstreifen usw.).
+static std::string nearKey(const std::string& l, const json& kinds) {
+    std::string k;
+    if (startsWith(l, "mat_route_")) k = l.substr(10);
+    else if (startsWith(l, "x_mat_road_")) k = l.substr(11);
+    return kinds.contains(k) ? k : std::string();
+}
+
 // Spiegel von WorldMaterialRules.detailClass: Gewichte Wiese, Erde, Waldboden, Schotter.
 static float4 detailClass(const std::string& l) {
     if (l.find("verge_grass") != std::string::npos) return { 1, 0, 0, 0 };
@@ -248,11 +261,27 @@ int main(int argc, char** argv) {
     const bool post = opt(settings, "postProcessing", true);
     const bool ao = opt(settings, "ambientOcclusion", false);
     const bool bloom = opt(settings, "bloom", false);
+    // Bildentstehung (Branch indoor-renderqualitaet, FilamentCore/RenderQuality.kt): alle
+    // Vorgaben = Stand davor, damit Vorher-Bilder gleich bleiben.
+    const bool reflections = opt(settings, "reflections", false);   // Spiegelungs-IBL aus reflections.bin
+    const bool taa = opt(settings, "taa", false);                   // zeitliche Kantenglaettung statt MSAA
+    const int effectQuality = opt(settings, "effectQuality", 0);    // 0 LOW, 1 MEDIUM, 2 HIGH (SSAO, Bloom)
+    const bool contactShadows = opt(settings, "contactShadows", false);
+    const int cascades = opt(settings, "cascades", 3);
+    const bool stableShadows = opt(settings, "stableShadows", false);
+    // Java-Vorgabe von ShadowOptions.lispsm ist false (C++: true) — die App setzt es nicht.
+    const bool lispsm = opt(settings, "lispsm", false);
+    const bool vignette = opt(settings, "vignette", false);
+    const bool whiteBalance = opt(settings, "whiteBalance", false);
+    const bool terrainShadows = opt(settings, "terrainShadows", false);  // Gelaende wirft Schatten
+    const float shadowFarM = opt(settings, "shadowFarM", 300);
     const int W = S["width"], H = S["height"];
     const double timeS = opt(S, "timeS", 0.0);
 
     auto t0 = std::chrono::steady_clock::now();
-    Engine* engine = Engine::create(Engine::Backend::OPENGL);
+    // FILARENDER_BACKEND=vulkan: lavapipe statt llvmpipe-GL (Schattenvergleich, siehe docs/indoor/render.md)
+    const char* be = getenv("FILARENDER_BACKEND");
+    Engine* engine = Engine::create(be && std::string(be) == "vulkan" ? Engine::Backend::VULKAN : Engine::Backend::OPENGL);
     if (!engine) return 4;
     SwapChain* sc = engine->createSwapChain(W, H, SwapChain::CONFIG_READABLE);
     Renderer* renderer = engine->createRenderer();
@@ -278,13 +307,23 @@ int main(int argc, char** argv) {
     {
         LightManager::ShadowOptions so;
         so.mapSize = 2048;
-        so.shadowCascades = 3;
+        so.shadowCascades = (uint8_t)cascades;
         so.cascadeSplitPositions[0] = 0.05f;
         so.cascadeSplitPositions[1] = 0.2f;
-        so.shadowFar = 300.f;
-        so.shadowFarHint = 300.f;
+        if (cascades >= 4) {
+            // RenderQuality.cascadeSplits: 8 m, 30 m, 100 m (Anteile der Reichweite)
+            so.cascadeSplitPositions[0] = 8.f / shadowFarM;
+            so.cascadeSplitPositions[1] = 30.f / shadowFarM;
+            so.cascadeSplitPositions[2] = 100.f / shadowFarM;
+        }
+        so.shadowFar = shadowFarM;
+        so.shadowFarHint = shadowFarM;
         so.shadowNearHint = 1.f;
-        so.stable = false;
+        so.stable = stableShadows;
+        so.lispsm = lispsm;
+        so.screenSpaceContactShadows = contactShadows;
+        so.stepCount = 8;
+        so.maxShadowDistance = 0.5f;
         const double3 enu = d3(K["sunDirEnu"]);
         const float3 toSun = normalize(float3{ float(enu.x), float(enu.z), float(-enu.y) });
         LightManager::Builder(LightManager::Type::SUN)
@@ -307,7 +346,28 @@ int main(int argc, char** argv) {
     // FilamentCore nutzt radiance(3, sh); in C++ heisst das irradiance(bands, sh) mit Strahldichte-SH
     // (Filament multipliziert intern mit A[i], siehe IndirectLight.cpp).
     {
-        IndirectLight* r = IndirectLight::Builder().radiance(3, sh).intensity(K["ambientLux"].get<float>()).build(*engine);
+        IndirectLight::Builder ib;
+        ib.radiance(3, sh).intensity(K["ambientLux"].get<float>());
+        if (reflections && K.contains("reflectionsSize")) {
+            // Vorgefilterte Mip-Kette aus SkyReflections (wie FilamentCore.buildReflections)
+            const int rs = K["reflectionsSize"], rl = K["reflectionsLevels"];
+            auto raw = readFile(skyDir + "/reflections.bin");
+            Texture* rt = Texture::Builder().width(rs).height(rs).levels(rl).sampler(Texture::Sampler::SAMPLER_CUBEMAP)
+                              .format(Texture::InternalFormat::R11F_G11F_B10F).build(*engine);
+            size_t off = 0;
+            for (int lv = 0; lv < rl; lv++) {
+                const int n = std::max(1, rs >> lv);
+                const size_t bytes = size_t(6) * n * n * 3 * 2;
+                auto* buf = new uint8_t[bytes];
+                memcpy(buf, raw.data() + off, bytes);
+                off += bytes;
+                rt->setImage(*engine, lv, 0, 0, 0, n, n, 6,
+                    Texture::PixelBufferDescriptor(buf, bytes, Texture::Format::RGB, Texture::Type::HALF,
+                        [](void* b, size_t, void*) { delete[] (uint8_t*)b; }));
+            }
+            ib.reflections(rt);
+        }
+        IndirectLight* r = ib.build(*engine);
         engine->destroy(ibl);
         ibl = r;
     }
@@ -406,12 +466,27 @@ int main(int argc, char** argv) {
     view->setPostProcessingEnabled(post);
     {
         View::MultiSampleAntiAliasingOptions m;
-        m.enabled = true;
+        m.enabled = !taa;
         m.sampleCount = 4;
         view->setMultiSampleAntiAliasingOptions(m);
         view->setAntiAliasing(View::AntiAliasing::NONE);
+        View::TemporalAntiAliasingOptions t;
+        t.enabled = taa;
+        // RenderQuality.taa: etwas mehr Rueckfuehrung gegen Laubflimmern, Varianz-Box gegen Schlieren
+        t.feedback = 0.1f;
+        t.boxType = View::TemporalAntiAliasingOptions::BoxType::AABB_VARIANCE;
+        t.sharpness = 0.25f;
+        view->setTemporalAntiAliasingOptions(t);
     }
-    view->setShadowType(shadows ? View::ShadowType::DPCF : View::ShadowType::PCF);
+    const View::QualityLevel fxq = effectQuality >= 2 ? View::QualityLevel::HIGH : effectQuality == 1 ? View::QualityLevel::MEDIUM : View::QualityLevel::LOW;
+    {
+        // Wie FilamentCore: PCF; DPCF (in 1.75.1 veraltet, faellt auf PCSS = EVSM zurueck) zum Vergleich.
+        // Vorgabe PCF wie die App seit dem Geraetebefund (DPCF/PCSS zeigten keine Schatten).
+        const std::string st = opt<std::string>(settings, "shadowType", "PCF");
+        View::ShadowType t = st == "PCF" ? View::ShadowType::PCF : st == "PCSS" ? View::ShadowType::PCSS
+            : st == "VSM" ? View::ShadowType::VSM : st == "PCFd" ? View::ShadowType::PCFd : View::ShadowType::DPCF;
+        view->setShadowType(shadows ? t : View::ShadowType::PCF);
+    }
     {
         View::SoftShadowOptions s;
         s.penumbraScale = 1.5f;
@@ -424,11 +499,27 @@ int main(int argc, char** argv) {
         a.enabled = ao;
         a.radius = 0.4f;
         a.intensity = 1.f;
+        if (effectQuality >= 1) {
+            // RenderQuality.ambientOcclusion
+            a.quality = fxq;
+            a.lowPassFilter = fxq;
+            a.upsampling = fxq;
+            a.radius = effectQuality >= 2 ? 0.55f : 0.5f;
+            a.intensity = 0.9f;  // wie RenderQuality.applyAmbientOcclusion
+        }
         view->setAmbientOcclusionOptions(a);
         View::BloomOptions b;
         b.enabled = bloom;
         b.strength = opt(L, "bloomStrength", 0.08f);
+        if (effectQuality >= 1) b.quality = fxq;
         view->setBloomOptions(b);
+        View::VignetteOptions vo;
+        vo.enabled = vignette;
+        vo.midPoint = 0.6f;
+        vo.roundness = 0.4f;
+        vo.feather = 0.6f;
+        vo.color = { 0.f, 0.f, 0.f, 1.f };
+        view->setVignetteOptions(vo);
     }
     // Tonwertabbildung und Farbgebung der Stimmung (fehlt: Filaments Standard ACES_LEGACY)
     ColorGrading* grading = nullptr;
@@ -448,7 +539,8 @@ int main(int argc, char** argv) {
             .contrast(opt(L, "contrast", 1.f))
             .vibrance(opt(L, "vibrance", 1.f))
             .saturation(opt(L, "saturation", 1.f))
-            .whiteBalance(opt(L, "temperature", 0.f), opt(L, "tint", 0.f));
+            .whiteBalance(whiteBalance ? opt(L, "wbTemperature", 0.f) : opt(L, "temperature", 0.f),
+                whiteBalance ? opt(L, "wbTint", 0.f) : opt(L, "tint", 0.f));
         if (L.contains("shadowsTint")) {
             gb.shadowsMidtonesHighlights(float4{ f3(L["shadowsTint"]), 0.f }, float4{ 1, 1, 1, 0 }, float4{ 1, 1, 1, 0 }, float4{ 0.f, 0.333f, 0.55f, 1.f });
         }
@@ -506,6 +598,54 @@ int main(int argc, char** argv) {
         wp->mats[SURFACE] = loadMaterial(engine, matDir + "/surface.filamat");
         wp->mats[SURFACE_BLEND] = loadMaterial(engine, matDir + "/surface_blend.filamat");
     }
+    // Nahdetail der Fahrbahn (surface.mat, SurfaceNearDetail in der App): Karten und Parameter
+    // aus assets/indoor/surface-detail (nahdetail.py). `settings.nearDetail` = false nur fuer
+    // Vorher-Bilder; `groundDetail` = false schaltet es wie auf dem Geraet ab.
+    json nearMeta;
+    std::map<std::string, Texture*> nearMaps;
+    const bool nearDetail = opt(settings, "nearDetail", true) && groundDetail;
+    const std::string nearDir = matDir.empty() ? std::string() : matDir + "/../surface-detail";
+    if (wp->mats[SURFACE] && std::ifstream(nearDir + "/detail.json")) nearMeta = readJson(nearDir + "/detail.json");
+    auto makeTex = [&](int w, int h, const uint8_t* rgba) {
+        auto* buf = new uint8_t[size_t(w) * h * 4];
+        memcpy(buf, rgba, size_t(w) * h * 4);
+        Texture* t = Texture::Builder().width(w).height(h).levels(0xff).sampler(Texture::Sampler::SAMPLER_2D)
+                         .usage(Texture::Usage::DEFAULT | Texture::Usage::GEN_MIPMAPPABLE)
+                         .format(Texture::InternalFormat::RGBA8).build(*engine);
+        t->setImage(*engine, 0, Texture::PixelBufferDescriptor(buf, size_t(w) * h * 4, Texture::Format::RGBA, Texture::Type::UBYTE,
+                                    [](void* b, size_t, void*) { delete[] (uint8_t*)b; }));
+        t->generateMipmaps(*engine);
+        return t;
+    };
+    auto nearMap = [&](const std::string& map) -> Texture* {
+        auto it = nearMaps.find(map);
+        if (it != nearMaps.end()) return it->second;
+        Texture* t = nullptr;
+        if (!map.empty()) {
+            auto raw = readFile(nearDir + "/" + nearMeta["maps"][map]["file"].get<std::string>());
+            int w = 0, h = 0, ch = 0;
+            uint8_t* px = stbi_load_from_memory(raw.data(), (int)raw.size(), &w, &h, &ch, 4);
+            if (px) { t = makeTex(w, h, px); stbi_image_free(px); }
+        }
+        if (!t) {  // wie die App: immer etwas gebunden (neutral: kein Gefaelle, mittlere Hoehe)
+            const uint8_t flat[4] = { 128, 128, 128, 255 };
+            t = makeTex(1, 1, flat);
+        }
+        nearMaps[map] = t;
+        return t;
+    };
+    auto setupNear = [&](MaterialInstance* mi, const std::string& label) {
+        std::string key = nearMeta.is_null() ? std::string() : nearKey(label, nearMeta["kinds"]);
+        if (key.empty() || !nearDetail) {
+            mi->setParameter("nearMap", nearMap(""), detailSampler);
+            return;
+        }
+        const json& k = nearMeta["kinds"][key];
+        mi->setParameter("nearMap", nearMap(k["map"].get<std::string>()), detailSampler);
+        mi->setParameter("nearA", float4{ nearMeta["rangeM"].get<float>(), k["normal"].get<float>(), k["albedo"].get<float>(), k["relief"].get<float>() });
+        mi->setParameter("nearB", float4{ k["repeatM"].get<float>(), k["rough"].get<float>(), k["roughVar"].get<float>(), k["trackGloss"].get<float>() });
+        mi->setParameter("nearC", float4{ k["trackU"].get<float>(), nearMeta["reliefRangeM"].get<float>(), opt(k, "reliefTexels", 1.0f), opt(k, "reliefMip", 0.0f) });
+    };
     wp->setup = [&](MaterialInstance* mi, int kind, const std::string& label) {
         if (kind == 1) {
             setParams(mi, L["terrain"]);
@@ -518,6 +658,7 @@ int main(int argc, char** argv) {
             if (!opt(settings, "aniso", true)) mi->setParameter("anisoRange", 0.f);
             mi->setParameter("detailMap", detailTex, detailSampler);
             mi->setParameter("detailClass", detailClass(label));
+            if (wp->mats[kind]->hasParameter("nearA")) setupNear(mi, label);
         } else {
             setParams(mi, L["foliage"]);
             if (!wind) mi->setParameter("windStrength", 0.f);
@@ -540,12 +681,35 @@ int main(int argc, char** argv) {
         waterMi = waterMat->createInstance();
         const json& M = L["water"];
         for (auto it = M.begin(); it != M.end(); ++it) {
+            // nur deklarierte Parameter (Stimmung und Material koennen verschiedene Staende haben)
+            if (!waterMat->hasParameter(it.key().c_str())) continue;
             if (it.value().is_array() && it.value().size() == 3) waterMi->setParameter(it.key().c_str(), f3(it.value()));
             else if (it.value().is_array() && it.value().size() == 2) waterMi->setParameter(it.key().c_str(), float2{ it.value()[0].get<float>(), it.value()[1].get<float>() });
             else if (it.value().is_number()) waterMi->setParameter(it.key().c_str(), it.value().get<float>());
         }
         waterMi->setParameter("time", float(timeS));
         waterMi->setParameter("waves", cloudTex, cloudSampler);
+        // Wellen-Normalenkarte (WaterWaves, RGBA8): $WATER_WAVES oder <sky>/water_waves.bin;
+        // fehlt sie, eine flache Karte (ruhiges Wasser) statt eines ungebundenen Samplers.
+        if (waterMat->hasParameter("waveNormals")) {
+            const char* env = std::getenv("WATER_WAVES");
+            std::string path = env ? std::string(env) : skyDir + "/water_waves.bin";
+            std::vector<uint8_t> raw;
+            if (std::ifstream(path)) raw = readFile(path);
+            if (raw.empty()) { fprintf(stderr, "water_waves.bin fehlt (%s): flaches Wasser\n", path.c_str()); raw.assign(4 * 4 * 4, (uint8_t)128); }
+            int n = (int)std::lround(std::sqrt((double)raw.size() / 4.0));
+            auto* buf = new uint8_t[raw.size()];
+            memcpy(buf, raw.data(), raw.size());
+            Texture* wn = Texture::Builder().width(n).height(n).levels(0xff).sampler(Texture::Sampler::SAMPLER_2D)
+                              .usage(Texture::Usage::DEFAULT | Texture::Usage::GEN_MIPMAPPABLE)
+                              .format(Texture::InternalFormat::RGBA8).build(*engine);
+            wn->setImage(*engine, 0, Texture::PixelBufferDescriptor(buf, raw.size(), Texture::Format::RGBA, Texture::Type::UBYTE,
+                                     [](void* b, size_t, void*) { delete[] (uint8_t*)b; }));
+            wn->generateMipmaps(*engine);
+            waterMi->setParameter("waveNormals", wn, cloudSampler);
+        }
+        // niedrige Stufe (ohne Boden-Detail): eine Wellenlage, keine gespiegelten Wolken — wie FilamentCore
+        if (waterMat->hasParameter("detail") && !opt(settings, "groundDetail", true)) waterMi->setParameter("detail", 0.f);
     }
 
     const std::string world = S["world"];
@@ -562,7 +726,10 @@ int main(int argc, char** argv) {
         for (auto& [e, cat] : l.category) {
             auto r = rm.getInstance(e);
             std::string base = cat.rfind("terrain_sub_", 0) == 0 ? "terrain" : cat;
-            bool cast = base == "buildings" || base == "trees";
+            bool cast = base == "buildings" || base == "trees" || (terrainShadows && base == "terrain");
+            bool recv0 = !(base == "trees" || base == "props");
+            // EVSM (PCSS, auf das DPCF in 1.75.1 zurueckfaellt) verlangt: wer empfaengt, wirft auch.
+            if (opt(settings, "receiversCast", false) && recv0 && base != "water") cast = true;
             bool recv = !(base == "trees" || base == "props");
             rm.setCastShadows(r, cast && shadows);
             rm.setReceiveShadows(r, recv);
