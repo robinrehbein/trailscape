@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plan-Rezepte (Idee 8): Training → Plan → Karte „Plan-Rezept", Import-Vorschau,
+     Export-Dialoge. Präfix recipe_, Quellen: ui/training/PlanRecipe*.kt,
+     PlanRecipeImportActivity.kt. Format: docs/plan-rezepte.md. -->
+<resources>
+    <!-- PlanRecipeCard -->
+    <string name="recipe_card_title">Plan-Rezept</string>
+    <string name="recipe_card_body">Pläne als Datei tauschen — ohne Konto und ohne persönliche Daten. Die Datei enthält nur Titel und die Struktur der Einheiten in Prozent der FTP.</string>
+    <string name="recipe_card_source">Importiert: „%1$s“</string>
+    <string name="recipe_card_source_author">Importiert: „%1$s“ von %2$s</string>
+    <string name="recipe_action_share_plan">Plan teilen</string>
+    <string name="recipe_action_save_plan">Als Datei speichern</string>
+    <string name="recipe_action_share_session">Einheit teilen</string>
+    <string name="recipe_action_open">Rezept öffnen</string>
+
+    <!-- PlanRecipeExportDialog -->
+    <string name="recipe_export_title_plan">Plan als Rezept</string>
+    <string name="recipe_export_title_session">Einheit als Rezept</string>
+    <string name="recipe_export_privacy_hint">In die Datei kommen nur Titel, Autor und die Struktur der Einheiten. Keine FTP, kein Gewicht, keine Touren, keine Orte, kein Zielname.</string>
+    <string name="recipe_export_title_label">Titel</string>
+    <string name="recipe_export_author_label">Autor (freiwillig)</string>
+    <string name="recipe_export_pick_session_title">Welche Einheit?</string>
+    <string name="recipe_export_session_option">%1$s · %2$s</string>
+    <string name="recipe_default_plan_title">Trainingsplan</string>
+    <string name="recipe_export_nothing_error">Aus diesem Plan lässt sich keine Einheit als Rezept speichern.</string>
+    <string name="recipe_export_saved_status">Rezept gespeichert.</string>
+    <string name="recipe_export_write_error">Das Rezept konnte nicht gespeichert werden.</string>
+    <string name="recipe_share_chooser_title">Rezept teilen</string>
+
+    <!-- PlanRecipeImportDialog -->
+    <string name="recipe_import_title_plan">Plan-Rezept</string>
+    <string name="recipe_import_title_session">Einzelne Einheit</string>
+    <string name="recipe_import_author">von %1$s</string>
+    <plurals name="recipe_import_weeks_count">
+        <item quantity="one">%1$d Woche</item>
+        <item quantity="other">%1$d Wochen</item>
+    </plurals>
+    <plurals name="recipe_import_sessions_per_week_count">
+        <item quantity="one">%1$d Einheit pro Woche</item>
+        <item quantity="other">%1$d Einheiten pro Woche</item>
+    </plurals>
+    <string name="recipe_import_sessions_range">%1$d–%2$d Einheiten pro Woche</string>
+    <string name="recipe_import_total">Insgesamt %1$s, die längste Woche %2$s</string>
+    <string name="recipe_import_session_duration">Dauer %1$s</string>
+    <string name="recipe_import_first_week_eyebrow">Erste Woche</string>
+    <string name="recipe_import_session_line">%1$s · %2$s · %3$s</string>
+    <string name="recipe_import_ftp_entered">Umgerechnet auf deine FTP von %1$d W.</string>
+    <string name="recipe_import_ftp_estimated">Umgerechnet auf deine geschätzte FTP von %1$d W. Trage deine FTP im Profil ein, dann stimmen die Watt.</string>
+    <string name="recipe_import_start">Der Plan beginnt am Montag, %1$s.</string>
+    <string name="recipe_import_replace_warning">Dein aktueller Plan „%1$s“ wird ersetzt. Das lässt sich nicht rückgängig machen.</string>
+    <string name="recipe_import_day_label">Wochentag der Einheit</string>
+    <string name="recipe_import_session_into_plan">Die Einheit wird in die laufende Woche deines Plans eingetragen.</string>
+    <string name="recipe_import_session_new_plan">Du hast noch keinen Plan: Es entsteht ein Plan mit einer Woche.</string>
+    <string name="recipe_import_confirm_new">Übernehmen</string>
+    <string name="recipe_import_confirm_replace">Plan ersetzen</string>
+    <string name="recipe_import_confirm_session">Eintragen</string>
+    <string name="recipe_import_done_plan_status">Plan „%1$s“ übernommen.</string>
+    <string name="recipe_import_done_session_status">Einheit „%1$s“ eingetragen.</string>
+    <string name="recipe_pause_word">Pause</string>
+
+    <!-- Ablehnung fremder Dateien -->
+    <string name="recipe_problem_title">Rezept nicht lesbar</string>
+    <string name="recipe_problem_too_large">Die Datei ist leer oder zu groß für ein Plan-Rezept (höchstens 256 KB).</string>
+    <string name="recipe_problem_not_text">Die Datei ist keine lesbare Textdatei.</string>
+    <string name="recipe_problem_not_json">Die Datei ist kein gültiges JSON.</string>
+    <string name="recipe_problem_too_deep">Die Datei ist zu tief verschachtelt.</string>
+    <string name="recipe_problem_not_recipe">Das ist kein Plan-Rezept. Ein Backup öffnest du unter Einstellungen → Import &amp; Backup.</string>
+    <string name="recipe_problem_newer">Dieses Rezept stammt aus einer neueren Version von Trailscape (Format %1$d). Bitte aktualisiere die App.</string>
+    <string name="recipe_problem_invalid">Im Rezept stimmt etwas nicht, bei „%1$s“.</string>
+    <string name="recipe_problem_invalid_nopath">Im Rezept stimmt etwas nicht.</string>
+    <string name="recipe_problem_too_many">Das Rezept enthält zu viele Wochen, Einheiten oder Abschnitte.</string>
+    <string name="recipe_problem_empty">Das Rezept enthält keine Einheit.</string>
+    <string name="recipe_problem_read">Die Datei konnte nicht gelesen werden.</string>
+</resources>

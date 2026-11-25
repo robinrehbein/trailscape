@@ -163,6 +163,12 @@ interface RideInfo {
      * Implementierungen (auch Test-Attrappen) unveraendert bleiben.
      */
     val indoor: Boolean get() = false
+
+    /**
+     * Siehe [Ride.powerMeasured]. Mit Vorgabe `false` aus demselben Grund
+     * wie [indoor].
+     */
+    val powerMeasured: Boolean get() = false
 }
 
 /**
@@ -192,6 +198,8 @@ data class RideSummary(
     override val pointCount: Int = 0,
     /** Siehe [Ride.indoor]; im Index nur geschrieben, wenn `true`. */
     override val indoor: Boolean = false,
+    /** Siehe [Ride.powerMeasured]; im Index nur geschrieben, wenn `true`. */
+    override val powerMeasured: Boolean = false,
 ) : RideInfo {
     fun toJson(): JsonObject = buildJsonObject {
         put("id", id)
@@ -206,6 +214,9 @@ data class RideSummary(
         // Angehaengt und nur im Ausnahmefall (siehe [Ride.indoor]).
         if (indoor) {
             put("indoor", true)
+        }
+        if (powerMeasured) {
+            put("powerMeasured", true)
         }
     }
 
@@ -222,6 +233,7 @@ data class RideSummary(
                 stats = (json.fieldOrNull("stats") as? JsonObject)?.let { RideStats.fromJson(it) }
                     ?: RideStats.empty,
                 indoor = json.optionalBoolean("indoor") ?: false,
+                powerMeasured = json.optionalBoolean("powerMeasured") ?: false,
             )
         }
     }
@@ -293,6 +305,28 @@ data class Ride(
      * byteweise beim alten Format, alte Dateien lesen sich als `false`.
      */
     override val indoor: Boolean = false,
+    /**
+     * `true`, wenn die Leistung dieser Tour **gemessen** ist — per
+     * Leistungsmesser, Rollentrainer oder aus einer importierten Datei mit
+     * Leistungswerten (mindestens [MEASURED_POWER_MIN_COVERAGE] der Punkte
+     * tragen eine, siehe [derivePowerMeasured]). `false` heisst „aus GPS und
+     * Profil geschaetzt" **oder unbekannt**: Beides behandelt die Auswertung
+     * gleich, nur eben mit der Unsicherheit der Schaetzung (±15–25 %).
+     *
+     * ## Wofuer
+     * Die Auswertung ([resolveEftp]) beschriftet die FTP je nach Herkunft:
+     * Stammt das beste 20-min-Mittel aus gemessener Leistung, steht dort nicht
+     * mehr „aus der GPS-Leistungsschaetzung". Die Herkunft haengt an der Tour,
+     * damit Listen und Detail sie auch ohne Punkte zeigen koennen.
+     *
+     * ## Rueckwaertskompatibilitaet
+     * Wie [planned] und [indoor]: nur geschrieben, wenn `true`, und vor
+     * `updatedAt`. Jede bisherige Tour bleibt byteweise im alten Format, alte
+     * Dateien lesen sich als `false` („geschaetzt/unbekannt"); alte Leser
+     * ignorieren den Schluessel, Sync-Server und Sicherungen reichen das
+     * Tour-JSON unveraendert durch.
+     */
+    override val powerMeasured: Boolean = false,
 ) : RideInfo {
     override val pointCount: Int get() = points.size
 
@@ -306,6 +340,7 @@ data class Ride(
         planned = planned,
         pointCount = points.size,
         indoor = indoor,
+        powerMeasured = powerMeasured,
     )
 
     fun toJson(): JsonObject = buildJsonObject {
@@ -322,6 +357,10 @@ data class Ride(
         // Wie `planned` nur im Ausnahmefall (siehe [indoor]).
         if (indoor) {
             put("indoor", true)
+        }
+        // Ebenso (siehe [powerMeasured]).
+        if (powerMeasured) {
+            put("powerMeasured", true)
         }
         // Immer geschrieben (siehe [updatedAt]) — als letzter Schluessel,
         // damit alles davor byteweise beim alten Format bleibt.
@@ -343,10 +382,26 @@ data class Ride(
                 // Fehlender Schluessel = alte Datei: siehe [updatedAt].
                 updatedAt = json.optionalLong("updatedAt") ?: createdAt,
                 indoor = json.optionalBoolean("indoor") ?: false,
+                powerMeasured = json.optionalBoolean("powerMeasured") ?: false,
             )
         }
     }
 }
+
+/**
+ * Ob die Leistung der Punkte **gemessen** ist: mindestens
+ * [MEASURED_POWER_MIN_COVERAGE] der Punkte tragen eine Leistung (bei weniger
+ * als zwei Punkten immer `false`). Dieselbe Schwelle wie in der
+ * Lastrechnung ([PhysicsEstimate.measured]), nur ueber die Punktzahl statt der
+ * Zeit — fuer die Kennzeichnung beim Speichern genuegt das, die genaue
+ * Zeitgewichtung bleibt der Auswertung vorbehalten.
+ */
+fun derivePowerMeasured(points: List<TrackPoint>): Boolean =
+    points.size >= 2 && points.count { it.power != null } >= points.size * MEASURED_POWER_MIN_COVERAGE
+
+/** Setzt [Ride.powerMeasured] aus den Punkten, wo es noch nicht gesetzt ist. */
+fun Ride.withDerivedPowerMeasured(): Ride =
+    if (powerMeasured || !derivePowerMeasured(points)) this else copy(powerMeasured = true)
 
 /**
  * Nur die tatsaechlich **gefahrenen** Touren — gespeicherte Planungen fallen
@@ -590,6 +645,12 @@ data class TrainingSession(
     val textKey: SessionTextKey? = null,
     /** Ganzzahlige Argumente zu [textKey] (Minuten, Wiederholungen, km …). */
     val textArgs: List<Int> = emptyList(),
+    /**
+     * Die Einheit stammt aus einem importierten Plan-Rezept (`PlanRecipe.kt`).
+     * [adaptPlan] baut solche Einheiten nicht neu, sondern laesst sie stehen.
+     * Nur mit Wert geschrieben, ein fehlender Schluessel ist `false`.
+     */
+    val fromRecipe: Boolean = false,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("day", day)
@@ -606,6 +667,9 @@ data class TrainingSession(
         textKey?.let { put("textKey", it.jsonName) }
         if (textArgs.isNotEmpty()) {
             put("textArgs", buildJsonArray { textArgs.forEach { add(JsonPrimitive(it)) } })
+        }
+        if (fromRecipe) {
+            put("fromRecipe", true)
         }
     }
 
@@ -631,6 +695,7 @@ data class TrainingSession(
                 textArgs = (json["textArgs"] as? JsonArray)
                     ?.mapNotNull { (it as? JsonPrimitive)?.intOrNull }
                     .orEmpty(),
+                fromRecipe = json.optionalBoolean("fromRecipe") ?: false,
             )
         }
     }
@@ -693,6 +758,12 @@ data class TrainingPlan(
      * [fallbackGravelSpeedKmh].
      */
     val planSpeedKmh: Double? = null,
+    /**
+     * Herkunft aus einem importierten Plan-Rezept (Titel und Autor des
+     * Rezepts); `null` bei einem von der App erzeugten Plan. Ein Rezeptplan
+     * wird nicht von [adaptPlan] umgebaut und hat keine Zielprognose.
+     */
+    val recipe: PlanRecipeOrigin? = null,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("createdAt", createdAt)
@@ -702,6 +773,7 @@ data class TrainingPlan(
         // Ab hier ausschliesslich angehaengte Felder, nur mit Wert.
         preferences?.takeUnless { it.isEmpty }?.let { put("preferences", it.toJson()) }
         planSpeedKmh?.let { put("planSpeedKmh", it) }
+        recipe?.let { put("recipe", it.toJson()) }
     }
 
     companion object {
@@ -716,7 +788,24 @@ data class TrainingPlan(
             planSpeedKmh = (json.fieldOrNull("planSpeedKmh") as? JsonPrimitive)
                 ?.content?.toDoubleOrNull()
                 ?.takeIf { it.isFinite() && it in minPlausibleAvgSpeedKmh..maxPlausibleAvgSpeedKmh },
+            recipe = (json.fieldOrNull("recipe") as? JsonObject)?.let { PlanRecipeOrigin.fromJson(it) },
         )
+    }
+}
+
+/** Woher ein Rezeptplan stammt — Titel und (freiwillig) Autor des Rezepts. */
+data class PlanRecipeOrigin(val title: String, val author: String? = null) {
+    fun toJson(): JsonObject = buildJsonObject {
+        put("title", title)
+        author?.let { put("author", it) }
+    }
+
+    companion object {
+        /** Tolerant: ohne Titel gibt es keine Herkunft. */
+        fun fromJson(json: JsonObject): PlanRecipeOrigin? {
+            val title = json.optionalString("title")?.takeIf { it.isNotBlank() } ?: return null
+            return PlanRecipeOrigin(title, json.optionalString("author")?.takeIf { it.isNotBlank() })
+        }
     }
 }
 

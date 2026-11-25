@@ -280,6 +280,9 @@ fun adaptPlan(
 ): AdaptedPlan {
     val nowMs = now ?: System.currentTimeMillis()
     val unchanged = AdaptedPlan(plan, adapted = false, reason = null)
+    // Ein importierter Plan (Plan-Rezept) ist Vorgabe von Trainerin oder Verein:
+    // Er wird nicht mit dem Generator neu gerechnet.
+    if (plan.recipe != null) return unchanged
 
     val completed = plan.weeks.filter { it.end <= nowMs }
     val last = completed.maxByOrNull { it.index } ?: return unchanged
@@ -347,7 +350,8 @@ fun adaptPlan(
         if (week.kind == WeekKind.ZIELWOCHE) {
             week
         } else {
-            val weekSessions = sessions[week.index]
+            // Einzeln importierte Rezepteinheiten (fromRecipe) bleiben stehen.
+            val weekSessions = sessions[week.index] + week.sessions.filter { it.fromRecipe }
             week.copy(targetKm = weekSessions.sumOf { it.targetKm }, sessions = weekSessions)
         }
     }.associateBy { it.index }

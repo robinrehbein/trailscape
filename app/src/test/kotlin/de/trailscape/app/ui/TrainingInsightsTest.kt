@@ -276,6 +276,41 @@ class TrainingInsightsTest {
     }
 
     @Test
+    fun `gemessene Leistung beschriftet die FTP nicht mehr als GPS-Schaetzung`() {
+        // Eine Stunde mit 300 W vom Leistungsmesser: bestes 20-min-Mittel
+        // 300 W, FTP 0,95 × 300 = 285 W — und die Herkunft ist gemessen.
+        val measured = ride("m", now.minusDays(2), power = 300)
+        val insights = insightsOf(listOf(measured))
+        assertEquals(EftpSource.ZWANZIG_MINUTEN_GEMESSEN, insights.eftp.source)
+        assertEquals(285.0, insights.eftp.watts, 1.0)
+        val note = insights.loadScaleNoteDe
+        assertTrue(note.contains("gemessener Leistung"), note)
+        assertFalse(note.contains("GPS"), note)
+    }
+
+    @Test
+    fun `geschaetzte Leistung behaelt die GPS-Beschriftung`() {
+        // Schnell genug, damit das GPS-Modell ueber der Default-FTP liegt.
+        val estimated = ride("e", now.minusDays(2), speedMs = 9.0)
+        val insights = insightsOf(listOf(estimated))
+        if (insights.eftp.source == EftpSource.ZWANZIG_MINUTEN) {
+            assertTrue(insights.loadScaleNoteDe.contains("GPS-Leistungsschätzung"))
+        }
+        assertTrue(insights.eftp.source != EftpSource.ZWANZIG_MINUTEN_GEMESSEN)
+    }
+
+    @Test
+    fun `die Herkunft folgt der Tour mit dem besten Mittel`() {
+        // Gemessen 220 W gegen geschaetzt-hoch: Die staerkere Tour bestimmt die
+        // Herkunft. Hier liegt die gemessene vorn (300 W gegen 200 W).
+        val strongMeasured = ride("m", now.minusDays(3), power = 300)
+        val weakMeasured = ride("n", now.minusDays(2), power = 200)
+        val insights = insightsOf(listOf(strongMeasured, weakMeasured))
+        assertEquals(EftpSource.ZWANZIG_MINUTEN_GEMESSEN, insights.eftp.source)
+        assertEquals(285.0, insights.eftp.watts, 1.0)
+    }
+
+    @Test
     fun `eingetragene FTP bestimmt die Lastskala und steht so im Hinweis`() {
         val strong = profile.copyWith(eftpOverrideW = 250.0)
         val ride = ride("a", now.minusDays(2), hr = null)
