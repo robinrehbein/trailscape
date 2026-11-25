@@ -691,6 +691,10 @@ int main(int argc, char** argv) {
             mi->setParameter("detailMap", detailTex, detailSampler);
             mi->setParameter("macroMap", cloudTex, cloudSampler);
             if (wp->mats[1]->hasParameter("pbrA")) setupPbr(mi, label, true);
+            // Software-Anisotropie des Luftbilds (WorldMaterialProvider: an wie PBR, 90 m);
+            // `settings.terrainAniso` = false nur fuer Vorher-Bilder.
+            if (wp->mats[1]->hasParameter("anisoRange"))
+                mi->setParameter("anisoRange", pbrOn && opt(settings, "terrainAniso", true) ? 90.f : 0.f);
         } else if (kind == SURFACE || kind == SURFACE_BLEND) {
             setParams(mi, L["surface"]);
             if (!groundDetail) mi->setParameter("detailRange", 0.f);

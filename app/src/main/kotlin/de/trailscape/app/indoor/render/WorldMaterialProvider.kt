@@ -231,6 +231,9 @@ internal class WorldMaterialProvider(
             WorldMaterialRules.Kind.TERRAIN -> {
                 mi.setParameter("detailRange", if (groundDetail) SkyShading.TERRAIN_DETAIL_RANGE_M.toFloat() else 0f)
                 pbrTextures.apply(mi, label, terrain = true, on = pbr)
+                // Software-Anisotropie des Luftbilds (nur neuere terrain.filamat); haengt wie PBR an
+                // „Bodendetails“ bzw. Hoch/Ultra, 0 = ein Zugriff wie vorher.
+                if (mi.material.hasParameter("anisoRange")) mi.setParameter("anisoRange", if (pbr) TERRAIN_ANISO_RANGE_M else 0f)
             }
             WorldMaterialRules.Kind.FOLIAGE -> mi.setParameter("windStrength", if (wind) 1f else 0f)
             WorldMaterialRules.Kind.SURFACE, WorldMaterialRules.Kind.SURFACE_BLEND -> {
@@ -258,5 +261,8 @@ internal class WorldMaterialProvider(
     companion object {
         private const val TAG = "WorldMaterials"
         const val DETAIL_ANISOTROPY = 8f
+
+        /** Reichweite der Software-Anisotropie des Luftbilds in m (wie das Luftbild-Band). */
+        const val TERRAIN_ANISO_RANGE_M = 90f
     }
 }

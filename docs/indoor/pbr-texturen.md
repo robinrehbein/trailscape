@@ -199,6 +199,38 @@ nicht; die größten weiteren Hebel sind Bäume und ein feineres Luftbild nahe d
   (bessere Qualität je Byte, auf Geräten mit ASTC) — erst nach Gerätebefund.
 - Diagnoseseite zeigt die geladenen Gruppen noch nicht (Werte stehen in `WorldMaterialProvider`).
 
+## Software-Anisotropie des Luftbilds (`terrain.mat`, Zusatzauftrag)
+
+Hinweis aus der Luftbild-Sitzung (`claude/grafik-luftbild-20cm`, `terrain_band.mat`): flach
+gesehen tastet `terrain.mat` das Luftbild einmal ab, die Hardware wählt ab ≈ 20 m eine
+Mip-Stufe mit ≈ 1 m je Texel (gltfio setzt keine Anisotropie). Übernommen wie dort und in
+`surface.mat`: bis `anisoRange` = 90 m (weich aus ab 63 m) vier `textureLod`-Abtastungen entlang
+der langen Achse der Pixelspur, sobald sie mehr als 1,6 : 1 gestreckt ist.
+
+- Parameter `anisoRange` deklariert, gesetzt nur nach `Material.hasParameter`; 0 = ein Zugriff
+  wie vorher. Hängt am selben Schalter wie PBR (`WorldMaterialProvider.pbr`: „Bodendetails“,
+  nach dem Merge Hoch/Ultra); sicherer Modus: eigene Materialien aus.
+  Referenzrenderer: `settings.terrainAniso`.
+- **Kosten:** +4 Texturzugriffe je Geländepixel bis 90 m (bei gestreckter Spur; sonst +0),
+  ≈ 15 ALU-Befehle. Gelände füllt aus Lenkersicht meist 10–30 % des Bildes. Bildzeit nicht gemessen
+  (Schätzung ≤ 0,3 ms auf S25-Klasse).
+- **Wirkung im Referenzrenderer: kaum messbar** (mittlere Abweichung 0,02–0,15 von 255, so groß
+  wie das Rauschen zwischen zwei Läufen; Bild `gelaende-aniso-lenker.jpg`). Ein Testshader zeigt,
+  dass der Zweig auf dem Gelände hinter den Randstreifen (ab ≈ 25 m) läuft — aber das 1-m-Luftbild
+  der Katalogstrecken hat dort kaum Feinstruktur, die ein schärferer Mip-Level zeigen könnte.
+  Lohnen dürfte es mit dem 20-cm-Band der Luftbild-Sitzung (feinere Textur) und auf Hängen;
+  auf dem Gerät prüfen. Ob lavapipe selbst anisotrop filtert, habe ich nicht geprüft.
+
+### Wo die Wirkung aus Lenkersicht sitzt (Ausläufe der Randstreifen)
+
+Die ersten 2–6,5 m neben der Fahrbahn sind die Randstreifen und ihre Ausläufe
+(`x_mat_route_verge_*`, `x_mat_route_*_fade`, Graskante `x_mat_route_fringe`), nicht das Gelände.
+Die PBR-Texturen sitzen genau dort: Wiesenrand (`verge_grass`, Grass004 + Acker-Flecken),
+Waldrand (`verge_forest`, Waldboden Ground082S), Bankett (Erde ↔ Fels), Gehweg (Beton),
+Graskante — in `surface.mat` wie in `surface_blend.mat` (Ausläufe), bis 30 m. Sichtbar vor allem
+als Nadelstreu am Waldrand (Bilder `schotter-lenker`, `waldweg-*`); auf Wiesen klein, weil
+Grashalme schon ab einigen Metern unter einem Pixel liegen.
+
 ## Neu erzeugen
 
 ```

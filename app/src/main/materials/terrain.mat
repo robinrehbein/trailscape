@@ -18,6 +18,11 @@
 // Luftbild (nur Detail mit Mittel 1), Normale und Rauheit aus der Textur, die staerkste in zwei
 // Massstaeben. Wiederholungen je Kachel ganzzahlig (nahtlos). `pbrA.x` = 0: wie vorher.
 //
+// Software-Anisotropie fuer das Luftbild bis `anisoRange` Metern (wie surface.mat und das
+// Luftbild-Band): gltfio uebernimmt keine Anisotropie, flach gesehen waehlt die Hardware schon
+// ab 20 m eine Mip-Stufe mit rund 1 m je Texel. Vier Abtastungen entlang der langen Achse der
+// Pixelspur, Mip-Stufe nach der kurzen Achse. `anisoRange` = 0: ein Zugriff wie vorher.
+//
 // Kompilieren: tool/indoor-dev/filament/materials.sh (matc 1.75.1).
 material {
     name : TrailscapeTerrain,
@@ -44,7 +49,8 @@ material {
         { type : sampler2dArray, name : pbrMapN, precision : medium },
         { type : float4, name : pbrA },
         { type : float4, name : pbrB },
-        { type : float4, name : pbrC }
+        { type : float4, name : pbrC },
+        { type : float, name : anisoRange }
     ],
     shadingModel : lit,
     blending : opaque,
@@ -53,6 +59,30 @@ material {
 }
 
 fragment {
+    // Vier Abtastungen entlang der langen Achse der Pixelspur, Mip-Stufe nach der kurzen Achse.
+    vec4 sampleAniso(highp vec2 uv, float near) {
+        highp vec2 dx = dFdx(uv);
+        highp vec2 dy = dFdy(uv);
+        vec2 ts = vec2(textureSize(materialParams_baseColorMap, 0));
+        vec2 px = dx * ts;
+        vec2 py = dy * ts;
+        float lx = dot(px, px);
+        float ly = dot(py, py);
+        float lmaj = sqrt(max(lx, ly));
+        float lmin = sqrt(min(lx, ly));
+        float ratio = lmaj / max(lmin, 1e-4);
+        if (near <= 0.0 || ratio < 1.6) return texture(materialParams_baseColorMap, uv);
+        float taps = min(ratio, 4.0);
+        float lod = max(log2(lmaj / taps), 0.0);
+        highp vec2 major = lx > ly ? dx : dy;
+        vec4 c = vec4(0.0);
+        for (int k = 0; k < 4; k++) {
+            float t = (float(k) + 0.5) / 4.0 - 0.5;
+            c += textureLod(materialParams_baseColorMap, uv + major * t, lod);
+        }
+        return mix(texture(materialParams_baseColorMap, uv), c * 0.25, near);
+    }
+
     // Drehung um k × 90° (haelt die Wiederholung je Kachel nahtlos), je Bodenart anders.
     highp vec2 rot90(highp vec2 p, float k) {
         if (k < 0.5) return p;
@@ -80,11 +110,12 @@ fragment {
         highp vec2 local0 = (uv - inset0) / (1.0 - 2.0 * inset0);
         highp vec2 lx = dFdx(local0);
         highp vec2 ly = dFdy(local0);
-        vec3 aerial = texture(materialParams_baseColorMap, uv).rgb * materialParams.baseColorFactor.rgb;
-        vec3 base = aerial;
-
         highp vec3 toCam = getWorldPosition() - getWorldCameraPosition();
         float dist = length(toCam);
+        float ar = materialParams.anisoRange;
+        float anear = ar > 0.0 ? 1.0 - smoothstep(ar * 0.7, ar, dist) : 0.0;
+        vec3 aerial = sampleAniso(uv, anear).rgb * materialParams.baseColorFactor.rgb;
+        vec3 base = aerial;
 
         // Bodenart aus der Luftbildfarbe (linear): Wiese gruen, Acker/Erde braun-beige,
         // Waldboden dunkel, Schotter/Fels grau oder steil.
