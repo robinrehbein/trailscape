@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.INTERVAL_ARG_EFFORT
 import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.i18n.PLAN_WEEKDAY_CODES
 import de.trailscape.core.i18n.SessionTextKey
