@@ -58,3 +58,16 @@
 -keep class de.trailscape.app.indoor.render.WorldMaterialProvider {
     public <methods>;
 }
+
+# Derselbe langsame Weg (JavaMaterialProvider) holt den nativen Zeiger der zurueckgegebenen
+# Objekte per JNI beim Namen: `getNativeObject()` auf MaterialInstance (createMaterialInstance)
+# und auf Material (getMaterial, getMaterials). Solange nur der UbershaderProvider im Spiel war,
+# lief alles nativ und niemand brauchte diese Namen — R8 hat sie umbenannt (Release 2.0.516:
+# Absturz beim Laden der ersten Kachel, sobald man „Fahren" tippt). Die Felder von
+# MaterialKey haelt gltfio ueber seine eigenen Regeln.
+-keepclassmembers class com.google.android.filament.MaterialInstance {
+    long getNativeObject();
+}
+-keepclassmembers class com.google.android.filament.Material {
+    long getNativeObject();
+}
