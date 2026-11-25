@@ -338,6 +338,14 @@ object AppServices {
     val indoorWorldLibrary: WorldLibrary by lazy { WorldLibrary(indoorWorldsDir, indoorGeoCacheDir) }
 
     /**
+     * Gespeicherte Herausforderungen (docs/herausforderung.md): je eine kleine
+     * Datei unter `<filesDir>/challenges`.
+     */
+    val challengeStore: de.trailscape.app.challenge.ChallengeStore by lazy {
+        de.trailscape.app.challenge.ChallengeStore(File(appContext.filesDir, "challenges"))
+    }
+
+    /**
      * Katalog bekannter Strecken (docs/indoor/catalog.md): beigelegter Katalog
      * aus dem Asset `indoor/catalog.json`, Downloads und Entpacken unter
      * `<filesDir>/indoor/catalog` (vom Backup ausgenommen wie ganz `indoor/`).

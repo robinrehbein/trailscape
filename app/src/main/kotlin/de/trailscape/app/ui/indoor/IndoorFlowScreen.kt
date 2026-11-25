@@ -11,6 +11,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +21,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import de.trailscape.app.challenge.shareChallengeFile
+import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -205,8 +208,17 @@ private fun HomeStage(vm: IndoorViewModel, onExit: () -> Unit) {
     val pair by vm.pair.collectAsStateWithLifecycle()
     val catalog by vm.catalog.collectAsStateWithLifecycle()
     val day by vm.day.collectAsStateWithLifecycle()
+    val challenges by vm.challenges.collectAsStateWithLifecycle()
+    val challengeImport by vm.challengeImport.collectAsStateWithLifecycle()
     val (bluetoothOn, permissionGranted) = rememberBluetoothState()
     BackHandler { onExit() }
+    // Eine geladene Strecke ändert, ob eine Herausforderung fahrbar ist.
+    LaunchedEffect(catalog) { vm.refreshChallenges() }
+    ChallengeImportDialog(
+        ui = challengeImport,
+        onSave = vm::confirmChallengeImport,
+        onDismiss = vm::dismissChallengeImport,
+    )
     IndoorHomeScreen(
         route = ui,
         pair = pair,
@@ -227,6 +239,14 @@ private fun HomeStage(vm: IndoorViewModel, onExit: () -> Unit) {
         onCatalogDownload = vm::downloadCatalog,
         onCatalogCancel = vm::cancelCatalogDownload,
         onCatalogDiscard = vm::discardCatalogDownload,
+        challenges = IndoorChallengesUi(
+            items = challenges,
+            selectedId = (ui.ghost as? IndoorGhostOption.Challenge)?.challengeId,
+        ),
+        onChallengeRide = vm::useChallenge,
+        onChallengeDownload = vm::downloadCatalog,
+        onChallengeDelete = vm::deleteChallenge,
+        onChallengeImport = vm::importChallengeFile,
     )
 }
 
@@ -341,6 +361,9 @@ private fun RideStage(vm: IndoorViewModel) {
 @Composable
 private fun SummaryStage(vm: IndoorViewModel, onExit: () -> Unit) {
     val summary by vm.summary.collectAsStateWithLifecycle()
+    val challengeShare by vm.challengeShare.collectAsStateWithLifecycle()
+    val shareScope = rememberCoroutineScope()
+    val shareContext = LocalContext.current
     var askDiscard by rememberSaveable { mutableStateOf(false) }
     val ui = summary
     val unsaved = ui != null && !ui.tooShort && ui.savedRideId == null
@@ -363,7 +386,26 @@ private fun SummaryStage(vm: IndoorViewModel, onExit: () -> Unit) {
             onExit()
         },
         onDone = onExit,
+        onShareChallenge = vm::openChallengeShare,
     )
+    challengeShare?.let { share ->
+        ChallengeShareDialog(
+            ui = share,
+            onNameChange = vm::setChallengeShareName,
+            onIncludeDateChange = vm::setChallengeShareDate,
+            onShare = {
+                val json = share.json
+                val fileId = share.fileId
+                if (json != null && fileId != null) {
+                    shareScope.launch {
+                        runCatching { shareChallengeFile(shareContext, json, fileId) }
+                        vm.closeChallengeShare()
+                    }
+                }
+            },
+            onDismiss = vm::closeChallengeShare,
+        )
+    }
     if (askDiscard) {
         OneUiDialog(
             onDismissRequest = { askDiscard = false },

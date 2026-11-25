@@ -143,6 +143,12 @@ sealed interface IndoorGhostOption {
 
     /** Ein gedachter Fahrer mit fester Leistung. */
     data class ConstantPower(val watts: Int) : IndoorGhostOption
+
+    /**
+     * Eine geteilte Herausforderung (docs/herausforderung.md): die Fahrt einer
+     * anderen Person auf derselben Strecke. [label] ist deren Anzeigename.
+     */
+    data class Challenge(val challengeId: String, val label: String) : IndoorGhostOption
 }
 
 /**
@@ -485,6 +491,10 @@ data class IndoorSummaryUi(
     val savedRideId: String? = null,
     val saveFailed: Boolean = false,
     val startKm: Double? = null,
+    /** Name des Absenders, wenn die Fahrt gegen eine Herausforderung ging; sonst `null`. */
+    val challengeOpponent: String? = null,
+    /** Die Fahrt lässt sich als Herausforderung teilen (docs/herausforderung.md). */
+    val canShareChallenge: Boolean = false,
 )
 
 // ---------------------------------------------------------------------------

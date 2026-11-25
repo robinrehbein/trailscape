@@ -55,6 +55,7 @@ fun IndoorSummaryScreen(
     onSave: () -> Unit,
     onDiscard: () -> Unit,
     onDone: () -> Unit,
+    onShareChallenge: (() -> Unit)? = null,
 ) {
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
     val saved = ui.savedRideId != null
@@ -131,7 +132,18 @@ fun IndoorSummaryScreen(
         }
 
         SummaryFacts(ui)
-        GhostComparison(ui)
+        if (ui.challengeOpponent != null) {
+            // Gegen eine geteilte Herausforderung: „x s vor/hinter <Name>" und die Antwort (docs/herausforderung.md).
+            ChallengeResultCard(
+                opponent = ui.challengeOpponent,
+                gapS = ui.ghostGapS,
+                canShare = ui.canShareChallenge && onShareChallenge != null,
+                onShare = { onShareChallenge?.invoke() },
+            )
+        } else {
+            GhostComparison(ui)
+            if (ui.canShareChallenge && onShareChallenge != null) ChallengeShareEntry(onShare = onShareChallenge)
+        }
     }
 
     if (confirmDiscard) {
