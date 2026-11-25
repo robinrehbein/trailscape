@@ -83,7 +83,7 @@ internal class ConstantPowerGhost(
             speedMps = speedMps,
             powerW = watts,
             gradePct = s.gradePct,
-            crr = effectiveCrr(s.surface.kind, rider.profileCrr),
+            crr = effectiveCrr(s.surface.kind, rider.profileCrr, rider.surfaceStrength),
             eleM = s.eleM,
             headwindMps = headwindMps(wind, s.headingDeg),
             rider = rider,

@@ -322,7 +322,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Mova
             speedMps = speed,
             powerW = power,
             gradePct = s.gradePct,
-            crr = effectiveCrr(s.surface.kind, rider.profileCrr),
+            crr = effectiveCrr(s.surface.kind, rider.profileCrr, rider.surfaceStrength),
             eleM = s.eleM,
             headwindMps = headwindMps(config.wind, s.headingDeg),
             rider = rider,
@@ -493,7 +493,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Mova
         val s = route.sampleAt(dist)
         return simulationCommand(
             gradePct = s.gradePct,
-            crr = effectiveCrr(s.surface.kind, rider.profileCrr),
+            crr = effectiveCrr(s.surface.kind, rider.profileCrr, rider.surfaceStrength),
             cwKgPerM = aeroCoefficient(PhysicsRider.of(rider).cdaM2, s.eleM),
             headwindMps = headwindMps(config.wind, s.headingDeg),
             gearRatio = gearState(gearIndex, gearTable).ratio,
@@ -597,7 +597,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Mova
             hrBpm = lastHr,
             gradePct = s.gradePct,
             surface = s.surface.kind,
-            crr = effectiveCrr(s.surface.kind, rider.profileCrr),
+            crr = effectiveCrr(s.surface.kind, rider.profileCrr, rider.surfaceStrength),
             headwindMps = headwindMps(config.wind, s.headingDeg),
             gear = gearState(gearIndex, gearTable),
             ghost = ghostNow(),

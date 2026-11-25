@@ -85,6 +85,12 @@ data class RiderSetup(
     val minSimGradePct: Double = -40.0,
     /** Obergrenze der gesendeten Ersatzsteigung in Prozent, siehe [minSimGradePct]. Ergaenzt von indoor-core. */
     val maxSimGradePct: Double = 40.0,
+    /**
+     * Wie deutlich der Belag zu spueren ist (Spreizung der Crr-Tabelle um den
+     * Mischwert, siehe [RideFeel.surfaceStrength]); 1,0 = Tabelle unveraendert.
+     * Ergaenzt von idee-06 (Kalibrierung).
+     */
+    val surfaceStrength: Double = 1.0,
 ) {
     val totalMassKg: Double get() = riderMassKg + bikeMassKg
 
