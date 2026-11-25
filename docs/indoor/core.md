@@ -14,6 +14,7 @@ Vertrag: [`docs/indoor.md`](../indoor.md), Abschnitte 2, 3.1, 4, 5, 6, 11.
 | `VirtualGears.kt` | Gangtabellen, Startgang, Ersatzsteigung für `SetSimulation` |
 | `ErgWorkouts.kt` | `ergWorkoutFor` |
 | `RiderSetupFrom.kt` | `riderSetupFrom` |
+| `RideFeel.kt`, `FeelCalibration.kt`, `RideProtocol.kt` | Fahrgefühl-Regler, geführter Abgleich, Fahrprotokoll — siehe [`kalibrierung.md`](kalibrierung.md) |
 | `IndoorGhost.kt` | Geist (Vergleichsleistung, frühere Fahrt) |
 | `IndoorSessionImpl.kt` | die Sitzung als reiner Automat |
 | `FtmsCodec.kt`, `FtmsTrainer.kt` | FTMS-Bytes und Kontroll-Automat |
@@ -172,6 +173,17 @@ Geschaltet wird mit `ShifterEvent.UP/DOWN` durch die sortierte Liste.
   (`riddenM`); der Geist wird an der neuen Stelle neu angesetzt (frühere Fahrt
   zeitlich verschoben, `PastRideGhost.startingAt`). Die Vertragsdateien sind
   unverändert.
+- Außenfahrt als Gegner (25.11.2026, `IndoorGhostSection.kt`, Einzelheiten in
+  `docs/indoor/app.md` „Drinnen nachfahren“): Die Zeit-Weg-Kurve trägt, wenn
+  mindestens die Hälfte der Punkte `power` hat, die aufsummierte Arbeit
+  (`GhostCurve.workJ`, Lücken über 30 s zählen nicht). Daraus die Leistung
+  des Geists jetzt (`GhostState.powerW`, gleitend über 10 s; konstanter Geist:
+  seine Leistung) und am Ende der Abschnittsvergleich
+  (`IndoorRideRecord.ghostSection`: Zeit und Ø Leistung beider ab dem letzten
+  Ansetzen bis zur Stelle des Fahrers; die frühere Fahrt kennt ihre Zeit auch,
+  wenn sie hinten lag). `ghostResultOf` liefert „vor/hinter/gleichauf“ mit
+  Vorrang dieser Zeitdifferenz vor dem Endabstand. Vertragsdateien nur
+  ergänzt (neue Felder mit Vorgabewert am Ende).
 
 ### FTMS-Trainer (Abschnitt 5.2)
 

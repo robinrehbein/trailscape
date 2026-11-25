@@ -265,6 +265,7 @@ data class TrainingInsights(
             EftpSource.EINGETRAGEN -> R.string.training_insights_load_scale_entered
             EftpSource.GESCHAETZT -> R.string.training_insights_load_scale_estimated
             EftpSource.ZWANZIG_MINUTEN -> R.string.training_insights_load_scale_twenty_min
+            EftpSource.ZWANZIG_MINUTEN_GEMESSEN -> R.string.idee03_load_scale_twenty_min_measured
             EftpSource.KALIBRIERT -> R.string.training_insights_load_scale_calibrated
         }
         return UiText.Res(id, listOf(dartRoundInt(eftp.watts), perKg))
@@ -487,6 +488,10 @@ fun computeInsights(
     // Fenster; der Bestwert je Tour steht fertig im Destillat.
     val windowStart = now.minusDays(eftpWindowDays.toLong())
     var bestRecentTwentyMinW: Double? = null
+    // Stammt das beste Mittel aus gemessener Leistung? Entscheidet nur die
+    // Tour, die den Bestwert haelt — eine gemessene Tour mit niedrigerem Wert
+    // aendert nichts an der Herkunft der benutzten Zahl.
+    var bestRecentMeasured = false
     for (summary in ordered) {
         if (localOfEpochMs(summary.createdAt).isBefore(windowStart)) {
             continue
@@ -498,9 +503,15 @@ fun computeInsights(
         val best = facts.bestTwentyMinW ?: continue
         if (bestRecentTwentyMinW == null || best > bestRecentTwentyMinW) {
             bestRecentTwentyMinW = best
+            bestRecentMeasured = facts.physicsMeasured
         }
     }
-    val eftp = resolveEftp(effective, bestTwentyMinW = bestRecentTwentyMinW, calibration = calibration)
+    val eftp = resolveEftp(
+        effective,
+        bestTwentyMinW = bestRecentTwentyMinW,
+        calibration = calibration,
+        bestTwentyMinMeasured = bestRecentMeasured,
+    )
 
     // --- Durchgang 2 nur, wenn sich die Skala wirklich verschiebt.
     val secondPass = if (abs(eftp.watts - anchorEftpW) < 0.5) {

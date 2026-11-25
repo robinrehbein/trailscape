@@ -101,6 +101,24 @@ fun effectiveCrr(kind: SurfaceKind, profileCrr: Double): Double {
     return kind.crr * (p / SurfaceKind.REFERENCE_PROFILE_CRR)
 }
 
+/**
+ * Wie [effectiveCrr], aber mit einstellbarer Staerke des Belags
+ * ([RideFeel.surfaceStrength]): Die Klassen-Crr werden um den Mischwert
+ * ([SurfaceKind.UNKNOWN]) gespreizt (`ref + (crr − ref)·Staerke`), danach wie
+ * gewohnt mit dem Profil-Crr skaliert. Staerke 1 ergibt genau [effectiveCrr];
+ * 0 macht jeden Belag zum Mischwert. Nie unter [MIN_EFFECTIVE_CRR].
+ */
+fun effectiveCrr(kind: SurfaceKind, profileCrr: Double, strength: Double): Double {
+    val s = if (strength.isFinite()) strength.coerceIn(RideFeel.SURFACE_MIN, RideFeel.SURFACE_MAX) else 1.0
+    val p = if (profileCrr.isFinite() && profileCrr > 0) profileCrr else SurfaceKind.REFERENCE_PROFILE_CRR
+    val ref = SurfaceKind.UNKNOWN.crr
+    val spread = maxOf(ref + (kind.crr - ref) * s, MIN_EFFECTIVE_CRR)
+    return spread * (p / SurfaceKind.REFERENCE_PROFILE_CRR)
+}
+
+/** Untergrenze des Crr nach der Spreizung (nie negativ oder 0, sonst rollt es „von selbst"). */
+const val MIN_EFFECTIVE_CRR: Double = 0.002
+
 private val SURFACE_VALUES: Map<String, SurfaceKind> = mapOf(
     "asphalt" to SurfaceKind.ASPHALT,
     "paved" to SurfaceKind.ASPHALT,

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bildentstehung der 3D-Ansicht: Grafikstufen und Bildratenmessung (Branch indoor-renderqualitaet). -->
+<resources>
+    <string name="render2_graphics_title">Grafikstufe</string>
+    <string name="render2_graphics_body">Hoch und Ultra sehen natürlicher aus und brauchen mehr Leistung und Akku.</string>
+    <string name="render2_graphics_standard">Standard</string>
+    <string name="render2_graphics_high">Hoch</string>
+    <string name="render2_graphics_ultra">Ultra</string>
+    <string name="render2_graphics_standard_body">Wie bisher – läuft auf den meisten Geräten flüssig.</string>
+    <string name="render2_graphics_high_body">Tiefe im Laub, Glanz vom Himmel, Lichtschein, warme Farben.</string>
+    <string name="render2_graphics_ultra_body">Dazu ruhige Kanten, Schatten von Hängen und Bergen. Für sehr starke Geräte.</string>
+
+    <string name="render2_diag_preset_high">Hoch</string>
+    <string name="render2_diag_preset_ultra">Ultra</string>
+    <string name="render2_diag_switch_reflections">Spiegelung des Himmels</string>
+    <string name="render2_diag_switch_taa">Zeitliche Kantenglättung (TAA)</string>
+    <string name="render2_diag_switch_terrain_shadows">Gelände wirft Schatten</string>
+    <string name="render2_diag_switch_stable_shadows">Stabile Schatten (4 Kaskaden)</string>
+    <string name="render2_diag_switch_white_balance">Weißabgleich je Tageszeit</string>
+    <string name="render2_diag_switch_vignette">Vignette</string>
+    <string name="render2_diag_switch_effects_high">Effekte in hoher Güte</string>
+
+    <string name="render2_diag_bench_title">Bildrate je Stufe</string>
+    <string name="render2_diag_bench_start">Messen (Standard, Hoch, Ultra je 30 s)</string>
+    <string name="render2_diag_bench_cancel">Messung abbrechen</string>
+    <string name="render2_diag_bench_hint">Lädt die Testwelt, fährt selbst und misst jede Stufe 30 Sekunden (nach 3 s Vorlauf). Bildschirm an lassen. Die Werte bitte abschreiben oder fotografieren.</string>
+    <string name="render2_diag_bench_running">Messung läuft: %1$s (%2$d %%)</string>
+    <string name="render2_diag_bench_row">%1$s: Ø %2$.1f ms (%3$.0f B/s) · 1 %% niedrig %4$.1f ms (%5$.0f B/s) · GPU %6$s</string>
+    <string name="render2_diag_bench_gpu_unknown">–</string>
+    <string name="render2_diag_bench_note">Die Bildzeit ist durch die Obergrenze von 60 B/s begrenzt; die GPU-Zeit zeigt die Reserve (unter 16,7 ms = 60 B/s möglich).</string>
+    <string name="render2_diag_res_title">Renderauflösung</string>
+    <string name="render2_diag_res_surface">Zeichenfläche</string>
+    <string name="render2_diag_res_dynamic">Dynamische Auflösung</string>
+    <string name="render2_diag_res_rendered">Tatsächlich gezeichnet</string>
+    <string name="render2_diag_res_px">%1$d × %2$d px</string>
+    <string name="render2_diag_res_percent">%1$d %% je Achse</string>
+    <string name="render2_diag_res_off">aus (100 %%)</string>
+    <string name="render2_diag_res_unavailable">nicht verfügbar</string>
+    <string name="render2_diag_res_min">Untergrenze der dynamischen Auflösung: %1$d %%</string>
+    <string name="render2_diag_bench_res">Auflösung Ø %1$s von %2$s</string>
+</resources>

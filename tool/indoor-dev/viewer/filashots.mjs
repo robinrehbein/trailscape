@@ -11,6 +11,7 @@
 //        [--riders "18:-0.9:0,60:0.9:2,140:-1.3:1:o"]   andere Radfahrer: Abstand voraus (m), Seitenversatz
 //                                                     (rechts +), Trikot 0–5, „o" = Gegenverkehr
 //        [--birds 5]                                   ein Schwarm von n Voegeln vor der Kamera
+//        [--seti effectQuality=2] [--frames 16]        Zahl-Schalter; Bilder je Aufnahme (TAA)
 //
 // `--sky` ist ein Verzeichnis von `indoor-dev sky` (sky.json, cube.bin, clouds.bin).
 // `--rig v1` nimmt die Lenkerkamera vor der Ueberarbeitung (fuer Vorher-Bilder).
@@ -53,6 +54,9 @@ for (let i = 0; i < argv.length; i++) {
     case '--riders': a.riders = v().split(',').filter(Boolean).map((x) => { const p = x.split(':'); return { gap: +p[0], lat: +p[1], jersey: +(p[2] ?? 0), oncoming: p[3] === 'o' }; }); break;
     case '--birds': a.birds = Number(v()); break;
     case '--set': { const [kk, vv] = v().split('='); a.set[kk] = vv === '1' || vv === 'true'; break; }
+    case '--seti': { const [kk, vv] = v().split('='); a.set[kk] = Number(vv); break; } // Zahl (effectQuality, cascades)
+    case '--sets': { const [kk, vv] = v().split('='); a.set[kk] = vv; break; } // Text (shadowType=PCF)
+    case '--frames': a.frames = Number(v()); break; // Bilder je Aufnahme (TAA braucht mehrere)
     default:
       if (k.startsWith('--')) { console.error(`unbekannte Option ${k}`); process.exit(2); }
       a.world = resolve(k);
@@ -145,11 +149,12 @@ for (const dist of a.dists) {
     const showRider = a.rider && !(pose.hideRider);
     const scene = {
       world: a.world, sky: a.sky, materials: a.materials, width: a.width, height: a.height, timeS: a.time, settings,
+      ...(a.frames ? { frames: a.frames } : {}),
       camera: { eye: pose.eye, target: pose.target, up: pose.up, fovV: proj.fovV, near: proj.near, far: 25000, shiftX: 0, shiftY: proj.shiftY },
       fogHeight: here.u - 40,
       tiles,
       rider: showRider ? { file: join(a.models, 'rider.glb'), matrix: riderMatrix(rel(...enuLateral(here, lat)), here.headingDeg, here.gradePct), pedal: 0.15, roll: 0 } : null,
-      cockpit: pose.cockpit ? { file: a.cockpit, matrix: pose.cockpit, nodes: { x_cockpit_bars: steerMatrix(pose.steer) } } : null,
+      cockpit: pose.cockpit && existsSync(a.cockpit) ? { file: a.cockpit, matrix: pose.cockpit, nodes: { x_cockpit_bars: steerMatrix(pose.steer) } } : null,
     };
     const models = [];
     for (const r of a.riders) {

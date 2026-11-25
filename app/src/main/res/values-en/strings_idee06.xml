@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Idea 6: calibration after the first rides (ride feel, guided check, ride logs) -->
+
+    <!-- IndoorFeelScreens.kt: sliders -->
+    <string name="indoor_feel_card_title">Fine-tuning</string>
+    <string name="indoor_feel_resistance_title">Overall resistance</string>
+    <string name="indoor_feel_resistance_light">lighter</string>
+    <string name="indoor_feel_resistance_heavy">heavier</string>
+    <string name="indoor_feel_resistance_body" formatted="false">How heavy the pedals feel overall. Above 100% the trainer brakes harder, below it less. The speed of the ride on the route does not change.</string>
+    <string name="indoor_feel_surface_title">Surface strength</string>
+    <string name="indoor_feel_surface_light">barely noticeable</string>
+    <string name="indoor_feel_surface_heavy">very pronounced</string>
+    <string name="indoor_feel_surface_body" formatted="false">How clearly gravel, forest floor and grass can be felt compared with asphalt. 100% is today’s table, 0% feels the same everywhere.</string>
+    <string name="indoor_feel_value_percent">%1$d%%</string>
+    <string name="indoor_feel_reset">Reset</string>
+    <string name="indoor_feel_default_note" formatted="false">Default: 100% — how the app calculates today.</string>
+
+    <!-- Entries in the settings -->
+    <string name="indoor_feel_calibrate_title">Set up ride feel</string>
+    <string name="indoor_feel_calibrate_body">Ride steadily for 2–3 minutes; the app suggests an overall resistance.</string>
+    <string name="indoor_feel_calibrate_needs_trainer">A real trainer must be paired for this (not the demo trainer).</string>
+    <string name="indoor_feel_protocols_title">Ride logs</string>
+    <string name="indoor_feel_protocols_body">What the trainer was given and what came out — on this device only.</string>
+
+    <!-- Guided check -->
+    <string name="indoor_feel_cal_title">Set up ride feel</string>
+    <string name="indoor_feel_cal_intro">Pedal steadily for 2–3 minutes on a flat stretch: about 80–90 rpm, calm, without shifting. The app compares your power with what a bike needs on the flat.</string>
+    <string name="indoor_feel_cal_waiting">Get going: at least 100 watts and 60–110 rpm.</string>
+    <string name="indoor_feel_cal_warmup">Settling in … %1$d seconds until the measurement starts.</string>
+    <string name="indoor_feel_cal_measuring">Measuring — keep pedalling steadily. %1$d seconds left.</string>
+    <string name="indoor_feel_cal_live">%1$d W · %2$d rpm · gear %3$d</string>
+    <string name="indoor_feel_cal_gear_less">Shift easier</string>
+    <string name="indoor_feel_cal_gear_more">Shift harder</string>
+    <string name="indoor_feel_cal_finish_now">Evaluate now</string>
+    <string name="indoor_feel_cal_cancel">Cancel</string>
+    <string name="indoor_feel_cal_result_title">Suggestion</string>
+    <string name="indoor_feel_cal_result_suggest">Overall resistance from %1$d%% to %2$d%%</string>
+    <string name="indoor_feel_cal_result_same">The resistance fits: %1$d%% stays.</string>
+    <string name="indoor_feel_cal_result_detail">Measured %1$d W at %2$d rpm; expected for a bike on the flat: %3$d W. Accuracy of the factor roughly ±%4$d%%.</string>
+    <string name="indoor_feel_cal_result_clamped" formatted="false">The calculated value was outside the limits (70–130%) and was capped.</string>
+    <string name="indoor_feel_cal_accept">Accept</string>
+    <string name="indoor_feel_cal_decline">Don’t accept</string>
+    <string name="indoor_feel_cal_accepted">Accepted. Applies from the next ride; it can be reset under Ride feel at any time.</string>
+    <string name="indoor_feel_cal_done">Done</string>
+    <string name="indoor_feel_cal_note">A flat stretch shows the resistance only roughly. After accepting, ride a few times and adjust if needed; the ride log helps with that.</string>
+    <string name="indoor_feel_cal_reject_title">No suggestion</string>
+    <string name="indoor_feel_cal_reject_too_few">Too few usable readings. Keep at least 100 watts at 60–110 rpm the whole time.</string>
+    <string name="indoor_feel_cal_reject_power">The power was too low for a reliable measurement (under 100 watts).</string>
+    <string name="indoor_feel_cal_reject_cadence">The cadence was outside 60–110 rpm. Pick a gear that gives about 85 rpm.</string>
+    <string name="indoor_feel_cal_reject_unsteady">Power or cadence was too uneven or drifted. Try again and pedal steadily.</string>
+    <string name="indoor_feel_cal_reject_speed">The speed of the ride did not match your power — probably the ride had not settled yet. Please try again.</string>
+    <string name="indoor_feel_cal_reject_gear">The gear was changed. Stay in one gear and try again.</string>
+    <string name="indoor_feel_cal_reject_implausible">The result would be far outside the usual (more than half to double the resistance). That points to a measurement error, so nothing is suggested.</string>
+    <string name="indoor_feel_cal_retry">Try again</string>
+
+    <!-- Ride logs -->
+    <string name="indoor_feel_log_title">Ride logs</string>
+    <string name="indoor_feel_log_intro">One line every 5 seconds per ride: set grade or resistance, measured power, simulated speed, gear. The files stay on this device; only what you share yourself leaves it. At most 12 rides are kept.</string>
+    <string name="indoor_feel_log_empty">No log yet. One is created on every ride.</string>
+    <string name="indoor_feel_log_open">View</string>
+    <string name="indoor_feel_log_share">Share</string>
+    <string name="indoor_feel_log_delete">Delete</string>
+    <string name="indoor_feel_log_delete_all">Delete all</string>
+    <string name="indoor_feel_log_back_to_list">Back to list</string>
+    <string name="indoor_feel_log_entry">%1$s · %2$d KB</string>
+    <string name="indoor_feel_log_share_chooser">Share ride log</string>
+    <string name="indoor_feel_log_share_subject">Trailscape ride log</string>
+    <string name="indoor_feel_log_truncated">Only the first %1$d lines are shown here; the whole file is shared.</string>
+</resources>

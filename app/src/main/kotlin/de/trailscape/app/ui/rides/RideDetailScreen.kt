@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.PedalBike
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -83,6 +84,8 @@ import de.trailscape.app.ui.progress.AchievementsCard
 import de.trailscape.app.ui.progress.rememberRideFacts
 import de.trailscape.core.milestonesReachedBy
 import de.trailscape.core.recordsSetBy
+import de.trailscape.app.ui.indoor.IndoorFromRideAction
+import de.trailscape.app.ui.indoor.indoorFromRideOffered
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.map.ElevationProfile
 import de.trailscape.app.ui.map.ElevationSample
@@ -102,6 +105,8 @@ import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.core.Confidence
 import de.trailscape.core.DecouplingResult
 import de.trailscape.core.Ride
+import de.trailscape.core.TrackOrigin
+import de.trailscape.core.classifyTrackOrigin
 import de.trailscape.core.RideCurve
 import de.trailscape.core.RouteComparison
 import de.trailscape.core.RideLoad
@@ -201,6 +206,9 @@ internal fun RideDetailScreen(
     onRename: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
+    onRideIndoor: (() -> Unit)? = null,
+    // „In 3D ansehen" (Idee 4, docs/indoor/vorschau.md); `null` = kein Einstieg.
+    onPreview3d: (() -> Unit)? = null,
 ) {
     val mapStyle by appViewModel.mapStyle.collectAsStateWithLifecycle()
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
@@ -397,6 +405,42 @@ internal fun RideDetailScreen(
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 )
+
+                // Strecke vor der Tour ansehen: 3D-Vorschau ohne Trainer. Nicht fuer
+                // Indoor-Fahrten — ihre Punkte sind die virtuelle Spur einer anderen Strecke.
+                if (onPreview3d != null && !ride.indoor && ride.points.size >= 2) {
+                    NeutralButton(
+                        onClick = onPreview3d,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            Icons.Filled.ViewInAr,
+                            contentDescription = null,
+                            modifier = Modifier.size(ButtonDefaults.IconSize),
+                        )
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Text(stringResource(R.string.idee04_detail_preview_action))
+                    }
+                }
+
+                // „Indoor fahren": dieselbe Strecke drinnen, die Aussenfahrt als
+                // Mitfahrer (ui/indoor/IndoorFromRide.kt). Unter den Hauptaktionen,
+                // damit Teilen und Loeschen ohne Scrollen erreichbar bleiben.
+                if (onRideIndoor != null && indoorFromRideOffered(ride)) {
+                    IndoorFromRideAction(planned = ride.planned, onClick = onRideIndoor)
+                }
+
+                // Idee 7: Tour <-> Planung umwandeln (siehe PlanFlip.kt).
+                if (!ride.indoor && ride.points.size >= 2) {
+                    PlanFlipSection(
+                        planned = ride.planned,
+                        looksLikeRoute = remember(ride.id, ride.updatedAt) {
+                            classifyTrackOrigin(ride.points) == TrackOrigin.PLANNED_ROUTE
+                        },
+                        rideName = ride.name,
+                        onFlip = { toPlanned -> appViewModel.setRidePlanned(ride.id, toPlanned) },
+                    )
+                }
 
                 // Optional darunter: Strava (nur mit verbundenem Konto, siehe
                 // StravaRideAction.kt).

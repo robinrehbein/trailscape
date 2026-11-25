@@ -43,6 +43,7 @@ import de.trailscape.core.TrainingSession
 import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.i18n.sessionTitle
 import de.trailscape.core.indoor.IndoorPhase
+import de.trailscape.core.indoor.ShifterEvent
 import kotlinx.coroutines.delay
 
 /**
@@ -116,8 +117,13 @@ fun IndoorFlowScreen(
     }
     // Von „Heute" gewaehlter Vorschlag der Einheit des Tages.
     LaunchedEffect(vm) { appViewModel.consumeIndoorDayPick()?.let(vm::preferDaySuggestion) }
+    // „Indoor fahren" aus der Tourdetailansicht: diese Strecke vorauswaehlen.
+    LaunchedEffect(vm) { appViewModel.consumeIndoorRidePick()?.let(vm::preferRide) }
+    // „In 3D ansehen" im Tourdetail: direkt in die Vorschau (Idee 4, docs/indoor/vorschau.md).
+    LaunchedEffect(vm) { appViewModel.consumeIndoorPreviewPick()?.let(vm::openPreview) }
     // Die Startseite ist der Anfang: Strecken einmal lesen (nach einer Drehung nicht erneut).
-    LaunchedEffect(vm) { vm.ensureRouteOptions() }
+    // Zum Ansehen geoeffnet (Vorschau): keine Startseite, also auch keine Streckenliste und kein Katalogabruf.
+    LaunchedEffect(vm) { if (!vm.previewMode) vm.ensureRouteOptions() }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, vm) {
@@ -137,10 +143,66 @@ fun IndoorFlowScreen(
         IndoorStage.ROUTE -> HomeStage(vm, onExit)
         IndoorStage.PAIR -> PairStage(vm)
         IndoorStage.SETTINGS -> SettingsStage(vm, onOpenWorlds, onOpenDiagnostics)
-        IndoorStage.WORLD -> WorldStage(vm)
+        IndoorStage.WORLD -> if (vm.previewMode) PreviewWorldStage(vm, onExit) else WorldStage(vm)
         IndoorStage.RIDE -> RideStage(vm)
         IndoorStage.SUMMARY -> SummaryStage(vm, onExit)
+        IndoorStage.PREVIEW -> PreviewStage(vm, onExit)
     }
+}
+
+/**
+ * „Strecke vorbereiten" vor der Vorschau: derselbe Bildschirm wie vor einer
+ * Fahrt (Voranschlag, Datenmenge, Fortschritt), ohne Server-Bau; statt
+ * „Ohne 3D-Ansicht fahren" steht „Nur Höhenprofil ansehen". Zurueck verlaesst
+ * den Ablauf (die Vorschau kam aus dem Tourdetail).
+ */
+@Composable
+private fun PreviewWorldStage(vm: IndoorViewModel, onExit: () -> Unit) {
+    val ui by vm.world.collectAsStateWithLifecycle()
+    val leave = { if (!vm.back()) onExit() }
+    BackHandler {
+        if (ui is IndoorWorldUi.Building) vm.cancelWorldBuild() else leave()
+    }
+    IndoorWorldScreen(
+        ui = ui,
+        onLoad = vm::loadWorld,
+        onCancel = vm::cancelWorldBuild,
+        onRideWithoutWorld = { vm.startPreview(withWorld = false) },
+        onRetry = vm::retryWorld,
+        onBack = leave,
+        onContinue = { vm.startPreview(withWorld = true) },
+        withoutWorldLabel = stringResource(R.string.idee04_world_without_action),
+        continueLabel = stringResource(R.string.idee04_world_continue_action),
+    )
+}
+
+/** Die 3D-Vorschau selbst; Zurueck schliesst sie und verlaesst den Ablauf. */
+@Composable
+private fun PreviewStage(vm: IndoorViewModel, onExit: () -> Unit) {
+    val preview by vm.preview.collectAsStateWithLifecycle()
+    val renderer by vm.renderer.collectAsStateWithLifecycle()
+    val leave = { if (!vm.back()) onExit() }
+    BackHandler { leave() }
+    val ui = preview
+    if (ui == null) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        }
+        return
+    }
+    IndoorPreviewScreen(
+        ui = ui,
+        worldSurface = { modifier ->
+            renderer?.let { r -> WorldSurface(renderer = r, modifier = modifier) }
+        },
+        onBack = leave,
+        onTogglePlay = { vm.previewTogglePlay() },
+        onCycleSpeed = { vm.previewCycleSpeed() },
+        onSeek = { vm.previewSeek(it) },
+        onCameraChange = { vm.previewSetCamera(it) },
+    )
 }
 
 @Composable
@@ -160,6 +222,13 @@ private fun PairStage(vm: IndoorViewModel) {
 private fun SettingsStage(vm: IndoorViewModel, onOpenWorlds: () -> Unit, onOpenDiagnostics: () -> Unit) {
     val ui by vm.pair.collectAsStateWithLifecycle()
     val catalog by vm.catalog.collectAsStateWithLifecycle()
+    val feel by vm.feel.collectAsStateWithLifecycle()
+    // Unterseite Fahrprotokolle (kein eigener Ablaufschritt: bleibt in den Einstellungen).
+    var showProtocols by rememberSaveable { mutableStateOf(false) }
+    if (showProtocols) {
+        ProtocolsPage(vm, onBack = { showProtocols = false })
+        return
+    }
     BackHandler { vm.closeSubPage() }
     IndoorSettingsScreen(
         ui = ui,
@@ -168,10 +237,49 @@ private fun SettingsStage(vm: IndoorViewModel, onOpenWorlds: () -> Unit, onOpenD
         onGearTableChange = vm::setGearTable,
         onTimeOfDayChange = vm::setTimeOfDay,
         onOtherRidersChange = vm::setOtherRiders,
+        onTrailOverlaysChange = vm::setTrailOverlays,
+        onGraphicsChange = vm::setGraphics,
         onOpenWorlds = onOpenWorlds,
         onRefreshCatalog = vm::refreshCatalog,
         onOpenDiagnostics = onOpenDiagnostics,
         onBack = vm::closeSubPage,
+        feel = feel,
+        onResistanceChange = vm::setFeelResistance,
+        onSurfaceStrengthChange = vm::setFeelSurfaceStrength,
+        onResetFeel = vm::resetFeel,
+        onStartCalibration = vm::startCalibration,
+        calibrationNeedsTrainer = ui.demoTrainer || ui.trainerName == null,
+        onOpenProtocols = if (vm.protocols != null) ({ showProtocols = true }) else null,
+    )
+}
+
+/** Liste und Ansicht der Fahrprotokolle; liest und löscht Dateien im Hintergrund-unkritischen Umfang (klein, höchstens 12). */
+@Composable
+private fun ProtocolsPage(vm: IndoorViewModel, onBack: () -> Unit) {
+    val store = vm.protocols ?: run { onBack(); return }
+    val context = LocalContext.current
+    var version by remember { mutableStateOf(0) }
+    var openedName by rememberSaveable { mutableStateOf<String?>(null) }
+    val entries = remember(version) { store.list() }
+    val format = remember { java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT) }
+    val rows = entries.map { ProtocolRowUi(it.file.name, format.format(java.util.Date(it.modifiedMs)), ((it.sizeBytes + 1023) / 1024).toInt()) }
+    val opened = entries.firstOrNull { it.file.name == openedName }
+    val openedText = remember(opened) { opened?.let { store.read(it) } }
+    BackHandler { if (openedName != null) openedName = null else onBack() }
+    IndoorProtocolScreen(
+        rows = rows,
+        openedId = opened?.file?.name,
+        openedText = openedText,
+        onOpen = { openedName = it },
+        onShare = { id -> entries.firstOrNull { it.file.name == id }?.let { e -> runCatching { shareProtocol(context, e) } } },
+        onDelete = { id ->
+            entries.firstOrNull { it.file.name == id }?.let { store.delete(it) }
+            openedName = null
+            version++
+        },
+        onDeleteAll = { store.clear(); openedName = null; version++ },
+        onCloseOpened = { openedName = null },
+        onBack = onBack,
     )
 }
 
@@ -204,6 +312,7 @@ private fun HomeStage(vm: IndoorViewModel, onExit: () -> Unit) {
     val ui by vm.route.collectAsStateWithLifecycle()
     val pair by vm.pair.collectAsStateWithLifecycle()
     val catalog by vm.catalog.collectAsStateWithLifecycle()
+    val catalogExtras by vm.catalogExtras.collectAsStateWithLifecycle()
     val day by vm.day.collectAsStateWithLifecycle()
     val (bluetoothOn, permissionGranted) = rememberBluetoothState()
     BackHandler { onExit() }
@@ -227,6 +336,7 @@ private fun HomeStage(vm: IndoorViewModel, onExit: () -> Unit) {
         onCatalogDownload = vm::downloadCatalog,
         onCatalogCancel = vm::cancelCatalogDownload,
         onCatalogDiscard = vm::discardCatalogDownload,
+        catalogExtras = catalogExtras,
     )
 }
 
@@ -256,6 +366,20 @@ private fun WorldStage(vm: IndoorViewModel) {
 
 @Composable
 private fun RideStage(vm: IndoorViewModel) {
+    // Geführter Abgleich „Fahrgefühl einstellen“: eigene Seite statt Fahransicht.
+    val calibration by vm.calibration.collectAsStateWithLifecycle()
+    calibration?.let { cal ->
+        BackHandler { vm.leaveCalibration() }
+        IndoorCalibrationScreen(
+            ui = cal,
+            onGearLess = { vm.shift(ShifterEvent.DOWN) },
+            onGearMore = { vm.shift(ShifterEvent.UP) },
+            onFinishNow = vm::finishCalibrationNow,
+            onAccept = vm::acceptCalibration,
+            onLeave = vm::leaveCalibration,
+        )
+        return
+    }
     val ride by vm.ride.collectAsStateWithLifecycle()
     val renderer by vm.renderer.collectAsStateWithLifecycle()
     var askLeave by rememberSaveable { mutableStateOf(false) }

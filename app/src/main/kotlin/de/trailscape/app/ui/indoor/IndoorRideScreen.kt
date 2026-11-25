@@ -594,18 +594,20 @@ private fun powerColor(session: IndoorSessionState): Color {
     return if (diff <= maxOf(erg.targetW / 20, 5)) HudColors.accent else HudColors.ink
 }
 
-/** Unter den Kernwerten: Geist (ausblendbar), Laden der Welt, Hinweis. */
+/** Unter den Kernwerten: Geist (ausblendbar), Laden der Welt, Bergwertung, Hinweis. */
 @Composable
 private fun TopExtras(ui: IndoorRideUi, session: IndoorSessionState, chromeHidden: Boolean, actions: HudActions) {
     val ghost = session.ghost
     if (ghost != null) {
         ChromeVisibility(visible = !chromeHidden) {
-            HudGhostChip(ghost = ghost, label = ui.ghostLabel, modifier = Modifier.padding(top = 4.dp))
+            HudGhostChip(ghost = ghost, label = ui.ghostLabel, modifier = Modifier.padding(top = 4.dp), showPower = ui.ghostOutdoor)
         }
     }
     (ui.render as? IndoorRenderUi.Loading)?.let { loading ->
         HudLoadingChip(loading = loading, modifier = Modifier.padding(top = 4.dp))
     }
+    // Bergwertung und Kilometer (IndoorTrailHud.kt); abschaltbar in den Einstellungen.
+    ui.trail?.let { IndoorTrailOverlay(trail = it, modifier = Modifier.padding(top = 4.dp)) }
     ui.notice?.let { notice ->
         NoticeBanner(notice = notice, onDismiss = actions.onDismissNotice, modifier = Modifier.padding(top = 6.dp))
     }

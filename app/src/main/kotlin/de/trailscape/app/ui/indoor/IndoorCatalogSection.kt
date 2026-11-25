@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,6 +45,11 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -55,6 +61,7 @@ import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.TagPill
 import de.trailscape.core.indoor.catalog.CatalogProfile
 import de.trailscape.core.indoor.catalog.CatalogRideKind
+import de.trailscape.core.indoor.catalog.CatalogTimeBasis
 import java.util.Locale
 
 /**
@@ -74,18 +81,60 @@ internal fun IndoorCatalogList(
     catalog: IndoorCatalogUi,
     selectedKey: String?,
     onSelect: (IndoorRouteOption) -> Unit,
+    extras: IndoorCatalogExtras = IndoorCatalogExtras(),
+    canRide: Boolean = false,
+    onRide: () -> Unit = {},
+    onDownload: (String) -> Unit = {},
+    onCancel: (String) -> Unit = {},
+    onDiscard: (String) -> Unit = {},
+    initialFilterOpen: Boolean = false,
+    initialDetailId: String? = null,
 ) {
+    val formats = LocalAppFormats.current
+    val lang = formats.language.tag
     when {
         catalog.loading -> Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.Center) {
             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
         }
         catalog.items.isEmpty() -> MutedText(stringResource(R.string.indoor_app_catalog_empty))
-        else -> catalog.items.forEach { item ->
-            CatalogCard(
-                item = item,
-                selected = selectedKey == "catalog:${item.id}",
-                onSelect = onSelect,
+        else -> {
+            val filter by CatalogBrowseSession.filter.collectAsState()
+            val rows = remember(catalog.items, extras) { catalogRows(catalog.items, extras) }
+            val shown = remember(rows, filter, lang) { rows.filteredBy(filter) { it.item.name.pick(lang) } }
+            var detailId by rememberSaveable { mutableStateOf(initialDetailId) }
+            CatalogFilterBar(
+                filter = filter,
+                shown = shown.size,
+                total = rows.size,
+                onChange = CatalogBrowseSession::set,
+                initiallyOpen = initialFilterOpen,
             )
+            if (shown.isEmpty()) {
+                CatalogNoMatch(onReset = { CatalogBrowseSession.set(filter.cleared()) })
+            }
+            shown.forEach { row ->
+                CatalogCard(
+                    row = row,
+                    selected = selectedKey == "catalog:${row.item.id}",
+                    onSelect = onSelect,
+                    onDetails = { detailId = row.item.id },
+                )
+            }
+            // Eine Strecke, die der Filter gerade ausblendet, bleibt im Detail offen.
+            val detail = rows.firstOrNull { it.item.id == detailId }
+            if (detail != null) {
+                CatalogDetailDialog(
+                    row = detail,
+                    selected = selectedKey == "catalog:${detail.item.id}",
+                    canRide = canRide,
+                    onSelect = onSelect,
+                    onRide = onRide,
+                    onDownload = onDownload,
+                    onCancel = onCancel,
+                    onDiscard = onDiscard,
+                    onDismiss = { detailId = null },
+                )
+            }
         }
     }
 }
@@ -102,10 +151,12 @@ internal fun catalogRefreshText(r: IndoorCatalogRefresh): String = stringResourc
 
 @Composable
 private fun CatalogCard(
-    item: IndoorCatalogItemUi,
+    row: CatalogRow,
     selected: Boolean,
     onSelect: (IndoorRouteOption) -> Unit,
+    onDetails: () -> Unit,
 ) {
+    val item = row.item
     val formats = LocalAppFormats.current
     val lang = formats.language.tag
     val name = item.name.pick(lang)
@@ -121,11 +172,11 @@ private fun CatalogCard(
         },
     ) {
         CatalogPreviewArea(item, name)
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RadioButton(selected = selected, onClick = null)
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = name, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                    Text(text = name, style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = listOf(item.region.pick(lang), countryName(item.country, formats.language.locale))
                             .filter { it.isNotBlank() }.joinToString(" · "),
@@ -135,15 +186,8 @@ private fun CatalogCard(
                 }
                 TagPill(text = kindLabel(item.kind))
             }
-            Text(
-                text = stringResource(
-                    R.string.indoor_app_catalog_meta,
-                    formats.km(item.distanceKm),
-                    formats.indoorAscent(item.ascentM),
-                    surfaceSummary(item),
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            CatalogFactsGrid(row)
+            CatalogSurfaceSummary(item)
             // Mit Bild steht das Profil klein unter den Zahlen; ohne Bild steht es oben gross.
             if (item.profile != null && item.previewPath != null) {
                 CatalogProfileChart(item.profile, name, Modifier.fillMaxWidth().height(44.dp), showRange = true)
@@ -152,9 +196,89 @@ private fun CatalogCard(
                 text = item.description.pick(lang),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3,
             )
-            CatalogStatusPill(item)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FlowRow(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    CatalogStatusPill(item)
+                    CatalogRiddenPill(row)
+                }
+                val detailsCd = stringResource(R.string.indoor_i10_details_cd, name)
+                TextButton(onClick = onDetails, modifier = Modifier.semantics { contentDescription = detailsCd }) {
+                    Text(stringResource(R.string.indoor_i10_details))
+                }
+            }
         }
+    }
+}
+
+/** „Gefahren · Bestzeit 41 min" — nur, wenn es eine volle Indoor-Fahrt auf dieser Strecke gibt. */
+@Composable
+internal fun CatalogRiddenPill(row: CatalogRow) {
+    val best = row.bestS ?: return
+    TagPill(
+        text = stringResource(R.string.indoor_i10_ridden, catalogDuration(best)),
+        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+    )
+}
+
+/**
+ * Die Kennzahlen der Karte in festen Feldern: Laenge, Hoehenmeter, Steigung
+ * (Durchschnitt und Maximum) und die geschaetzte Fahrzeit mit Hinweis, woher
+ * sie kommt. Umbrechen bei grosser Schrift.
+ */
+@Composable
+internal fun CatalogFactsGrid(row: CatalogRow, modifier: Modifier = Modifier) {
+    val formats = LocalAppFormats.current
+    val item = row.item
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Fact(stringResource(R.string.indoor_i10_facts_length), stringResource(R.string.indoor_i10_km_value, formats.km(item.distanceKm)))
+        Fact(stringResource(R.string.indoor_i10_facts_ascent), stringResource(R.string.indoor_i10_ascent_value, formats.indoorAscent(item.ascentM)))
+        Fact(stringResource(R.string.indoor_i10_facts_grade), catalogGradeText(row, formats))
+        val est = row.estimateS
+        if (est != null) {
+            Fact(
+                stringResource(R.string.indoor_i10_facts_time),
+                stringResource(R.string.indoor_i10_time_value, catalogDuration(est)),
+                note = stringResource(
+                    if (row.timeBasis == CatalogTimeBasis.PROFILE) R.string.indoor_i10_time_basis_profile else R.string.indoor_i10_time_basis_neutral,
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun Fact(label: String, value: String, note: String? = null) {
+    Column(modifier = Modifier.semantics(mergeDescendants = true) {}) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.titleSmall)
+        if (note != null) {
+            Text(note, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** Belagsleiste mit Text („Asphalt 59 %, Pflaster 29 %") — die Leiste allein sagt dem Vorleser nichts. */
+@Composable
+internal fun CatalogSurfaceSummary(item: IndoorCatalogItemUi) {
+    val text = surfaceSummary(item)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        SurfaceBar(item.surfaces, stringResource(R.string.indoor_i10_surface_bar_cd, text))
+        Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -230,7 +354,7 @@ internal fun catalogFailureText(reason: IndoorCatalogFailure): String = stringRe
 )
 
 @Composable
-private fun kindLabel(kind: CatalogRideKind): String = stringResource(
+internal fun kindLabel(kind: CatalogRideKind): String = stringResource(
     when (kind) {
         CatalogRideKind.ROAD -> R.string.indoor_app_catalog_kind_road
         CatalogRideKind.GRAVEL -> R.string.indoor_app_catalog_kind_gravel
@@ -240,7 +364,7 @@ private fun kindLabel(kind: CatalogRideKind): String = stringResource(
 
 /** „Asphalt 95 %, Pflaster 5 %" — hoechstens drei Belaege ab 5 %. */
 @Composable
-private fun surfaceSummary(item: IndoorCatalogItemUi): String {
+internal fun surfaceSummary(item: IndoorCatalogItemUi): String {
     val parts = item.surfaces.filter { it.second >= 0.05 }.take(3).map { (kind, f) ->
         stringResource(R.string.indoor_app_catalog_surface_share, surfaceLabel(kind), (f * 100).toInt().coerceAtLeast(1))
     }
@@ -253,7 +377,7 @@ private fun surfaceSummary(item: IndoorCatalogItemUi): String {
  * „Neu".
  */
 @Composable
-private fun CatalogPreviewArea(item: IndoorCatalogItemUi, name: String) {
+internal fun CatalogPreviewArea(item: IndoorCatalogItemUi, name: String) {
     val bitmap = remember(item.previewPath) {
         item.previewPath?.let { path -> runCatching { BitmapFactory.decodeFile(path)?.asImageBitmap() }.getOrNull() }
     }
@@ -326,7 +450,7 @@ private fun CatalogPreviewArea(item: IndoorCatalogItemUi, name: String) {
  * Spanne „612–812 m" oben rechts.
  */
 @Composable
-private fun CatalogProfileChart(profile: CatalogProfile, name: String, modifier: Modifier, showRange: Boolean) {
+internal fun CatalogProfileChart(profile: CatalogProfile, name: String, modifier: Modifier, showRange: Boolean) {
     val formats = LocalAppFormats.current
     val lo = profile.elevM.min()
     val hi = profile.elevM.max()
@@ -381,5 +505,5 @@ private fun CatalogProfileChart(profile: CatalogProfile, name: String, modifier:
 /** Kleinste dargestellte Hoehenspanne — Arenberg (20 Hm) soll nicht wie ein Pass aussehen. */
 private const val MIN_CATALOG_PROFILE_SPAN_M = 40.0
 
-private fun countryName(code: String, locale: Locale): String =
+internal fun countryName(code: String, locale: Locale): String =
     if (code.length == 2) Locale.Builder().setRegion(code).build().getDisplayCountry(locale).ifBlank { code } else code

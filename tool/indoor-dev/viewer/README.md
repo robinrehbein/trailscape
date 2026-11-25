@@ -66,6 +66,8 @@ Welt), `/models/` (die Modelle).
 | `exposure`, `near` | `0.62`, je Kamera | Belichtung, nahe Schnittebene |
 | `auto` | `1` | `0`: nichts zeichnen, bis `setView` gerufen wird |
 | `hdr` | `0` | `1`: Szene wie Filament in einen Float-Puffer (RGBA16F) mit 4× MSAA, Tonemapping danach — dort wird vor dem Mischen nicht auf 0..1 geklemmt |
+| `cardFade` | `1` | Blattkarten (`x_mat_tree_cards`), die man fast auf der Kante sieht, ausblenden wie `foliage.mat` (seit `indoor-world/12`); `0` zeigt den alten Stand |
+| `hideMat` | – | Fehlersuche: Materialien, deren Name eines der kommagetrennten Stücke enthält, nicht zeichnen (`hideMat=route_shoulder,terrain`) |
 | `clampColor` | `0` | `1`: Vertexfarben im Shader auf 0..1 klemmen (so sähe es mit `centroid`-Interpolation aus); mit `hdr=1` zum Eingrenzen heller Nahtlinien. SwiftShader zeigt den Effekt nur an einzelnen Pixeln — maßgeblich ist `indoor-dev overlaps` (Zähler „durchsichtige Eckpunkte") |
 
 Tasten: ←/→ Strecke (mit Umschalt weiter), 1/2/3 Kamera, Q/E Sonnenazimut,

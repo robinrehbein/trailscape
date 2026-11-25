@@ -85,7 +85,7 @@ beurteilt; seine Hauptpunkte (dunkle Fichtenwände, flache Waldscherben) sind
 als Nr. 11/12 eingearbeitet, die übrigen (Detailtextur über dem Luftbild,
 Laubkarten) brauchten eigene Shader bzw. eine Vertragsänderung.
 
-**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/11` (vorher `/10`, `/9`, `/8`, `/7`, `/6`, `/5`, `/4`, `/3`, `/2`, `/1`). Sie geht
+**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/12` (vorher `/11`, `/10`, `/9`, `/8`, `/7`, `/6`, `/5`, `/4`, `/3`, `/2`, `/1`). Sie geht
 in die Welt-ID ein — selbst gebaute Welten der alten Fassung werden nicht mehr
 gefunden und neu gebaut (die alten bleiben in der Weltverwaltung löschbar).
 Katalog: `version` aller Strecken in `catalog-src.json` auf 2. Version 10
@@ -96,6 +96,10 @@ Version 11 (25.11.2026, Branch `claude/indoor-vegetation-objekte`): neue Bäume,
 Objekte, Dachfarben (Abschnitt „Vegetation und Objekte“); alle 20 Katalogeinträge
 um eins angehoben; im beigelegten Katalog (14 Einträge) Versionen und Paketnamen
 angehoben, Welt-IDs wie bisher aus dem Release.
+Version 12 (25.11.2026, Branch `claude/indoor-weltqualitaet`): Randstreifen nach
+Luftbild, feineres Laub, Waldkörper nach Luftbild, flache LoD2-Platten (Abschnitt
+„Weltqualität der Katalogstrecken“); alle 20 Katalogeinträge um eins angehoben,
+im beigelegten Katalog ebenso.
 
 ### Mängel, Ursache, Stand
 
@@ -894,7 +898,8 @@ Volumen). Alle Welten bestehen `checkWorld`; Budgets eingehalten.
 - [ ] Eckbögen am Dreiast-Knoten (lidar.md 9.1) nicht angefasst.
 - [ ] Hecken, Strommasten, Mauern: keine Daten in den Vektorkacheln.
 - [ ] Grasstreifen über Winterfeldern nur leicht gedämpft.
-- [ ] Aus dem Fehlerbericht der neuen Strecken nicht bearbeitet: bottwartal
+- [ ] (Stand 25.11.2026 später: km 25 behoben, bottwartal km 27 Band behoben, km 6,5 offen —
+      Abschnitt „Weltqualität der Katalogstrecken“.) Aus dem Fehlerbericht der neuen Strecken nicht bearbeitet: bottwartal
       km 27,0 (Querstraße nur als Luftbild), welzheimer-wald km 25,0 (graue
       Rechteckfläche auf der Wiese, im Betrachter weiter zu sehen) und km 6,5
       (Gehweg endet mit harter Querkante) — Straßen-/Geländeschichten, eigene
@@ -904,6 +909,161 @@ Volumen). Alle Welten bestehen `checkWorld`; Budgets eingehalten.
       **nicht gelaufen** — Maven Central antwortete auf das Robolectric-JAR
       (`android-all-instrumented-15`) mit 429 (`retry-after` ≈ 19 h). Diese Runde
       ändert keinen App-Code; nachholen.
+
+## Weltqualität der Katalogstrecken (25.11.2026, Branch `claude/indoor-weltqualitaet`)
+
+Auftrag des Inhabers: die 20 vorgefertigten Welten „richtig high quality … AAA-wertig“.
+Ehrlich vorweg: Mit prozedural gebauten Welten aus Luftbild, Höhenmodell und Karte auf einem
+Handy ist „AAA“ nicht erreichbar (keine handmodellierten Assets, Luftbild als Bodentextur mit
+20 cm–2 m je Pixel, Bäume als Karten). Ziel dieser Runde: die Mängel beheben, die auf **allen**
+Strecken in jedem Bild zu sehen waren, ohne Paketgröße und Dreiecke nennenswert wachsen zu lassen (Ergebnis: +1,3 bis +2,4 % je Paket, siehe unten).
+Welt-Version `indoor-world/12`, alle 20 Katalogeinträge um eins angehoben.
+
+### Bestandsaufnahme
+
+Grundlage: die 20 veröffentlichten Pakete des Release `indoor-worlds-v1` (alle
+`indoor-world/11`), je Strecke vier Stellen (12/37/62/87 % der Länge) aus Verfolger- und
+Drohnenkamera, dazu die bekannten Problemstellen; Betrachter `shots.mjs` (three.js,
+SwiftShader), einzelne Stellen im Filament-Referenzrenderer (`filashots.mjs`, Filament 1.75.1
+auf llvmpipe). **Nicht auf dem Gerät.**
+
+Mängel auf (fast) allen Strecken, nach Wirkung:
+
+| # | Mangel | Ursache | Stand |
+|---|---|---|---|
+| 1 | Randstreifen als grelles, grünes Band neben dem Weg (Sa Calobra über Kalkfels, Flint Hills, Alpe d'Huez, Winterfelder in Bottwartal, Strohgäu, Feldberg) — in jedem Verfolger- und Drohnenbild | Vertexfarbe ≤ 1 auf zu dunklen Randtexturen (Gras-Mittel linear 0,19/0,27/0,08) und Abtönung je Kanal auf das 0,5–1,7-Fache begrenzt: helle Luftbilder waren nicht erreichbar, der Farbton blieb grün | **behoben** |
+| 2 | Baumkronen aus der Nähe: „Schuppen“ statt Laub, lange Striche („Federn“) | Laubmotiv mit 240 Blättern à 17–25 px (auf einer 4,4-m-Karte 35 cm je Blatt), Laubmasse als 128-px-Rauschen; Karten, die man auf der Kante sieht, als verzerrte Striche | **verbessert** |
+| 3 | Waldkörper der Fernstufe als dunkelgrüner, satter Teppich mit harten Kanten, auch dort, wo das Luftbild keinen Wald zeigt (Macchie Sa Calobra, Kahlschlag Kahler Asten) — sichtbare Naht zur Stufe 0 | Stufe 1 setzte Waldkörper nach Landnutzung allein, in fester Artfarbe | **behoben** |
+| 4 | Helle, flache Rechteckplatte neben dem Weg (welzheimer-wald km 25) und helle Zacken am Bankett in den Kehren (sa-calobra) | Kartenstücke, die als „auf der Strecke“ gelten, aber durch die Glättung 1,5 m oder mehr neben der Mittellinie liegen, stanzten Randstreifen und Bankett aus (`PlanMask`), werden selbst aber nicht gezeichnet — das Luftbild (helle Hoffläche, echte Straße) schien durch. Gefunden mit `hideMat` (Bankett/Gelände ausgeblendet) | **behoben** (km 25); Sa Calobra **verringert**: aus der Drohne verschwunden, aus der Verfolgerkamera an der Kehre km 8,9 noch drei Zacken (vermutlich echte Abzweige, deren Aussparung bleibt) |
+| 5 | Flache LoD2-Körper (0,1–1 m hoch, bis 29 × 11 m) als graue Platten | LoD2 führt Boden-/Siloplatten als Gebäude | **behoben** (Nebenfund bei Nr. 4) |
+| 6 | Waldboden/Unterholz unter dem Kronendach dunkel | im three.js-Betrachter deutlich; im Filament-Referenzrenderer (terrain.mat hellt Waldboden auf) unauffällig | unverändert |
+| 7 | Lange kahle, helle Stämme | Laserbäume mit hohem Kronenansatz (echt), Kiefer mit heller Oberstammfarbe | unverändert |
+| 8 | Luftbild an Steilhängen verschmiert | Projektion von oben, Datengrenze | unverändert |
+
+Streckenspezifisch: `bottwartal` km 27 — das grüne Band über dem Winterfeld ist weg (Nr. 1),
+der Seitenweg links der Einmündung bleibt ein schmaler Feldweg im Luftbild (**offen**, kein grober
+Fehler); `welzheimer-wald` km 25 behoben (Nr. 4), km 6,5 Gehweg endet mit kurzer Querkante
+(**offen**). Ortsdurchfahrten (Balkantrasse, Altenberg, Strohgäu, Marbach) und
+Pflasterstrecken ohne groben Fehler.
+
+### Was geändert ist
+
+- **Randstreifen** (`RouteTextures.Verge`, `RouteLayer`): Randtexturen heller normiert (Gras
+  0,33/0,42/0,19, Waldboden 0,255/0,215/0,15, Bankett 0,43/0,395/0,33 linear); die Grundfarbe
+  ohne Luftbild bleibt exakt dieselbe (`LEGACY_VERGE_MEAN` × `DEFAULT_TINT`, Verkehrsinseln und
+  Bankett ebenso zurückgerechnet). Mit Luftbild nimmt der Streifen jetzt dessen **Farbton** an;
+  begrenzt ist nur die Helligkeit (0,55- bis 2,8-Fache der Grundfarbe, `RouteEnv.vergeTarget`).
+  Über kahlem Boden, Fels, Winterfeld oder Pflaster (Grünüberschuss < 0,05, nicht im Schatten:
+  `isBareGround`) liegt die Schotter-/Erdtextur statt Gras. Waldboden folgt dem Luftbild nur zur
+  Hälfte und nie dunkler als 85 % der Grundfarbe (das Luftbild zeigt dort Kronen).
+- **Laub** (`FoliageAtlas`): Zweigmotiv aus rund 900 kleinen Blättern (8–12 px) in 8
+  beleuchteten Büscheln (oben und zur Sonne heller, innen dunkler) statt 240 großer; Laubmasse
+  aus Blattbüscheln (5–7,5 px) über einer geschlossenen Grundmasse statt Rauschen. Mittlere
+  Helligkeit und Deckung wie vorher (gemessen: Zweig 0,52/0,34 statt 0,50/0,375, Masse
+  0,54/0,475 statt 0,53/0,50). Nahe Kronen außen jede zweite statt jede dritte Karte als Zweig
+  (`TreeModels`). Atlas-PNG je Kachel 113,5 → 121,4 kB.
+- **Kantenausblendung** (`app/src/main/materials/foliage.mat`, nur Karten, `atlasMode` 1):
+  Alpha × `smoothstep(0,10; 0,32; |n·v|)` mit der Ebenennormale aus `dFdx/dFdy` der Weltlage —
+  Karten, die man fast auf der Kante sieht, verschwinden statt als Strich. Keine neuen
+  Parameter, keine glTF-Erweiterung; `foliage.filamat` mit matc 1.75.1 neu gebaut. Betrachter:
+  gleiche Rechnung (`cardFade=0` zeigt den alten Stand).
+- **Waldkörper** (`TreesLayer`): Stufe 1 nur, wo die Kronenschätzung des eigenen Luftbilds
+  (`canopyFromAerial`, 8-m-Zellen) mindestens 0,1 zeigt; Kronendachfarbe aller Waldkörper zur
+  30 % an die Luftbildfarbe der Stelle gezogen (Blau nie über 85 % von Grün — Schnee im
+  Winterbild färbte sonst blaugrau). Erster Versuch mit Schwelle 0,35 und 50 % ließ in
+  Baden-Württemberg (Winterluftbild, laubloser Wald braungrau) ganze Hänge kahl wirken
+  (Solitude) — darum Schwelle 0,1: nur klar helle Flächen verlieren den Waldkörper.
+- **Aussparungen am Rand** (`RouteEnv.buildMask`): Kartenstücke auf der Strecke, die mit beiden
+  Enden innerhalb Fahrbahn + 1,5 m liegen, sperren nichts mehr (sie sind dieselbe Straße, nur von
+  der Glättung versetzt). Echte Abzweige und Kreiseleinfahrten (ein Ende weiter weg) sperren wie
+  bisher.
+- **Flache LoD2-Körper** (`LaserParts`): unter 1,2 m (Traufe bis Boden) entfallen sie samt
+  Kartengrundriss an ihrer Stelle (`FLAT_LOD2_M`).
+- Betrachter: neuer Parameter `hideMat=<Teil>,…` (Materialien zur Fehlersuche ausblenden).
+
+### Bilder (`docs/indoor/bilder/weltqualitaet/`)
+
+Je Strecke ein Bild `<id>.jpg`: oben vorher (Release, `indoor-world/11`), unten nachher (lokal
+gebaut, `indoor-world/12`), links Verfolger-, rechts Drohnenkamera an derselben Stelle; Betrachter
+three.js. Dazu Filament-Referenzbilder `filament-<id>-<Stelle>.jpg` (links vorher mit dem alten
+`foliage.filamat`, rechts nachher; Himmel `indoor-dev sky --time NOON`). Die Pakete „vorher“ hat
+die CI gebaut, „nachher“ dieser Container — Geodaten können sich dazwischen leicht geändert haben.
+
+| Bild | Stelle (Laufmeter Verfolger / Drohne) | Was man sieht |
+|---|---|---|
+| `alpe-dhuez.jpg` | 5592 / 13149 | grünes Band beidseits der Straße weg; Kronen ohne Federstriche |
+| `vlaamse-ardennen.jpg` | 8500 / 3663 | Koppenberg; Rand an Feldern in Feldfarbe |
+| `arenberg.jpg` | 6200 / 8700 | Pflaster im Wald; Kronen feiner, gleiche Helligkeit |
+| `monte-sante-marie.jpg` | 3000 / 4440 | ohne Luftbild: Rand unverändert (Grundfarbe), Laub neu |
+| `sa-calobra.jpg`, `sa-calobra-kehren.jpg` | 3770 / 8866, 8866 | Kehren über Kalkfels: grüne Bänder, dunkelgrüne Waldplatte und Zacken (Drohne) weg; Verfolger zeigt drei Rest-Zacken |
+| `flint-hills.jpg` | Survey-Stellen 37/62 % | Prärie: Rand trocken-blass statt sattgrün |
+| `grosser-feldberg.jpg` | 37/62 % | Waldkörper am Gegenhang nicht mehr dunkelgrüner Teppich |
+| `schauinsland.jpg`, `kahler-asten.jpg`, `rennsteig.jpg` | 37/62 % | Bergwald: Kronen, Waldkörper an der Kahlschlagkante |
+| `balkantrasse.jpg`, `altenberg.jpg` | 37/62 % | Ortslagen, Bahntrasse |
+| `solitude.jpg`, `maulbronn.jpg`, `strohgaeu.jpg`, `marbach-lemberg.jpg`, `bottwartal.jpg`, `welzheimer-wald.jpg`, `enztal.jpg`, `schoenbuch.jpg` | 37/62 % | Baden-Württemberg (Winterluftbild): Mittel- und Randstreifen nicht mehr knallgrün, Waldkörper erhalten |
+| `bottwartal-km27.jpg` | 26960 / 26960 | grünes Band über dem Winterfeld weg |
+| `welzheimer-wald-km25.jpg` | 25000 / 25000 | helle Platte rechts neben der Straße weg |
+| `filament-sa-calobra-08866-drone.jpg`, `filament-sa-calobra-01500-chase.jpg`, `filament-arenberg-06200-chase.jpg`, `filament-solitude-05244-drone.jpg` | | dieselben Befunde im Filament-Referenzrenderer (Desktop-GL, llvmpipe) |
+
+„37/62 %“: die Stellen der Bestandsaufnahme bei 37 bzw. 62 % der Länge.
+
+### Paketgrößen und Budget
+
+Pakete wie `catalog-build` sie schreibt (MB = 10⁶ Byte); vorher = Release `indoor-worlds-v1`
+(CI), nachher = lokal (MEDIUM, `-Xmx6g`). „Dreiecke/Texturen gleichzeitig“ = Budget-Werte aus dem
+Manifest (größte gleichzeitig geladene Menge).
+
+| Strecke | Paket vorher (v) | Paket nachher (v) | Δ | Dreiecke gleichzeitig vorher → nachher | Texturen gleichzeitig vorher → nachher |
+|---|---|---|---|---|---|
+| `alpe-dhuez` | 123.7 MB (v11) | 126.0 MB (v12) | +1.8 % | 496.112 → 496.204 | 178 → 179 MB |
+| `vlaamse-ardennen` | 112.5 MB (v11) | 122.7 MB (v12) | +9.0 % | 425.398 → 467.952 | 193 → 193 MB |
+| `arenberg` | 132.8 MB (v11) | 135.2 MB (v12) | +1.8 % | 534.698 → 534.350 | 181 → 182 MB |
+| `monte-sante-marie` | 88.2 MB (v11) | 89.6 MB (v12) | +1.5 % | 298.418 → 298.413 | 155 → 155 MB |
+| `sa-calobra` | 81.7 MB (v11) | 82.9 MB (v12) | +1.5 % | 398.983 → 397.478 | 153 → 153 MB |
+| `flint-hills` | 105.0 MB (v11) | 112.6 MB (v12) | +7.2 % | 341.908 → 363.252 | 134 → 137 MB |
+| `grosser-feldberg` | 151.2 MB (v11) | 153.9 MB (v12) | +1.8 % | 478.185 → 479.107 | 183 → 183 MB |
+| `schauinsland` | 175.4 MB (v11) | 178.2 MB (v12) | +1.6 % | 563.468 → 563.546 | 193 → 194 MB |
+| `kahler-asten` | 127.8 MB (v11) | 129.8 MB (v12) | +1.6 % | 520.721 → 520.838 | 177 → 177 MB |
+| `balkantrasse` | 113.4 MB (v8) | 115.3 MB (v9) | +1.6 % | 459.205 → 459.310 | 188 → 189 MB |
+| `altenberg` | 146.5 MB (v8) | 149.3 MB (v9) | +1.9 % | 460.685 → 461.374 | 191 → 193 MB |
+| `rennsteig` | 170.4 MB (v11) | 173.3 MB (v12) | +1.7 % | 519.719 → 520.243 | 185 → 185 MB |
+| `solitude` | 140.5 MB (v3) | 142.6 MB (v4) | +1.5 % | 531.063 → 531.111 | 188 → 188 MB |
+| `maulbronn` | 147.8 MB (v3) | 151.0 MB (v4) | +2.1 % | 462.120 → 462.113 | 190 → 191 MB |
+| `strohgaeu` | 178.0 MB (v2) | 182.3 MB (v3) | +2.4 % | 389.286 → 389.112 | 193 → 194 MB |
+| `marbach-lemberg` | 253.8 MB (v2) | 259.6 MB (v3) | +2.2 % | 449.940 → 449.802 | 191 → 193 MB |
+| `bottwartal` | 356.9 MB (v2) | 363.7 MB (v3) | +1.9 % | 453.700 → 454.076 | 193 → 194 MB |
+| `welzheimer-wald` | 322.4 MB (v2) | 328.7 MB (v3) | +2.0 % | 470.520 → 470.669 | 201 → 201 MB |
+| `enztal` | 302.5 MB (v2) | 308.1 MB (v3) | +1.8 % | 437.285 → 437.237 | 197 → 198 MB |
+| `schoenbuch` | 223.0 MB (v2) | 226.0 MB (v3) | +1.4 % | 477.841 → 477.991 | 175 → 175 MB |
+| **zusammen** | 3.45 GB | 3.53 GB | +2.2 % | | |
+
+Die meisten Strecken wachsen um 1,3–2,4 %: Atlas-PNG je Kachel der Stufe 0 rund 8 kB größer
+(feinere Blätter), Randtexturen heller (JPEG etwas größer). `vlaamse-ardennen` (+9 %) und
+`flint-hills` (+7 %) haben jetzt auf **allen** Kacheln Luftbild (129/129 statt 110, 162/162 statt
+124 — der CI-Lauf hatte dort Lücken); das allein erklärt den Zuwachs dort, ebenso die +10 % bzw. +6 %
+Dreiecke (mehr Bäume aus der Kronenschätzung). Alle 20 Welten bestehen `indoor-dev check`.
+
+Dreiecke: Die Kartenzahl je Baum ist unverändert (`TreeModels.cost` gleich), die Waldkörper der
+Stufe 1 werden eher weniger. Draw Calls unverändert (kein neues Material). Texturen: Atlas gleich
+groß (512²), PNG etwas größer.
+
+### Nur im Betrachter bzw. Referenzrenderer geprüft, nicht auf dem Gerät
+
+- Kantenausblendung in `foliage.mat`: Ableitungen (`dFdx/dFdy`) unter OpenGL ES/mediump, Kosten
+  je Laubpixel (ein Kreuzprodukt, eine Normierung) — im Referenzrenderer gesehen, Bildrate auf dem
+  Handy weiter ungemessen.
+- Randstreifen-Farben und Waldkörper unter dem echten Licht der App (PBR Neutral, Belichtung) —
+  im Referenzrenderer (NOON) stimmig, Dämmerung nicht angesehen.
+
+### Offen
+
+- [ ] `welzheimer-wald` km 6,5 (Gehweg-Ende), `bottwartal` km 27 (Seitenweg nur im Luftbild).
+- [ ] Nahe Kronen bleiben Karten: von unten und aus 2–5 m erkennt man Kartenflächen; ein
+      echter Fortschritt bräuchte mehr, kleinere Karten (Dreiecke, Bildrate) oder echte
+      Zweiggeometrie.
+- [ ] Mediterrane Vegetation (Aleppo-Kiefer, Macchie) und flämische Backsteinhäuser kennt der
+      Weltbau nicht.
+- [ ] Bildrate auf dem Gerät messen (Laub mit Kantenausblendung, Overdraw).
 
 ## Abweichungen vom Vertrag
 

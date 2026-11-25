@@ -118,6 +118,9 @@ fun IndoorHomeScreen(
     onDayPath: (IndoorDayPath) -> Unit = {},
     initialOptionsOpen: Boolean = false,
     initialCatalogOpen: Boolean = false,
+    catalogExtras: IndoorCatalogExtras = IndoorCatalogExtras(),
+    initialCatalogFilterOpen: Boolean = false,
+    initialCatalogDetailId: String? = null,
 ) {
     val lang = LocalAppFormats.current.language.tag
     val readiness = indoorRouteReadiness(
@@ -222,7 +225,19 @@ fun IndoorHomeScreen(
         }
         if (catalogOpen || catalogSelected) {
             MutedText(stringResource(R.string.indoor_app_catalog_intro))
-            IndoorCatalogList(catalog = catalog, selectedKey = route.selected?.key, onSelect = onSelect)
+            IndoorCatalogList(
+                catalog = catalog,
+                selectedKey = route.selected?.key,
+                onSelect = onSelect,
+                extras = catalogExtras,
+                canRide = trainerIssue == null && pair.canContinue,
+                onRide = onRide,
+                onDownload = onCatalogDownload,
+                onCancel = onCatalogCancel,
+                onDiscard = onCatalogDiscard,
+                initialFilterOpen = initialCatalogFilterOpen,
+                initialDetailId = initialCatalogDetailId,
+            )
         }
     }
 }
