@@ -119,6 +119,34 @@ Winter, unbelaubt), das DOM1 ist älter als das Luftbild (Kahlschläge werden ü
 ausgeglichen, Neupflanzungen fehlen); außerhalb von NRW und BW gibt es weder Gelände 1 m noch
 Bäume an echter Stelle noch LoD2, außerhalb der Luftbild-Länder nicht einmal den echten Boden.
 
+## 5 Weitere Datenquellen (Bewertung, abgerufen am 25.11.2026)
+
+Erweiterung des Auftrags durch den Inhaber („können wir noch mehr Daten als Luftdaten nutzen …
+z. B. Street View“). Regel der Orchestrierung: **eingebaut** wird nur, was eindeutig offen lizenziert ist,
+ohne Konto/Token auskommt und im Katalog-/Server-Bau abgerufen wird (nie vom Handy); alles andere ist
+Entscheidungsvorlage. Alle Angaben aus den genannten Seiten, gelesen am 25.11.2026 (Recherche mit
+Unter-Agenten, Zitate dort nachgelesen); „nicht geprüft“ ist so markiert.
+
+**Datenschutz-Grundsatz:** Jede Abfrage mit dem Rechteck oder Korridor einer *eigenen* Strecke verrät dem
+Dienst die Hausrunde (und die IP). Deshalb fragt das Handy keinen der neuen Dienste ab; Katalogstrecken
+sind öffentlich, der Server-Bau läuft auf dem eigenen Server (dort sieht der Datendienst die Anfrage
+des Servers, nicht des Nutzers — der Verlauf ist ihm trotzdem bekannt).
+
+| Quelle | Nutzen für die Wiedererkennung | Abdeckung (DE) | Lizenz / Bedingungen (Fundstelle) | Konto/Token | Menge | Handy / Katalog-Server | Aufwand | Urteil |
+|---|---|---|---|---|---|---|---|---|
+| **OSM voll über Overpass API** | Hecken, Zäune, Mauern, Leitplanken, Lärmschutz, Strommasten/-leitungen, Windräder, Masten/Türme, Laternen, Einzelbäume mit Art, Baumreihen, Dachform/-farbe, Geschosse, Breite/Spuren | taginfo DE (Stand 24.11.2026, taginfo.geofabrik.de/europe:germany): 39,6 Mio. Gebäude, davon `building:levels` 4,0 Mio. (~10 %), `roof:shape` 3,7 Mio. (~9 %), `roof:colour` 0,74 Mio. (~2 %); `barrier=fence` 583 k, `hedge` 538 k, `wall` 244 k, `guard_rail` 48 k; `natural=tree` 4,24 Mio., `tree_row` 376 k, `genus` 381 k; `power=tower` 212 k, `pole` 712 k, `line` 52 k; `generator:source=wind` 33 k; `man_made=mast` 40 k, `tower` 32 k, `silo` 31 k, `chimney` 9 k; `highway=street_lamp` 1,13 Mio.; `traffic_sign` 690 k | ODbL 1.0, „© OpenStreetMap contributors“ (openstreetmap.org/copyright); abgeleitete Datenbanken bleiben ODbL. Öffentliche Instanz: „maximum of about 10000 requests per day … below about 1 GB per day“, ausdrücklich **kein App-Backend** („relying on the public instances as backend … only running your own instance sustainably serves your mission“, dev.overpass-api.de/overpass-doc/en/preface/commons.html) | nein | eine Anfrage je Strecke, einige 100 kB–MB | **nur Katalog/Server** (für das Handy nur eigener Dienst) | gering | **eingebaut** (`--osm-detail`, siehe 6) |
+| Geofabrik-Auszüge (`.osm.pbf`) | wie Overpass, ganze Länder | Deutschland 4,6 GB, BW 624 MB, NRW 876 MB, Bayern 819 MB; täglich aktualisiert | ODbL 1.0 („All OpenStreetMap derived data on the download server is licensed under the Open Database License 1.0“, download.geofabrik.de) | nein | GB | Katalog/Server; **für das Handy der datenschutzfreundliche Weg**: eigene Kacheln mit Zusatzattributen je Region bauen und ausliefern (verrät nur die Region) | mittel (eigene Kachel-Pipeline, Hosting) | Vorschlag für später |
+| Overture Maps (Gebäude u. a.) | Gebäude mit `height`, `num_floors`, `roof_shape`, `roof_color`, `facade_color` | in DE stammen die 3D-Attribute fast nur aus OSM („primary source is OpenStreetMap … highest conflation priority“, docs.overturemaps.org/guides/buildings/) | Gebäude/Verkehr/Basis ODbL, Places CDLA Permissive 2.0 (docs.overturemaps.org/attribution/) | nein (S3/Azure `--no-sign-request`) | 2,5 Mrd. Gebäude weltweit (GB-Summe nicht geprüft) | Katalog/Server (GeoParquet) | mittel | in DE kaum Mehrwert gegenüber OSM |
+| Wikidata / Wikimedia Commons | Name, Art, ggf. Höhe markanter Bauwerke (über OSM `wikidata=*`), Fotos als Vorlage | gut für Kirchen/Türme (Höhe P2048 nicht geprüft) | Wikidata CC0; Commons-Bilder je Bild verschieden (oft CC BY-SA); Query-Service 60 s Rechenzeit je 60 s, User-Agent mit Kontakt Pflicht (mediawiki.org/wiki/Wikidata_Query_Service/User_Manual, foundation.wikimedia.org/wiki/Policy:User-Agent_policy) | nein | klein | Katalog/Server | gering–mittel | optional (Landmarken-Höhen) |
+| **Panoramax** (Straßenfotos) | Fassadenfarbe, Schilder (Bilder) | lückenhaft: Stichprobe Odenwald/Eifel/München je ≥ 500 Bilder, Feldberg (Schwarzwald) und Brocken 0; keine deutsche Instanz (panoramax.openstreetmap.de existiert nicht), Bilder über api.panoramax.xyz | Bilder CC BY-SA 4.0; **abgeleitete Daten** ausdrücklich „under Licence Ouverte 2.0, CC-BY 4.0 or ODbL 1.0“ (panoramax.openstreetmap.fr, Nutzungsbedingungen 02.02.2026); Gesichter/Kennzeichen automatisch verwischt | nein („without any account“) | Bilder 500 px–HD | nur Katalog/Server | hoch (Fassaden), mittel (Farben) | **Entscheidungsvorlage** (Personenbilder — nicht gebaut) |
+| Mapillary | beste Abdeckung (nicht gemessen, Token nötig), erkannte Verkehrszeichen/Punkte | – | Bilder CC BY-SA; **erkannte Objekte gehören Mapillary**: „limited, non-exclusive, non-transferable, non-sublicensable, revocable license“; Ausnahme nur für Beiträge zu OSM/Overture (mapillary.com/terms, 15.02.2024); Kacheln 50 000/Tag | **ja** (Client-Token je App) | – | nur Server | mittel | nur mit Konto; Erkennungen nicht in Pakete (Lizenz) — besser in OSM eintragen |
+| KartaView | Fotos | nicht messbar (API antwortete nicht) | CC BY-SA 4.0, „© Grab and KartaView Contributors“ (kartaview.org/terms) | für viele Endpunkte nein | – | – | – | unzuverlässig |
+| Google Street View | Fassaden, Schilder | sehr gut | **ausgeschlossen**: „will not export, extract, or otherwise scrape … pre-fetch, index, store … bulk download“, kein Caching, keine abgeleiteten Inhalte (Beispiel „construct an index of tree locations … from Street View imagery“), im EWR keine Nutzung zusammen mit einer Karte (cloud.google.com/maps-platform/terms, 26.08.2026, und EWR-Fassung) | ja + Abrechnung | – | – | – | ausgeschlossen |
+| Google Photorealistic 3D Tiles | fertiges 3D-Netz | – | **im EWR technisch gesperrt** („Photorealistic 3D tiles are not available … 403 … from EEA projects“, developers.google.com/maps/comms/eea/map-tiles); außerdem kein Speichern/Offline, keine Geodaten-Extraktion (developers.google.com/maps/documentation/tile/policies) | ja + Abrechnung | – | – | – | ausgeschlossen |
+| Apple Look Around / Bing Streetside | – | – | nur interaktiv im eigenen Kartenwerkzeug mit Token (MapKit) bzw. Bing Maps for Enterprise abgekündigt | ja | – | – | – | ausgeschlossen |
+
+<!-- AMTLICH -->
+
 ## 4 Option (nicht gebaut): Straßenfotos für Fassaden und Schilder
 
 Was weder Vektorkacheln noch Luftbild noch Laser zeigen — Fassaden, Schaufenster, Verkehrszeichen,

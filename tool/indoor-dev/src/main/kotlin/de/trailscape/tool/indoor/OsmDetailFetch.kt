@@ -57,11 +57,12 @@ fun fetchOsmDetail(route: IndoorRoute, cacheDir: File, offline: Boolean, endpoin
             val res = try {
                 client.send(req, HttpResponse.BodyHandlers.ofString())
             } catch (e: Exception) {
-                System.err.println("OSM-Zusatzdaten: Abruf gescheitert (${e.message})")
-                null
+                // Netz/Host nicht erreichbar: nicht warten, ohne Zusatzdaten weiterbauen.
+                System.err.println("OSM-Zusatzdaten: Abruf gescheitert (${e.message}) — ohne Zusatzdaten")
+                return null
             }
-            if (res != null && res.statusCode() == 200) { got = res.body(); break }
-            if (res != null && res.statusCode() != 429 && res.statusCode() != 504) {
+            if (res.statusCode() == 200) { got = res.body(); break }
+            if (res.statusCode() != 429 && res.statusCode() != 504) {
                 System.err.println("OSM-Zusatzdaten: Status ${res.statusCode()} — ohne Zusatzdaten")
                 return null
             }
