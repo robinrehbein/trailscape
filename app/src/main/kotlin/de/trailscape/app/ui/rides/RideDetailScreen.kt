@@ -83,6 +83,8 @@ import de.trailscape.app.ui.progress.AchievementsCard
 import de.trailscape.app.ui.progress.rememberRideFacts
 import de.trailscape.core.milestonesReachedBy
 import de.trailscape.core.recordsSetBy
+import de.trailscape.app.ui.indoor.IndoorFromRideAction
+import de.trailscape.app.ui.indoor.indoorFromRideOffered
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.map.ElevationProfile
 import de.trailscape.app.ui.map.ElevationSample
@@ -201,6 +203,7 @@ internal fun RideDetailScreen(
     onRename: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
+    onRideIndoor: (() -> Unit)? = null,
 ) {
     val mapStyle by appViewModel.mapStyle.collectAsStateWithLifecycle()
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
@@ -357,6 +360,12 @@ internal fun RideDetailScreen(
                         Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                         Text(stringResource(R.string.rides_detail_ride_again_action))
                     }
+                }
+
+                // „Indoor fahren": dieselbe Strecke drinnen, die Aussenfahrt als
+                // Mitfahrer (ui/indoor/IndoorFromRide.kt).
+                if (onRideIndoor != null && indoorFromRideOffered(ride)) {
+                    IndoorFromRideAction(planned = ride.planned, onClick = onRideIndoor)
                 }
 
                 // Die vier Handgriffe, die frueher hinter ⋮ lagen — jetzt

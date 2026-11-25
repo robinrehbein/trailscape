@@ -49,6 +49,8 @@ import de.trailscape.core.indoor.DayRideEnd
 import de.trailscape.core.indoor.DayRouteAvailability
 import de.trailscape.core.indoor.DayRouteMatch
 import de.trailscape.core.indoor.DemoTrainer
+import de.trailscape.core.indoor.GhostOutcome
+import de.trailscape.core.indoor.ghostResultOf
 import de.trailscape.core.indoor.ErgWorkout
 import de.trailscape.core.indoor.GhostSpec
 import de.trailscape.core.indoor.IndoorDeviceRole
@@ -278,6 +280,9 @@ class IndoorViewModel(
     /** Von „Heute" gewaehlter Vorschlag, der beim Anzeigen vorausgewaehlt wird. */
     private var preferredDayKey: String? = null
 
+    /** „Indoor fahren" aus der Tourdetailansicht: diese Tour waehlen, sobald die Strecken gelesen sind. */
+    private var preferredRideId: String? = null
+
     /** Startpunkt des gewaehlten Vorschlags: Schluessel der Streckenwahl und Anteil der Laenge. */
     private var dayStartPick: Pair<String, Double>? = null
 
@@ -352,6 +357,8 @@ class IndoorViewModel(
         val startMaxM: Double = 0.0,
         val routeLengthM: Double = 0.0,
         val routeIsLoop: Boolean = false,
+        /** Der Mitfahrer ist die eigene Aussenfahrt ([IndoorGhostOption.PastRide]). */
+        val ghostOutdoor: Boolean = false,
     )
 
     init {
@@ -555,7 +562,32 @@ class IndoorViewModel(
                     loadingOptions = false,
                 )
             }
+            applyPreferredRide()
         }
+    }
+
+    /**
+     * „Indoor fahren" in der Tourdetailansicht (docs/indoor/app.md, „Drinnen
+     * nachfahren"): waehlt die Tour [rideId] auf der Startseite vor, im Modus
+     * „Frei fahren"; bei einer gefahrenen Tour (keine Planung) faehrt die
+     * Aussenfahrt als Mitfahrer mit. Alles Weitere — Trainer, „Wird einmal
+     * vorbereitet", „Fahren" — laeuft ueber die Startseite wie bei jeder
+     * anderen Wahl. Kennt die Liste die Tour nicht (z. B. unter zwei Punkten),
+     * bleibt die Startseite ohne Wahl.
+     */
+    fun preferRide(rideId: String) {
+        preferredRideId = rideId
+        if (routeOptionsRequested && !_route.value.loadingOptions) applyPreferredRide()
+    }
+
+    private fun applyPreferredRide() {
+        val id = preferredRideId ?: return
+        preferredRideId = null
+        val option = _route.value.options.firstOrNull { it is IndoorRouteOption.Saved && it.rideId == id } as? IndoorRouteOption.Saved
+            ?: return
+        selectRoute(option)
+        setMode(IndoorMode.SIM)
+        setGhost(if (option.planned) IndoorGhostOption.None else IndoorGhostOption.PastRide(option.rideId, ""))
     }
 
     private fun savedOptions(): List<IndoorRouteOption.Saved> {
@@ -1270,6 +1302,7 @@ class IndoorViewModel(
             demoPowerW = if (demo) DEMO_DEFAULT_POWER_W else null,
             demoCadenceRpm = if (demo) DEMO_DEFAULT_CADENCE_RPM else null,
             ghostLabel = ghostLabel,
+            ghostOutdoor = routeUi.ghost is IndoorGhostOption.PastRide,
             ergTitle = if (mode == IndoorMode.ERG) ergWorkout?.title else null,
             attribution = if (useWorld) manifest.attribution else emptyList(),
             mode = mode,
@@ -1468,6 +1501,7 @@ class IndoorViewModel(
             ergTitle = st.ergTitle,
             attribution = st.attribution,
             runtimeProblem = rs.problem,
+            ghostOutdoor = st.ghostOutdoor,
             start = startUiOf(rs, st),
             dayEnd = dayEndOf(rs, st),
         )
@@ -1687,7 +1721,11 @@ class IndoorViewModel(
             avgSpeedKmh = if (movingS > 0) distanceM / movingS * 3.6 else 0.0,
             laps = record?.laps ?: rs.session?.lap ?: 1,
             ghostLabel = st?.ghostLabel,
-            ghostGapS = record?.ghostFinalGapS,
+            // Vorrang hat die Zeitdifferenz auf demselben Abschnitt (IndoorGhostSection.kt).
+            ghostGapS = record?.let { r -> ghostResultOf(r)?.let { if (it.outcome == GhostOutcome.BEHIND) it.seconds else -it.seconds } }
+                ?: record?.ghostFinalGapS,
+            ghostOutdoor = st?.ghostOutdoor == true,
+            ghostSection = record?.ghostSection?.takeIf { st?.ghostOutdoor == true },
             // „Zu kurz" nur bei einer echten Aufzeichnung unter 60 s; fehlt sie
             // (fremder Teil warf in finish()) oder liess sie sich nicht
             // umwandeln, ist das ein eigener Zustand mit dem Grund.

@@ -583,6 +583,12 @@ fun RideDetailHost(
         onRename = { renameTarget = summary },
         onShare = { shareOpen = true },
         onDelete = { onDelete(loaded.id) },
+        // „Indoor fahren" (ui/indoor/IndoorFromRide.kt): wie „nochmal fahren"
+        // schliesst das Detail, dann oeffnet der Indoor-Ablauf mit dieser Strecke.
+        onRideIndoor = {
+            onBack()
+            appViewModel.requestIndoorRide(loaded.id)
+        },
     )
 
     renameTarget?.let { target ->

@@ -55,6 +55,22 @@ internal interface GhostRunner {
      * das nicht bekannt ist oder er noch nicht dort war.
      */
     fun passedAtS(distM: Double): Double? = null
+
+    /**
+     * Leistung des Geists jetzt in Watt (fruehere Fahrt: gleitend ueber
+     * [GHOST_POWER_WINDOW_S]); `null`, wenn unbekannt oder er im Ziel steht.
+     */
+    val powerW: Double? get() = null
+
+    /**
+     * Wie lange der Geist von Laufmeter [fromM] bis [toM] brauchte bzw.
+     * braucht (Fahrzeit in s); `null`, wenn das nicht vorab bekannt ist
+     * (konstante Leistung) oder er den Abschnitt nie ganz faehrt.
+     */
+    fun sectionS(fromM: Double, toM: Double): Double? = null
+
+    /** Mittlere Leistung des Geists auf dem Abschnitt [fromM]..[toM]; `null`, wenn unbekannt. */
+    fun sectionAvgPowerW(fromM: Double, toM: Double): Double? = null
 }
 
 /** Ein gedachter Fahrer mit konstanter Leistung (siehe Dateikopf). */
@@ -72,6 +88,10 @@ internal class ConstantPowerGhost(
         private set
     override var arrivalS: Double? = null
         private set
+
+    override val powerW: Double? get() = if (arrivalS == null) watts else null
+
+    override fun sectionAvgPowerW(fromM: Double, toM: Double): Double? = watts
 
     override fun advance(runningMs: Long, dtS: Double) {
         if (!route.isLoop && distM >= route.lengthM) {
@@ -103,11 +123,38 @@ internal class ConstantPowerGhost(
 
 /**
  * Eine Zeit-Weg-Kurve: [timesS] streng steigend ab 0, [distsM] monoton
- * steigend (Laufmeter der Strecke).
+ * steigend (Laufmeter der Strecke). [workJ] ist, falls die fruehere Fahrt
+ * Leistung kannte, die bis zu jedem Punkt geleistete Arbeit in J (ab 0,
+ * monoton steigend) — daraus entstehen Leistungsverlauf und Abschnittsmittel.
  */
-internal class GhostCurve(val timesS: DoubleArray, val distsM: DoubleArray) {
+internal class GhostCurve(val timesS: DoubleArray, val distsM: DoubleArray, val workJ: DoubleArray? = null) {
     init {
         require(timesS.size >= 2 && timesS.size == distsM.size)
+        require(workJ == null || workJ.size == timesS.size)
+    }
+
+    /** Arbeit in J bis zur Zeit [tS] (linear im Stueck, ausserhalb geklemmt); `null` ohne Leistung. */
+    fun workAt(tS: Double): Double? {
+        val w = workJ ?: return null
+        val last = timesS.size - 1
+        if (tS <= timesS[0]) return w[0]
+        if (tS >= timesS[last]) return w[last]
+        var lo = 0
+        var hi = last
+        while (hi - lo > 1) {
+            val mid = (lo + hi) ushr 1
+            if (timesS[mid] <= tS) lo = mid else hi = mid
+        }
+        val share = (tS - timesS[lo]) / (timesS[hi] - timesS[lo])
+        return w[lo] + (w[hi] - w[lo]) * share
+    }
+
+    /** Mittlere Leistung zwischen [t0S] und [t1S]; `null` ohne Leistung oder bei leerem Fenster. */
+    fun avgPowerW(t0S: Double, t1S: Double): Double? {
+        if (!(t1S - t0S > 0.5)) return null
+        val a = workAt(t0S) ?: return null
+        val b = workAt(t1S) ?: return null
+        return (b - a) / (t1S - t0S)
     }
 
     /** Laufmeter und Tempo zur Zeit [tS]; vor dem Anfang der erste, nach dem Ende der letzte Punkt (Tempo 0). */
@@ -166,21 +213,38 @@ internal class PastRideGhost(
     private val goalS: Double? = if (route.isLoop) null else curve.timeAt(route.lengthM)?.let { it - shiftS }
     override var arrivalS: Double? = null
         private set
+    override var powerW: Double? = null
+        private set
 
     override fun advance(runningMs: Long, dtS: Double) {
         val t = runningMs / 1000.0
         val (d, v) = curve.at(t + shiftS)
         distM = baseM + d
         speedMps = v
+        val ct = t + shiftS
+        powerW = if (ct >= curve.timesS.last()) null else curve.avgPowerW(max(curve.timesS[0], ct - GHOST_POWER_WINDOW_S), ct)
         if (goalS != null && t >= goalS) {
             arrivalS = goalS
             distM = route.lengthM
             speedMps = 0.0
+            powerW = null
         }
     }
 
     override fun passedAtS(distM: Double): Double? =
         curve.timeAt(distM - baseM)?.let { it - shiftS }?.takeIf { it >= 0.0 }
+
+    override fun sectionS(fromM: Double, toM: Double): Double? {
+        val t0 = curve.timeAt(fromM - baseM) ?: return null
+        val t1 = curve.timeAt(toM - baseM) ?: return null
+        return (t1 - t0).takeIf { it > 0.0 }
+    }
+
+    override fun sectionAvgPowerW(fromM: Double, toM: Double): Double? {
+        val t0 = curve.timeAt(fromM - baseM) ?: return null
+        val t1 = curve.timeAt(toM - baseM) ?: return null
+        return curve.avgPowerW(t0, t1)
+    }
 
     companion object {
         /**
@@ -218,10 +282,19 @@ internal fun ghostState(ghost: GhostRunner, riderDistM: Double, riderSpeedMps: D
     val gapM = ghost.distM - riderDistM
     val behindSpeed = if (gapM >= 0) riderSpeedMps else ghost.speedMps
     val gapS = if (behindSpeed >= GHOST_MIN_GAP_SPEED_MPS) gapM / behindSpeed else null
-    return GhostState(distM = ghost.distM, speedMps = ghost.speedMps, gapM = gapM, gapS = gapS)
+    return GhostState(distM = ghost.distM, speedMps = ghost.speedMps, gapM = gapM, gapS = gapS, powerW = ghost.powerW)
 }
 
 internal const val GHOST_MIN_GAP_SPEED_MPS: Double = 0.5
+
+/** Fenster der gleitenden Leistung des frueheren Ritts (Punkte schwanken je Sekunde stark). */
+internal const val GHOST_POWER_WINDOW_S: Double = 10.0
+
+/**
+ * Mindestanteil der Punkte mit Leistung, damit die fruehere Fahrt einen
+ * Leistungsverlauf bekommt (sonst bliebe ein Mittel aus wenigen Punkten).
+ */
+internal const val GHOST_MIN_POWER_SHARE: Double = 0.5
 
 /**
  * Suchfenster der Projektion ab der letzten Stelle: so weit, wie man seit dem
@@ -282,6 +355,11 @@ private const val GHOST_AHEAD_PENALTY = 0.01
  *     Rundschluss innerhalb von [GHOST_GOAL_TOLERANCE_M] bzw.
  *     [GHOST_GOAL_TOLERANCE_SHARE] vor dem Ziel, wird sie linear aufs Ziel
  *     gestreckt.
+ *  6. Leistung: Tragen mindestens [GHOST_MIN_POWER_SHARE] der Punkte `power`
+ *     (Mittel seit dem vorigen Punkt), wird die Arbeit aufsummiert
+ *     (Leistung · Abstand zum Vorgaenger; Luecken ueber [GHOST_PAUSE_GAP_S]
+ *     zaehlen nicht, Punkte ohne Leistung als 0 W) und als [GhostCurve.workJ]
+ *     mitgegeben.
  */
 internal fun pastRideCurve(route: IndoorRoute, points: List<TrackPoint>): GhostCurve? {
     val timed = ArrayList<TrackPoint>(points.size)
@@ -297,22 +375,39 @@ internal fun pastRideCurve(route: IndoorRoute, points: List<TrackPoint>): GhostC
 
     val projTimes = ArrayList<Long>(timed.size)
     val projDists = ArrayList<Double>(timed.size)
+    val projIdx = ArrayList<Int>(timed.size)
     var last = 0.0
     var lastT = timed[0].time!!
-    for (p in timed) {
+    for ((i, p) in timed.withIndex()) {
         val window = GHOST_MAX_SPEED_MPS * (p.time!! - lastT) / 1000.0 + GHOST_WINDOW_RESERVE_M
         val d = projectForward(route, p.lat, p.lon, last, window) ?: continue
         last = d
         lastT = p.time
         projTimes += p.time!!
         projDists += d
+        projIdx += i
+    }
+
+    // Arbeit bis zu jedem gueltigen Punkt (Schritt 6).
+    val cumWork: DoubleArray? = if (timed.count { it.power != null } >= GHOST_MIN_POWER_SHARE * timed.size) {
+        DoubleArray(timed.size).also { w ->
+            for (i in 1 until timed.size) {
+                val dtS = (timed[i].time!! - timed[i - 1].time!!) / 1000.0
+                val pw = timed[i].power?.takeIf { it > 0 } ?: 0
+                w[i] = w[i - 1] + if (dtS <= GHOST_PAUSE_GAP_S) pw * dtS else 0.0
+            }
+        }
+    } else {
+        null
     }
 
     val times: List<Long>
     val dists: List<Double>
+    val indices: List<Int>
     if (projTimes.size >= 2 && projTimes.size >= GHOST_MIN_MATCH_SHARE * timed.size) {
         times = projTimes
         dists = projDists
+        indices = projIdx
     } else {
         val cum = DoubleArray(timed.size)
         for (i in 1 until timed.size) {
@@ -324,6 +419,7 @@ internal fun pastRideCurve(route: IndoorRoute, points: List<TrackPoint>): GhostC
         }
         times = timed.map { it.time!! }
         dists = cum.map { it * route.lengthM / total }
+        indices = timed.indices.toList()
     }
 
     val outT = DoubleArray(times.size)
@@ -342,7 +438,12 @@ internal fun pastRideCurve(route: IndoorRoute, points: List<TrackPoint>): GhostC
     val tolerance = max(GHOST_GOAL_TOLERANCE_M, GHOST_GOAL_TOLERANCE_SHARE * len)
     // Kam die fruehere Fahrt (bis auf die Toleranz) ins Ziel, endet auch der Geist genau dort.
     val scale = if (!route.isLoop && span > 0 && len - dists.last() <= tolerance) len / span else 1.0
-    return GhostCurve(outT, DoubleArray(dists.size) { ((dists[it] - d0) * scale).coerceAtMost(if (route.isLoop) Double.MAX_VALUE else len) })
+    val work = cumWork?.let { w -> DoubleArray(indices.size) { w[indices[it]] - w[indices[0]] } }
+    return GhostCurve(
+        outT,
+        DoubleArray(dists.size) { ((dists[it] - d0) * scale).coerceAtMost(if (route.isLoop) Double.MAX_VALUE else len) },
+        work,
+    )
 }
 
 /**

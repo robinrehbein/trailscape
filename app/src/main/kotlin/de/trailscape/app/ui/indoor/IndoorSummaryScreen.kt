@@ -131,7 +131,8 @@ fun IndoorSummaryScreen(
         }
 
         SummaryFacts(ui)
-        GhostComparison(ui)
+        // Mit der eigenen Aussenfahrt als Mitfahrer: der Vergleich mit ihr (IndoorOutdoorComparison.kt).
+        if (ui.ghostOutdoor) OutdoorComparison(ui) else GhostComparison(ui)
     }
 
     if (confirmDiscard) {
