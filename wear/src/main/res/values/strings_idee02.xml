@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Idee 2: Vorschlag drinnen/draußen zur Einheit des Tages auf der Kachel (docs/wear-motivation.md, d). -->
+<resources>
+    <!-- glance/GlanceTexts.kt, tile/WochenTileService.kt -->
+    <string name="idee02_wear_today_outdoor">Heute draußen</string>
+    <string name="idee02_wear_today_indoor">Heute drinnen</string>
+    <string name="idee02_wear_today_outdoor_min">Heute draußen · %1$d min</string>
+    <string name="idee02_wear_today_indoor_min">Heute drinnen · %1$d min</string>
+    <string name="idee02_wear_today_done">Einheit erledigt ✓</string>
+</resources>

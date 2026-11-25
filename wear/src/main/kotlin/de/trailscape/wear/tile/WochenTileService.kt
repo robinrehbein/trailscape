@@ -25,7 +25,9 @@ import androidx.wear.tiles.RequestBuilders
 import androidx.wear.tiles.TileBuilders.Tile
 import androidx.wear.tiles.Material3TileService
 import de.trailscape.core.GlanceAnzeige
+import de.trailscape.core.HeuteVorschlag
 import de.trailscape.core.glanceFuerHeute
+import de.trailscape.core.heuteFuerTag
 import de.trailscape.wear.MainActivity
 import de.trailscape.wear.R
 import de.trailscape.wear.glance.GlanceStore
@@ -71,7 +73,9 @@ class WochenTileService : Material3TileService(allowDynamicTheme = false) {
         val stand = GlanceStore.laden(applicationContext) ?: GlanceStore.nachziehen(applicationContext)
         val jetzt = LocalDateTime.now()
         val anzeige = glanceFuerHeute(stand, jetzt.toLocalDate())
-        val layout = layout(context, anzeige)
+        // Vorschlag zur Einheit des Tages — nur, wenn er von heute ist (Telefon ab Idee 2).
+        val vorschlag = heuteFuerTag(stand, jetzt.toLocalDate())
+        val layout = layout(context, anzeige, vorschlag)
         return Tile.Builder()
             .setResourcesVersion(RESOURCES_VERSION)
             .setTileTimeline(Timeline.fromLayoutElement(layout))
@@ -109,7 +113,11 @@ class WochenTileService : Material3TileService(allowDynamicTheme = false) {
             return Duration.between(jetzt, ziel).toMillis().coerceAtLeast(PUFFER_MINUTEN * 60_000L)
         }
 
-        private fun layout(context: Context, anzeige: GlanceAnzeige?): LayoutElementBuilders.LayoutElement {
+        private fun layout(
+            context: Context,
+            anzeige: GlanceAnzeige?,
+            vorschlag: HeuteVorschlag?,
+        ): LayoutElementBuilders.LayoutElement {
             val oeffnen = Clickable.Builder()
                 .setId(CLICK_ID)
                 .setOnClick(
@@ -124,7 +132,8 @@ class WochenTileService : Material3TileService(allowDynamicTheme = false) {
                 )
                 .build()
             val beschreibung = if (anzeige != null) {
-                GlanceTexts.beschreibung(context, anzeige)
+                listOfNotNull(GlanceTexts.beschreibung(context, anzeige), vorschlag?.let { GlanceTexts.heute(context, it) })
+                    .joinToString(", ")
             } else {
                 context.getString(R.string.wear_glance_empty)
             }
@@ -146,7 +155,7 @@ class WochenTileService : Material3TileService(allowDynamicTheme = false) {
             }
             return box
                 .addContent(bogen(anzeige))
-                .addContent(inhalt(context, anzeige))
+                .addContent(inhalt(context, anzeige, vorschlag))
                 .build()
         }
 
@@ -197,16 +206,29 @@ class WochenTileService : Material3TileService(allowDynamicTheme = false) {
                 .build()
         }
 
-        /** Status klein oben, Serie gross in der Mitte, Kilometer darunter. */
-        private fun inhalt(context: Context, anzeige: GlanceAnzeige): LayoutElementBuilders.LayoutElement =
-            Column.Builder()
+        /**
+         * Status klein oben, Serie gross in der Mitte, Kilometer darunter; mit
+         * Vorschlag zur Einheit des Tages darunter noch eine kleine graue Zeile.
+         */
+        private fun inhalt(
+            context: Context,
+            anzeige: GlanceAnzeige,
+            vorschlag: HeuteVorschlag?,
+        ): LayoutElementBuilders.LayoutElement {
+            val spalte = Column.Builder()
                 .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
                 .addContent(zeile(GlanceTexts.status(context, anzeige), KLEIN_SP, GRAU))
                 .addContent(Spacer.Builder().setHeight(dp(2f)).build())
                 .addContent(zeile(GlanceTexts.serieLang(context, anzeige), GROSS_SP, WEISS, fett = true))
                 .addContent(Spacer.Builder().setHeight(dp(2f)).build())
                 .addContent(zeile(GlanceTexts.fortschritt(context, anzeige), MITTEL_SP, AKZENT))
-                .build()
+            if (vorschlag != null) {
+                spalte
+                    .addContent(Spacer.Builder().setHeight(dp(4f)).build())
+                    .addContent(zeile(GlanceTexts.heute(context, vorschlag), KLEIN_SP, GRAU))
+            }
+            return spalte.build()
+        }
 
         private fun zeile(
             text: String,
