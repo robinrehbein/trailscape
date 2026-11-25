@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte zu „Leben auf der Strecke" (Idee 11): Bergwertung und Kilometermarken
+    im Indoor-HUD, Anstiege in der Auswertung, Schalter in den Indoor-Einstellungen.
+    Präfix trail_. Quellen: ui/indoor/IndoorTrailHud.kt, ui/indoor/IndoorTrailSummary.kt,
+    ui/indoor/IndoorTrailSettings.kt. Regeln: docs/i18n.md.
+-->
+<resources>
+    <!-- IndoorTrailHud.kt -->
+    <string name="trail_hud_ahead">Anstieg in %1$d m: %2$s km, %3$s %%</string>
+    <string name="trail_hud_ahead_best">Bestzeit %1$s</string>
+    <string name="trail_hud_category">Kat. %1$d</string>
+    <string name="trail_hud_category_hc">HC</string>
+    <string name="trail_hud_on_title">Am Anstieg</string>
+    <string name="trail_hud_on_unranked">ohne Wertung</string>
+    <string name="trail_hud_label_left">Rest</string>
+    <string name="trail_hud_label_gain">Höhe</string>
+    <string name="trail_hud_label_grade">Steigung</string>
+    <string name="trail_hud_label_time">Zeit</string>
+    <string name="trail_hud_label_delta">zur Bestzeit</string>
+    <string name="trail_hud_value_percent">%1$s %%</string>
+    <string name="trail_hud_done_title">Passhöhe %1$s m</string>
+    <string name="trail_hud_done_time">Zeit am Anstieg %1$s</string>
+    <string name="trail_hud_done_new_best">Neue Bestzeit</string>
+    <string name="trail_hud_done_new_best_by">Neue Bestzeit · %1$s schneller</string>
+    <string name="trail_hud_done_first">Erste Zeit an diesem Anstieg</string>
+    <string name="trail_hud_done_slower">%1$s hinter der Bestzeit</string>
+    <string name="trail_hud_done_unranked">Ohne Wertung – nicht vom Fuß an gefahren</string>
+    <string name="trail_hud_km">km %1$d</string>
+
+    <!-- IndoorTrailSummary.kt -->
+    <string name="trail_summary_title">Anstiege</string>
+    <string name="trail_summary_climb">Anstieg %1$d</string>
+    <string name="trail_summary_climb_lap">Anstieg %1$d · Runde %2$d</string>
+    <string name="trail_summary_detail">%1$s km · %2$s %% · %3$s hm · bis %4$s m</string>
+    <string name="trail_summary_best">Bestzeit %1$s</string>
+
+    <!-- IndoorTrailSettings.kt -->
+    <string name="trail_settings_overlays_title">Einblendungen auf der Strecke</string>
+    <string name="trail_settings_overlays_body">Anstiege mit eigener Bestzeit, Passhöhen und Kilometer während der Fahrt einblenden. Die Zeiten an Anstiegen werden auch ohne Einblendung gemessen.</string>
+</resources>
