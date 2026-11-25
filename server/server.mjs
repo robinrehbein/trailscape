@@ -563,6 +563,10 @@ async function handleRooms(req, res, method, pathname) {
     return;
   }
   if (pathname === '/api/rooms' && method === 'POST') {
+    if (Number(req.headers['content-length'] || 0) > ROOM_BODY_LIMIT) {
+      sendJson(res, 413, { error: 'Anfrage zu gross', code: 'TOO_LARGE' }, { Connection: 'close' });
+      return;
+    }
     let body;
     try {
       body = await readBody(req, ROOM_BODY_LIMIT);
@@ -690,7 +694,7 @@ async function main() {
       clearInterval(keepalive);
       rooms.shutdown();
       server.close();
-      setTimeout(() => process.exit(0), 300).unref();
+      setTimeout(() => process.exit(0), 300);
     };
     process.once('SIGTERM', stop);
     process.once('SIGINT', stop);
