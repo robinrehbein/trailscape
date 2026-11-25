@@ -1,6 +1,7 @@
 package de.trailscape.core.challenge
 
 import de.trailscape.core.indoor.GhostCurve
+import de.trailscape.core.indoor.catalog.isSafeCatalogId
 import java.security.MessageDigest
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -76,7 +77,6 @@ const val CURVE_MAX_SPEED_MPS: Double = 40.0
 /** Tiefste Schachtelung, die der Leser zulaesst (das Format braucht 4). */
 private const val MAX_JSON_DEPTH = 16
 
-private val CATALOG_ID = Regex("[a-z0-9][a-z0-9-]{0,63}")
 private val DATE = Regex("\\d{4}-\\d{2}-\\d{2}")
 
 /** Auf welcher Strecke die Fahrt lief. */
@@ -273,7 +273,7 @@ private fun parseChallengeUnsafe(raw: String): ChallengeParse {
         "catalog" -> {
             val id = routeObj.str("id")
             val v = routeObj.int("version")
-            if (id == null || !CATALOG_ID.matches(id) || v == null || v !in 1..9999) {
+            if (id == null || !isSafeCatalogId(id) || v == null || v !in 1..9999) {
                 return ChallengeParse.Rejected(ChallengeReject.ROUTE_INVALID)
             }
             ChallengeRoute.Catalog(id, v)
@@ -350,7 +350,7 @@ fun routeOfKey(key: String, catalogVersion: Int): ChallengeRoute? = when {
     key == ChallengeRoute.TestWorld.key -> ChallengeRoute.TestWorld
     key.startsWith("catalog:") -> {
         val id = key.removePrefix("catalog:")
-        if (CATALOG_ID.matches(id) && catalogVersion in 1..9999) ChallengeRoute.Catalog(id, catalogVersion) else null
+        if (isSafeCatalogId(id) && catalogVersion in 1..9999) ChallengeRoute.Catalog(id, catalogVersion) else null
     }
     else -> null
 }
