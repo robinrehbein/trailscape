@@ -1,9 +1,9 @@
 # Trailscape Sync-Server
 
 Ein optionaler Selfhost-Sync-Server für [Trailscape](../README.md). Er besteht
-aus **einer einzigen Datei** (`server.mjs`), hat **keine Abhängigkeiten**
-(nur Node-Core-Module) und speichert Touren als einfache JSON-Dateien auf
-der Festplatte.
+aus `server.mjs` (dazu `rooms.mjs` und `websocket.mjs` für die optionalen
+Räume), hat **keine Abhängigkeiten** (nur Node-Core-Module) und speichert
+Touren als einfache JSON-Dateien auf der Festplatte.
 
 ## Start ohne Docker
 
@@ -25,6 +25,7 @@ Wichtige Umgebungsvariablen:
 | `SYNC_TOKEN` | ja      | –         | Geheimer Token für die Authentifizierung (mindestens 16 Zeichen) |
 | `PORT`       | nein    | `8080`    | Port, auf dem der Server lauscht             |
 | `DATA_DIR`   | nein    | `./data`  | Verzeichnis, in dem Touren gespeichert werden |
+| `ROOMS`      | nein    | aus       | `1` schaltet Räume für Gruppenfahrten ein (siehe unten) |
 | `TRUST_PROXY` | nein   | aus       | `1` hinter einem Reverse-Proxy: Die Sperre nach Fehlversuchen nimmt dann die Client-Adresse aus `X-Forwarded-For` statt der Proxy-Adresse. Nur setzen, wenn Port 8080 nicht direkt erreichbar ist |
 
 Ohne gesetzten `SYNC_TOKEN` startet der Server nicht; ebenso verweigert er
@@ -70,7 +71,9 @@ Proxys eingetragen.
 
 ## API-Übersicht
 
-Alle Endpunkte erfordern den Header `Authorization: Bearer <SYNC_TOKEN>`.
+Alle Endpunkte erfordern den Header `Authorization: Bearer <SYNC_TOKEN>` —
+einzige Ausnahme ist der WebSocket der Räume unter `/api/rooms/ws` (siehe
+unten), der über ein Raum-Geheimnis läuft und sonst nichts öffnet.
 Nach 10 fehlgeschlagenen Anmeldeversuchen innerhalb von 15 Minuten blockt
 der Server die IP vorübergehend (HTTP 429 mit `Retry-After`); jeder
 Fehlversuch wird mit Zeitstempel und IP (ohne Token) protokolliert.
@@ -108,6 +111,63 @@ Es gibt genau einen `SYNC_TOKEN` pro Server-Instanz. Ein Token entspricht
 also einem Nutzer bzw. einem gemeinsamen Datenbestand – für mehrere
 getrennte Nutzer werden mehrere Server-Instanzen (mit jeweils eigenem
 `DATA_DIR` und `SYNC_TOKEN`) benötigt.
+
+## Räume für Gruppenfahrten (optional, Vorgabe aus)
+
+Mit `ROOMS=1` kann der Server **verabredete Gruppenfahrten in Echtzeit**
+vermitteln: Wer den `SYNC_TOKEN` hat, legt einen Raum für eine Strecke an und
+teilt einen Einladungslink; Eingeladene treten mit dem Raum-Geheimnis aus dem
+Link bei und sehen sich gegenseitig auf der Strecke. Vollständige
+Spezifikation, Begründungen und Messwerte:
+[`docs/raum-protokoll.md`](../docs/raum-protokoll.md).
+
+Die App hat dafür noch **keine Oberfläche** (Stand: Protokoll, Server und
+Netz-Client sind fertig und getestet, der Einbau in die Fahrt folgt).
+
+Kurz und wichtig:
+
+* **Gäste bekommen nie den `SYNC_TOKEN`.** Das Raum-Geheimnis öffnet nur
+  diesen einen Raum über den WebSocket; an Touren und Bau-Dienst kommt man
+  damit nicht (401).
+* **Nichts wird gespeichert.** Räume leben nur im Arbeitsspeicher; von jedem
+  Fahrer nur der letzte Zustand (Laufmeter, Tempo, auf Wunsch Leistung). Ein
+  Neustart beendet alle Räume. Ins Protokoll kommen nur Zählerstände und bei
+  Fehlversuchen Zeit und Adresse — keine Raumkennungen, Geheimnisse, Namen
+  oder Positionen.
+* **WebSocket über den Reverse-Proxy.** Caddy und Traefik reichen ihn ohne
+  Zusatz durch; nginx braucht `proxy_http_version 1.1`,
+  `proxy_set_header Upgrade $http_upgrade` und
+  `proxy_set_header Connection "upgrade"` (Beispiel im Protokoll, Abschnitt 2).
+
+| Variable | Vorgabe | Bedeutung |
+|---|---|---|
+| `ROOMS` | aus | `1` schaltet Räume ein; sonst antworten `/api/rooms…` mit 404 |
+| `ROOMS_MAX` | `20` | Räume gleichzeitig (1..1000) |
+| `ROOM_MAX_RIDERS` | `10` | Fahrer je Raum (2..50) |
+| `ROOM_TTL_MIN` | `360` | Lebensdauer eines Raums in Minuten ab Anlegen |
+| `ROOM_IDLE_MIN` | `15` | Raum ohne verbundenen Fahrer so lange, dann weg |
+| `ROOM_REJOIN_GRACE_S` | `30` | so lange bleibt der Platz nach einem Abbruch frei |
+
+Weitere feste Grenzen (Nachricht 1 KB, 8 Nachrichten je Sekunde, Avatar
+512 Byte, Name 32 Zeichen, Beitritt binnen 5 s, …) stehen im Protokoll,
+Abschnitt 7.
+
+| Methode | Pfad | Berechtigung | Beschreibung |
+|---|---|---|---|
+| `POST` | `/api/rooms` | `SYNC_TOKEN` | Raum anlegen: `{route:{id, lengthM, loop?, version?, name?}, maxRiders?, ttlMin?, startAt?}` → `201 {room, secret, hostSecret, serverTime}` |
+| `GET` | `/api/rooms` | `SYNC_TOKEN` | Versionen, Grenzen, laufende Räume (ohne Geheimnisse, Namen, Positionen) |
+| `DELETE` | `/api/rooms/<id>` | `SYNC_TOKEN` | Raum beenden |
+| `GET` (Upgrade) | `/api/rooms/ws` | Raum-Geheimnis in der ersten Nachricht | WebSocket für `join`, `state`, `snapshot` … |
+
+Bedarf (gemessen, Protokoll Abschnitt 11): 1000 gleichzeitige Fahrer in 100
+Räumen kosten den Node-Prozess rund 10 % eines Kerns und 110 MB; der Engpass
+ist die ausgehende Bandbreite mit rund 4–5 kB/s je Fahrer im vollen
+Zehnerraum. Für den Eigengebrauch mit ein, zwei Gruppen reicht jeder
+vorhandene Sync-Server.
+
+Tests (Node ≥ 22, wegen des eingebauten WebSocket-Clients):
+`node --test server/test/*.test.mjs`. Lastprobe:
+`node server/test/raum-last.mjs <Räume> <Fahrer je Raum> <Sekunden>`.
 
 ## Bau-Dienst für Indoor-Welten (optional)
 

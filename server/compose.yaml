@@ -11,6 +11,7 @@ services:
     environment:
       SYNC_TOKEN: ${SYNC_TOKEN:?SYNC_TOKEN in .env setzen}
       WORLDS_URL: http://worlds:8081
+      # ROOMS: "1"   # Räume für Gruppenfahrten (docs/raum-protokoll.md), Vorgabe aus
       # TRUST_PROXY: "1"   # hinter einem Reverse-Proxy
     ports:
       - "8080:8080"
