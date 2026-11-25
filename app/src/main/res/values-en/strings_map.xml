@@ -279,6 +279,12 @@
     </plurals>
     <string name="map_live_time_label">Time</string>
     <string name="map_live_ascent_label">m ↑</string>
+    <!-- Zielzeile waehrend der Aufzeichnung (LiveZielZeile.kt). %1$s = Rest in km, aufgerundet -->
+    <string name="map_live_goal_week_rest">%1$s&#160;km to your weekly goal</string>
+    <string name="map_live_goal_week_done">Weekly goal reached ✓</string>
+    <!-- %1$s = Rest in km bis zur bisher weitesten Tour, aufgerundet -->
+    <string name="map_live_goal_best_rest">%1$s&#160;km to a new longest ride</string>
+    <string name="map_live_goal_best_done">New longest ride ✓</string>
     <string name="map_live_ride_mode_action">Ride mode</string>
     <string name="map_live_resume_action">Resume</string>
     <string name="map_live_pause_action">Pause</string>

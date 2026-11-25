@@ -45,11 +45,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.wear.compose.material3.CircularProgressIndicator
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.Text
+import de.trailscape.core.ZielZeile
 import de.trailscape.core.formatDuration
 import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.i18n.formatDecimal
 import de.trailscape.core.i18n.formatDistanceKm
 import de.trailscape.core.i18n.languageOfTag
+import de.trailscape.core.zielZeile
+import de.trailscape.core.zielZeileZahl
 import de.trailscape.wear.R
 import de.trailscape.wear.comm.PhoneLink
 import de.trailscape.wear.record.RecordingStatus
@@ -222,6 +225,12 @@ private fun VorbereitenScreen() {
  * Distanz und Tempo kompakt in einer Zeile. Pause/Weiter und
  * Beenden liegen als zwei runde 48-dp-Knoepfe am unteren Bogen, weit genug
  * auseinander, um sie auf dem Rad ohne hinzusehen sicher zu treffen.
+ *
+ * Darunter, wenn das Telefon einen Ziel-Snapshot mitschickt, die Zielzeile
+ * („Noch 12 km bis zum Wochenziel", Regeln in `core/…/LiveZiel.kt`), klein in
+ * der Akzentfarbe. Vibriert wird beim Erreichen nicht: Die Uhr-App nutzt
+ * bisher keine Vibration, und ein erstes Summen mitten in der Fahrt waere eine
+ * neue Art Meldung, keine Zeile.
  */
 @Composable
 private fun LiveScreen(context: Context, phase: RecordingStatus.Phase) {
@@ -229,7 +238,9 @@ private fun LiveScreen(context: Context, phase: RecordingStatus.Phase) {
     val distanzKm by RecordingStatus.distanzKm.collectAsStateWithLifecycle()
     val tempoKmh by RecordingStatus.tempoKmh.collectAsStateWithLifecycle()
     val hf by RecordingStatus.letzteHfBpm.collectAsStateWithLifecycle()
+    val zielSnapshot by RecordingStatus.zielSnapshot.collectAsStateWithLifecycle()
     val sprache = spracheDerKonfiguration()
+    val ziel = remember(zielSnapshot, distanzKm) { zielZeile(zielSnapshot, distanzKm) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -242,7 +253,12 @@ private fun LiveScreen(context: Context, phase: RecordingStatus.Phase) {
             Text(
                 text = hf?.toString() ?: "–",
                 color = AccentGreen,
-                fontSize = 72.sp,
+                // Mit Ziel-Snapshot eine Stufe kleiner, damit die Zielzeile auf
+                // kleinen runden Displays ueber den Knoepfen noch zweizeilig
+                // Platz hat. Am Snapshot (fest fuer die Tour) und nicht an der
+                // Zeile: Die erscheint mitten in der Fahrt (Bestweite in
+                // Reichweite), und der Puls soll dabei nicht springen.
+                fontSize = if (zielSnapshot != null) 60.sp else 72.sp,
                 fontWeight = FontWeight.Bold,
                 // Tabellen-/Versalziffern: der Herzschlag darf beim Wechseln
                 // von "9" auf "10" nicht seitlich wandern.
@@ -269,6 +285,23 @@ private fun LiveScreen(context: Context, phase: RecordingStatus.Phase) {
                     color = Color.White,
                     fontSize = 16.sp,
                     style = TextStyle(fontFeatureSettings = "tnum"),
+                )
+            }
+
+            ziel?.let { zeile ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = zielText(zeile, sprache),
+                    color = AccentGreen,
+                    fontSize = 12.sp,
+                    lineHeight = 14.sp,
+                    textAlign = TextAlign.Center,
+                    // Zwei Zeilen reichen fuer jeden Satz in beiden Sprachen
+                    // (geprueft in WearZielTexteTest); die Kuerzung ist nur
+                    // der Notanker fuer sehr grosse Schrift.
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 24.dp),
                 )
             }
         }
@@ -322,6 +355,22 @@ private fun LiveScreen(context: Context, phase: RecordingStatus.Phase) {
                 )
             }
         }
+    }
+}
+
+/**
+ * Die Zielzeile in der Sprache der Uhr: Zahl aus `:core` ([zielZeileZahl]),
+ * Satz aus den Uhr-Ressourcen. Kein Text vom Telefon — anders als die
+ * Abschlusszeilen folgt sie deshalb der Uhrsprache.
+ */
+@Composable
+private fun zielText(zeile: ZielZeile, sprache: AppLanguage): String {
+    val zahl = zielZeileZahl(zeile, sprache).orEmpty()
+    return when (zeile) {
+        is ZielZeile.WochenzielRest -> stringResource(R.string.wear_live_goal_week_rest, zahl)
+        ZielZeile.WochenzielGeschafft -> stringResource(R.string.wear_live_goal_week_done)
+        is ZielZeile.BestweiteRest -> stringResource(R.string.wear_live_goal_best_rest, zahl)
+        ZielZeile.NeueBestweite -> stringResource(R.string.wear_live_goal_best_done)
     }
 }
 

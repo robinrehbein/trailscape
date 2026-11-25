@@ -8,6 +8,7 @@ import androidx.health.services.client.HealthServices
 import de.trailscape.core.AbschlussInfo
 import de.trailscape.core.AufzeichnungsZustand
 import de.trailscape.core.Befehl
+import de.trailscape.core.ZielSnapshot
 import de.trailscape.core.eigenerPulsZaehlt
 import de.trailscape.core.telefonEndeBeendetUhr
 import de.trailscape.wear.R
@@ -86,6 +87,7 @@ object RecordingStatus {
     private val _letzteHfBpm = MutableStateFlow<Int?>(null)
     private val _fehler = MutableStateFlow<String?>(null)
     private val _abschlussZeilen = MutableStateFlow<List<String>>(emptyList())
+    private val _zielSnapshot = MutableStateFlow<ZielSnapshot?>(null)
 
     /**
      * Wanduhr-Start (ms seit Epoch) der zuletzt begonnenen Aufzeichnung, `null`
@@ -128,6 +130,15 @@ object RecordingStatus {
      * Tour-ID wird bewusst nicht gegen die eigene Aufzeichnung geprueft.
      */
     val abschlussZeilen: StateFlow<List<String>> = _abschlussZeilen.asStateFlow()
+
+    /**
+     * Wochenziel-Rest und weiteste Tour zum Start der Tour, wie sie das
+     * Telefon im [AufzeichnungsZustand] mitschickt (nur Zahlen). Daraus und aus
+     * [distanzKm] bildet das Live-Bild die Zielzeile in der Sprache der Uhr
+     * (`zielZeile` in `:core`). `null` ohne Telefon-Zustand oder mit einem
+     * Telefon, das die Felder nicht kennt — dann keine Zeile. Nur im Speicher.
+     */
+    val zielSnapshot: StateFlow<ZielSnapshot?> = _zielSnapshot.asStateFlow()
 
     /**
      * Fragt die Geraetefaehigkeiten ab, ohne etwas zu starten — damit der
@@ -201,6 +212,9 @@ object RecordingStatus {
     internal fun wendeTelefonZustandAn(zustand: AufzeichnungsZustand) {
         _laufzeitMs.value = zustand.dauerMs
         _distanzKm.value = zustand.distanzKm
+        // Jeder Zustand bringt den ganzen Snapshot mit (oder keinen): Der
+        // letzte gilt, auch ein fehlender.
+        _zielSnapshot.value = zustand.ziel
         zustand.hf?.let {
             _letzteHfBpm.value = it
             hfVomTelefonMs = SystemClock.elapsedRealtime()
@@ -271,5 +285,6 @@ object RecordingStatus {
         hfVomTelefonMs = null
         _fehler.value = null
         _abschlussZeilen.value = emptyList()
+        _zielSnapshot.value = null
     }
 }
