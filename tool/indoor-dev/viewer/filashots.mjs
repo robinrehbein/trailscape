@@ -8,6 +8,9 @@
 //   node filashots.mjs <welt> --sky <dir> [--dists 0,500] [--cameras chase,handlebar]
 //        (Kameras mit ; trennen)  [--size 900x1200] [--out <dir>] [--prefix name_] [--materials <dir>] [--time s]
 //        [--set shadows=0 …] [--rig v1] [--no-rider] [--speed 8]
+//        [--riders "18:-0.9:0,60:0.9:2,140:-1.3:1:o"]   andere Radfahrer: Abstand voraus (m), Seitenversatz
+//                                                     (rechts +), Trikot 0–5, „o" = Gegenverkehr
+//        [--birds 5]                                   ein Schwarm von n Voegeln vor der Kamera
 //
 // `--sky` ist ein Verzeichnis von `indoor-dev sky` (sky.json, cube.bin, clouds.bin).
 // `--rig v1` nimmt die Lenkerkamera vor der Ueberarbeitung (fuer Vorher-Bilder).
@@ -27,6 +30,8 @@ const a = {
   materials: join(REPO, 'app', 'src', 'main', 'assets', 'indoor', 'materials'), time: 0, set: {}, rig: 'v2', rider: true,
   models: join(REPO, 'app', 'src', 'main', 'assets', 'indoor', 'models'), speed: 8,
   cockpit: join(REPO, 'app', 'build', 'indoor', 'cockpit.glb'), // aus CockpitAndHandlebarTest
+  indoorBuild: join(REPO, 'app', 'build', 'indoor'), // rider_<k>.glb, birds.glb aus LifeAndMaterialsTest
+  riders: [], birds: 0,
 };
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
@@ -45,6 +50,8 @@ for (let i = 0; i < argv.length; i++) {
     case '--speed': a.speed = Number(v()); break;
     case '--rig': a.rig = v(); break;
     case '--no-rider': a.rider = false; break;
+    case '--riders': a.riders = v().split(',').filter(Boolean).map((x) => { const p = x.split(':'); return { gap: +p[0], lat: +p[1], jersey: +(p[2] ?? 0), oncoming: p[3] === 'o' }; }); break;
+    case '--birds': a.birds = Number(v()); break;
     case '--set': { const [kk, vv] = v().split('='); a.set[kk] = vv === '1' || vv === 'true'; break; }
     default:
       if (k.startsWith('--')) { console.error(`unbekannte Option ${k}`); process.exit(2); }
@@ -144,6 +151,15 @@ for (const dist of a.dists) {
       rider: showRider ? { file: join(a.models, 'rider.glb'), matrix: riderMatrix(rel(...enuLateral(here, lat)), here.headingDeg, here.gradePct), pedal: 0.15, roll: 0 } : null,
       cockpit: pose.cockpit ? { file: a.cockpit, matrix: pose.cockpit, nodes: { x_cockpit_bars: steerMatrix(pose.steer) } } : null,
     };
+    const models = [];
+    for (const r of a.riders) {
+      const p = poseAt(dist + r.gap);
+      const heading = r.oncoming ? (p.headingDeg + 180) % 360 : p.headingDeg;
+      const grade = r.oncoming ? -p.gradePct : p.gradePct;
+      models.push({ file: join(a.indoorBuild, `rider_${r.jersey}.glb`), matrix: riderMatrix(rel(...enuLateral(p, r.lat)), heading, grade), pedal: (r.gap * 0.37) % 1, roll: (r.gap * 0.71) % 1 });
+    }
+    if (a.birds > 0) models.push(birdModel(pose, a.birds));
+    scene.models = models;
     const sceneFile = join(out, `${name}.scene.json`);
     writeFileSync(sceneFile, JSON.stringify(scene));
     const t0 = Date.now();
@@ -158,6 +174,32 @@ for (const dist of a.dists) {
   }
 }
 process.exit(failed ? 1 : 0);
+
+// Ein Schwarm wie BirdFlock: 55–80 m vor der Kamera, 14–20 m hoch, quer fliegend, Fluegel in
+// verschiedenen Phasen (birds.glb: x_bird_<i> mit x_bird_<i>_l/_r).
+function birdModel(pose, n) {
+  const [ex, ey, ez] = pose.eye, [tx, , tz] = pose.target;
+  let fx = tx - ex, fz = tz - ez;
+  const l = Math.hypot(fx, fz) || 1; fx /= l; fz /= l;
+  const rx = -fz, rz = fx;
+  const yaw = Math.atan2(rx, rz); // fliegen nach rechts
+  const nodes = {};
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  for (let i = 0; i < 7; i++) {
+    const vis = i < n;
+    const row = Math.floor((i + 1) / 2), side = i % 2 ? -1 : 1;
+    const ahead = 62 + row * 1.8 * side * 0.4, lateral = -6 - row * 2.2, up = 16 + (i % 3) * 0.7 + side * row * 0.4;
+    const px = ex + fx * ahead + rx * (lateral + side * row * 1.4), pz = ez + fz * ahead + rz * (lateral + side * row * 1.4);
+    const py = vis ? ey + up : -10000;
+    nodes[`x_bird_${i}`] = [c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, px, py, pz, 1];
+    const flap = 0.7 * Math.sin(i * 1.9 + 0.6);
+    for (const [k, sign] of [['l', -1], ['r', 1]]) {
+      const ca = Math.cos(sign * flap), sa = Math.sin(sign * flap);
+      nodes[`x_bird_${i}_${k}`] = [ca, sa, 0, 0, -sa, ca, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    }
+  }
+  return { file: join(a.indoorBuild, 'birds.glb'), matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], nodes };
+}
 
 function enuLateral(p, lateralM) {
   const h = (p.headingDeg * Math.PI) / 180;

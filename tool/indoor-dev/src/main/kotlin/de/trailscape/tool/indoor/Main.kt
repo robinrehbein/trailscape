@@ -117,6 +117,7 @@ private fun run(all: List<String>): Int {
             overlaps(File(a.positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")), a.opt("tol-cm")?.toDoubleOrNull()?.div(100.0) ?: 0.004)
         }
         "models" -> models(Args(rest, emptySet()))
+        "trees" -> Args(rest, emptySet()).let { a -> de.trailscape.core.indoor.world.writeTreeSheet(File(a.req("out"))); println("Baumschau nach ${a.req("out")}"); 0 }
         "catalog-routes" -> catalogRoutes(Args(rest, emptySet()).opt("only"))
         "lod2-cut" -> lod2Cut(Args(rest, setOf("offline")))
         "server-info" -> serverInfo()

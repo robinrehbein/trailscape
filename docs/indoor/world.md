@@ -20,9 +20,9 @@ Datenstufe „Laser" (DGM1, nDOM, LoD2 aus NRW; nur Entwicklerwerkzeug):
 | Fahrbahn `route` | je Belag kachelnde Textur, weicher Belagswechsel, Ränder nach Belag und Umgebung (Bankett, Bordstein mit Gehweg, Graskante), Böschungsstreifen, Markierung auf Landstraßen |
 | Straßen `roads` | übrige Straßen und Wege der Karte, flach auf dem Gelände |
 | Gebäude `buildings` | Grundriss × Höhe, Satteldächer/Walmdächer, Anbauten, Fassadenatlas, Stufe 1 grob. Dachfarbe je Gebäude (deterministisch): Ziegelrot, Rotbraun, Braun, Anthrazit, Grau, wo möglich aus der Luftbildfarbe; Grau aus dem Luftbild wird bei Ziegeldächern teils als Rotbraun/Braun gedeutet. Die Vektorkacheln nennen keine Gebäudeart (kein church/warehouse); große Grundrisse (> 800 m²) werden nur in Gewerbe- und Landwirtschaftsflächen zur Wellblechhalle, sonst zu Putz-/Ziegelbauten mit Fenstern und Ziegeldach (Traufe 6,6–9,6 m, wenn die Daten keine Höhe nennen) |
-| Bäume `trees` | **Blattkarten** (seit Abschnitt „Vegetation“): sechs Arten (breiter/schlanker Laubbaum, Feldbaum, Fichte aus Astquirl-Schürzen, Kiefer, Busch) bis 70 m neben der Strecke, Kronen aus verdrehten Alpha-Karten (prozeduraler Atlas) mit gebogenen Normalen, drei Stufen vom Weg aus vergeben; Gras-/Farnbüschel am Wegrand; dahinter und in Stufe 1 Waldkörper mit Kronenmosaik und Randbäumen als Kreuzbild |
+| Bäume `trees` | **Kronenlappen** (seit Abschnitt „Vegetation und Objekte“): zehn Wuchsformen (Buche, Eiche, Esche, Birke, Säulenpappel, Obstbaum, Feldgehölz, Fichte, Kiefer, Strauch), Obstwiesen in Reihen, Alleen, Waldsaum; davor: **Blattkarten** (seit Abschnitt „Vegetation“): sechs Arten (breiter/schlanker Laubbaum, Feldbaum, Fichte aus Astquirl-Schürzen, Kiefer, Busch) bis 70 m neben der Strecke, Kronen aus verdrehten Alpha-Karten (prozeduraler Atlas) mit gebogenen Normalen, drei Stufen vom Weg aus vergeben; Gras-/Farnbüschel am Wegrand; dahinter und in Stufe 1 Waldkörper mit Kronenmosaik und Randbäumen als Kreuzbild |
 | Wasser `water` | **neu:** Wasserspiegel auf Uferhöhe über den Wasserflächen der Karte |
-| Kleinteile `props` | Leitpfosten, Laternen, Ortstafel, Weidezäune, Holzpolter, Bänke, Wegweiser |
+| Kleinteile `props` | Leitpfosten, Laternen, Ortstafel **mit Ortsnamen**, Weidezäune, Holzpolter, Bänke, Wegweiser, Brückengeländer, Vorfahrtstraße (Zeichen 306) |
 | Detailstufen | 3 Stufen (256 m / 1 km / 4 km), `show` nach Laufmetern, Budget je Qualität nachgerechnet (steht im Manifest, `checkWorld` meldet Überschreitungen; der Bau bricht deswegen nicht mehr ab) |
 | Prüfung | `checkWorld` (Namen, Erweiterungen, Texturformate, Budget, lückenloses `show`) im Werkzeug und als `:core`-Test |
 | Modelle | `rider.glb`, `ghost.glb` (selbst erzeugt, `pedal`/`roll`) unter `app/src/main/assets/indoor/models/` |
@@ -85,13 +85,17 @@ beurteilt; seine Hauptpunkte (dunkle Fichtenwände, flache Waldscherben) sind
 als Nr. 11/12 eingearbeitet, die übrigen (Detailtextur über dem Luftbild,
 Laubkarten) brauchten eigene Shader bzw. eine Vertragsänderung.
 
-**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/10` (vorher `/9`, `/8`, `/7`, `/6`, `/5`, `/4`, `/3`, `/2`, `/1`). Sie geht
+**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/11` (vorher `/10`, `/9`, `/8`, `/7`, `/6`, `/5`, `/4`, `/3`, `/2`, `/1`). Sie geht
 in die Welt-ID ein — selbst gebaute Welten der alten Fassung werden nicht mehr
 gefunden und neu gebaut (die alten bleiben in der Weltverwaltung löschbar).
 Katalog: `version` aller Strecken in `catalog-src.json` auf 2. Version 10
 (24.11.2026, Branch `claude/indoor-laser-fixes`): Einmündungen im Kurvenscheitel,
 Baumkronen, Waldboden unter dem Kronendach, Grasstreifen an offenen Streckenenden
 (`docs/indoor/lidar.md`, Abschnitt 9); alle 14 Katalogeinträge um eins angehoben.
+Version 11 (25.11.2026, Branch `claude/indoor-vegetation-objekte`): neue Bäume,
+Objekte, Dachfarben (Abschnitt „Vegetation und Objekte“); alle 20 Katalogeinträge
+um eins angehoben; im beigelegten Katalog (14 Einträge) Versionen und Paketnamen
+angehoben, Welt-IDs wie bisher aus dem Release.
 
 ### Mängel, Ursache, Stand
 
@@ -695,6 +699,211 @@ Unter `docs/indoor/bilder/luftbild-bw/`, Strohgäu, mit Fahrer, Sonne
       grenzscharfen Dienste); denkbar wäre, Weiß dort durch die erzeugte
       Bodentextur zu ersetzen.
 - [ ] Nur im Betrachter gesehen, nicht auf dem Gerät.
+
+## Vegetation und Objekte (25.11.2026, Branch `claude/indoor-vegetation-objekte`)
+
+Anlass: Der Gründer will die Welten deutlich hübscher; die Bäume sahen nach
+Karten aus (lange dünne Stämme, kleiner Schopf, schräg abstehende „Federn“, aus
+der Drohne kartig, Nadelbäume als gestapelte Kegel). Teil dieser Runde ist nur
+der **Inhalt** der Welt (Weltbau `core/…/indoor/world/`); Licht, Himmel,
+Dunst, Wasser-Material und Kameras sind unverändert (parallele Session im
+Renderer). Welt-Version zunächst `indoor-world/10`; nachdem Version 10 nach
+`main` gemergt und als Katalog gebaut wurde, gehen die Änderungen in
+`indoor-world/11` auf (alle 20 Katalogeinträge um eins angehoben).
+
+Bildpaare: `docs/indoor/bilder/vegetation-objekte/<name>-vorher.jpg` /
+`-nachher.jpg`, 900 × 1200 (Hochformat), Fahrer- (Verfolger) und
+Drohnenkamera, gleicher Blickpunkt. **Vorher** = Ausgangsstand
+`claude/trusting-heisenberg-mbokzx` (6a27557), **nachher** = dieser Branch;
+beide lokal gebaut (Solitude und Maulbronn `build --laser --catalog-aerial`,
+Altenberg kurz ohne Laser, Testwelt). Alles im Betrachter (three.js,
+SwiftShader), **nicht auf dem Gerät** gesehen.
+
+| Punkt | Bildpaare |
+|---|---|
+| Bäume | `baeume-solitude-km12-5-fahrer`, `baeume-solitude-km12-5-drohne`, `baeume-solitude-km1-fahrer`, `baeume-altenberg-km1-2-fahrer`, `baeume-altenberg-km1-2-drohne` (ohne Laser), `baeume-maulbronn-km2-fahrer`, `baeume-maulbronn-km7-fahrer`; Baumschau: `baumschau-vorher.jpg`, `baumschau-drohne-vorher.jpg` gegen `baumschau-nah-a/b/c`, `baumschau-mittel-a/b`, `baumschau-fern-b`, `baumschau-drohne-nachher`, `baumschau-buche-nah` (1600 × 900) |
+| Waldsaum | `saum-maulbronn-km2-drohne` |
+| Objekte | `ortstafel-maulbronn-km7-4-fahrer` / `-drohne` (Ortstafel „Diefenbach“), `gelaender-testwelt-fahrer` / `-drohne` |
+| Gebäude | `gebaeude-maulbronn-km8-fahrer`, `gebaeude-maulbronn-km8-5-drohne` |
+| lidar.md 9.1 | `grasstreifen-maulbronn-km13-fahrer` / `-drohne` |
+
+### Bäume: Kronenlappen statt Kartenbüschel
+
+- **Aufbau** (`TreeModels.leafy`): Die Krone ist eine Hülle (Ellipsoid aus
+  Höhe, Kronenansatz und Breite) mit 3–8 **Lappen** (kleinere Ellipsoide; Kuppel
+  bei Buche/Eiche/Obstbaum, lockere Wolke bei Esche/Birke, Säule mit Wülsten
+  bei der Pappel, flache Wolken bei der Kiefer). Auf jedem Lappen liegen
+  Laubkarten **tangential** (Vorderseite nach außen, nur eine Wicklung) statt
+  radial abstehend — von der Seite und von oben eine geschlossene, laubige
+  Fläche. Karten am Rand und unten sind etwas **zur Strecke geneigt**
+  (`facing`, die Kamera ist immer dort): flach stehend wären sie von dort
+  gesehen Striche. Kartenzahl je Lappen nach dessen Oberfläche, Summe je Form
+  fest (die Dreieckszahl hängt nur von Form und Stufe ab, `TreeModels.cost`).
+- **Stufen:** nah zwei Schalen (außen Zweig-/Laubmasse-Karten, innen eine
+  dunklere Schale — durch die Lücken sieht man Schatten, Äste und Himmel),
+  Hauptäste zu den Lappen; mittel und fern eine Schale mit kleinen
+  **Kernen** (Ellipsoid aus 4–5 × 3 Feldern, Texturkoordinaten im deckenden
+  Innern des Laubmasse-Motivs, nach oben verschoben, damit man von unten in
+  die Krone sieht). Kartengröße höchstens 4,4 / 2,7 / 4,8 m (nah/mittel/fern).
+  Volle Stufe jetzt bis 22 m statt 16 m neben der Strecke (`DETAIL_M`).
+- **Wuchsformen** (`TreeModels.Form`, aus Art, `pale` und neu `Spec.variant`):
+  Buche (gewölbt, geschlossen), Eiche (breit, unregelmäßig, kräftige Äste),
+  Esche/Ahorn (schlank-eiförmig), Birke (lockere, hängende Krone, weißer Stamm
+  mit dunklen Bändern und dunklem Fuß), Säulenpappel, Obstbaum (kurzer Stamm,
+  breite flache Krone, Gerüstäste), Feldgehölz, Fichte, Kiefer, Strauch.
+  Proportionen je Form (`crownFactors`: Kronenradius und -ansatz je Meter
+  Höhe); **Laserbäume** rechnen daraus die Breite aus dem gemessenen
+  Kronenradius, sehr schmale Laubbäume (Radius < 8,5 % der Höhe) werden
+  Säulenpappeln.
+- **Fichte:** dunkler Kegelkern (0,5 bzw. 0,38 der Hülle), darum Astkränze aus
+  waagrecht abstehenden, hängenden, um die Astachse gerollten
+  Nadelzweig-Karten (von oben ein Astkranz statt Kegelstapel), nah und mittel
+  dazu gewölbte Schürzen, schmale helle Spitze. Fern 6 × 5 Astkarten statt
+  Kreuzbild.
+- **Artenwahl** (`TreesLayer.specFor`): Eichen im Offenland zu 45 %, im Wald
+  regional 12–48 %; Säulenpappeln nur im Offenland (35 % der schlanken
+  Laubbäume); Birken im Wald seltener; kleine Bäume an Siedlung, Wiese,
+  Obstwiese, Park zu 70 % Obstbäume.
+- **Obstwiesen:** neue Flächenklasse `LandClass.ORCHARD` (Vektorkacheln
+  `landcover farmland/orchard`, vorher Gebüsch); dort Obstbäume in Reihen
+  (10 × 8,5 m, Richtung regional, 11 % Lücken, jeder zehnte ein alter großer
+  Birnbaum), Boden wie Wiese. Mit Laser bleiben Lage und Höhe gemessen, die
+  Bäume werden Obstbäume.
+- **Alleen** (ohne Laser): Wo das Luftbild über ≥ 4 Plätze (≈ 38 m) eine
+  Baumreihe 3–6 m neben dem Fahrbahnrand zeigt und die Strecke eine Straße
+  außerhalb des Walds ist, stehen dort Bäume gleicher Art und Größe alle 9,5 m
+  (je 200 m und Seite eine Art). Mit Laser stehen Alleebäume ohnehin gemessen.
+- **Werkzeug:** `indoor-dev trees --out <dir>` schreibt eine Mini-Welt mit allen
+  Formen in allen Stufen (14/74/134 m hinter der Strecke) für den Betrachter
+  (`shots.mjs … --cameras free`); `trees.txt` nennt die Dreiecke je Form/Stufe.
+
+Dreiecke je Baum (Baumschau, `trees.txt`; vorher → nachher; nah/mittel/fern):
+
+| Form | vorher | nachher |
+|---|---|---|
+| Laubbaum breit (Buche) | 544 / 200 / 54 | 522 / 294 / 134 |
+| Eiche | – | 526 / 294 / 134 |
+| Esche, Birke, Pappel | 392 / 148 / 34 | 396 / 202–232 / 102–108 |
+| Obstbaum, Feldgehölz | 364 / 132 / 30 | 314–378 / 174–214 / 90–102 |
+| Fichte | 616 / 280 / 12 | 600 / 324 / 150 |
+| Kiefer | 276 / 80 / 44 | 196 / 116 / 96 |
+| Strauch | 96 / 44 / 16 | 106 / 60 / 48 |
+
+Ferne Bäume sind teurer (Volumen statt Kreuzbild); der Deckel je Kachel
+(`SINGLE_TREE_MAX` 30 000) bleibt, die Vergabe nach außen regelt den Rest.
+
+### Unterwuchs und Rand
+
+- **Waldsaum** (`TreesLayer.forestEdgeShrubs`): Wo die Strecke an einem
+  Waldrand vorbeiführt (Kronenbedeckung springt quer zur Strecke über 0,6, ≥ 4 m
+  neben der Fahrbahn), stehen alle 7 m je Seite 1–3 Sträucher bzw. junge Bäume
+  0,8–3,4 m vor dem Rand — Mantel statt harter Kante aus Stämmen. Gilt mit und
+  ohne Laser.
+- **Grasstreifen über blassen Feldern** (lidar.md 9.1): Neben `FARMLAND` nimmt
+  der Übergangsstreifen die Luftbildfarbe zur Hälfte 9 m draußen (Feld) statt
+  nur am Rain. Wirkung in Maulbronn km 13 sichtbar, aber gering: der Rain ist im
+  Winterluftbild wirklich grün, der Streifen bleibt grüner als das Feld.
+- Nicht gemacht: Hecken (in den Vektorkacheln gibt es keine `barrier`),
+  Ackerreihen/Wiesenstruktur auf Feldern (das Luftbild ist die Bodentextur; eine
+  Detailtextur bräuchte einen eigenen Shader, Renderer-Seite).
+
+### Objekte am Straßenrand
+
+- **Ortstafel mit Ortsnamen:** Name des nächsten Orts aus der Ebene `place`
+  der Vektorkacheln (neu `MapData.places`, `MapPlace`; Dorf/Stadt/Weiler,
+  Ortsteile nur, wenn deutlich näher, bis 3 km). Schrift: eigene Strichschrift
+  `SignText` (Groß-/Kleinbuchstaben, Umlaute, ß, Ziffern; Akzente → Grundbuchstabe),
+  gelbe Tafel mit schwarzem, abgerundetem Rand, je Name eine PNG 512 × 256 im
+  eigenen Material `x_mat_sign_<hash>` (ein Zeichenaufruf mehr je Ortseingang).
+  Die Tafel wächst mit dem Namen (0,9–1,7 m), lange Tafeln an zwei Pfosten.
+  Testwelt: „Testhausen“. Ohne Namen bleibt die Tafel leer wie bisher.
+- **Brückengeländer:** wo die Strecke über ein Wegstück der Karte mit
+  `brunnel = bridge` führt (Stück „auf der Strecke“): beidseits Pfosten alle
+  1,8 m, Handlauf 1,05 m, Knieleiste 0,5 m über dem Belag; Holz bei Holzbelag,
+  sonst verzinkt grau.
+- **Vorfahrtstraße** (Zeichen 306) dezent: auf Kraftverkehrsstraßen außerorts
+  30 m vor Einmündungen, rechts, höchstens eine je 150 m.
+- **Weidezäune** (lidar.md 9.1): nicht mehr unter Bäumen (Kronenbedeckung am
+  Pfosten ≥ 0,45 oder 3 m dahinter ≥ 0,6 — mit Laser das nDOM, also auch Wald,
+  den die Karte als Wiese führt) und kein Zaunfeld quer über einen Weg (Mitte
+  des Felds < 1 m neben einer Straße).
+- Nicht gemacht: Strommasten/Leitungen und Mauern — die OpenMapTiles-Kacheln
+  haben weder `power` noch `barrier`; Laternen innerorts, Leitpfosten, Bänke
+  gab es schon.
+
+### Brücken (Nachtrag aus den neuen Laserstrecken)
+
+- **Brückenbauwerk** (`PropsLayer.bridgeStructures`): Jede Brücke der Karte
+  (`brunnel = bridge`, 6–400 m), die mehr als 0,8 m über dem Gelände liegt,
+  bekommt einen Überbau als Betonplatte (0,8 m dick, 0,35 m breiter als die
+  Fahrbahn), Pfeiler etwa alle 22 m, wo der Boden mehr als 2,5 m tiefer liegt
+  (mit Pfeilerkopf), und neben der Strecke eine Brüstung (0,85 m); auf der
+  Strecke eine Randkappe, dazu die Geländer. Deckhöhe wie im Weltbau (Strecke:
+  ihre Höhe; sonst geradlinig zwischen dem Gelände an den Linienenden). Brücken,
+  deren Linie die geglättete Strecke nur knapp begleitet (≤ 2 m neben dem Rand,
+  gleich gerichtet), zählen als Streckenbrücken. Bild:
+  `bruecke-enztal-km5-3-drohne` (Talbrücke jetzt mit Pfeilern),
+  `bruecke-enztal-km5-2-fahrer`.
+- **LoD2 auf der Fahrbahn** (schoenbuch km 7,0, „Teufelsbrücke“): Die graue
+  Platte quer über dem Weg war kein Kartenweg, sondern ein LoD2-Körper (das
+  LoD2 führt Stege/Brückenteile teils als flache „Gebäude“). LoD2-Gebäude,
+  deren Grundriss die Mittellinie der Strecke überdeckt, entfallen jetzt
+  (`coversTrack` in `LaserParts.kt`). Bild: `bruecke-schoenbuch-km7-fahrer`.
+  Eine echte Brücke ist dort nicht gezeichnet (in den Vektorkacheln ist der Weg
+  nicht als Brücke markiert).
+
+### Gebäude
+
+- **LoD2-Dächer** (`Lod2Mesher.roofColor`): vorher die (begrenzte)
+  Luftbildfarbe — im BW-Winterluftbild fast immer grau. Jetzt entscheidet das
+  Luftbild nur, wenn es eindeutig ist (rot/braun bzw. sehr dunkel), sonst eine
+  regionale Mischung je Gebäude fest: Ziegelrot, Rotbraun, Braun, Anthrazit,
+  wenig Grau (in „modernen“ Gegenden nach Rauschen mehr Anthrazit). Türme
+  (höher 18 m, Grundriss < 140 m²) Schiefer oder Kupfergrün, hohe große Bauten
+  (> 15 m, > 280 m²: Kirche, Kloster) Schiefer bzw. dunkle Ziegel; Flachdächer
+  eigene Farbe (dunkle Bahn oder Kies).
+- **LoD2-Wände:** gebrochene Putztöne (Altweiß, Sand, Hellgelb, Lachs,
+  Hellgrau, Ocker, Blassgrün) statt fast nur Weiß. Fenster als Geschossband und
+  Sockel gab es schon (`emitWall`).
+- Gebäude aus Kartengrundrissen hatten Dachfarben, Fassadenatlas, Fenster,
+  Türen und Sockel schon; unverändert. Kirchen sind dort nicht erkennbar: Die
+  Vektorkacheln nennen keine Gebäudeart.
+
+### Messwerte (vorher → nachher, MEDIUM, Cache warm, `-Xmx3g`)
+
+| Welt | Dreiecke gleichzeitig | Baumdreiecke je Kachel (Stufe 0) | Primitive je Kachel (Stufe 0) | Platte | Texturen |
+|---|---|---|---|---|---|
+| Solitude 13,9 km (Laser) | 514 739 → 530 891 | 20 962 → 23 405 | 12,9 → 12,9 | 12,5 → 13,7 MB/km | 182,4 MB (gleich) |
+| Maulbronn 15,4 km (Laser) | 436 434 → 462 120 | 10 313 → 12 765 | 13,1 → 13,2 | 11,7 → 12,8 MB/km | 181,0 MB (gleich) |
+| Altenberg kurz 3 km (ohne Laser) | 463 519 → 473 643 | 16 044 → 17 271 | 13,8 → 13,8 | 18,5 → 19,2 MB/km | 178,8 MB (gleich) |
+
+Draw Calls: Bäume weiter zwei Primitive je Kachel (Stämme, Karten), dazu eine
+je Ortstafel. Platte +4 bis +10 % (mehr Karten je Baum, ferne Bäume als
+Volumen). Alle Welten bestehen `checkWorld`; Budgets eingehalten.
+
+### Offen
+
+- [ ] Alles nur im Betrachter (SwiftShader) gesehen, **nicht auf dem Gerät**;
+      Bildrate (mehr Karten nah bis 22 m, Overdraw) auf dem Handy messen.
+      Stellschrauben wie unter „Bildrate: Overdraw“, dazu `DETAIL_M` 22 → 16.
+- [ ] Mittlere Kronen schräg von der Seite gesehen (nicht von der Strecke aus)
+      zeigen einzelne Karten als Scheiben; nahe Kronen direkt über der Kamera
+      zeigen ihre Kartenstruktur.
+- [ ] Waldkörper-Ränder tragen weiter die alten Kreuzbilder (Atlas), sie passen
+      in der Ferne, nah am Waldrand nicht ganz zu den neuen Kronen.
+- [ ] Eckbögen am Dreiast-Knoten (lidar.md 9.1) nicht angefasst.
+- [ ] Hecken, Strommasten, Mauern: keine Daten in den Vektorkacheln.
+- [ ] Grasstreifen über Winterfeldern nur leicht gedämpft.
+- [ ] Aus dem Fehlerbericht der neuen Strecken nicht bearbeitet: bottwartal
+      km 27,0 (Querstraße nur als Luftbild), welzheimer-wald km 25,0 (graue
+      Rechteckfläche auf der Wiese, im Betrachter weiter zu sehen) und km 6,5
+      (Gehweg endet mit harter Querkante) — Straßen-/Geländeschichten, eigene
+      Untersuchung nötig.
+- [ ] Prüflauf 25.11.2026: `:core:test`, `:app:assembleRelease`, `:indoor-dev:test`
+      und `:app:compileDebugUnitTestKotlin` grün; `:app:testDebugUnitTest -Pscreenshots`
+      **nicht gelaufen** — Maven Central antwortete auf das Robolectric-JAR
+      (`android-all-instrumented-15`) mit 429 (`retry-after` ≈ 19 h). Diese Runde
+      ändert keinen App-Code; nachholen.
 
 ## Abweichungen vom Vertrag
 

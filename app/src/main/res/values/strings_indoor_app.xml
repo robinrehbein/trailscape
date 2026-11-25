@@ -85,6 +85,8 @@
     <string name="indoor_app_pair_time_noon_body">Hohe Sonne, kurze Schatten.</string>
     <string name="indoor_app_pair_time_evening_label">Abend</string>
     <string name="indoor_app_pair_time_evening_body">Warmes, flaches Licht aus dem Westen.</string>
+    <string name="indoor_app_pair_other_riders_title">Andere Radfahrer anzeigen</string>
+    <string name="indoor_app_pair_other_riders_body">Ein paar Mitfahrer und Gegenverkehr auf der Strecke – nur zur Kulisse, ohne Einfluss auf Widerstand oder Windschatten.</string>
     <string name="indoor_app_pair_continue_hint">Koppele einen Trainer oder schalte den Demo-Trainer ein, um weiterzumachen.</string>
     <string name="indoor_app_pair_diagnostics_action">Diagnose öffnen</string>
     <!-- IndoorRouteScreen.kt -->

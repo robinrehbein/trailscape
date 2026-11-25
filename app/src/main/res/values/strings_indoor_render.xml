@@ -75,6 +75,10 @@
     <string name="indoor_render_diag_switch_trees">Bäume</string>
     <string name="indoor_render_diag_switch_buildings">Gebäude</string>
     <string name="indoor_render_diag_switch_props">Kleinteile</string>
+    <string name="indoor_render_diag_switch_ground">Boden-Detail, schärfere Beläge</string>
+    <string name="indoor_render_diag_switch_wind">Wind in Laub und Gras</string>
+    <string name="indoor_render_diag_switch_birds">Vögel</string>
+    <string name="indoor_render_diag_switch_riders">Andere Radfahrer</string>
     <string name="indoor_render_diag_switch_fps30">Höchstens 30 Bilder je Sekunde</string>
     <string name="indoor_render_diag_resolution">Auflösung: %1$d %%</string>
     <string name="indoor_render_diag_failure_detail">Details für einen Fehlerbericht</string>

@@ -269,7 +269,7 @@ internal class RouteEnv(val ctx: TileContext) {
                 LandClass.FOREST -> {
                     p.inner[side] = 4.0; p.end[side] = 10.0
                 }
-                LandClass.MEADOW, LandClass.PARK, LandClass.SCRUB, LandClass.WETLAND -> {
+                LandClass.MEADOW, LandClass.ORCHARD, LandClass.PARK, LandClass.SCRUB, LandClass.WETLAND -> {
                     p.inner[side] = 3.5; p.end[side] = 9.0
                 }
                 // Breiter deckend als frueher (1,2/1,0 m): Das Luftbild zeigt die echte Strasse oft
@@ -291,7 +291,19 @@ internal class RouteEnv(val ctx: TileContext) {
             val ae = (ce + re * off).coerceIn(s.minE + 1.0, s.maxE - 1.0)
             val an = (cn + rn * off).coerceIn(s.minN + 1.0, s.maxN - 1.0)
             ctx.aerialMeanAt(ae, an, 2.0)?.let { c ->
-                p.aerial[side] = floatArrayOf(Argb.SRGB_TO_LINEAR[Argb.red(c)], Argb.SRGB_TO_LINEAR[Argb.green(c)], Argb.SRGB_TO_LINEAR[Argb.blue(c)])
+                val near = floatArrayOf(Argb.SRGB_TO_LINEAR[Argb.red(c)], Argb.SRGB_TO_LINEAR[Argb.green(c)], Argb.SRGB_TO_LINEAR[Argb.blue(c)])
+                // Neben Feldern (Maulbronn km 7/13, lidar.md 9.1): Der Rain direkt am Weg ist im Luftbild satt
+                // gruen, das Winterfeld dahinter blass. Der Streifen nimmt dort zur Haelfte die Farbe des Felds
+                // 9 m draussen — er laeuft sonst als knallgruenes Band ueber das helle Feld aus.
+                if (land == LandClass.FARMLAND) {
+                    val fe = (ce + re * (hw + 9.0) * sgn).coerceIn(s.minE + 1.0, s.maxE - 1.0)
+                    val fn = (cn + rn * (hw + 9.0) * sgn).coerceIn(s.minN + 1.0, s.maxN - 1.0)
+                    ctx.aerialMeanAt(fe, fn, 2.5)?.let { f ->
+                        val far = floatArrayOf(Argb.SRGB_TO_LINEAR[Argb.red(f)], Argb.SRGB_TO_LINEAR[Argb.green(f)], Argb.SRGB_TO_LINEAR[Argb.blue(f)])
+                        for (k in 0..2) near[k] = near[k] * 0.5f + far[k] * 0.5f
+                    }
+                }
+                p.aerial[side] = near
             }
         }
         p.nearRoad = roads.roads.isNotEmpty() && roads.clearance(ce, cn) < hw + 14.0
@@ -408,6 +420,7 @@ internal class RouteEnv(val ctx: TileContext) {
             LandClass.PARK to floatArrayOf(0.52f, 0.63f, 0.50f),
             LandClass.FARMLAND to floatArrayOf(0.64f, 0.62f, 0.52f),
             LandClass.SCRUB to floatArrayOf(0.50f, 0.54f, 0.47f),
+            LandClass.ORCHARD to floatArrayOf(0.60f, 0.62f, 0.58f),
             LandClass.RESIDENTIAL to floatArrayOf(0.55f, 0.62f, 0.52f),
             LandClass.WETLAND to floatArrayOf(0.50f, 0.56f, 0.47f),
             LandClass.WATER to floatArrayOf(0.50f, 0.56f, 0.47f),

@@ -57,6 +57,8 @@ class LaserFixesTest {
             var minY = Double.MAX_VALUE
             for (k in 0 until crown.triangleCount) {
                 val v = IntArray(3) { crown.indices[k * 3 + it] }
+                // Kerne der Kronenlappen (Texturkoordinaten im deckenden Innern der Laubmasse) sind keine Karten
+                if (v.all { i -> isCore(crown, i) }) continue
                 for (a in 0..2) {
                     val p = v[a]; val q = v[(a + 1) % 3]
                     val l = hypot(hypot((crown.x(p) - crown.x(q)).toDouble(), (crown.y(p) - crown.y(q)).toDouble()), (crown.z(p) - crown.z(q)).toDouble())
@@ -68,6 +70,13 @@ class LaserFixesTest {
             assertTrue(longest <= 6.5 * 1.42 + 0.01, "$species $lod: Karte ${"%.1f".format(longest)} m")
             if (species == TreeModels.Species.BROAD) assertTrue(minY < 0.45 * 30.0, "$species $lod: Krone beginnt erst bei ${"%.1f".format(minY)} m")
         }
+    }
+
+    private fun isCore(m: MeshBuilder, i: Int): Boolean {
+        val u = m.uvs[i * 2].toDouble()
+        val v = m.uvs[i * 2 + 1].toDouble()
+        val r = FoliageAtlas.MASS
+        return u > r.u(0.29) && u < r.u(0.71) && v < r.v(0.29) && v > r.v(0.71)
     }
 
     /** Befund 4: Unter dichtem Bewuchs wird das Luftbild zum Waldboden abgetoent, ohne Bewuchs bleibt es unveraendert. */

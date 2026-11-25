@@ -164,21 +164,23 @@ class LaserWorldTest {
 
     @Test
     fun baumartUndUeberhang() {
-        val base = TreeModels.Spec(TreeModels.Species.BROAD, 10.0, 1.0, 1.0, 1, 0.0, false)
+        val base = TreeModels.Spec(TreeModels.Species.BROAD, 10.0, 1.0, 1.0, 1, 0.0, false, variant = 0)
         // breite Krone → Laubbaum, Breite aus dem Radius
         val broad = laserTreeSpec(base, LaserTree(0.0, 0.0, 20.0, 6.4))!!
         assertEquals(TreeModels.Species.BROAD, broad.species)
-        assertEquals(1.0, broad.width, 0.05)
+        // Breite = gemessener Radius / (Kronenfaktor der Wuchsform × Hoehe)
+        val kBroad = TreeModels.crownFactors(TreeModels.formOf(broad)).first
+        assertEquals(6.4 / (kBroad * 20.0), broad.width, 0.05)
         // schmale Krone im Nadelwald → Fichte, sonst Pappelform
         assertEquals(TreeModels.Species.CONIFER, laserTreeSpec(base, LaserTree(0.0, 0.0, 25.0, 2.5), conifer = 0.8)!!.species)
         assertEquals(TreeModels.Species.TALL, laserTreeSpec(base, LaserTree(0.0, 0.0, 25.0, 3.0), conifer = 0.8)!!.species)
         assertEquals(TreeModels.Species.TALL, laserTreeSpec(base, LaserTree(0.0, 0.0, 25.0, 2.5), conifer = 0.1)!!.species)
         // Fichte direkt am Weg: Krone nicht ueber die Fahrbahn
         val c = laserTreeSpec(base, LaserTree(0.0, 0.0, 20.0, 2.0), roomM = 3.0, conifer = 0.9)!!
-        assertTrue(0.22 * c.heightM * c.width <= 3.0 - CLEAR_STRIP_M + 1e-9)
+        assertTrue(TreeModels.crownFactors(TreeModels.Form.SPRUCE).first * c.heightM * c.width <= 3.0 - CLEAR_STRIP_M + 1e-9)
         // Laubbaum mit Kronenansatz ueber dem Lichtraum darf ueberhaengen — am Damm (Fuss 3 m tiefer) nicht.
-        val over = laserTreeSpec(base, LaserTree(0.0, 0.0, 20.0, 6.4), roomM = 3.0)!!
-        assertEquals((3.0 - CLEAR_STRIP_M + MAX_OVERHANG_M) / (0.32 * 20.0), over.width, 1e-6)
+        val over = laserTreeSpec(base, LaserTree(0.0, 0.0, 24.0, 7.0), roomM = 5.0)!!
+        assertEquals((5.0 - CLEAR_STRIP_M + MAX_OVERHANG_M) / (TreeModels.crownFactors(TreeModels.formOf(over)).first * 24.0), over.width, 1e-6)
         assertNull(laserTreeSpec(base, LaserTree(0.0, 0.0, 20.0, 6.4), roomM = 3.0, baseAboveRoadM = -3.0))
         // Im Einschnitt (Fuss 5,5 m hoeher) darf auch die Fichte bis 1 m ueber den Streifen ragen.
         assertNotNull(laserTreeSpec(base, LaserTree(0.0, 0.0, 20.0, 2.0), roomM = 2.0, conifer = 0.9, baseAboveRoadM = 5.5))

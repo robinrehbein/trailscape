@@ -113,6 +113,7 @@ internal class LandRaster(
         return when (classAt(e, n)) {
             LandClass.FOREST -> 1.0
             LandClass.SCRUB -> 0.3
+            LandClass.ORCHARD -> 0.18
             LandClass.PARK -> 0.12
             LandClass.RESIDENTIAL -> 0.08
             LandClass.WETLAND -> 0.08
@@ -268,6 +269,7 @@ internal class LandRaster(
             it[LandClass.INDUSTRIAL.ordinal] = 5
             it[LandClass.PARK.ordinal] = 6
             it[LandClass.SCRUB.ordinal] = 7
+            it[LandClass.ORCHARD.ordinal] = 7
             it[LandClass.WETLAND.ordinal] = 8
             it[LandClass.FOREST.ordinal] = 9
             it[LandClass.WATER.ordinal] = 10

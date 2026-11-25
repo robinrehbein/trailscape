@@ -50,3 +50,11 @@
 -keep class btools.router.StdModel { <init>(); }
 -keep class btools.router.KinematicModel { <init>(); }
 -keep class btools.router.KinematicNoCostModel { <init>(); }
+
+# Indoor-Darstellung: gltfio ruft die Methoden eines Java-MaterialProviders per JNI beim Namen
+# auf (JavaMaterialProvider in AssetLoader.cpp: createMaterialInstance, getMaterial,
+# getMaterials, needsDummyData, destroyMaterials). Nichts davon ruft Kotlin selbst — ohne
+# diese Regel entfernt oder benennt R8 sie, und das Laden jeder Kachel scheitert.
+-keep class de.trailscape.app.indoor.render.WorldMaterialProvider {
+    public <methods>;
+}
