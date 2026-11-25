@@ -658,6 +658,9 @@ class ScreenshotTest {
 
         compose.onAllNodesWithContentDescription(settings)[0].performClick()
         settle()
+        // „Sprache" steht in der letzten Gruppe („App") der Einstellungsliste
+        // und liegt seit den fuenf benannten Gruppen unter dem Rand: hinscrollen.
+        scrollSettingsTo(context.getString(R.string.more_language_title))
         compose.onAllNodesWithText(context.getString(R.string.more_language_title))[0].performClick()
         settle()
         compose.onAllNodesWithText(context.getString(R.string.more_language_hint))[0].assertExists()
@@ -675,6 +678,7 @@ class ScreenshotTest {
         start()
         compose.onAllNodesWithContentDescription("Einstellungen", substring = true)[0].performClick()
         settle()
+        scrollSettingsTo("Sprache")
         compose.onAllNodesWithText("Sprache")[0].performClick()
         settle()
         shot("45-einstellungen-sprache")
@@ -825,6 +829,12 @@ class ScreenshotTest {
      */
     private fun tab(label: String) {
         compose.onAllNodesWithText(label).onLast().performClick()
+        settle()
+    }
+
+    /** Scrollt die Einstellungsliste, bis die Zeile [label] komponiert und sichtbar ist. */
+    private fun scrollSettingsTo(label: String) {
+        compose.onAllNodes(hasScrollToNodeAction())[0].performScrollToNode(hasText(label))
         settle()
     }
 

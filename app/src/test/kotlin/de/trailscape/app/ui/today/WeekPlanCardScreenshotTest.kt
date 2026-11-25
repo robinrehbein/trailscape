@@ -117,7 +117,7 @@ class WeekPlanCardScreenshotTest {
         assertEquals(2, compose.onAllNodesWithText("dein üblicher Fahrtag").fetchSemanticsNodes().size)
         shot("heute-wochenplan-ohne-wetter")
         val first = plan.rides.first()
-        compose.onNodeWithContentDescription("Runde über ${first.km} km für Donnerstag planen").performClick()
+        compose.onNodeWithContentDescription("Runde über ${first.km} km für Donnerstag bauen").performClick()
         assertEquals(first, planned)
         compose.onNodeWithText("Wetter für den Wochenplan").performClick()
         assertEquals(true, switched)

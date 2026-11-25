@@ -139,6 +139,11 @@ internal fun stravaShareRowKind(
  */
 @Composable
 internal fun StravaShareRow(ride: Ride, onConnect: () -> Unit, modifier: Modifier = Modifier) {
+    // Erst pruefen, dann die Dienste anfassen: Ohne Strava-Schluessel im Build
+    // oder bei einer nicht hochladbaren Tour gibt es keine Zeile — und
+    // [StravaServices] wird gar nicht erst gelesen (es setzt `init()` voraus;
+    // dieselbe Vorab-Pruefung stand frueher an der Zeile im Tourdetail).
+    if (!StravaConfig.available || !isStravaUploadable(ride)) return
     val connection by StravaServices.connection.collectAsStateWithLifecycle()
     val records by StravaServices.records.collectAsStateWithLifecycle()
     val state = stravaRideActionState(records[ride.id], System.currentTimeMillis())
