@@ -58,6 +58,10 @@ material {
     shadingModel : lit,
     blending : transparent,
     culling : none,
+    // Filaments Specular-AA: raut nach der Normalenvarianz im Pixel auf — gegen Funkeln im Sonnenglitzer
+    specularAntiAliasing : true,
+    specularAntiAliasingVariance : 0.2,
+    specularAntiAliasingThreshold : 0.15,
     featureLevel : 1
 }
 
@@ -113,8 +117,8 @@ fragment {
         vec3 sunC = frameUniforms.lightColorIntensity.rgb * frameUniforms.lightColorIntensity.w;
         float mu = max(dot(r, frameUniforms.lightDirection), 0.0);
         sky += sunC * (materialParams.glow * pow(mu, materialParams.glowSize));
-        if (full && r.y > 0.0) {
-            highp vec2 uv = r.xz / (r.y + 0.18) * materialParams.cloudScale + materialParams.wind * t;
+        if (full) { // nur auf Uniform verzweigen: texture() braucht gleichfoermigen Kontrollfluss (Ableitungen)
+            highp vec2 uv = r.xz / (max(r.y, 0.0) + 0.18) * materialParams.cloudScale + materialParams.wind * t;
             float n1 = texture(materialParams_waves, uv).r;
             float n2 = texture(materialParams_waves, uv * 2.03 + vec2(0.37, 0.11) + materialParams.wind * (t * 0.6)).r;
             float raw = n1 * 0.78 + n2 * 0.22;
@@ -131,7 +135,7 @@ fragment {
         highp vec2 az = r.xz / max(length(r.xz), 1e-3);
         float sil = texture(materialParams_waves, az * 0.37 + vec2(0.11, 0.63)).r;
         float top = mix(0.05, 0.30, sil);
-        float inBank = bank * (1.0 - smoothstep(top - 0.04, top + 0.015, r.y));
+        float inBank = bank * (1.0 - smoothstep(top - 0.07, top + 0.03, r.y));
         // Uferkulisse: je Richtung heller/dunkler (Wiese, Wald), unten dunkler (Stamm- und Boeschungsschatten)
         vec3 shore = materialParams.bankColor * (mix(0.45, 1.6, sil * sil) * mix(0.65, 1.15, clamp(r.y / top, 0.0, 1.0)))
                    + (materialParams.horizon + materialParams.zenith) * 0.035; // Luft- und Himmelslicht vor dem Ufer
