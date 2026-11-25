@@ -364,12 +364,6 @@ internal fun RideDetailScreen(
                     }
                 }
 
-                // „Indoor fahren": dieselbe Strecke drinnen, die Aussenfahrt als
-                // Mitfahrer (ui/indoor/IndoorFromRide.kt).
-                if (onRideIndoor != null && indoorFromRideOffered(ride)) {
-                    IndoorFromRideAction(planned = ride.planned, onClick = onRideIndoor)
-                }
-
                 // Die vier Handgriffe, die frueher hinter ⋮ lagen — jetzt
                 // sichtbar und beschriftet, direkt unter der Hauptaktion und in
                 // derselben Ordnung wie auf dem Karten-Tourblatt
@@ -408,6 +402,13 @@ internal fun RideDetailScreen(
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 )
+
+                // „Indoor fahren": dieselbe Strecke drinnen, die Aussenfahrt als
+                // Mitfahrer (ui/indoor/IndoorFromRide.kt). Unter den Hauptaktionen,
+                // damit Teilen und Loeschen ohne Scrollen erreichbar bleiben.
+                if (onRideIndoor != null && indoorFromRideOffered(ride)) {
+                    IndoorFromRideAction(planned = ride.planned, onClick = onRideIndoor)
+                }
 
                 // Idee 7: Tour <-> Planung umwandeln (siehe PlanFlip.kt).
                 if (!ride.indoor && ride.points.size >= 2) {
