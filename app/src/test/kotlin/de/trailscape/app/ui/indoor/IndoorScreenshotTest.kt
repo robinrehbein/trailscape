@@ -27,6 +27,7 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureScreenRoboImage
@@ -291,24 +292,144 @@ class IndoorScreenshotTest {
                 chainringTeeth = 48,
             ),
             devicesSection = { Placeholder("Geräteliste", Modifier.fillMaxWidth().height(180.dp)) },
-            onDemoChange = {}, onChainringChange = {}, onGearTableChange = {}, onContinue = {}, onBack = {}, onOpenDiagnostics = {},
+            onDemoChange = {}, onDone = {}, onBack = {},
         )
     }
 
+    private val pairKickr = IndoorPairUi(demoTrainer = false, trainerName = "KICKR CORE 7B2F", shifterName = "Zwift Click")
+    private val pairNone = IndoorPairUi(demoTrainer = false, trainerName = null, shifterName = null)
+
+    /** Die Startseite (docs/indoor/app.md, „Nutzerfluss“). */
+    @Composable
+    private fun Home(
+        route: IndoorRouteUi = routeSim,
+        pair: IndoorPairUi = pairKickr,
+        issue: IndoorTrainerIssue? = null,
+        catalog: IndoorCatalogUi = IndoorCatalogUi(emptyList()),
+        day: IndoorDayUi? = null,
+        optionsOpen: Boolean = false,
+    ) = IndoorHomeScreen(
+        route = route, pair = pair, trainerIssue = issue,
+        onSelect = {}, onModeChange = {}, onGhostChange = {}, onRide = {}, onBack = {}, onOpenPair = {}, onOpenSettings = {},
+        catalog = catalog, day = day, initialOptionsOpen = optionsOpen,
+    )
+
     @Test
-    fun streckeSim() = shot("92-indoor-strecke-sim") {
-        IndoorRouteScreen(routeSim, {}, {}, {}, {}, {})
-    }
+    fun streckeSim() = shot("92-indoor-strecke-sim") { Home(optionsOpen = true) }
 
     @Test
     fun streckeErg() = shot("93-indoor-strecke-erg") {
-        IndoorRouteScreen(
-            routeSim.copy(
+        Home(
+            route = routeSim.copy(
                 mode = IndoorMode.ERG, ergTitle = "Schwelle 3 x 8 Min", ergMinutes = 62,
                 ghost = IndoorGhostOption.ConstantPower(180),
             ),
-            {}, {}, {}, {}, {},
+            optionsOpen = true,
         )
+    }
+
+    // ------------------------------------------- Startseite: Zustaende vor „Fahren"
+    // Bilder unter docs/indoor/bilder/nutzerfluss/ (nachher-*).
+
+    private val flowFile = "nutzerfluss"
+
+    /** Nichts bereit: kein Trainer, keine Strecke gewaehlt. */
+    @Test
+    fun startseiteNichtsBereit() = shot("$flowFile-nachher-01-nichts-bereit") {
+        Home(route = routeSim.copy(selected = null, ghost = IndoorGhostOption.None, ghostPastRideAvailable = false), pair = pairNone, issue = IndoorTrainerIssue.NOT_PAIRED, catalog = catalogUi)
+    }
+
+    /** Strecke bereit, Trainer fehlt. */
+    @Test
+    fun startseiteTrainerFehlt() = shot("$flowFile-nachher-02-trainer-fehlt") {
+        Home(pair = pairNone, issue = IndoorTrainerIssue.NOT_PAIRED, catalog = catalogUi)
+    }
+
+    /** Trainer gemerkt, aber Bluetooth aus. */
+    @Test
+    fun startseiteBluetoothAus() = shot("$flowFile-nachher-03-bluetooth-aus") {
+        Home(issue = IndoorTrainerIssue.BLUETOOTH_OFF, catalog = catalogUi)
+    }
+
+    /** Bekannte Strecke gewaehlt, noch nicht geladen: „Herunterladen". */
+    @Test
+    fun startseiteHerunterladen() = shot("$flowFile-nachher-04-herunterladen") {
+        Home(route = routeCatalog.copy(selected = IndoorRouteOption.Catalog("monte-sante-marie", "Schotter von Monte Sante Marie", 13.2, 248.0)), catalog = catalogUi)
+    }
+
+    /** Bekannte Strecke laedt. */
+    @Test
+    fun startseiteLaedt() = shot("$flowFile-nachher-05-laedt") {
+        Home(route = routeCatalog.copy(selected = IndoorRouteOption.Catalog("vlaamse-ardennen", "Oude Kwaremont", 10.0, 200.0)), catalog = catalogUi)
+    }
+
+    /** Alles bereit (Demo-Trainer, bekannte Strecke geladen). */
+    @Test
+    fun startseiteBereit() = shot("$flowFile-nachher-06-bereit") {
+        Home(route = routeCatalog, pair = IndoorPairUi(demoTrainer = true, trainerName = null, shifterName = null), catalog = catalogUi)
+    }
+
+    /** Download gescheitert. */
+    @Test
+    fun startseiteFehler() = shot("$flowFile-nachher-07-fehler") {
+        Home(route = routeCatalog.copy(selected = IndoorRouteOption.Catalog("rennsteig", "Rennsteig bei Oberhof", 10.0, 200.0)), catalog = catalogUi)
+    }
+
+    /** Eigene Strecke ohne 3D-Ansicht: „Fahren" fuehrt erst zu „Strecke vorbereiten". */
+    @Test
+    fun startseiteVorbereiten() = shot("$flowFile-nachher-08-vorbereiten") {
+        Home(route = routeSim.copy(selected = planned, ghost = IndoorGhostOption.None, ghostPastRideAvailable = false), catalog = catalogUi)
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1500dp-xxhdpi")
+    fun einstellungen() = shot("$flowFile-nachher-09-einstellungen") {
+        IndoorSettingsScreen(
+            ui = pairKickr.copy(chainringTeeth = 48),
+            catalog = IndoorCatalogUi(emptyList(), refreshResult = IndoorCatalogRefresh.UPDATED),
+            onChainringChange = {}, onGearTableChange = {}, onTimeOfDayChange = {}, onOtherRidersChange = {},
+            onOpenWorlds = {}, onRefreshCatalog = {}, onOpenDiagnostics = {}, onBack = {},
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun startseiteEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        shot("$flowFile-nachher-10-englisch") {
+            Home(pair = pairNone, issue = IndoorTrainerIssue.NOT_PAIRED, catalog = catalogUi)
+        }
+        compose.onNodeWithText("Pair your trainer first.").assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun einstellungenEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        shot("$flowFile-nachher-11-einstellungen-en") {
+            IndoorSettingsScreen(
+                ui = pairKickr, catalog = IndoorCatalogUi(emptyList()),
+                onChainringChange = {}, onGearTableChange = {}, onTimeOfDayChange = {}, onOtherRidersChange = {},
+                onOpenWorlds = {}, onRefreshCatalog = {}, onOpenDiagnostics = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Ride feel").assertExists()
+    }
+
+    /** Pause: „Weiter" und „Fahrt beenden" auf der Startpunkt-Karte; der Tipp fragt nach. */
+    @Test
+    fun pauseMitBeenden() {
+        shot("$flowFile-nachher-12-pause-beenden") {
+            RideScreen(
+                ride(session = session(phase = IndoorPhase.PAUSED, ghost = null), ghostLabel = null).copy(
+                    start = IndoorStartUi(selectedM = 4_260.0, maxM = 11_900.0, resumeM = null, held = false),
+                ),
+            )
+        }
+        compose.onNodeWithText("Fahrt beenden").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Fahrt angehalten").assertExists()
+        captureScreenRoboImage("build/outputs/roborazzi/$flowFile-nachher-13-pause-beenden-rueckfrage.png")
     }
 
     private fun catalogItem(
@@ -366,7 +487,6 @@ class IndoorScreenshotTest {
     )
 
     private val routeCatalog get() = routeSim.copy(
-        tab = IndoorRouteTab.CATALOG,
         selected = IndoorRouteOption.Catalog("alpe-dhuez", "Alpe d'Huez", 15.1, 1105.0),
         ghost = IndoorGhostOption.None,
         ghostPastRideAvailable = false,
@@ -375,14 +495,14 @@ class IndoorScreenshotTest {
     @Test
     @Config(qualifiers = "${TestLocales.DE}-w411dp-h2600dp-xxhdpi")
     fun streckeBekannteStrecken() = shot("116-indoor-strecke-katalog") {
-        IndoorRouteScreen(routeCatalog, {}, {}, {}, {}, {}, catalog = catalogUi)
+        Home(route = routeCatalog, catalog = catalogUi)
     }
 
     @Test
     @Config(qualifiers = "+en-rGB")
     fun streckeBekannteStreckenEnglisch() {
         TestLocales.assertTestLocale(AppLanguage.EN)
-        shot("117-indoor-strecke-katalog-en") { IndoorRouteScreen(routeCatalog, {}, {}, {}, {}, {}, catalog = catalogUi) }
+        shot("117-indoor-strecke-katalog-en") { Home(route = routeCatalog, catalog = catalogUi) }
         compose.onNodeWithText("Known routes").assertExists()
     }
 
@@ -452,7 +572,7 @@ class IndoorScreenshotTest {
                             modifier = Modifier.fillMaxSize().padding(16.dp),
                             verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
                         ) {
-                            IndoorCatalogSection(previewUi, "catalog:alpe-dhuez", {}, {}, {}, {}, {})
+                            IndoorCatalogList(previewUi, "catalog:alpe-dhuez") {}
                         }
                     }
                 }
@@ -468,9 +588,9 @@ class IndoorScreenshotTest {
     @Config(qualifiers = "${TestLocales.DE}-w411dp-h2400dp-xxhdpi")
     fun katalogVorschau() {
         previewShot("katalog-vorschau-01-karten", "Noch keine Vorschau")
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("Laser").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Extra detailliert").fetchSemanticsNodes().isNotEmpty() }
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Neu").fetchSemanticsNodes().isNotEmpty() }
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("Paket 106,0 MB · Mit Luftbild").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Herunterladen · 106,0 MB").fetchSemanticsNodes().isNotEmpty() }
         compose.waitUntil(10_000) {
             compose.onAllNodesWithContentDescription("Vorschaubild der 3D-Welt von Alpe d'Huez").fetchSemanticsNodes().isNotEmpty()
         }
@@ -604,7 +724,7 @@ class IndoorScreenshotTest {
         IndoorPairScreen(
             ui = IndoorPairUi(demoTrainer = true, trainerName = null, shifterName = null, chainringTeeth = 50),
             devicesSection = { Placeholder("Geräteliste", Modifier.fillMaxWidth().height(180.dp)) },
-            onDemoChange = {}, onChainringChange = {}, onGearTableChange = {}, onContinue = {}, onBack = {}, onOpenDiagnostics = {},
+            onDemoChange = {}, onDone = {}, onBack = {},
         )
     }
 
@@ -636,7 +756,7 @@ class IndoorScreenshotTest {
                     onScan = {}, onStopScan = {}, onPair = { _, _ -> }, onForget = {}, onGrant = {}, onEnableBluetooth = {},
                 )
             },
-            onDemoChange = {}, onChainringChange = {}, onGearTableChange = {}, onContinue = {}, onBack = {}, onOpenDiagnostics = {},
+            onDemoChange = {}, onDone = {}, onBack = {},
         )
     }
 
@@ -797,7 +917,7 @@ class IndoorScreenshotTest {
     @Config(qualifiers = "+en-rGB")
     fun streckeEnglisch() {
         TestLocales.assertTestLocale(AppLanguage.EN)
-        shot("107-indoor-strecke-en") { IndoorRouteScreen(routeSim, {}, {}, {}, {}, {}) }
+        shot("107-indoor-strecke-en") { Home(optionsOpen = true) }
         val title = RuntimeEnvironment.getApplication().getString(R.string.indoor_app_route_title)
         compose.onNodeWithText(title).assertExists()
     }
@@ -842,7 +962,7 @@ class IndoorScreenshotTest {
     @Test
     @Config(qualifiers = "${TestLocales.DE}-w411dp-h1100dp-xxhdpi")
     fun tageseinheitStrecke() = shot("$dayFile-01-strecke-intervalle") {
-        IndoorRouteScreen(routeSim.copy(ergTitle = "Schwelle 3 x 8 Min", ergMinutes = 52), {}, {}, {}, {}, {}, day = dayOffer)
+        Home(route = routeSim.copy(ergTitle = "Schwelle 3 x 8 Min", ergMinutes = 52), day = dayOffer)
     }
 
     @Test
@@ -920,7 +1040,7 @@ class IndoorScreenshotTest {
     fun tageseinheitEnglisch() {
         TestLocales.assertTestLocale(AppLanguage.EN)
         shot("$dayFile-07-strecke-en") {
-            IndoorRouteScreen(routeSim.copy(ergTitle = "Threshold 3 x 8 min", ergMinutes = 52), {}, {}, {}, {}, {}, day = dayOffer.copy(title = "Threshold 3 x 8 min"))
+            Home(route = routeSim.copy(ergTitle = "Threshold 3 x 8 min", ergMinutes = 52), day = dayOffer.copy(title = "Threshold 3 x 8 min"))
         }
         compose.onAllNodesWithText("Today’s session").onFirst().assertExists()
     }
@@ -946,7 +1066,7 @@ class IndoorScreenshotTest {
                 IndoorDayCard(ui = dayOffer.copy(title = "Threshold 3 x 8 min", generated = dayGenerated, path = IndoorDayPath.GENERATED), onRide = {}, onNext = {})
             }
         }
-        compose.onAllNodesWithText("Generated world").onFirst().assertExists()
+        compose.onAllNodesWithText("Generated route").onFirst().assertExists()
     }
 
     // ------------------------------------------------------------------ Server-Bau (docs/indoor/serverbau.md)
@@ -961,7 +1081,7 @@ class IndoorScreenshotTest {
 
     @Composable
     private fun ServerWorld(ui: IndoorWorldUi, server: IndoorServerUi) =
-        IndoorWorldScreen(ui, {}, {}, {}, {}, {}, {}, server = server)
+        IndoorWorldScreen(ui, {}, {}, {}, {}, {}, {}, server = server, initialAdvancedOpen = true)
 
     @Test
     @Config(qualifiers = "${TestLocales.DE}-w411dp-h1500dp-xxhdpi")

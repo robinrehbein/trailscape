@@ -497,8 +497,9 @@ private fun TrailscapeAppContent() {
                     InsetPadded { MoreScreen(appViewModel, onBack = { navController.popBackStack() }) }
                 }
                 // Indoor (docs/indoor.md 10.1): der Ablauf haelt sein
-                // ViewModel am eigenen Backstack-Eintrag; die Diagnose ist
-                // aus dem Ablauf (Koppeln) und unter Mehr erreichbar.
+                // ViewModel am eigenen Backstack-Eintrag; Diagnose und
+                // Weltverwaltung sind aus dessen Einstellungen erreichbar,
+                // die Diagnose auch unter Mehr.
                 composable(INDOOR_ROUTE) {
                     IndoorFlowScreen(
                         appViewModel = appViewModel,
@@ -507,6 +508,9 @@ private fun TrailscapeAppContent() {
                         onExit = { navController.popBackStack(INDOOR_ROUTE, inclusive = true) },
                         onOpenDiagnostics = {
                             navController.navigate(INDOOR_DIAGNOSTICS_ROUTE) { launchSingleTop = true }
+                        },
+                        onOpenWorlds = {
+                            navController.navigate(INDOOR_WORLDS_ROUTE) { launchSingleTop = true }
                         },
                     )
                 }

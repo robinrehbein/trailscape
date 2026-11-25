@@ -177,8 +177,7 @@ class IndoorCatalogFlowTest {
     private fun IndoorViewModel.toRoute() {
         setDemoTrainer(true)
         continueFromPair()
-        setRouteTab(IndoorRouteTab.CATALOG)
-        assertEquals(IndoorRouteTab.CATALOG, route.value.tab)
+        assertEquals(IndoorStage.ROUTE, stage.value)
     }
 
     private fun IndoorViewModel.item(): IndoorCatalogItemUi = catalog.value.items.single { it.id == "testrunde" }

@@ -17,7 +17,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -30,10 +35,12 @@ import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.theme.LocalSignalColors
 
 /**
- * # Schritt 3: Welt laden
+ * # Strecke vorbereiten (nur fuer Strecken ohne fertige 3D-Ansicht sichtbar)
  *
- * Erst der **Voranschlag** (Hosts, Datenmenge, Platz, Datenschutzhinweis);
- * Netzverkehr gibt es erst nach „Welt laden". Danach Fortschritt mit Abbruch
+ * Erst der **Voranschlag** (Datenmenge, Platz, Datenschutzhinweis; Qualitaet,
+ * Belag, Boden und die Liste der Hosts unter „Einzelheiten");
+ * Netzverkehr gibt es erst nach „Vorbereiten". Der Bau auf dem eigenen Server
+ * steht eingeklappt darunter. Danach Fortschritt mit Abbruch
  * oder ein verstaendlicher Fehler. „Ohne Welt fahren" ist ausser waehrend des
  * Baus (dort zuerst abbrechen) und nach fertiger Welt immer angeboten.
  *
@@ -54,12 +61,14 @@ fun IndoorWorldScreen(
     onServerBuild: () -> Unit = {},
     onServerCancel: () -> Unit = {},
     onServerRetry: () -> Unit = {},
+    initialAdvancedOpen: Boolean = false,
 ) {
     val building = ui is IndoorWorldUi.Building
     val serverBusy = server is IndoorServerUi.Working
     IndoorPage(
-        title = stringResource(R.string.indoor_app_world_title),
-        overline = stepOverline(3),
+        title = stringResource(
+            if (ui is IndoorWorldUi.Ready) R.string.indoor_app_world_ready_page_title else R.string.indoor_app_world_title,
+        ),
         // Waehrend des Baus fuehrt „Zurueck" nicht aus Versehen weg: erst Abbrechen.
         onBack = if (building) null else onBack,
         bottomBar = {
@@ -123,12 +132,16 @@ fun IndoorWorldScreen(
                 // Die zweite Wahl steht oben, sobald sie laeuft — dann ist sie das Wichtigste.
                 if (serverBusy) IndoorServerSection(server, onServerBuild, onServerCancel, onServerRetry)
                 PlanContent(ui)
-                if (!serverBusy) IndoorServerSection(server, onServerBuild, onServerCancel, onServerRetry)
+                if (!serverBusy) AdvancedServer(server, onServerBuild, onServerCancel, onServerRetry, initialAdvancedOpen)
             }
             is IndoorWorldUi.Building -> BuildingContent(ui)
             is IndoorWorldUi.Ready -> {
                 ReadyContent(ui)
-                IndoorServerSection(server, onServerBuild, onServerCancel, onServerRetry)
+                if (serverBusy) {
+                    IndoorServerSection(server, onServerBuild, onServerCancel, onServerRetry)
+                } else {
+                    AdvancedServer(server, onServerBuild, onServerCancel, onServerRetry, initialAdvancedOpen)
+                }
             }
             is IndoorWorldUi.Failed -> FailedContent(ui)
             is IndoorWorldUi.RouteUnavailable -> RouteUnavailableContent(ui)
@@ -149,6 +162,7 @@ private fun PreparingContent() {
 @Composable
 private fun PlanContent(plan: IndoorWorldUi.Plan) {
     val formats = LocalAppFormats.current
+    var details by rememberSaveable { mutableStateOf(false) }
     Text(text = plan.routeName, style = MaterialTheme.typography.titleLarge)
     MutedText(stringResource(R.string.indoor_app_world_plan_intro))
 
@@ -159,10 +173,6 @@ private fun PlanContent(plan: IndoorWorldUi.Plan) {
                 value = stringResource(R.string.indoor_app_value_km, formats.km(plan.distanceKm)),
             )
             LabelValueRow(
-                label = stringResource(R.string.indoor_app_world_plan_quality),
-                value = qualityLabel(plan.quality),
-            )
-            LabelValueRow(
                 label = stringResource(R.string.indoor_app_world_plan_download),
                 value = if (plan.downloadBytes > 0L) formats.indoorBytes(plan.downloadBytes) else stringResource(R.string.indoor_app_world_plan_download_none),
             )
@@ -170,18 +180,24 @@ private fun PlanContent(plan: IndoorWorldUi.Plan) {
                 label = stringResource(R.string.indoor_app_world_plan_disk),
                 value = formats.indoorBytes(plan.diskBytes),
             )
-            LabelValueRow(
-                label = stringResource(R.string.indoor_app_world_plan_surfaces),
-                value = routeSourceLabel(plan.surfaceSource),
-            )
-            LabelValueRow(
-                label = stringResource(R.string.indoor_app_world_plan_ground),
-                value = if (plan.aerialLabels.isEmpty()) {
-                    stringResource(R.string.indoor_app_world_plan_ground_generated)
-                } else {
-                    plan.aerialLabels.joinToString(", ")
-                },
-            )
+            if (details) {
+                LabelValueRow(
+                    label = stringResource(R.string.indoor_app_world_plan_quality),
+                    value = qualityLabel(plan.quality),
+                )
+                LabelValueRow(
+                    label = stringResource(R.string.indoor_app_world_plan_surfaces),
+                    value = routeSourceLabel(plan.surfaceSource),
+                )
+                LabelValueRow(
+                    label = stringResource(R.string.indoor_app_world_plan_ground),
+                    value = if (plan.aerialLabels.isEmpty()) {
+                        stringResource(R.string.indoor_app_world_plan_ground_generated)
+                    } else {
+                        plan.aerialLabels.joinToString(", ")
+                    },
+                )
+            }
         }
     }
     if (plan.resumable) {
@@ -191,23 +207,55 @@ private fun PlanContent(plan: IndoorWorldUi.Plan) {
             text = stringResource(R.string.indoor_app_world_plan_resumable),
         )
     }
-
-    Eyebrow(stringResource(R.string.indoor_app_world_plan_hosts_eyebrow))
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (plan.hosts.isEmpty()) {
-                MutedText(stringResource(R.string.indoor_app_world_plan_hosts_none))
-            } else {
-                plan.hosts.forEach { host -> Text(text = host, style = MaterialTheme.typography.bodyMedium) }
-            }
-        }
-    }
+    // Datenschutz bleibt sichtbar (es geht um die Zustimmung zum Netzverkehr);
+    // die Liste der Hosts steht unter „Einzelheiten".
     NoticeBox(
         icon = Icons.Filled.Info,
         color = MaterialTheme.colorScheme.tertiary,
         title = stringResource(R.string.indoor_app_world_privacy_title),
         text = stringResource(R.string.indoor_app_world_privacy_body),
     )
+    if (details) {
+        Eyebrow(stringResource(R.string.indoor_app_world_plan_hosts_eyebrow))
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (plan.hosts.isEmpty()) {
+                    MutedText(stringResource(R.string.indoor_app_world_plan_hosts_none))
+                } else {
+                    plan.hosts.forEach { host -> Text(text = host, style = MaterialTheme.typography.bodyMedium) }
+                }
+            }
+        }
+    }
+    TextButton(onClick = { details = !details }) {
+        Text(stringResource(if (details) R.string.indoor_app_world_details_hide else R.string.indoor_app_world_details_show))
+    }
+}
+
+/**
+ * Der Bau auf dem eigenen Server ist eine Moeglichkeit fuer Fortgeschrittene:
+ * eingeklappt hinter einer Zeile, nur sichtbar, wenn ein Server ihn anbietet.
+ * Laeuft er, steht er offen oben (siehe [IndoorWorldScreen]).
+ */
+@Composable
+private fun AdvancedServer(
+    server: IndoorServerUi,
+    onBuild: () -> Unit,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit,
+    initiallyOpen: Boolean,
+) {
+    if (server == IndoorServerUi.Hidden) return
+    // Ein Fehler steht offen, damit er nicht untergeht.
+    var open by rememberSaveable { mutableStateOf(initiallyOpen) }
+    val expanded = open || server is IndoorServerUi.Failed
+    if (!expanded) {
+        TextButton(onClick = { open = true }) {
+            Text(stringResource(R.string.indoor_app_world_advanced_show))
+        }
+    } else {
+        IndoorServerSection(server, onBuild, onCancel, onRetry)
+    }
 }
 
 @Composable

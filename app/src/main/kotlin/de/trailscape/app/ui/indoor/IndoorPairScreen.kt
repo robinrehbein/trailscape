@@ -9,7 +9,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -18,7 +17,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,58 +26,50 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.ui.components.Eyebrow
-import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.more.SettingsSwitchRow
 import de.trailscape.core.indoor.VirtualGearTable
 import de.trailscape.core.indoor.sky.IndoorTimeOfDay
 
 /**
- * # Schritt 1: Koppeln
+ * # Nebenseite „Trainer koppeln" (von der Startseite)
  *
  * Zustandslos. [devicesSection] ist ein Slot fuer `IndoorDevicesSection()`
- * (Koppeln, Status, Vergessen mit Berechtigungsabfrage), damit Screenshot-Tests
- * ihn durch einen Platzhalter ersetzen koennen. Der Demo-Trainer braucht kein
- * Geraet — mit ihm geht es immer weiter.
+ * (Suche, Berechtigung, Bluetooth, Koppeln, Vergessen), damit Screenshot-Tests
+ * ihn durch einen Platzhalter ersetzen koennen. Darunter der Schalter „Ohne
+ * Trainer ausprobieren" (Demo-Trainer). „Fertig" und Zurueck fuehren zur
+ * Startseite; dort steht, ob noch etwas fehlt — diese Seite sperrt nichts.
  *
- * Die Zeile „Kettenblatt am Trainer" stellt die echte Uebersetzung ein
- * (Kettenblatt / Zwift Cog mit 14 Zaehnen), auf die sich die virtuellen Gaenge
- * beziehen; [onChainringChange] bekommt den neuen Wert, das ViewModel begrenzt
- * und merkt ihn. Darunter waehlt [onGearTableChange] die Gangtabelle
- * (gleichmaessig oder wie am Rad) und [onTimeOfDayChange] die Tageszeit der
- * 3D-Welt (automatisch nach der Uhr, Morgen, Mittag, Abend); [onOtherRidersChange] schaltet
- * die anderen Radfahrer in der 3D-Welt.
+ * Fahrgefuehl und 3D-Ansicht (Kettenblatt, Gaenge, Tageszeit, andere
+ * Radfahrer) stehen seit dem neuen Nutzerfluss unter Einstellungen
+ * ([IndoorSettingsScreen]).
  */
 @Composable
 fun IndoorPairScreen(
     ui: IndoorPairUi,
     devicesSection: @Composable () -> Unit,
     onDemoChange: (Boolean) -> Unit,
-    onChainringChange: (Int) -> Unit,
-    onGearTableChange: (VirtualGearTable) -> Unit,
-    onContinue: () -> Unit,
+    onDone: () -> Unit,
     onBack: () -> Unit,
-    onOpenDiagnostics: () -> Unit,
-    onTimeOfDayChange: (IndoorTimeOfDay) -> Unit = {},
-    onOtherRidersChange: (Boolean) -> Unit = {},
 ) {
     IndoorPage(
         title = stringResource(R.string.indoor_app_pair_title),
-        overline = stepOverline(1),
         onBack = onBack,
         bottomBar = {
-            if (!ui.canContinue) {
-                MutedText(stringResource(R.string.indoor_app_pair_continue_hint))
-            }
-            Button(
-                onClick = onContinue,
-                enabled = ui.canContinue,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-            ) {
-                Text(stringResource(R.string.indoor_app_action_continue))
+            Button(onClick = onDone, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                Text(stringResource(R.string.indoor_app_action_done))
             }
         },
     ) {
         MutedText(stringResource(R.string.indoor_app_pair_intro))
+
+        // Koppeln, Status, Vergessen: Der Abschnitt bringt Ueberschrift,
+        // Einleitung, Berechtigungsabfrage, die gemerkten Geraete je Rolle und
+        // den Hinweis „Schalttaster optional" selbst mit.
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(IndoorCardPadding)) {
+                devicesSection()
+            }
+        }
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(vertical = 4.dp)) {
@@ -92,50 +82,12 @@ fun IndoorPairScreen(
                 )
             }
         }
-
-        if (ui.demoTrainer) {
-            NoticeBox(
-                icon = Icons.Filled.Info,
-                color = MaterialTheme.colorScheme.primary,
-                text = stringResource(R.string.indoor_app_pair_demo_notice),
-            )
-        }
-
-        ChainringCard(teeth = ui.chainringTeeth, onChange = onChainringChange)
-        GearTableCard(selected = ui.gearTable, onChange = onGearTableChange)
-        TimeOfDayCard(selected = ui.timeOfDay, onChange = onTimeOfDayChange)
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                SettingsSwitchRow(
-                    title = stringResource(R.string.indoor_app_pair_other_riders_title),
-                    subtitle = stringResource(R.string.indoor_app_pair_other_riders_body),
-                    checked = ui.otherRiders,
-                    onCheckedChange = onOtherRidersChange,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-            }
-        }
-
-        // Koppeln, Status, Vergessen: Der Abschnitt bringt Ueberschrift,
-        // Einleitung, Berechtigungsabfrage, die gemerkten Geraete je Rolle und
-        // den Hinweis „Schalttaster optional" selbst mit — deshalb hier keine
-        // zweite Liste der gemerkten Geraete. Die Karte gibt ihm denselben
-        // Rahmen wie den Karten darueber.
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(IndoorCardPadding)) {
-                devicesSection()
-            }
-        }
-
-        TextButton(onClick = onOpenDiagnostics) {
-            Text(stringResource(R.string.indoor_app_pair_diagnostics_action))
-        }
     }
 }
 
 /** Stepper „Kettenblatt am Trainer" (ein Zahn je Schritt). */
 @Composable
-private fun ChainringCard(teeth: Int, onChange: (Int) -> Unit) {
+internal fun ChainringCard(teeth: Int, onChange: (Int) -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Eyebrow(stringResource(R.string.indoor_app_pair_chainring_title))
@@ -168,7 +120,7 @@ private fun ChainringCard(teeth: Int, onChange: (Int) -> Unit) {
 
 /** Wahl der Gangtabelle der virtuellen Gaenge (je 24 Gaenge). */
 @Composable
-private fun GearTableCard(selected: VirtualGearTable, onChange: (VirtualGearTable) -> Unit) {
+internal fun GearTableCard(selected: VirtualGearTable, onChange: (VirtualGearTable) -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 12.dp)) {
             Eyebrow(
@@ -186,7 +138,7 @@ private fun GearTableCard(selected: VirtualGearTable, onChange: (VirtualGearTabl
 
 /** Wahl der Tageszeit der 3D-Welt (Sonnenstand, Licht, Himmel). */
 @Composable
-private fun TimeOfDayCard(selected: IndoorTimeOfDay, onChange: (IndoorTimeOfDay) -> Unit) {
+internal fun TimeOfDayCard(selected: IndoorTimeOfDay, onChange: (IndoorTimeOfDay) -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 12.dp)) {
             Eyebrow(

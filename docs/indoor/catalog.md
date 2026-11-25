@@ -309,7 +309,14 @@ Mobilfunk).
 
 ## App
 
-- **Streckenwahl** (Schritt 2): zwei Bereiche „Eigene Strecken“ / „Bekannte
+- **Streckenwahl** (seit 25.11.2026, docs/indoor/app.md „Nutzerfluss“): die
+  bekannten Strecken stehen in **einer** Liste unter den eigenen Strecken der
+  Startseite, jede Karte mit Status („Bereit“, „Herunterladen · 77 MB“,
+  „Lädt · 45 %“ …) und ohne eigene Knöpfe; Herunterladen, Fortsetzen,
+  Verwerfen, Abbrechen und Aktualisieren stehen für die gewählte Strecke unten
+  über „Fahren“. „Liste der bekannten Strecken aktualisieren“ samt Hinweis,
+  wohin die Anfrage geht, unter Einstellungen → Erweitert. „Laser“ heißt in
+  der Oberfläche „Extra detailliert“. Bis dahin galt: zwei Bereiche „Eigene Strecken“ / „Bekannte
   Strecken“. Karten mit Vorschau (siehe oben), Name, Region und Land, km, Hm, Belagsanteilen, Art
   (Rennrad/Schotter/Pflaster), Text, Luftbild ja/nein und Zustand:
   nicht geladen („Laden (77 MB)“) · lädt x % mit „Abbrechen“ · angefangen
@@ -318,7 +325,7 @@ Mobilfunk).
   noch nicht verfügbar“, kein Netz, Prüfsumme, Platz). Unten „Katalog
   aktualisieren“ und ein Hinweis, wohin die Anfrage geht. Bilder 116 und
   117 (`docs/indoor/bilder/app/`).
-- **Bereit → direkt losfahren:** „Weiter“ mit einer bereiten bekannten
+- **Bereit → direkt losfahren:** „Fahren“ (früher „Weiter“) mit einer bereiten bekannten
   Strecke öffnet die Welt ohne Voranschlag und ohne Netz und startet die
   Fahrt sofort (`IndoorViewModel.continueFromRoute`, `autoStart`). Die
   Quellenangaben der Welt sind im HUD erreichbar.

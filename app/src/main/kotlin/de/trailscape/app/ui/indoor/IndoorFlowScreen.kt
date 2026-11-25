@@ -25,12 +25,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.trailscape.app.R
 import de.trailscape.app.indoor.IndoorPart
 import de.trailscape.app.indoor.IndoorParts
 import de.trailscape.app.indoor.indoorCatching
 import de.trailscape.app.indoor.render.WorldSurface
+import de.trailscape.app.sensors.bluetoothEnabled
+import de.trailscape.app.sensors.hasBluetoothPermissions
 import de.trailscape.app.sensors.indoor.IndoorDevicesSection
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.ui.AppViewModel
@@ -40,6 +43,7 @@ import de.trailscape.core.TrainingSession
 import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.i18n.sessionTitle
 import de.trailscape.core.indoor.IndoorPhase
+import kotlinx.coroutines.delay
 
 /**
  * # Verdrahtung des Indoor-Ablaufs (Ziel `indoor` im `NavHost`)
@@ -50,9 +54,10 @@ import de.trailscape.core.indoor.IndoorPhase
  * Drehung und endet mit dem Verlassen des Ablaufs.
  *
  * ## Zurueck
- *  * Koppeln: verlaesst den Ablauf ([onExit]).
- *  * Strecke, Welt: einen Schritt zurueck ([IndoorViewModel.back]); ein
- *    laufender Weltbau wird dabei abgebrochen.
+ *  * Startseite: verlaesst den Ablauf ([onExit]).
+ *  * Koppeln, Einstellungen: zurueck zur Startseite.
+ *  * Strecke vorbereiten: zurueck zur Startseite ([IndoorViewModel.back]);
+ *    ein laufender Weltbau wird dabei abgebrochen.
  *  * Fahren: **nie versehentlich verlassen** — Zurueck haelt die Fahrt an und
  *    fragt: weiterfahren oder beenden (dann folgt die Auswertung, dort wird
  *    gespeichert). Ist der Start gescheitert, geht es zurueck zu „Welt laden".
@@ -66,12 +71,14 @@ import de.trailscape.core.indoor.IndoorPhase
  *
  * @param onExit verlaesst den Ablauf (Backstack-Eintrag entfernen).
  * @param onOpenDiagnostics oeffnet `indoor/diagnose`.
+ * @param onOpenWorlds oeffnet `indoor/welten` (Strecken auf dem Geraet).
  */
 @Composable
 fun IndoorFlowScreen(
     appViewModel: AppViewModel,
     onExit: () -> Unit,
     onOpenDiagnostics: () -> Unit,
+    onOpenWorlds: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val vm: IndoorViewModel = viewModel(
@@ -109,6 +116,8 @@ fun IndoorFlowScreen(
     }
     // Von „Heute" gewaehlter Vorschlag der Einheit des Tages.
     LaunchedEffect(vm) { appViewModel.consumeIndoorDayPick()?.let(vm::preferDaySuggestion) }
+    // Die Startseite ist der Anfang: Strecken einmal lesen (nach einer Drehung nicht erneut).
+    LaunchedEffect(vm) { vm.ensureRouteOptions() }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, vm) {
@@ -125,8 +134,9 @@ fun IndoorFlowScreen(
 
     val stage by vm.stage.collectAsStateWithLifecycle()
     when (stage) {
-        IndoorStage.PAIR -> PairStage(vm, onExit, onOpenDiagnostics)
-        IndoorStage.ROUTE -> RouteStage(vm)
+        IndoorStage.ROUTE -> HomeStage(vm, onExit)
+        IndoorStage.PAIR -> PairStage(vm)
+        IndoorStage.SETTINGS -> SettingsStage(vm, onOpenWorlds, onOpenDiagnostics)
         IndoorStage.WORLD -> WorldStage(vm)
         IndoorStage.RIDE -> RideStage(vm)
         IndoorStage.SUMMARY -> SummaryStage(vm, onExit)
@@ -134,30 +144,73 @@ fun IndoorFlowScreen(
 }
 
 @Composable
-private fun PairStage(vm: IndoorViewModel, onExit: () -> Unit, onOpenDiagnostics: () -> Unit) {
+private fun PairStage(vm: IndoorViewModel) {
     val ui by vm.pair.collectAsStateWithLifecycle()
+    BackHandler { vm.closeSubPage() }
     IndoorPairScreen(
         ui = ui,
         devicesSection = { IndoorDevicesSection() },
         onDemoChange = vm::setDemoTrainer,
-        onChainringChange = vm::setChainringTeeth,
-        onGearTableChange = vm::setGearTable,
-        onTimeOfDayChange = vm::setTimeOfDay,
-        onOtherRidersChange = vm::setOtherRiders,
-        onContinue = vm::continueFromPair,
-        onBack = onExit,
-        onOpenDiagnostics = onOpenDiagnostics,
+        onDone = vm::closeSubPage,
+        onBack = vm::closeSubPage,
     )
 }
 
 @Composable
-private fun RouteStage(vm: IndoorViewModel) {
+private fun SettingsStage(vm: IndoorViewModel, onOpenWorlds: () -> Unit, onOpenDiagnostics: () -> Unit) {
+    val ui by vm.pair.collectAsStateWithLifecycle()
+    val catalog by vm.catalog.collectAsStateWithLifecycle()
+    BackHandler { vm.closeSubPage() }
+    IndoorSettingsScreen(
+        ui = ui,
+        catalog = catalog,
+        onChainringChange = vm::setChainringTeeth,
+        onGearTableChange = vm::setGearTable,
+        onTimeOfDayChange = vm::setTimeOfDay,
+        onOtherRidersChange = vm::setOtherRiders,
+        onOpenWorlds = onOpenWorlds,
+        onRefreshCatalog = vm::refreshCatalog,
+        onOpenDiagnostics = onOpenDiagnostics,
+        onBack = vm::closeSubPage,
+    )
+}
+
+/**
+ * Ob Bluetooth an ist und die Berechtigung erteilt — beides kann sich in den
+ * Systemeinstellungen aendern, ohne dass die Seite davon hoert; deshalb
+ * sekundenweise nachgefragt, solange die Seite sichtbar ist (wie der
+ * Geraeteabschnitt von indoor-ble).
+ */
+@Composable
+private fun rememberBluetoothState(): Pair<Boolean, Boolean> {
+    val context = LocalContext.current
+    var on by remember { mutableStateOf(bluetoothEnabled(context)) }
+    var granted by remember { mutableStateOf(hasBluetoothPermissions(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                on = bluetoothEnabled(context)
+                granted = hasBluetoothPermissions(context)
+                delay(1_000)
+            }
+        }
+    }
+    return on to granted
+}
+
+@Composable
+private fun HomeStage(vm: IndoorViewModel, onExit: () -> Unit) {
     val ui by vm.route.collectAsStateWithLifecycle()
+    val pair by vm.pair.collectAsStateWithLifecycle()
     val catalog by vm.catalog.collectAsStateWithLifecycle()
     val day by vm.day.collectAsStateWithLifecycle()
-    BackHandler { vm.back() }
-    IndoorRouteScreen(
-        ui = ui,
+    val (bluetoothOn, permissionGranted) = rememberBluetoothState()
+    BackHandler { onExit() }
+    IndoorHomeScreen(
+        route = ui,
+        pair = pair,
+        trainerIssue = indoorTrainerIssue(pair, bluetoothOn, permissionGranted),
         day = day,
         onDayRide = { vm.rideDaySuggestion() },
         onDayNext = vm::nextDaySuggestion,
@@ -166,14 +219,14 @@ private fun RouteStage(vm: IndoorViewModel) {
         onSelect = vm::selectRoute,
         onModeChange = vm::setMode,
         onGhostChange = vm::setGhost,
-        onContinue = vm::continueFromRoute,
-        onBack = { vm.back() },
+        onRide = vm::continueFromRoute,
+        onBack = onExit,
+        onOpenPair = vm::openPair,
+        onOpenSettings = vm::openSettings,
         catalog = catalog,
-        onTabChange = vm::setRouteTab,
         onCatalogDownload = vm::downloadCatalog,
         onCatalogCancel = vm::cancelCatalogDownload,
         onCatalogDiscard = vm::discardCatalogDownload,
-        onCatalogRefresh = vm::refreshCatalog,
     )
 }
 

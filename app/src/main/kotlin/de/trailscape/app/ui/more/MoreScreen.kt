@@ -452,13 +452,16 @@ private fun SettingsList(
         // Indoor (docs/indoor.md 10.1, 10.4), bewusst unter der Gruppe "App", damit
         // deren Zeilen (Sprache, Sync) im Bild der Liste oben bleiben: eigene Ziele im `NavHost`, keine
         // Seiten dieses Bereichs — die Huelle oeffnet sie ueber
-        // [AppViewModel.requestIndoor].
+        // [AppViewModel.requestIndoor]. Seit dem neuen Nutzerfluss
+        // (docs/indoor/app.md) fuehrt die erste Zeile in das Indoor-Training
+        // selbst; „Strecken auf dem Geraet" steht dort unter Einstellungen.
+        // Die Diagnose bleibt auch hier, damit sie ohne den Ablauf erreichbar ist.
         item {
             MoreGroup(label = stringResource(R.string.indoor_app_more_group)) {
                 SettingsNavRow(
-                    title = stringResource(R.string.indoor_app_worlds_title),
-                    status = stringResource(R.string.indoor_app_more_worlds_status),
-                    onClick = { appViewModel.requestIndoor(IndoorDestination.WORLDS) },
+                    title = stringResource(R.string.indoor_app_more_flow_title),
+                    status = stringResource(R.string.indoor_app_more_flow_status),
+                    onClick = { appViewModel.requestIndoor(IndoorDestination.FLOW) },
                 )
                 ListDivider()
                 SettingsNavRow(

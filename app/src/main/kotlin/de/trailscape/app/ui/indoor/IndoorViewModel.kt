@@ -205,7 +205,9 @@ class IndoorViewModel(
     // Oeffentliche Zustaende
     // -----------------------------------------------------------------------
 
-    private val _stage = MutableStateFlow(IndoorStage.PAIR)
+    // Der Ablauf beginnt auf der Startseite (Trainer-Status, Strecken, „Fahren");
+    // Koppeln und Einstellungen sind Nebenseiten davon.
+    private val _stage = MutableStateFlow(IndoorStage.ROUTE)
     val stage: StateFlow<IndoorStage> = _stage.asStateFlow()
 
     private var remembered: Map<IndoorDeviceRole, IndoorDeviceRef> = emptyMap()
@@ -434,11 +436,29 @@ class IndoorViewModel(
 
     private fun readOtherRiders(): Boolean = runCatching { store.getString(KEY_OTHER_RIDERS) != "false" }.getOrDefault(true)
 
-    /** Weiter zur Streckenwahl (nur wenn [IndoorPairUi.canContinue]). */
+    /**
+     * Zurueck von „Trainer koppeln" zur Startseite und die Strecken neu lesen
+     * (nur wenn [IndoorPairUi.canContinue]; sonst bleibt die Seite offen).
+     */
     fun continueFromPair() {
         if (!_pair.value.canContinue) return
         _stage.value = IndoorStage.ROUTE
         loadRouteOptions()
+    }
+
+    /** Nebenseite „Trainer koppeln" (von der Startseite). */
+    fun openPair() {
+        if (_stage.value == IndoorStage.ROUTE) _stage.value = IndoorStage.PAIR
+    }
+
+    /** Nebenseite „Einstellungen" (von der Startseite). */
+    fun openSettings() {
+        if (_stage.value == IndoorStage.ROUTE) _stage.value = IndoorStage.SETTINGS
+    }
+
+    /** Nebenseite schliessen — zurueck zur Startseite, die Auswahl bleibt. */
+    fun closeSubPage() {
+        if (_stage.value == IndoorStage.PAIR || _stage.value == IndoorStage.SETTINGS) _stage.value = IndoorStage.ROUTE
     }
 
     private fun readDemoFlag(): Boolean = runCatching { store.getString(KEY_DEMO_TRAINER) == "true" }.getOrDefault(false)
@@ -493,12 +513,23 @@ class IndoorViewModel(
     // 2. Strecke und Modus
     // -----------------------------------------------------------------------
 
+    private var routeOptionsRequested = false
+
+    /**
+     * Beim Oeffnen der Startseite: die Strecken lesen, falls das noch nicht
+     * geschah (nach einer Drehung nicht noch einmal).
+     */
+    fun ensureRouteOptions() {
+        if (!routeOptionsRequested) loadRouteOptions()
+    }
+
     /**
      * Liest die waehlbaren Strecken: Testwelt, gespeicherte Planungen und
      * gefahrene Touren. **Indoor-Fahrten sind keine Strecke** — ihre Punkte
      * sind die virtuelle Spur einer anderen Strecke, niemand war dort.
      */
     fun loadRouteOptions() {
+        routeOptionsRequested = true
         _route.update { it.copy(loadingOptions = true) }
         catalogController.load()
         scope.launch {
@@ -638,6 +669,10 @@ class IndoorViewModel(
      * Einheit, ERG-Modus, weiter zu „Welt laden" (bereit → direkt in die Fahrt).
      */
     fun rideDayGenerated() {
+        if (!_pair.value.canContinue) {
+            openPair()
+            return
+        }
         val goal = dayPlan?.goal ?: return
         val profile = runCatching { de.trailscape.core.indoor.dayGeneratedProfile(goal) }.getOrNull() ?: return
         val option = IndoorRouteOption.Generated(profile, texts.dayGeneratedName(dayPlan?.title ?: ""))
@@ -663,12 +698,21 @@ class IndoorViewModel(
             val len = match.candidate.profile?.lengthM ?: 0.0
             if (st.startM > 0 && len > 0) s.key to st.startM / len else null
         }
+        // Ohne Trainer fuehrt „Fahren" erst zum Koppeln (die Strecke laedt
+        // sich auch ohne Trainer).
+        if (!_pair.value.canContinue &&
+            (s.availability == DayRouteAvailability.READY || s.availability == DayRouteAvailability.BUILD)
+        ) {
+            openPair()
+            return
+        }
         when (s.availability) {
             DayRouteAvailability.PLAN -> dayPlan?.planTarget?.let { onPlanRoute(it) }
             DayRouteAvailability.DOWNLOAD -> {
                 val id = s.key.removePrefix("catalog:")
                 dayAwaitingCatalog = id
-                setRouteTab(IndoorRouteTab.CATALOG)
+                // Die Strecke ist danach in der Liste gewaehlt; unten steht der Fortschritt.
+                optionForDayKey(s.key, s.name, match)?.let(::selectRoute)
                 downloadCatalog(id)
             }
             DayRouteAvailability.READY, DayRouteAvailability.BUILD -> {
@@ -746,11 +790,6 @@ class IndoorViewModel(
         _route.update { it.copy(ghost = accepted) }
     }
 
-    /** Bereich der Streckenwahl: eigene Strecken oder bekannte Strecken. */
-    fun setRouteTab(tab: IndoorRouteTab) {
-        _route.update { it.copy(tab = tab) }
-    }
-
     /** Nutzeraktion „Laden"/„Fortsetzen"/„Aktualisieren" einer bekannten Strecke. */
     fun downloadCatalog(id: String) = catalogController.download(id)
 
@@ -770,7 +809,9 @@ class IndoorViewModel(
      * direkt los (ohne Voranschlag und ohne Netz).
      */
     fun continueFromRoute() {
-        if (!_route.value.canContinue) return
+        // Ohne Trainer (oder Demo) geht es nicht in die Fahrt; die Startseite
+        // sagt das und bietet „Koppeln" an.
+        if (!_route.value.canContinue || !_pair.value.canContinue) return
         _stage.value = IndoorStage.WORLD
         val sel = _route.value.selected
         prepareWorld(autoStart = sel is IndoorRouteOption.Catalog || sel is IndoorRouteOption.Generated)
@@ -1696,9 +1737,10 @@ class IndoorViewModel(
      * wird nur ueber „Beenden".
      */
     fun back(): Boolean = when (_stage.value) {
-        IndoorStage.PAIR -> false
-        IndoorStage.ROUTE -> {
-            _stage.value = IndoorStage.PAIR
+        // Die Startseite ist der Anfang: Zurueck verlaesst den Ablauf.
+        IndoorStage.ROUTE -> false
+        IndoorStage.PAIR, IndoorStage.SETTINGS -> {
+            _stage.value = IndoorStage.ROUTE
             true
         }
         IndoorStage.WORLD -> {

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -58,6 +59,7 @@ internal fun IndoorPage(
     modifier: Modifier = Modifier,
     overline: String? = null,
     bottomBar: (@Composable ColumnScope.() -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -83,6 +85,7 @@ internal fun IndoorPage(
                     overline = overline,
                     backLabel = if (onBack != null) stringResource(R.string.indoor_app_action_back) else null,
                     onBack = onBack,
+                    actions = actions,
                 )
                 content()
                 Spacer(modifier = Modifier.height(8.dp))
@@ -99,13 +102,6 @@ internal fun IndoorPage(
         }
     }
 }
-
-/** „Schritt 2 von 4" über dem Titel der Ablauf-Schritte. */
-@Composable
-internal fun stepOverline(step: Int): String = stringResource(R.string.indoor_app_step_overline, step, INDOOR_STEP_COUNT)
-
-/** Koppeln, Strecke, Welt, Fahren — die Auswertung zaehlt nicht mit. */
-internal const val INDOOR_STEP_COUNT: Int = 4
 
 /** Ein Absatz gedaempfter Fliesstext. */
 @Composable

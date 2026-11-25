@@ -126,15 +126,56 @@ class IndoorViewModelDemoFlowTest {
         }
     }
 
-    /** Koppeln mit Demo-Trainer und weiter zur Streckenwahl. */
+    /** Von der Startseite zum Koppeln, Demo-Trainer an, zurueck zur Startseite. */
     private fun IndoorViewModel.pairWithDemo() {
+        assertEquals(IndoorStage.ROUTE, stage.value, "der Ablauf beginnt auf der Startseite")
+        assertFalse(pair.value.canContinue, "ohne Trainer und ohne Demo geht es nicht in die Fahrt")
+        openPair()
         assertEquals(IndoorStage.PAIR, stage.value)
-        assertFalse(pair.value.canContinue, "ohne Trainer und ohne Demo geht es nicht weiter")
         setDemoTrainer(true)
         assertTrue(pair.value.canContinue)
         continueFromPair()
         assertEquals(IndoorStage.ROUTE, stage.value)
         assertFalse(route.value.loadingOptions)
+    }
+
+    @Test
+    fun startseiteIstDerAnfangUndFahrenBrauchtEinenTrainer() {
+        val vm = viewModel(FakeIndoorParts())
+        assertEquals(IndoorStage.ROUTE, vm.stage.value)
+        vm.ensureRouteOptions()
+        assertFalse(vm.route.value.loadingOptions)
+        assertTrue(IndoorRouteOption.TestWorld in vm.route.value.options)
+
+        // Ohne Trainer: Strecke waehlbar, „Fahren" bleibt ohne Wirkung.
+        vm.selectRoute(IndoorRouteOption.TestWorld)
+        assertTrue(vm.route.value.canContinue)
+        vm.continueFromRoute()
+        assertEquals(IndoorStage.ROUTE, vm.stage.value, "ohne Trainer kein Schritt weiter")
+        assertNull(vm.activeRuntime)
+
+        // Nebenseiten fuehren zur Startseite zurueck, die Auswahl bleibt.
+        vm.openSettings()
+        assertEquals(IndoorStage.SETTINGS, vm.stage.value)
+        vm.setChainringTeeth(50)
+        assertTrue(vm.back())
+        assertEquals(IndoorStage.ROUTE, vm.stage.value)
+        assertEquals(50, vm.pair.value.chainringTeeth)
+        vm.openPair()
+        assertEquals(IndoorStage.PAIR, vm.stage.value)
+        vm.setDemoTrainer(true)
+        vm.closeSubPage()
+        assertEquals(IndoorStage.ROUTE, vm.stage.value)
+        assertEquals(IndoorRouteOption.TestWorld, vm.route.value.selected)
+
+        // Jetzt geht es: Testwelt ist bereit.
+        vm.continueFromRoute()
+        assertEquals(IndoorStage.WORLD, vm.stage.value)
+        assertIs<IndoorWorldUi.Ready>(vm.world.value)
+        // Zurueck von „Strecke vorbereiten" → Startseite; von dort verlaesst Zurueck den Ablauf.
+        assertTrue(vm.back())
+        assertEquals(IndoorStage.ROUTE, vm.stage.value)
+        assertFalse(vm.back(), "Zurueck auf der Startseite verlaesst den Ablauf")
     }
 
     /** Beenden, Auswertung, Speichern — liefert die gespeicherte Tour. */

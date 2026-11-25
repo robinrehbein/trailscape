@@ -156,6 +156,10 @@ fun IndoorRideScreen(
     KeepScreenOn()
     LightSystemBarIcons()
     var showDevices by rememberSaveable { mutableStateOf(false) }
+    // „Fahrt beenden" in der Pause ist ein einfacher Tipp — deshalb eine
+    // Rueckfrage, denn aus der Auswertung fuehrt kein Weg zurueck in die Fahrt.
+    // (Der runde Knopf beendet nur gedrueckt gehalten, ohne Rueckfrage.)
+    var confirmFinish by rememberSaveable { mutableStateOf(false) }
     var chromeHidden by rememberSaveable { mutableStateOf(initialChromeHidden) }
     val showWorld = ui.render is IndoorRenderUi.Ready || ui.render is IndoorRenderUi.Loading
 
@@ -170,6 +174,7 @@ fun IndoorRideScreen(
         onDismissNotice = onDismissNotice,
         onRideWithoutWorld = onRideWithoutWorld,
         onShowDevices = { showDevices = true },
+        onFinishFromPause = { confirmFinish = true },
         onMoveStart = onMoveStart,
         onNudgeStart = onNudgeStart,
         onReleaseStart = onReleaseStart,
@@ -211,6 +216,24 @@ fun IndoorRideScreen(
     if (showDevices) {
         DevicesDialog(ui = ui, onDismiss = { showDevices = false })
     }
+    if (confirmFinish) {
+        OneUiDialog(
+            onDismissRequest = { confirmFinish = false },
+            title = { Text(stringResource(R.string.indoor_app_flow_leave_title)) },
+            text = { Text(stringResource(R.string.indoor_app_flow_leave_body)) },
+            dismissButton = {
+                TextButton(onClick = { confirmFinish = false }) { Text(stringResource(R.string.indoor_app_action_cancel)) }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmFinish = false
+                        onFinish()
+                    },
+                ) { Text(stringResource(R.string.indoor_app_flow_leave_finish)) }
+            },
+        )
+    }
 }
 
 /** Alle Rueckrufe des HUD gebuendelt, damit die Layouts schlank bleiben. */
@@ -225,6 +248,8 @@ private class HudActions(
     val onDismissNotice: () -> Unit,
     val onRideWithoutWorld: (() -> Unit)?,
     val onShowDevices: () -> Unit,
+    /** „Fahrt beenden" auf der Pausen- bzw. Startpunkt-Karte: erst nachfragen. */
+    val onFinishFromPause: () -> Unit,
     val onMoveStart: (Double) -> Unit,
     val onNudgeStart: (Double) -> Unit,
     val onReleaseStart: () -> Unit,
@@ -250,6 +275,7 @@ private fun StartPanelIfAny(
         onNudge = actions.onNudgeStart,
         onRelease = actions.onReleaseStart,
         onResume = actions.onTogglePause,
+        onFinish = actions.onFinishFromPause,
         compact = compact,
         modifier = modifier,
     )
@@ -410,7 +436,7 @@ private fun PortraitHud(
                 if (dayEnd != null) {
                     DayEndCard(dayEnd = dayEnd, actions = actions, modifier = cardModifier)
                 } else {
-                    PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = cardModifier)
+                    PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = cardModifier, onFinish = actions.onFinishFromPause)
                 }
             }
         }
@@ -512,7 +538,7 @@ private fun LandscapeHud(
                 if (dayEnd != null) {
                     DayEndCard(dayEnd = dayEnd, actions = actions, modifier = Modifier.align(Alignment.Center))
                 } else {
-                    PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = Modifier.align(Alignment.Center))
+                    PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = Modifier.align(Alignment.Center), onFinish = actions.onFinishFromPause)
                 }
             }
         }
@@ -749,7 +775,12 @@ private fun DemoPanel(ui: IndoorRideUi, chromeHidden: Boolean, actions: HudActio
  * Pause mit „Weiter" — dort, wo der Blick ohnehin hingeht.
  */
 @Composable
-private fun PhaseCard(session: IndoorSessionState, onTogglePause: () -> Unit, modifier: Modifier = Modifier) {
+private fun PhaseCard(
+    session: IndoorSessionState,
+    onTogglePause: () -> Unit,
+    modifier: Modifier = Modifier,
+    onFinish: (() -> Unit)? = null,
+) {
     val phase = phaseLabel(session.phase) ?: return
     Surface(color = HudColors.panelStrong, shape = RoundedCornerShape(24.dp), modifier = modifier.widthIn(max = 320.dp)) {
         Column(
@@ -763,13 +794,21 @@ private fun PhaseCard(session: IndoorSessionState, onTogglePause: () -> Unit, mo
             )
             if (session.phase == IndoorPhase.PAUSED) {
                 Spacer(modifier = Modifier.height(10.dp))
-                Button(
-                    onClick = onTogglePause,
-                    colors = ButtonDefaults.buttonColors(containerColor = HudColors.ink, contentColor = Color.Black),
-                ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(stringResource(R.string.indoor_app_ride_resume_action))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // In der Pause ein einfacher Tipp zum Beenden (danach: speichern oder verwerfen).
+                    if (onFinish != null) {
+                        TextButton(onClick = onFinish) {
+                            Text(stringResource(R.string.indoor_app_start_finish_action), color = HudColors.ink)
+                        }
+                    }
+                    Button(
+                        onClick = onTogglePause,
+                        colors = ButtonDefaults.buttonColors(containerColor = HudColors.ink, contentColor = Color.Black),
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(stringResource(R.string.indoor_app_ride_resume_action))
+                    }
                 }
             }
         }
