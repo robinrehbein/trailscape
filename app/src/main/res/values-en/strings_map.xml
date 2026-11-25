@@ -401,6 +401,7 @@
     <string name="map_screen_location_imprecise_notice">Recording needs your precise location. In the prompt, choose “Precise” instead of “Approximate”.</string>
     <string name="map_screen_planning_cleared_status">Planning cleared.</string>
     <string name="map_screen_planning_discarded_status">Planning discarded.</string>
+    <string name="map_screen_route_saved_status">Saved as a planned route. You’ll find it in History.</string>
     <string name="map_screen_round_trip_from_place">from %1$s</string>
     <string name="map_screen_round_trip_from_position">from your location</string>
     <string name="map_screen_route_name_title">Route name</string>

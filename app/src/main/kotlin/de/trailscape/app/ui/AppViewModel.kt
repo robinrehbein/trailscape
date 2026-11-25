@@ -1031,13 +1031,19 @@ class AppViewModel(
      */
     private fun Ride.touchedNow(): Ride = copy(updatedAt = System.currentTimeMillis())
 
-    /** Speichert eine neue Tour, ergaenzt die Liste inkrementell und waehlt sie aus. */
-    fun addRide(ride: Ride) {
+    /**
+     * Speichert eine neue Tour, ergaenzt die Liste inkrementell und waehlt sie aus.
+     *
+     * @param selectAfter `false`, wenn die Tour nicht ausgewaehlt werden soll — die
+     *   Planung auf der Karte bleibt nach „Speichern" stehen, eine zusaetzlich
+     *   ausgewaehlte Tour laege dann unsichtbar unter ihr.
+     */
+    fun addRide(ride: Ride, selectAfter: Boolean = true) {
         viewModelScope.launch {
             val touched = ride.touchedNow()
             withContext(io) { rideStorage.saveRide(touched) }
             upsertSummary(touched.toSummary())
-            select(ride.id)
+            if (selectAfter) select(ride.id)
             // Segment-Bestleistungen im Hintergrund nachziehen — mit
             // Bestzeit-Hinweis, das hier ist eine neue Tour.
             refreshSegments(reportRideIds = setOf(ride.id))

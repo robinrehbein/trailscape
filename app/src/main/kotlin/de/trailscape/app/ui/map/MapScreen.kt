@@ -3687,7 +3687,9 @@ fun MapScreen(appViewModel: AppViewModel) {
                     // Die Route bleibt nach dem Speichern stehen: Wer sie
                     // gespeichert hat, will sie meist gleich fahren
                     // („Losfahren") — weg kommt sie ueber „Verwerfen".
-                    appViewModel.addRide(rideFromPlannedRoute(name, route))
+                    // Nicht auswaehlen: Die Planung bleibt das, was die Karte zeigt.
+                    appViewModel.addRide(rideFromPlannedRoute(name, route), selectAfter = false)
+                    appViewModel.showMessage(UiText.Res(R.string.map_screen_route_saved_status))
                 },
             )
         }

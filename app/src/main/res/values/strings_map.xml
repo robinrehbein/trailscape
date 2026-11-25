@@ -401,6 +401,7 @@
     <string name="map_screen_location_imprecise_notice">Zum Aufzeichnen wird der genaue Standort gebraucht. Wähle in der Abfrage „Genau“ statt „Ungefähr“.</string>
     <string name="map_screen_planning_cleared_status">Planung geleert.</string>
     <string name="map_screen_planning_discarded_status">Planung verworfen.</string>
+    <string name="map_screen_route_saved_status">Als Planung gespeichert. Du findest sie im Verlauf.</string>
     <string name="map_screen_round_trip_from_place">ab %1$s</string>
     <string name="map_screen_round_trip_from_position">ab deinem Standort</string>
     <string name="map_screen_route_name_title">Name der Route</string>
