@@ -177,7 +177,7 @@ val dataNotices: List<LicenseNotice> = listOf(
         url = "https://github.com/tilezen/joerd/blob/master/docs/attribution.md",
     ),
     LicenseNotice(
-        name = UiText.Plain("OpenFreeMap, OpenMapTiles, OpenStreetMap (Indoor-Welten)"),
+        name = UiText.Plain("OpenFreeMap, OpenMapTiles, OpenStreetMap (Indoor-Strecken)"),
         license = UiText.Plain("ODbL 1.0 — © OpenMapTiles, Daten von OpenStreetMap"),
         url = "https://openfreemap.org/",
     ),

@@ -203,7 +203,7 @@ class IndoorViewModelDemoFlowTest {
         vm.continueFromRoute()
         assertEquals(IndoorStage.WORLD, vm.stage.value)
         val ready = assertIs<IndoorWorldUi.Ready>(vm.world.value)
-        assertEquals("Testwelt", ready.routeName)
+        assertEquals("Teststrecke", ready.routeName)
         assertTrue(File(worlds.testWorldDir(), "manifest.json").isFile, "Testwelt liegt unter indoor/worlds/testwelt")
 
         vm.startRide(withWorld = true)
@@ -225,7 +225,7 @@ class IndoorViewModelDemoFlowTest {
         assertTrue(saved.indoor)
         assertFalse(saved.planned)
         assertTrue(saved.points.size >= 60, "ein Punkt je gefahrener Sekunde, hier ${saved.points.size}")
-        assertEquals("Indoor · Testwelt", saved.name)
+        assertEquals("Indoor · Teststrecke", saved.name)
         assertTrue(renderer.destroyed, "die Darstellung wird nach der Fahrt freigegeben")
         assertTrue(rideStorage.listSummaries().summaries.single { it.id == saved.id }.indoor)
     }
@@ -357,7 +357,7 @@ class IndoorViewModelDemoFlowTest {
         vm.startRide(withWorld = true)
         assertNull(vm.ride.value?.startProblem, "Start: ${vm.ride.value?.startProblem}")
         // Die Sitzung faehrt auf dem Streckenband des Manifests.
-        val expected = worldRouteOf(manifest, "Testwelt")
+        val expected = worldRouteOf(manifest, "Teststrecke")
         val driven = fake.sessionConfigs.first().route
         assertEquals(expected.id, driven.id)
         assertEquals(expected.name, driven.name)
@@ -391,7 +391,7 @@ class IndoorViewModelDemoFlowTest {
 
         val saved = vm.finishAndSave()
         assertTrue(saved.indoor)
-        assertEquals("Indoor · Testwelt", saved.name)
+        assertEquals("Indoor · Teststrecke", saved.name)
         assertTrue(saved.points.size >= 60, "ein Punkt je gefahrener Sekunde, hier ${saved.points.size}")
         val o = manifest.origin
         assertTrue(

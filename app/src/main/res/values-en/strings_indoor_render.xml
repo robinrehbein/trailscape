@@ -10,8 +10,8 @@
 <resources>
     <!-- WorldSurfaceView.kt: 2D fallback when 3D rendering fails -->
     <string name="indoor_render_fallback_title">No 3D view</string>
-    <string name="indoor_render_fallback_no_graphics">This device can’t draw the 3D world. Your ride continues with the elevation profile.</string>
-    <string name="indoor_render_fallback_bad_world">The world is incomplete or damaged. Your ride continues with the elevation profile.</string>
+    <string name="indoor_render_fallback_no_graphics">This device can’t draw the 3D view. Your ride continues with the elevation profile.</string>
+    <string name="indoor_render_fallback_bad_world">The 3D view of the route is incomplete or damaged. Your ride continues with the elevation profile.</string>
     <string name="indoor_render_fallback_bad_assets">The rider model can’t be loaded. Your ride continues with the elevation profile.</string>
     <string name="indoor_render_fallback_memory">There isn’t enough graphics memory. A lower quality may help; your ride continues.</string>
     <string name="indoor_render_fallback_surface">The drawing surface was lost. Your ride continues with the elevation profile.</string>
@@ -21,11 +21,11 @@
     <string name="indoor_render_diag_title">Indoor diagnostics</string>
     <string name="indoor_render_diag_back">Back</string>
     <string name="indoor_render_diag_intro">Check 3D rendering on this device: start the test scene, switch individual stages off and watch the frame rate.</string>
-    <string name="indoor_render_diag_preview_empty">Start the test scene or the test world.</string>
+    <string name="indoor_render_diag_preview_empty">Start the test scene or the test route.</string>
     <string name="indoor_render_diag_test_scene">Test scene</string>
-    <string name="indoor_render_diag_test_world">Test world</string>
-    <string name="indoor_render_diag_testworld_busy">Building test world …</string>
-    <string name="indoor_render_diag_testworld_failed">The test world couldn’t be built (%1$s).</string>
+    <string name="indoor_render_diag_test_world">Test route</string>
+    <string name="indoor_render_diag_testworld_busy">Preparing test route …</string>
+    <string name="indoor_render_diag_testworld_failed">The test route couldn’t be prepared (%1$s).</string>
     <string name="indoor_render_diag_ride_start">Test ride</string>
     <string name="indoor_render_diag_ride_stop">Stop</string>
     <string name="indoor_render_diag_restart">Restart</string>
@@ -82,6 +82,6 @@
     <string name="indoor_render_diag_switch_fps30">At most 30 frames per second</string>
     <string name="indoor_render_diag_resolution">Resolution: %1$d %%</string>
     <string name="indoor_render_diag_failure_detail">Details for a bug report</string>
-    <string name="indoor_render_diag_safe_mode">Safe graphics mode is on: the app was closed while loading a world last time. Ground detail, wind, water, birds and other riders are therefore off.</string>
+    <string name="indoor_render_diag_safe_mode">Safe graphics mode is on: the app was closed while loading a route last time. Ground detail, wind, water, birds and other riders are therefore off.</string>
     <string name="indoor_render_diag_safe_mode_reset">Leave safe mode</string>
 </resources>

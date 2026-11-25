@@ -39,7 +39,7 @@ interface IndoorTexts {
     fun dayPlanName(): String = "Neue Runde"
 
     /** Name der generierten Welt zur Einheit [title]. */
-    fun dayGeneratedName(title: String): String = "Generierte Welt · $title"
+    fun dayGeneratedName(title: String): String = "Generierte Strecke · $title"
 
     /** Sprache der Oberflaeche (`de`/`en`), fuer die Namen der Katalogstrecken. */
     fun languageTag(): String = "de"
