@@ -173,8 +173,6 @@ class IndoorPreviewController(
     fun seekTo(distM: Double) {
         if (closed) return
         player.seekTo(distM)
-        val now = clock()
-        withRenderer { it.setState(player.worldState(now)) }
         publish()
     }
 
@@ -194,8 +192,11 @@ class IndoorPreviewController(
         loopJob = null
     }
 
+    /** Neuer Stand nach einer Bedienung: an die Darstellung (auch „steht") und in die Oberflaeche. */
     private fun publish() {
-        _ui.update { it.copy(frame = player.frame(clock())) }
+        val now = clock()
+        withRenderer { it.setState(player.worldState(now)) }
+        _ui.update { it.copy(frame = player.frame(now)) }
     }
 
     private fun withRenderer(block: (WorldRenderer) -> Unit) {

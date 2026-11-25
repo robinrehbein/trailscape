@@ -150,7 +150,7 @@ class IndoorPreviewFlowTest {
         assertEquals(CameraMode.CHASE, assertNotNull(vm.preview.value).camera)
         vm.previewTogglePlay()
         assertFalse(assertNotNull(vm.preview.value).frame.playing)
-        assertTrue(renderer.states.last().paused || renderer.states.last().rider.speedMps == 0.0)
+        assertTrue(renderer.states.last().paused, "die Darstellung erfaehrt sofort, dass es steht")
 
         // Hintergrund haelt an.
         vm.previewTogglePlay()

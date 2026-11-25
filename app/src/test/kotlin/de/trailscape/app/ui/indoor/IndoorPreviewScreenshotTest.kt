@@ -257,7 +257,7 @@ class IndoorPreviewScreenshotTest {
         assertEquals(1, toggled)
         assertEquals(1, cycled)
         assertEquals(CameraMode.CHASE, camera)
-        compose.onNodeWithText(context.getString(R.string.idee04_preview_speed_label, 4)).assertExists()
+        compose.onNodeWithContentDescription(context.getString(R.string.idee04_preview_speed_cd, 4)).assertExists()
     }
 
     @Test
