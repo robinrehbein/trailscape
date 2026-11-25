@@ -319,6 +319,7 @@ internal class LaserBuildingsLayer(
         val s = ctx.spec
         var budget = ctx.budget.buildings
         val built = ArrayList<LaserBuilding>()
+        val flat = HashSet<LaserBuilding>()
         if (ctx.level == 0 && budget > 0) {
             val list = parts.lod2In(s.minE, s.minN, s.maxE, s.maxN)
                 .map { it to (ctx.track.nearest(it.ce, it.cn, 2000.0)?.distance ?: 2000.0) }
@@ -332,6 +333,10 @@ internal class LaserBuildingsLayer(
                     // Kein LoD2-Koerper auf der Fahrbahn: Bruecken und Stege fuehrt das LoD2 teils als
                     // flache „Gebaeude“; quer auf der Strecke lagen sie als graue Platte (schoenbuch km 7).
                     if (dist < 40.0 && coversTrack(ctx, b)) continue
+                    // Flache LoD2-Koerper (Bodenplatten, Silo- und Mistplatten, Behaelterdeckel unter
+                    // ~1,2 m) standen als graue Platte mit harten Kanten auf der Wiese
+                    // (welzheimer-wald km 25). Sie entfallen — auch der Kartengrundriss an ihrer Stelle.
+                    if (b.topU - b.groundU < FLAT_LOD2_M) { flat += b; continue }
                     val m = mesher.mesh(b) ?: continue
                     if (m.triangles > budget) continue
                     budget -= m.triangles
@@ -349,7 +354,7 @@ internal class LaserBuildingsLayer(
                     val c = FootprintShape.centroid(outer)
                     val l = parts.lod2At(c[0], c[1])
                     when {
-                        l != null && l in builtSet -> null
+                        l != null && (l in builtSet || l in flat) -> null
                         l != null && l.measuredHeightM > 1.0 -> MapBuilding(b.id, b.rings, l.measuredHeightM, b.minHeightM, b.colour)
                         else -> parts.ndomHeight(b)?.let { MapBuilding(b.id, b.rings, it, b.minHeightM, b.colour) } ?: b
                     }
@@ -364,6 +369,9 @@ internal class LaserBuildingsLayer(
         base.build(sub, out)
     }
 }
+
+/** Hoehe (Traufe bis Boden, LoD2), unter der ein Koerper als flache Platte gilt und entfaellt. */
+internal const val FLAT_LOD2_M = 1.2
 
 internal class Lod2Mesh(val wall: MeshBuilder, val roof: MeshBuilder) {
     val triangles: Int get() = wall.triangleCount + roof.triangleCount
