@@ -26,8 +26,6 @@ import de.trailscape.app.ui.theme.TrailscapeTheme
 import de.trailscape.core.challenge.CHALLENGE_MAX_BYTES
 import de.trailscape.core.challenge.ChallengeParse
 import de.trailscape.core.challenge.parseChallenge
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -125,16 +123,4 @@ internal fun readChallengeBytes(context: Context, uri: Uri): ByteArray? = try {
     context.contentResolver.openInputStream(uri)?.use { readBoundedChallenge(it) }
 } catch (_: Exception) {
     null
-}
-
-internal fun readBoundedChallenge(stream: InputStream): ByteArray? {
-    val out = ByteArrayOutputStream()
-    val buf = ByteArray(8 * 1024)
-    while (true) {
-        val n = stream.read(buf)
-        if (n < 0) break
-        if (out.size() + n > CHALLENGE_MAX_BYTES) return null
-        out.write(buf, 0, n)
-    }
-    return out.toByteArray()
 }

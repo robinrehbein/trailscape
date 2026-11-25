@@ -5,7 +5,9 @@ import de.trailscape.core.challenge.CHALLENGE_MAX_BYTES
 import de.trailscape.core.challenge.Challenge
 import de.trailscape.core.challenge.ChallengeParse
 import de.trailscape.core.challenge.parseChallenge
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.InputStream
 
 /**
  * # Gespeicherte Herausforderungen
@@ -88,4 +90,20 @@ class ChallengeStore(private val dir: File) {
 
         fun fileName(id: String): String = "$id$SUFFIX"
     }
+}
+
+/**
+ * Liest höchstens [CHALLENGE_MAX_BYTES] aus [stream]; `null`, wenn mehr drinsteckt.
+ * Nie mehr als die Grenze im Speicher, auch bei einer unendlichen Quelle.
+ */
+internal fun readBoundedChallenge(stream: InputStream): ByteArray? {
+    val out = ByteArrayOutputStream()
+    val buf = ByteArray(8 * 1024)
+    while (true) {
+        val n = stream.read(buf)
+        if (n < 0) break
+        if (out.size() + n > CHALLENGE_MAX_BYTES) return null
+        out.write(buf, 0, n)
+    }
+    return out.toByteArray()
 }
