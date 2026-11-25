@@ -12,6 +12,12 @@
 // Die Parameter baseColorFactor … aoStrength setzt gltfio (AssetLoader.cpp) auf jede
 // Materialinstanz — sie muessen existieren, auch wenn sie kaum etwas tun.
 //
+// PBR-Texturen (PbrTextures, docs/indoor/pbr-texturen.md): mit `pbrA.x` > 0 ersetzt nah ein
+// Textur-Array mit vier Bodenarten (Wiese, Acker, Waldboden, Fels; Farbdetail + Rauheit,
+// Normale) das Boden-Detail: die zwei staerksten Bodenarten des Pixels, Farbe weiter aus dem
+// Luftbild (nur Detail mit Mittel 1), Normale und Rauheit aus der Textur, die staerkste in zwei
+// Massstaeben. Wiederholungen je Kachel ganzzahlig (nahtlos). `pbrA.x` = 0: wie vorher.
+//
 // Kompilieren: tool/indoor-dev/filament/materials.sh (matc 1.75.1).
 material {
     name : TrailscapeTerrain,
@@ -33,7 +39,12 @@ material {
         { type : float, name : bumpStrength },
         { type : float, name : macroStrength },
         { type : float, name : forestWarmth },
-        { type : float, name : warmRange }
+        { type : float, name : warmRange },
+        { type : sampler2dArray, name : pbrMapC, precision : medium },
+        { type : sampler2dArray, name : pbrMapN, precision : medium },
+        { type : float4, name : pbrA },
+        { type : float4, name : pbrB },
+        { type : float4, name : pbrC }
     ],
     shadingModel : lit,
     blending : opaque,
@@ -42,8 +53,33 @@ material {
 }
 
 fragment {
+    // Drehung um k × 90° (haelt die Wiederholung je Kachel nahtlos), je Bodenart anders.
+    highp vec2 rot90(highp vec2 p, float k) {
+        if (k < 0.5) return p;
+        if (k < 1.5) return vec2(-p.y, p.x);
+        if (k < 2.5) return -p;
+        return vec2(p.y, -p.x);
+    }
+
+    // Eine Bodenart: Farbdetail (Mittel 1) in rgb, Rauheit in a; Normale X/Y in Weltrichtung (x, z).
+    vec4 pbrLayer(highp vec2 local, highp vec2 lx, highp vec2 ly, float layer, float rep, out vec2 n) {
+        highp vec2 q = rot90(local * rep, layer);
+        vec2 gx = rot90(lx * rep, layer);
+        vec2 gy = rot90(ly * rep, layer);
+        vec4 c = textureGrad(materialParams_pbrMapC, vec3(q, layer), gx, gy);
+        vec2 t = textureGrad(materialParams_pbrMapN, vec3(q, layer), gx, gy).rg * 2.0 - 1.0;
+        n = rot90(t, 4.0 - layer);  // zurueckdrehen (4 − k ≡ −k)
+        return vec4(c.rgb * 2.0, c.a);
+    }
+
     void material(inout MaterialInputs material) {
         highp vec2 uv = getUV0();
+        // Kachelkoordinate 0..1 genau aus der UV (halber Texel Einzug wie im Weltbau), Ableitungen vor jeder Verzweigung
+        highp vec2 ts0 = vec2(textureSize(materialParams_baseColorMap, 0));
+        highp vec2 inset0 = 0.5 / ts0;
+        highp vec2 local0 = (uv - inset0) / (1.0 - 2.0 * inset0);
+        highp vec2 lx = dFdx(local0);
+        highp vec2 ly = dFdy(local0);
         vec3 aerial = texture(materialParams_baseColorMap, uv).rgb * materialParams.baseColorFactor.rgb;
         vec3 base = aerial;
 
@@ -80,9 +116,55 @@ fragment {
                    0.65 * cool * (1.0 - smoothstep(materialParams.warmRange * 0.6, materialParams.warmRange, dist)));
 
         vec3 nTs = vec3(0.0, 0.0, 1.0);
+        float rough = materialParams.roughnessFactor;
         float range = materialParams.detailRange;
         float fade = range > 0.0 ? 1.0 - smoothstep(range * 0.55, range, dist) : 0.0;
-        if (fade > 0.001) {
+        vec4 pA = materialParams.pbrA;  // Reichweite m, Normale, Farbdetail, Rauheit-Anteil
+        float pw = pA.x > 0.0 ? 1.0 - smoothstep(pA.x * 0.55, pA.x, dist) : 0.0;
+        if (pA.x > 0.0) fade = 0.0;  // PBR an: kein Boden-Detail
+        if (pw > 0.001) {
+            vec4 rp = materialParams.pbrB;  // Wiederholungen je Kachel der vier Bodenarten
+            vec4 pC = materialParams.pbrC;  // Rauheit: Skala, Versatz
+            // die zwei staerksten Bodenarten
+            float i1 = 0.0;
+            float w1 = wts.x;
+            if (wts.y > w1) { i1 = 1.0; w1 = wts.y; }
+            if (wts.z > w1) { i1 = 2.0; w1 = wts.z; }
+            if (wts.w > w1) { i1 = 3.0; w1 = wts.w; }
+            vec4 rest = wts;
+            rest[int(i1)] = -1.0;
+            float i2 = 0.0;
+            float w2 = rest.x;
+            if (rest.y > w2) { i2 = 1.0; w2 = rest.y; }
+            if (rest.z > w2) { i2 = 2.0; w2 = rest.z; }
+            if (rest.w > w2) { i2 = 3.0; w2 = rest.w; }
+            vec2 n1;
+            vec4 t1 = pbrLayer(local0, lx, ly, i1, rp[int(i1)], n1);
+            // zweiter, groeberer Massstab der staerksten Art gegen sichtbare Wiederholung
+            vec2 n1b;
+            vec4 t1b = pbrLayer(local0.yx, ly.yx, lx.yx, i1, floor(rp[int(i1)] / 3.0), n1b);
+            t1.rgb *= mix(vec3(1.0), t1b.rgb, 0.45);
+            t1.a = mix(t1.a, t1b.a, 0.3);
+            n1 += 0.45 * n1b.yx;
+            vec4 tc = t1;
+            vec2 nc = n1;
+            float b2 = smoothstep(0.08, 0.3, w2) * w2 / max(w1 + w2, 1e-3);
+            if (b2 > 0.001) {
+                vec2 n2;
+                vec4 t2 = pbrLayer(local0, lx, ly, i2, rp[int(i2)], n2);
+                tc = mix(tc, t2, b2);
+                nc = mix(nc, n2, b2);
+            }
+            float m = texture(materialParams_macroMap, local0 * materialParams.macroRepeat).r;
+            float k = (1.0 + materialParams.macroStrength * pw * (m - 0.5) * 2.0);
+            base *= mix(vec3(1.0), tc.rgb, pA.z * pw) * max(k, 0.0);
+            rough = mix(rough, tc.a * pC.x + pC.y, pA.w * pw);
+            vec3 p = (nc.x * vec3(1.0, 0.0, 0.0) + nc.y * vec3(0.0, 0.0, 1.0)) * (pA.y * pw);
+            p -= dot(p, nGeo) * nGeo;
+            vec3 nW = normalize(nGeo + p);
+            base *= 1.0 / max(dot(nW, nGeo), 0.55);  // Energieausgleich (wie auf der Fahrbahn)
+            nTs = vec3(dot(nW, getWorldTangentFrame()[0]), dot(nW, getWorldTangentFrame()[1]), dot(nW, getWorldTangentFrame()[2]));
+        } else if (fade > 0.001) {
             // Kachelkoordinate 0..1 genau aus der UV (halber Texel Einzug wie im Weltbau)
             highp vec2 ts = vec2(textureSize(materialParams_baseColorMap, 0));
             highp vec2 inset = 0.5 / ts;
@@ -114,7 +196,7 @@ fragment {
         prepareMaterial(material);
         material.baseColor = vec4(base, 1.0);
         material.metallic = 0.0;
-        material.roughness = materialParams.roughnessFactor;
+        material.roughness = rough;
         material.emissive = vec4(materialParams.emissiveFactor * 0.0, 0.0);
     }
 }

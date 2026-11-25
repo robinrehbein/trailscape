@@ -194,6 +194,20 @@ static std::string nearKey(const std::string& l, const json& kinds) {
     return kinds.contains(k) ? k : std::string();
 }
 
+// Spiegel von PbrRules.keyFor (Kotlin, getestet): Schluessel der PBR-Textur aus dem
+// Materialnamen — Belag (`mat_route_<b>`, `x_mat_road_<b>`, Auslauf `x_mat_route_<b>_fade`) oder
+// Randstreifen (`x_mat_route_verge_grass`, `…_shoulder`, `…_fringe` …); Kanten, Bordsteine leer.
+static std::string pbrKey(const std::string& l, const json& kinds) {
+    std::string k;
+    if (startsWith(l, "mat_route_")) k = l.substr(10);
+    else if (startsWith(l, "x_mat_road_")) k = l.substr(11);
+    else if (startsWith(l, "x_mat_route_")) k = l.substr(12);
+    else return std::string();
+    if (endsWith(k, "_edge")) return std::string();
+    if (endsWith(k, "_fade")) k = k.substr(0, k.size() - 5);
+    return kinds.contains(k) ? k : std::string();
+}
+
 // Spiegel von WorldMaterialRules.detailClass: Gewichte Wiese, Erde, Waldboden, Schotter.
 static float4 detailClass(const std::string& l) {
     if (l.find("verge_grass") != std::string::npos) return { 1, 0, 0, 0 };
@@ -265,7 +279,9 @@ int main(int argc, char** argv) {
     const double timeS = opt(S, "timeS", 0.0);
 
     auto t0 = std::chrono::steady_clock::now();
-    Engine* engine = Engine::create(Engine::Backend::OPENGL);
+    // FILARENDER_BACKEND=vulkan: lavapipe statt llvmpipe-GL (Schattenvergleich, siehe docs/indoor/render.md)
+    const char* be = getenv("FILARENDER_BACKEND");
+    Engine* engine = Engine::create(be && std::string(be) == "vulkan" ? Engine::Backend::VULKAN : Engine::Backend::OPENGL);
     if (!engine) return 4;
     SwapChain* sc = engine->createSwapChain(W, H, SwapChain::CONFIG_READABLE);
     Renderer* renderer = engine->createRenderer();
@@ -424,7 +440,14 @@ int main(int argc, char** argv) {
         view->setMultiSampleAntiAliasingOptions(m);
         view->setAntiAliasing(View::AntiAliasing::NONE);
     }
-    view->setShadowType(shadows ? View::ShadowType::DPCF : View::ShadowType::PCF);
+    {
+        // Wie FilamentCore: PCF; DPCF (in 1.75.1 veraltet, faellt auf PCSS = EVSM zurueck) zum Vergleich.
+        // Vorgabe PCF wie die App seit dem Geraetebefund (DPCF/PCSS zeigten keine Schatten).
+        const std::string st = opt<std::string>(settings, "shadowType", "PCF");
+        View::ShadowType t = st == "PCF" ? View::ShadowType::PCF : st == "PCSS" ? View::ShadowType::PCSS
+            : st == "VSM" ? View::ShadowType::VSM : st == "PCFd" ? View::ShadowType::PCFd : View::ShadowType::DPCF;
+        view->setShadowType(shadows ? t : View::ShadowType::PCF);
+    }
     {
         View::SoftShadowOptions s;
         s.penumbraScale = 1.5f;
@@ -567,12 +590,107 @@ int main(int argc, char** argv) {
         mi->setParameter("nearB", float4{ k["repeatM"].get<float>(), k["rough"].get<float>(), k["roughVar"].get<float>(), k["trackGloss"].get<float>() });
         mi->setParameter("nearC", float4{ k["trackU"].get<float>(), nearMeta["reliefRangeM"].get<float>(), opt(k, "reliefTexels", 1.0f), opt(k, "reliefMip", 0.0f) });
     };
+    // PBR-Texturen (PbrTextures in der App, pbr.py): Textur-Arrays (KTX1, ETC2/EAC) aus
+    // assets/indoor/pbr, je Gruppe erst bei Bedarf. `settings.pbr` = false nur fuer Vorher-Bilder;
+    // `groundDetail` = false schaltet sie wie auf dem Geraet ab.
+    json pbrMeta;
+    std::map<std::string, std::pair<Texture*, Texture*>> pbrGroups;
+    const bool pbrOn = opt(settings, "pbr", true) && groundDetail;
+    // FILARENDER_PBR_DIR: entpackte Kopie (pbr.py decode) fuer lavapipe-Vulkan, das kein ETC2 kann
+    const char* pbrEnv = getenv("FILARENDER_PBR_DIR");
+    const std::string pbrDir = pbrEnv ? std::string(pbrEnv) : matDir.empty() ? std::string() : matDir + "/../pbr";
+    if (std::ifstream(pbrDir + "/pbr.json")) pbrMeta = readJson(pbrDir + "/pbr.json");
+    TextureSampler pbrSampler(TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR, TextureSampler::MagFilter::LINEAR, TextureSampler::WrapMode::REPEAT);
+    pbrSampler.setAnisotropy(8.f);
+    auto loadKtx = [&](const std::string& file) -> Texture* {
+        auto raw = readFile(pbrDir + "/" + file);
+        if (raw.size() < 64) return nullptr;
+        uint32_t h[13];
+        memcpy(h, raw.data() + 12, sizeof h);
+        const uint32_t ifmt = h[4], w = h[6], layers = std::max(1u, h[9]), levels = h[11];
+        const bool compressed = h[1] == 0;
+        Texture::InternalFormat tf = ifmt == 0x9279 ? Texture::InternalFormat::ETC2_EAC_SRGBA8
+            : ifmt == 0x9272 ? Texture::InternalFormat::EAC_RG11 : ifmt == 0x8C43 ? Texture::InternalFormat::SRGB8_A8 : Texture::InternalFormat::RG8;
+        Texture::CompressedType ct = ifmt == 0x9279 ? Texture::CompressedType::ETC2_EAC_SRGBA8 : Texture::CompressedType::EAC_RG11;
+        // Wie die App: ohne Unterstuetzung nichts bauen (sonst bricht Filament nativ ab)
+        if (!Texture::isTextureFormatSupported(*engine, tf)) {
+            fprintf(stderr, "PBR: Format %u nicht unterstuetzt (%s)\n", ifmt, file.c_str());
+            return nullptr;
+        }
+        Texture* t = Texture::Builder().width(w).height(w).depth(layers).levels(levels)
+                         .sampler(Texture::Sampler::SAMPLER_2D_ARRAY).format(tf).build(*engine);
+        size_t off = 64 + h[12];
+        for (uint32_t lv = 0; lv < levels; lv++) {
+            uint32_t n;
+            memcpy(&n, raw.data() + off, 4);
+            off += 4;
+            auto* buf = new uint8_t[n];
+            memcpy(buf, raw.data() + off, n);
+            off += (n + 3) & ~3u;
+            const uint32_t d = std::max(1u, w >> lv);
+            if (compressed)
+                t->setImage(*engine, lv, 0, 0, 0, d, d, layers,
+                    Texture::PixelBufferDescriptor(buf, n, ct, n, [](void* b, size_t, void*) { delete[] (uint8_t*)b; }));
+            else
+                t->setImage(*engine, lv, 0, 0, 0, d, d, layers,
+                    Texture::PixelBufferDescriptor(buf, n, ifmt == 0x8C43 ? Texture::Format::RGBA : Texture::Format::RG, Texture::Type::UBYTE,
+                        [](void* b, size_t, void*) { delete[] (uint8_t*)b; }));
+        }
+        return t;
+    };
+    Texture* pbrNeutral = nullptr;
+    auto pbrGroup = [&](const std::string& g) -> std::pair<Texture*, Texture*> {
+        if (g.empty()) {
+            if (!pbrNeutral) {
+                auto* buf = new uint8_t[4]{ 128, 128, 128, 255 };
+                pbrNeutral = Texture::Builder().width(1).height(1).depth(1).levels(1).sampler(Texture::Sampler::SAMPLER_2D_ARRAY)
+                                 .format(Texture::InternalFormat::RGBA8).build(*engine);
+                pbrNeutral->setImage(*engine, 0, 0, 0, 0, 1, 1, 1, Texture::PixelBufferDescriptor(buf, 4, Texture::Format::RGBA, Texture::Type::UBYTE,
+                                                                          [](void* b, size_t, void*) { delete[] (uint8_t*)b; }));
+            }
+            return { pbrNeutral, pbrNeutral };
+        }
+        auto it = pbrGroups.find(g);
+        if (it != pbrGroups.end()) return it->second;
+        const json& gm = pbrMeta["groups"][g];
+        std::pair<Texture*, Texture*> r{ loadKtx(gm["color"]), loadKtx(gm["normal"]) };
+        pbrGroups[g] = r;
+        return r;
+    };
+    auto setupPbr = [&](MaterialInstance* mi, const std::string& label, bool terrain) {
+        std::string g;
+        const json* k = nullptr;
+        if (!pbrMeta.is_null() && pbrOn) {
+            if (terrain) { k = &pbrMeta["terrain"]; g = (*k)["group"]; }
+            else {
+                std::string key = pbrKey(label, pbrMeta["kinds"]);
+                if (!key.empty()) { k = &pbrMeta["kinds"][key]; g = (*k)["group"]; }
+            }
+        }
+        auto tex = pbrGroup(g);
+        if (!tex.first || !tex.second) { tex = pbrGroup(""); k = nullptr; }
+        mi->setParameter("pbrMapC", tex.first, pbrSampler);
+        mi->setParameter("pbrMapN", tex.second, pbrSampler);
+        if (!k) return;  // pbrA.x = 0 (Vorgabe): aus
+        const json& K2 = *k;
+        if (terrain) {
+            mi->setParameter("pbrA", float4{ pbrMeta["terrainRangeM"].get<float>(), K2["normal"].get<float>(), K2["albedo"].get<float>(), K2["roughMix"].get<float>() });
+            mi->setParameter("pbrB", float4{ K2["repeats"][0].get<float>(), K2["repeats"][1].get<float>(), K2["repeats"][2].get<float>(), K2["repeats"][3].get<float>() });
+            mi->setParameter("pbrC", float4{ K2["roughScale"].get<float>(), K2["roughBias"].get<float>(), 0.f, 0.f });
+        } else {
+            mi->setParameter("pbrA", float4{ pbrMeta["rangeM"].get<float>(), K2["normal"].get<float>(), K2["albedo"].get<float>(), K2["replace"].get<float>() });
+            mi->setParameter("pbrB", float4{ K2["meters"].get<float>(), K2["layer"].get<float>(), K2["alt"].get<float>(), K2["altMix"].get<float>() });
+            mi->setParameter("pbrC", float4{ K2["roughScale"].get<float>(), K2["roughBias"].get<float>(), K2["roughMix"].get<float>(), K2["keepLod"].get<float>() });
+            mi->setParameter("pbrD", float4{ K2["coord"].get<float>(), K2["uvMetersU"].get<float>(), K2["uvMetersV"].get<float>(), K2["altMeters"].get<float>() });
+        }
+    };
     wp->setup = [&](MaterialInstance* mi, int kind, const std::string& label) {
         if (kind == 1) {
             setParams(mi, L["terrain"]);
             if (!groundDetail) mi->setParameter("detailRange", 0.f);
             mi->setParameter("detailMap", detailTex, detailSampler);
             mi->setParameter("macroMap", cloudTex, cloudSampler);
+            if (wp->mats[1]->hasParameter("pbrA")) setupPbr(mi, label, true);
         } else if (kind == SURFACE || kind == SURFACE_BLEND) {
             setParams(mi, L["surface"]);
             if (!groundDetail) mi->setParameter("detailRange", 0.f);
@@ -580,6 +698,7 @@ int main(int argc, char** argv) {
             mi->setParameter("detailMap", detailTex, detailSampler);
             mi->setParameter("detailClass", detailClass(label));
             if (wp->mats[kind]->hasParameter("nearA")) setupNear(mi, label);
+            if (wp->mats[kind]->hasParameter("pbrA")) setupPbr(mi, label, false);
         } else {
             setParams(mi, L["foliage"]);
             if (!wind) mi->setParameter("windStrength", 0.f);

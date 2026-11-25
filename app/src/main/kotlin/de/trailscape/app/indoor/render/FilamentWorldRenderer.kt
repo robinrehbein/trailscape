@@ -433,6 +433,8 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         }
         // Nahdetail der Fahrbahn (Karten neben den Materialien); im sicheren Modus nicht.
         if (!guard.safeMode) out.putAll(SurfaceNearTextures.loadAssets(appContext.assets))
+        // PBR-Texturen: nur pbr.json vorab, die Texturen liest PbrTextures bei Bedarf; im sicheren Modus nicht.
+        if (!guard.safeMode) out.putAll(PbrTextures.loadAssets(appContext.assets))
         return out
     }
 
@@ -441,7 +443,9 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         // Die Schalter fuer Baeume, Gebaeude, Kleinteile prueft der Streamer in jedem Bild selbst.
         c.applySettings(settings, l.fogDensity, l.fogColor, fogHeight())
         // Boden-Detail, Software-Anisotropie und Wind der eigenen Materialien (Qualitaet)
-        c.worldMaterials.apply(groundDetail = settings.groundDetail, wind = settings.wind, aniso = settings.groundDetail)
+        // PBR-Texturen haengen an „Bodendetails“. Mit den Grafikstufen (Branch indoor-renderqualitaet):
+        // `pbr = settings.groundDetail && settings.reflections` — Standard unveraendert, Hoch/Ultra mit PBR.
+        c.worldMaterials.apply(groundDetail = settings.groundDetail, wind = settings.wind, aniso = settings.groundDetail, pbr = settings.groundDetail)
     }
 
     private fun applySky(c: FilamentCore) {

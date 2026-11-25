@@ -109,6 +109,9 @@ Je Bild links vorher, rechts nachher (untere 55–75 % des Bildes, 900 × 1200 j
 
 ## Offen
 
+- Weiter mit echten Texturen: [pbr-texturen.md](pbr-texturen.md) (PBR-Sätze für Fahrbahn,
+  Randstreifen und Gelände; nimmt das Nahdetail im Nahbereich zurück).
+
 - Gegenlicht und Streiflicht wirken am stärksten; mit der Sonne im Rücken (Kopfstein am Abend)
   ist der Gewinn klein — wie in echt, aber dort hilft das Relief wenig.
 - Der Belagswechsel (`x_mat_route_<belag>_fade`, Maske, Ubershader) und Straßenkanten

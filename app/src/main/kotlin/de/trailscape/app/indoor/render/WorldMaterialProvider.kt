@@ -32,6 +32,10 @@ import java.nio.ByteOrder
  * **Nahdetail:** Fahrbahnen bekommen zusaetzlich eine Detailkarte je Belag ([SurfaceNearTextures],
  * nur wenn das Material `nearMap`/`nearA…C` deklariert); es haengt am Schalter Boden-Detail.
  *
+ * **PBR-Texturen:** Gelaende, Fahrbahnen und Randstreifen bekommen nah echte Texturen (Farbdetail,
+ * Normale, Rauheit; [PbrTextures], docs/indoor/pbr-texturen.md), nur wenn das Material
+ * `pbrMapC`/`pbrA…` deklariert; Schalter [pbr].
+ *
  * **Laufzeit:** [apply] stellt Detail, Wind und Anisotropie auf allen lebenden Instanzen um
  * (Qualitaet, Schalter); [forget] vergisst die Instanzen eines Assets, bevor es zerstoert wird.
  */
@@ -50,6 +54,9 @@ internal class WorldMaterialProvider(
     /** Nahdetail der Fahrbahn (Karten aus `packages`, siehe [SurfaceNearDetail]). */
     private val near = SurfaceNearTextures(engine, packages)
 
+    /** PBR-Texturen (Gruppen bei Bedarf, siehe [PbrTextures]). */
+    private val pbrTextures = PbrTextures(engine, packages)
+
     /** Lebende eigene Instanzen: nativer Zeiger → (Art, Name). */
     private val live = HashMap<Long, Pair<MaterialInstance, Pair<WorldMaterialRules.Kind, String?>>>()
 
@@ -59,6 +66,14 @@ internal class WorldMaterialProvider(
         private set
     var aniso = true
         private set
+
+    /** PBR-Texturen an (Grafikstufe Hoch/Ultra bzw. bis dahin „Bodendetails“). */
+    var pbr = true
+        private set
+
+    /** Geladene PBR-Gruppen und ihr Grafikspeicher (Diagnose). */
+    val pbrGroups: Set<String> get() = pbrTextures.loadedGroups
+    val pbrGpuBytes: Long get() = pbrTextures.gpuBytes
 
     /** Zaehler fuer Diagnose und Tests: eigene Instanzen je Art seit dem Start. */
     val created = HashMap<WorldMaterialRules.Kind, Int>()
@@ -120,6 +135,7 @@ internal class WorldMaterialProvider(
         detailTexture?.let { runCatching { engine.destroyTexture(it) } }
         detailTexture = null
         near.destroy()
+        pbrTextures.destroy()
     }
 
     override fun destroy() {
@@ -129,12 +145,13 @@ internal class WorldMaterialProvider(
 
     // ---------------------------------------------------------------- Laufzeit
 
-    /** Stellt Detail, Wind und Anisotropie um — sofort auf allen lebenden Instanzen. */
-    fun apply(groundDetail: Boolean, wind: Boolean, aniso: Boolean) {
-        if (groundDetail == this.groundDetail && wind == this.wind && aniso == this.aniso) return
+    /** Stellt Detail, Wind, Anisotropie und PBR um — sofort auf allen lebenden Instanzen. */
+    fun apply(groundDetail: Boolean, wind: Boolean, aniso: Boolean, pbr: Boolean = groundDetail) {
+        if (groundDetail == this.groundDetail && wind == this.wind && aniso == this.aniso && pbr == this.pbr) return
         this.groundDetail = groundDetail
         this.wind = wind
         this.aniso = aniso
+        this.pbr = pbr
         for ((mi, info) in live.values) runCatching { setSwitches(mi, info.first, info.second) }
     }
 
@@ -189,6 +206,7 @@ internal class WorldMaterialProvider(
                 setParameters(mi, SkyShading.terrain())
                 mi.setParameter("detailMap", ensureDetailTexture(), detailSampler)
                 mi.setParameter("macroMap", noiseTexture(), repeatSampler)
+                pbrTextures.setup(mi, label, terrain = true, on = pbr)
             }
             WorldMaterialRules.Kind.FOLIAGE -> {
                 setParameters(mi, SkyShading.foliage())
@@ -201,6 +219,7 @@ internal class WorldMaterialProvider(
                 val c = WorldMaterialRules.detailClass(label)
                 mi.setParameter("detailClass", c[0], c[1], c[2], c[3])
                 near.setup(mi, label, groundDetail)
+                pbrTextures.setup(mi, label, terrain = false, on = pbr)
             }
             WorldMaterialRules.Kind.UBER -> Unit
         }
@@ -209,13 +228,16 @@ internal class WorldMaterialProvider(
 
     private fun setSwitches(mi: MaterialInstance, kind: WorldMaterialRules.Kind, label: String?) {
         when (kind) {
-            WorldMaterialRules.Kind.TERRAIN ->
+            WorldMaterialRules.Kind.TERRAIN -> {
                 mi.setParameter("detailRange", if (groundDetail) SkyShading.TERRAIN_DETAIL_RANGE_M.toFloat() else 0f)
+                pbrTextures.apply(mi, label, terrain = true, on = pbr)
+            }
             WorldMaterialRules.Kind.FOLIAGE -> mi.setParameter("windStrength", if (wind) 1f else 0f)
             WorldMaterialRules.Kind.SURFACE, WorldMaterialRules.Kind.SURFACE_BLEND -> {
                 mi.setParameter("detailRange", if (groundDetail) SkyShading.SURFACE_DETAIL_RANGE_M.toFloat() else 0f)
                 mi.setParameter("anisoRange", if (aniso) SkyShading.SURFACE_ANISO_RANGE_M.toFloat() else 0f)
                 near.apply(mi, label, groundDetail)
+                pbrTextures.apply(mi, label, terrain = false, on = pbr)
             }
             WorldMaterialRules.Kind.UBER -> Unit
         }
