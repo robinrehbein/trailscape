@@ -800,9 +800,14 @@ internal class TreesLayer : TileLayer {
         val base = crownColor(ctx, e, n, shade)
         val a = ctx.aerialMeanAt(e, n, max(4.0, cell * 0.75)) ?: return base
         val f = (shade / 0.8).coerceIn(0.5, 1.2)
+        // Luftbild linear; Blau nie ueber Gruen (Schnee und Dunst im Winterbild faerbten den Wald sonst blaugrau).
+        val ar = Argb.SRGB_TO_LINEAR[Argb.red(a)].toDouble()
+        val ag = Argb.SRGB_TO_LINEAR[Argb.green(a)].toDouble()
+        val ab = min(Argb.SRGB_TO_LINEAR[Argb.blue(a)].toDouble(), ag * 0.85)
+        val al = doubleArrayOf(ar, ag, ab)
         fun ch(k: Int, sh: Int): Int {
             val vb = ((base shr sh) and 0xFF) / 255.0
-            val va = Argb.SRGB_TO_LINEAR[(a shr sh) and 0xFF] / CANOPY_TEX_MEAN[k] * f
+            val va = al[k] / CANOPY_TEX_MEAN[k] * f
             return ((vb + (va - vb) * CANOPY_AERIAL_SHARE).coerceIn(0.0, 1.0) * 255 + 0.5).toInt()
         }
         return Argb.of(255, ch(0, 16), ch(1, 8), ch(2, 0))
