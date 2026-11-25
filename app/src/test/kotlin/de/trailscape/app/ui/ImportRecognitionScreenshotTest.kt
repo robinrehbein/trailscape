@@ -9,7 +9,7 @@ import de.trailscape.app.R
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.rides.PlanFlipConfirmDialog
 import de.trailscape.app.ui.theme.TrailscapeTheme
-import kotlin.test.assertEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
