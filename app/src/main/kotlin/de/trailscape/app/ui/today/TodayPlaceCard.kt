@@ -328,8 +328,8 @@ private fun placeReasonText(reason: PlaceReason, p: TodayPlace, now: ZonedDateTi
     val zone: ZoneId = now.zone
     val setAt = p.sunset
     val riseAt = p.sunrise
-    val sunset = setAt?.atZone(zone)?.toLocalTime()?.let(formats::time)
-    val sunrise = riseAt?.atZone(zone)?.toLocalTime()?.let(formats::time)
+    val sunset = setAt?.atZone(zone)?.toLocalTime()?.let { formats.time(it) }
+    val sunrise = riseAt?.atZone(zone)?.toLocalTime()?.let { formats.time(it) }
     return when (reason) {
         PlaceReason.DARK -> when {
             setAt == null || riseAt == null || sunset == null || sunrise == null ->
