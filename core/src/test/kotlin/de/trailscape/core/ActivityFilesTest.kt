@@ -174,7 +174,7 @@ class ActivityFilesTest {
         val planned = importActivityFiles(listOf(file("r.gpx", gpxBytes("Route", startMs = null))), texts = CoreTextsDe)
         assertEquals("„Route“ als Planung importiert", bulkImportMessage(planned, texts = CoreTextsDe))
 
-        val ridden = importActivityFiles(listOf(file("f.gpx", gpxBytes("Fahrt", 1_000L))), texts = CoreTextsDe)
+        val ridden = importActivityFiles(listOf(file("f.gpx", gpxBytes("Fahrt", 1_600_000_000_000L))), texts = CoreTextsDe)
         assertEquals("„Fahrt“ importiert", bulkImportMessage(ridden, texts = CoreTextsDe))
 
         val broken = importActivityFiles(listOf(file("x.gpx", "nix".toByteArray())), texts = CoreTextsDe)
@@ -203,8 +203,8 @@ class ActivityFilesTest {
         val mixed = importActivityFiles(
             listOf(
                 file("a.gpx", gpxBytes("A", startMs = null)),
-                file("f.gpx", gpxBytes("F", 1_000L)),
-                file("g.gpx", gpxBytes("G", 2_000_000L)),
+                file("f.gpx", gpxBytes("F", 1_600_000_000_000L)),
+                file("g.gpx", gpxBytes("G", 1_650_000_000_000L)),
             ),
             texts = CoreTextsDe,
         )

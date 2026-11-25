@@ -18,6 +18,8 @@ import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.TrailscapeApp
 import de.trailscape.app.ui.theme.TrailscapeTheme
+import de.trailscape.app.ui.training.PlanRecipeImportHost
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 class MainActivity : ComponentActivity() {
 
@@ -49,6 +51,7 @@ class MainActivity : ComponentActivity() {
         AppLocale.refresh(this)
         showTodayIfRequested(intent)
         importIfRequested(intent)
+        planRecipeIfRequested(intent)
         setContent {
             TrailscapeTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -60,6 +63,10 @@ class MainActivity : ComponentActivity() {
                     // im Layout keinen Platz; ohne liegengebliebenen Bericht
                     // gibt dieses Composable gar nichts aus.
                     CrashReportPrompt()
+                    // Vorschau und Bestaetigung geoeffneter Plan-Rezepte
+                    // (siehe PlanRecipeImportActivity); ohne offenes Rezept
+                    // gibt dieses Composable nichts aus.
+                    PlanRecipeImportHost(viewModel())
                 }
             }
         }
@@ -75,6 +82,19 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         showTodayIfRequested(intent)
         importIfRequested(intent)
+        planRecipeIfRequested(intent)
+    }
+
+    /**
+     * Die [PlanRecipeImportActivity] hat ein Plan-Rezept gelesen und in
+     * [de.trailscape.app.ui.training.PendingPlanRecipe] abgelegt. Hier geht es
+     * nur zum Tab „Training"; die Vorschau zeigt der Host im Compose-Inhalt.
+     * Das Extra wird entfernt, damit eine Drehung nichts doppelt tut.
+     */
+    private fun planRecipeIfRequested(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_PLAN_RECIPE_PENDING, false) != true) return
+        intent.removeExtra(EXTRA_PLAN_RECIPE_PENDING)
+        ViewModelProvider(this)[AppViewModel::class.java].requestTab(AppTab.TRAINING)
     }
 
     /**

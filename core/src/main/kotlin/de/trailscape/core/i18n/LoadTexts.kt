@@ -104,6 +104,7 @@ internal object LoadTextsDe : LoadTexts {
     override fun eftpSource(source: EftpSource) = when (source) {
         EftpSource.EINGETRAGEN -> "von dir eingetragen"
         EftpSource.ZWANZIG_MINUTEN -> "aus deinem besten 20-Minuten-Abschnitt geschätzt"
+        EftpSource.ZWANZIG_MINUTEN_GEMESSEN -> "aus deinem besten 20-Minuten-Abschnitt, gemessene Leistung"
         EftpSource.KALIBRIERT -> "aus dem Vergleich mit deiner Herzfrequenz nachgeführt"
         EftpSource.GESCHAETZT -> "grob aus deinem Gewicht geschätzt"
     }
@@ -244,6 +245,7 @@ internal object LoadTextsEn : LoadTexts {
     override fun eftpSource(source: EftpSource) = when (source) {
         EftpSource.EINGETRAGEN -> "entered by you"
         EftpSource.ZWANZIG_MINUTEN -> "estimated from your best 20-minute stretch"
+        EftpSource.ZWANZIG_MINUTEN_GEMESSEN -> "from your best 20-minute stretch, measured power"
         EftpSource.KALIBRIERT -> "adjusted by comparing with your heart rate"
         EftpSource.GESCHAETZT -> "roughly estimated from your weight"
     }

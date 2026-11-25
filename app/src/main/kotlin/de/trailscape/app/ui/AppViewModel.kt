@@ -23,6 +23,8 @@ import de.trailscape.app.ui.rides.formatImprovementDe
 import de.trailscape.app.update.UpdateCheckResult
 import de.trailscape.app.update.UpdateChecker
 import de.trailscape.core.ActivityFileInput
+import de.trailscape.core.asPlanned
+import de.trailscape.core.asRidden
 import de.trailscape.core.EXPLORER_TILES_CHEAP_REFRESH_MAX
 import de.trailscape.core.ExplorerTile
 import de.trailscape.core.ExplorerTilesStore
@@ -997,6 +999,62 @@ class AppViewModel(
      */
     val fileImportNotice: StateFlow<FileImportNotice?> = _fileImportNotice.asStateFlow()
 
+    private val _importRecognition = MutableStateFlow<ImportRecognition?>(null)
+
+    /**
+     * Was eine per Teilen/Oeffnen gereichte **einzelne** Datei war (Planung
+     * oder gefahrene Tour), bis der Nutzer es bestaetigt oder umdreht. Der
+     * Dialog dazu steht in `ImportRecognitionHost`; mehrere Dateien und
+     * Importe aus dem App-Dialog laufen weiter ueber [fileImportNotice].
+     */
+    val importRecognition: StateFlow<ImportRecognition?> = _importRecognition.asStateFlow()
+
+    /** Schliesst den Erkennungs-Dialog, die Datei bleibt, wie erkannt. */
+    fun dismissImportRecognition() {
+        _importRecognition.value = null
+    }
+
+    /** Dreht die Erkennung einmalig um: Planung wird Tour und umgekehrt. */
+    fun flipImportRecognition() {
+        val recognition = _importRecognition.value ?: return
+        _importRecognition.value = null
+        setRidePlanned(recognition.rideId, !recognition.planned)
+    }
+
+    /**
+     * Wandelt eine Tour in eine Planung um ([planned] = `true`) oder eine
+     * Planung in eine gefahrene Tour. Die Punkte bleiben unveraendert; die
+     * Tour faellt aus Statistik, Wochenfortschritt, Fitness und
+     * Entdeckt-Kacheln (alle filtern ueber `Ride.planned`) bzw. kommt hinein.
+     *
+     * Der Weg ist derselbe wie beim Umbenennen: laden, aendern, speichern,
+     * Zusammenfassung ersetzen. `updatedAt` waechst (`asPlanned`/`asRidden`),
+     * damit der Selfhost-Sync die Aenderung per Last-Write-Wins uebernimmt --
+     * `planned` steht bereits in Tour-Datei, Sicherung und Index. Die
+     * Segment-Bestzeiten werden danach neu abgeglichen.
+     */
+    fun setRidePlanned(id: String, planned: Boolean) {
+        viewModelScope.launch {
+            val current = _rides.value.firstOrNull { it.id == id } ?: return@launch
+            if (current.planned == planned || current.indoor) return@launch
+            val changed = withContext(io) {
+                val ride = rideStorage.loadRide(id) ?: return@withContext null
+                val now = System.currentTimeMillis()
+                val updated = if (planned) ride.asPlanned(now) else ride.asRidden(now)
+                rideStorage.saveRide(updated)
+                updated.toSummary()
+            } ?: return@launch
+            upsertSummary(changed)
+            refreshSegments()
+            showMessage(
+                UiText.Res(
+                    if (planned) R.string.gpxplan_flipped_to_planned_message else R.string.gpxplan_flipped_to_ridden_message,
+                    listOf(changed.name),
+                ),
+            )
+        }
+    }
+
     /** Quittiert [notice] — nur, wenn inzwischen keine neuere Meldung darueber liegt. */
     fun consumeFileImportNotice(notice: FileImportNotice) {
         _fileImportNotice.compareAndSet(notice, null)
@@ -1037,13 +1095,23 @@ class AppViewModel(
                         de.trailscape.core.importActivityFiles(files, allSummaries, texts = texts)
                     }
                     saveNewRides(result.rides)
-                    result.rides.singleOrNull()?.let { ride ->
+                    val single = result.rides.singleOrNull()
+                    single?.let { ride ->
                         select(ride.id)
-                        if (openInHistory) requestRideDetail(ride.id)
+                        if (openInHistory) {
+                            // Eine erkannte Route gehoert auf die Karte (dort ist sie
+                            // abzufahren), eine Aufzeichnung in die Tourdetails.
+                            if (ride.planned) requestShowRideOnMap(ride.id) else requestRideDetail(ride.id)
+                        }
                     }
                     val failure = bulkImportFailureText(result, texts = texts)
                     if (failure != null) {
                         _fileImportFailure.value = failure
+                    } else if (openInHistory && single != null && result.errors.isEmpty()) {
+                        // Teilen/Oeffnen einer einzelnen Datei: ein Dialog sagt, als was
+                        // sie erkannt wurde, und laesst es einmalig umdrehen -- er
+                        // ersetzt hier die Snackbar (Idee 7, siehe [importRecognition]).
+                        _importRecognition.value = ImportRecognition(single.id, single.name, single.planned)
                     } else {
                         _fileImportNotice.value = FileImportNotice(
                             message = bulkImportMessage(result, texts = texts),
