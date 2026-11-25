@@ -113,6 +113,9 @@ internal fun sessionFromRecipe(
     )
 }
 
+/** Die Wochentags-Kuerzel der Plaene (`Mo` … `So`), Index 0 = Montag — fuer die Anzeige. */
+val planWeekdayCodes: List<String> get() = PLAN_WEEKDAY_CODES
+
 private fun mondayMs(date: LocalDate): Long = dartEpochMs(date.atStartOfDay())
 
 /** Der Montag der Woche von [date] — und, falls das schon vorbei ist, nichts weiter: der Aufrufer waehlt. */

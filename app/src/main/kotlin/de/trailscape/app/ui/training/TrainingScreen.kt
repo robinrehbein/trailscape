@@ -170,8 +170,10 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     val displayPlan = adaptedPlan?.plan
     // Prognose fuer das Ziel: heute und — mit der Fitness, die der Plan bis
     // zum Renntag aufbaut — am Renntag.
+    // Ein importierter Plan-Rezeptplan (recipe != null) hat kein Event, also
+    // weder Prognose noch Tragfaehigkeitsurteil.
     val prediction = remember(displayPlan, rides, currentCtl, coreTexts) {
-        displayPlan?.let {
+        displayPlan?.takeIf { it.recipe == null }?.let {
             predictGoalFinish(
                 goal = it.goal,
                 rides = rides,
@@ -185,7 +187,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     // quittiert wird ueber den Schluessel des gespeicherten Plans.
     // Mit der Prognose: nur so kennt das Urteil die Zielzeit-Luecke.
     val feasibility = remember(displayPlan, prediction, coreTexts) {
-        displayPlan?.let { assessPlanFeasibility(it, prognosis = prediction?.prognosis, texts = coreTexts) }
+        displayPlan?.takeIf { it.recipe == null }?.let { assessPlanFeasibility(it, prognosis = prediction?.prognosis, texts = coreTexts) }
     }
     val feasibilityNotes = remember(displayPlan, feasibility, coreTexts) {
         if (displayPlan != null && feasibility != null) {
@@ -379,13 +381,18 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                             targetTimeNoteShown = feasibility?.targetTimeMessage?.isNotBlank() == true,
                         )
                     }
-                } else {
+                } else if (shownPlan?.recipe == null) {
                     item(key = "goal-setup") {
                         GoalSetupCard(
                             onSetUp = { showGoalEditor = true },
                             primary = rides.isNotEmpty(),
                         )
                     }
+                }
+
+                // Plan-Rezepte: Datei oeffnen, Plan/Einheit teilen (docs/plan-rezepte.md).
+                if (segment == SEGMENT_PLAN) {
+                    item(key = "plan-rezept") { PlanRecipeSection(appViewModel, plan) }
                 }
 
                 // Die Tragfaehigkeit ist die wichtigste Warnung

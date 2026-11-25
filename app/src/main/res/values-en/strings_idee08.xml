@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plan recipes (idea 8): Training → Plan → "Plan recipe" card, import preview,
+     export dialogs. Prefix recipe_, sources: ui/training/PlanRecipe*.kt,
+     PlanRecipeImportActivity.kt. Format: docs/plan-rezepte.md. -->
+<resources>
+    <!-- PlanRecipeCard -->
+    <string name="recipe_card_title">Plan recipe</string>
+    <string name="recipe_card_body">Swap plans as a file — no account, no personal data. The file holds only a title and the structure of the sessions in percent of FTP.</string>
+    <string name="recipe_card_source">Imported: “%1$s”</string>
+    <string name="recipe_card_source_author">Imported: “%1$s” by %2$s</string>
+    <string name="recipe_action_share_plan">Share plan</string>
+    <string name="recipe_action_save_plan">Save as file</string>
+    <string name="recipe_action_share_session">Share session</string>
+    <string name="recipe_action_open">Open recipe</string>
+
+    <!-- PlanRecipeExportDialog -->
+    <string name="recipe_export_title_plan">Plan as recipe</string>
+    <string name="recipe_export_title_session">Session as recipe</string>
+    <string name="recipe_export_privacy_hint">The file holds only a title, an author and the structure of the sessions. No FTP, no weight, no rides, no places, no goal name.</string>
+    <string name="recipe_export_title_label">Title</string>
+    <string name="recipe_export_author_label">Author (optional)</string>
+    <string name="recipe_export_pick_session_title">Which session?</string>
+    <string name="recipe_export_session_option">%1$s · %2$s</string>
+    <string name="recipe_default_plan_title">Training plan</string>
+    <string name="recipe_export_nothing_error">No session of this plan can be saved as a recipe.</string>
+    <string name="recipe_export_saved_status">Recipe saved.</string>
+    <string name="recipe_export_write_error">The recipe could not be saved.</string>
+    <string name="recipe_share_chooser_title">Share recipe</string>
+
+    <!-- PlanRecipeImportDialog -->
+    <string name="recipe_import_title_plan">Plan recipe</string>
+    <string name="recipe_import_title_session">Single session</string>
+    <string name="recipe_import_author">by %1$s</string>
+    <plurals name="recipe_import_weeks_count">
+        <item quantity="one">%1$d week</item>
+        <item quantity="other">%1$d weeks</item>
+    </plurals>
+    <plurals name="recipe_import_sessions_per_week_count">
+        <item quantity="one">%1$d session per week</item>
+        <item quantity="other">%1$d sessions per week</item>
+    </plurals>
+    <string name="recipe_import_sessions_range">%1$d–%2$d sessions per week</string>
+    <string name="recipe_import_total">%1$s in total, longest week %2$s</string>
+    <string name="recipe_import_session_duration">Duration %1$s</string>
+    <string name="recipe_import_first_week_eyebrow">First week</string>
+    <string name="recipe_import_session_line">%1$s · %2$s · %3$s</string>
+    <string name="recipe_import_ftp_entered">Converted to your FTP of %1$d W.</string>
+    <string name="recipe_import_ftp_estimated">Converted to your estimated FTP of %1$d W. Enter your FTP in your profile to make the watts accurate.</string>
+    <string name="recipe_import_start">The plan starts on Monday, %1$s.</string>
+    <string name="recipe_import_replace_warning">Your current plan “%1$s” will be replaced. This cannot be undone.</string>
+    <string name="recipe_import_day_label">Day of the session</string>
+    <string name="recipe_import_session_into_plan">The session is added to the current week of your plan.</string>
+    <string name="recipe_import_session_new_plan">You have no plan yet: a one-week plan will be created.</string>
+    <string name="recipe_import_confirm_new">Import</string>
+    <string name="recipe_import_confirm_replace">Replace plan</string>
+    <string name="recipe_import_confirm_session">Add</string>
+    <string name="recipe_import_done_plan_status">Plan “%1$s” imported.</string>
+    <string name="recipe_import_done_session_status">Session “%1$s” added.</string>
+    <string name="recipe_pause_word">rest</string>
+
+    <!-- Rejecting foreign files -->
+    <string name="recipe_problem_title">Recipe not readable</string>
+    <string name="recipe_problem_too_large">The file is empty or too large for a plan recipe (256 KB at most).</string>
+    <string name="recipe_problem_not_text">The file is not a readable text file.</string>
+    <string name="recipe_problem_not_json">The file is not valid JSON.</string>
+    <string name="recipe_problem_too_deep">The file is nested too deeply.</string>
+    <string name="recipe_problem_not_recipe">This is not a plan recipe. You open a backup under Settings → Import &amp; backup.</string>
+    <string name="recipe_problem_newer">This recipe comes from a newer version of Trailscape (format %1$d). Please update the app.</string>
+    <string name="recipe_problem_invalid">Something is wrong in the recipe, at “%1$s”.</string>
+    <string name="recipe_problem_invalid_nopath">Something is wrong in the recipe.</string>
+    <string name="recipe_problem_too_many">The recipe has too many weeks, sessions or segments.</string>
+    <string name="recipe_problem_empty">The recipe contains no session.</string>
+    <string name="recipe_problem_read">The file could not be read.</string>
+</resources>
