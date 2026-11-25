@@ -874,6 +874,38 @@ werden (eine Zeile: `IndoorViewModel.readGraphics`, Rückfall `STANDARD`).
 - Stufe Ultra bleibt Wahl des Inhabers; ob Hoch Vorgabe werden kann, entscheidet
   die Messung auf dem Gerät.
 
+### Weichere Schatten innerhalb von PCF? (geprüft, nicht eingebaut)
+
+Filament 1.75.1 filtert PCF fest im Shader: `ShadowSample_PCF_Low` =
+Hardware-Tiefenvergleich + 3×3-Gauß **in Texeln** der Schattenkarte
+(`surface_shadowing.fs`; die Methode ist eine Übersetzungs-Konstante,
+`CONFIG_SHADOW_SAMPLING_METHOD`). `View.SoftShadowOptions` (Penumbra) wirkt nur
+auf DPCF/PCSS, `ShadowOptions.vsm.blurWidth` nur auf VSM — beide zeigen keine
+Schatten. Die einzige Java-Stellschraube ist damit die **Texelgröße**
+(`mapSize`, Kaskadengrenzen): weichere Kanten hieße gröbere Schatten
+(größere Texel), also Treppen statt Halbschatten — kein Gewinn. Ultra hat mit
+4 Kaskaden (8/30/100 m) eher schärfere Nahschatten; TAA glättet dort die
+Treppen der Kante zeitlich (Jitter), macht den Halbschatten aber nicht breiter.
+Ergebnis: **keine belastbare Stellschraube**, Standard und Stufen bleiben, wie
+sie sind.
+
+### Notiz für die Baum-Bibliothek: Dither-Überblenden mittel ↔ fern
+
+Der sichtbare Sprung beim Wechsel der Baumstufen bei 60 m ließe sich in
+`foliage.mat` (Alpha-Maske, also ohne neue Shadervarianten) mit einem
+ortsfesten Dither-`discard` über eine Entfernungsspanne überblenden: Fragment
+der nahen Stufe verwirft ab `d > 60 m − b` mit wachsendem Anteil, die ferne
+Stufe spiegelbildlich (Bayer-4×4 aus `gl_FragCoord`, Abstand aus
+`getWorldPosition()`/`getWorldCameraPosition()`), mit TAA in Ultra fast
+unsichtbar. **Nicht eingebaut**, weil (1) `foliage.mat` Inhalt der Sitzung
+„Streckenqualität“ ist, (2) beide Stufen dafür wissen müssen, welche sie sind
+(neuer Parameter oder zwei Materialinstanzen — Parameter-Risiko, Issue 106,
+nur sicher, wenn er in der `.mat` deklariert ist und `WorldMaterialProvider`
+ihn setzt), (3) der Schattendurchgang dasselbe verwerfen muss (sonst springen
+die Schatten weiter) und (4) beide Stufen in der Spanne gleichzeitig gezeichnet
+werden müssen (der Streamer blendet heute hart um). Aufwand etwa 1–2 Tage
+zusammen mit der Baum-Bibliothek; abschaltbar über eine Spannweite 0.
+
 ### Für einen weiteren großen Schritt nötig — außerhalb dieses Bereichs
 
 | Was | Wirkung | Aufwand | Paketgröße | Lizenz |
