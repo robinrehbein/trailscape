@@ -212,7 +212,7 @@ internal fun climbVerdictText(e: ClimbEffort): String = when (climbOutcome(e)) {
         val by = e.improvementMs?.takeIf { it >= 1000 }
         if (by != null) stringResource(R.string.trail_hud_done_new_best_by, formatClimbTime(by)) else stringResource(R.string.trail_hud_done_new_best)
     }
-    ClimbOutcome.SLOWER -> stringResource(R.string.trail_hud_done_slower, formatClimbTime(-(e.improvementMs ?: 0)))
+    ClimbOutcome.SLOWER -> stringResource(R.string.trail_hud_done_slower, formatClimbTime(-(e.improvementMs ?: 0L)))
 }
 
 private fun hudOutcomeColor(o: ClimbOutcome): Color = when (o) {
