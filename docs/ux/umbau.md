@@ -1,8 +1,8 @@
 # Umbau der Bedienstruktur
 
-Stand 25.11.2026. Grundlage ist die Seitenkarte (`docs/ux/seitenkarte.md`, Prototyp unter `docs/ux/artefakt/`). Diese Datei hält fest, was davon umgesetzt ist, wo jede heutige Seite jetzt liegt und wo die vier Funktionen eingehängt werden, die noch auf eigenen Branches liegen.
+Stand 25.11.2026. Grundlage ist die Seitenkarte (`docs/ux/seitenkarte.md`, Prototyp unter `docs/ux/artefakt/`). Diese Datei hält fest, was davon umgesetzt ist, wo jede heutige Seite jetzt liegt und wo die vier Funktionen hängen, die auf eigenen Branches entstanden sind (Erfolge, Herausforderung, Garage, Raum für Gruppenfahrten) – seit dem Einhängen auf `claude/ux-einhaengen` sind sie gemergt; siehe „Was jetzt wo hängt“.
 
-Nichts davon lief auf einem Gerät, und der Stand ist in der Umbau-Session **nicht gebaut** worden (der Container bekam von Maven Central nur HTTP 429). Siehe „Nicht geprüft“ am Ende.
+Nichts davon lief auf einem Gerät. Ob der Stand gebaut ist, steht unter „Nicht geprüft“ am Ende.
 
 ## Die Entscheidungen des Eigentümers
 
@@ -10,7 +10,7 @@ Nichts davon lief auf einem Gerät, und der Stand ist in der Umbau-Session **nic
 |---|---|---|
 | 1 Bekommt Indoor einen Tab? | Der Tab „Training“ wird durch „Indoor“ ersetzt; er bündelt Strecken, Trainingspläne und den Start der Indoor-Fahrt. | Leiste Heute · Karte · Indoor · Verlauf. Indoor hat die Segmente Strecken \| Plan. |
 | 2 Welche Wörter gelten? | Festes Glossar, Deutsch und Englisch. | Texte umbenannt; Glossar in `docs/i18n.md`. |
-| 3 Wo wohnen die Erfolge? | Abschnitt unter „Verlauf“, kein eigener Tab. | Platz `HistorySegment.ACHIEVEMENTS`, unsichtbar bis zum Merge. |
+| 3 Wo wohnen die Erfolge? | Abschnitt unter „Verlauf“, kein eigener Tab. | Segment „Erfolge“ (`HistorySegment.ACHIEVEMENTS`), sichtbar, solange „Erfolge anzeigen“ an ist. |
 | 4 Setzt ein Tipp einen Punkt? | Ja, mit Rückgängig-Knopf. | `ui/map/MapTapPlanning.kt`, Rückgängig im Planungsblatt. |
 | 5 Aufräumen vor oder nach den Branches? | Erst aufräumen. | Sammelstellen gebaut: Blatt „Nochmal fahren“, Einstellungen → Indoor, Tourdetail als Ziel der Auswertung. |
 
@@ -22,12 +22,13 @@ Zahnrad           auf allen vier Tabs, immer dieselbe Seite „Einstellungen“
 
 Heute             Tagesform, Empfehlung, Woche, Ziel
 Karte             Blatt „Wohin?“: Suche · Route planen · Runde bauen · Zahnrad
-Indoor            Segmente  Strecken | Plan            [ | Herausforderungen ] [ | Raum ]
-Verlauf           Segmente  Touren | Fortschritt       [ | Erfolge ]
+Indoor            Segmente  Strecken | Plan | Herausforderungen   [ | Raum ]
+                  Kopfzeile der Sicht „Strecken“: Garage-Symbol neben dem Zahnrad
+Verlauf           Segmente  Touren | Fortschritt | Erfolge
 Einstellungen     Du · Geräte · Fahren · Daten · App
 ```
 
-In eckigen Klammern stehen Plätze, die festgelegt, aber unsichtbar sind, bis es die Funktion gibt.
+In eckigen Klammern steht der eine Platz, der festgelegt, aber unsichtbar ist, bis es eine Oberfläche dafür gibt (Raum für Gruppenfahrten). „Erfolge“ fehlt, wenn „Erfolge anzeigen“ ausgeschaltet ist.
 
 Wo die Regeln stehen:
 
@@ -41,6 +42,10 @@ Wo die Regeln stehen:
 | Verlauf mit Segmenten | `app/…/ui/rides/RidesScreen.kt` |
 | Tipp auf die Karte, Rückgängig | `app/…/ui/map/MapTapPlanning.kt`, getestet in `MapTapPlanningTest` |
 | Blatt „Nochmal fahren“ | `app/…/ui/rides/RideAgain.kt`, getestet in `RideAgainOptionsTest` |
+| Sicht „Erfolge“ im Verlauf | `app/…/ui/erfolge/ErfolgeScreen.kt` (`ErfolgeHistoryContent`) |
+| Sicht „Herausforderungen“ im Indoor-Tab | `app/…/ui/indoor/IndoorFlowScreen.kt` (`ChallengesStage`), Inhalt `IndoorChallengeSection.kt` |
+| „Herausforderung teilen“ im Blatt „Teilen“ | `app/…/ui/rides/ChallengeShareRow.kt`, Ablage `app/…/challenge/ChallengeDraftStore.kt` (getestet in `ChallengeDraftStoreTest`, `IndoorChallengeFlowTest`) |
+| Garage | `app/…/ui/indoor/garage/`, Route `AppRoutes.INDOOR_GARAGE` |
 
 ## Was umgesetzt ist
 
@@ -204,52 +209,60 @@ Jede Seite, jedes Blatt und jeder Dialog aus der Bestandsliste der Seitenkarte, 
 | Dialoge der Fahrt | Unverändert. |
 | Auswertung | Nach der Fahrt; „Tour ansehen“ öffnet das Tourdetail. |
 
-## Wo die vier kommenden Funktionen eingehängt werden
+## Was jetzt wo hängt
 
-Keiner der vier Branches ist gemergt. Für keinen gibt es in der ausgelieferten App eine leere Seite: Die Plätze sind Aufzählungswerte und Parameter, die erst mit der Funktion sichtbar werden.
+Die vier Branches sind in dieser Reihenfolge gemergt: Erfolge, Herausforderung, Garage, Raum (`claude/idee-05-hintergrund` ausdrücklich nicht). Alte Einstiege an entfallenen Stellen (Tab „Training“, frühere Einstellungszeilen) sind nicht wiederbelebt.
+
+| Funktion | Seite / Dialog | Weg dorthin |
+|---|---|---|
+| Erfolge | Sicht „Erfolge“ (Stufe, Wochenserie mit Pausenwochen, Abzeichen, „Kommt bald“) | Verlauf → Erfolge |
+| Erfolge | Schalter „Erfolge anzeigen“ | Einstellungen → Erinnerungen & Motivation |
+| Erfolge | Abzeichen-Zeile nach der Fahrt | Tourblatt auf der Karte und Abschluss auf der Uhr, von selbst |
+| Herausforderung | Liste, „Gegen … fahren“, „Strecke herunterladen“, Löschen, „Datei wählen“ mit Vorschau | Indoor → Herausforderungen |
+| Herausforderung | Vorschau beim Öffnen von außen (`ChallengeImportActivity`) | „Öffnen mit“ / „Teilen“ auf die Datei; „Trailscape öffnen“ landet auf Indoor → Herausforderungen |
+| Herausforderung | Pille „Herausforderung“ bei „Mitfahrer“ | Indoor → Strecken → Optionen, sobald eine gewählt ist |
+| Herausforderung | Ergebnis „x s vor/hinter Name“ | Auswertung nach der Fahrt |
+| Herausforderung | „Herausforderung teilen“ / „Als Antwort teilen“ (Name, Datum, Vorschau) | Tourdetail → Teilen-Symbol; ebenso „Teilen“ an der Tourkarte. Die Auswertung führt mit „Tour ansehen“ dorthin und sagt es in einem Satz |
+| Garage | Seite „Garage“ | Indoor → Strecken → Paletten-Symbol in der Kopfzeile |
+| Raum | – | keine Oberfläche, Platz unsichtbar |
 
 ### Erfolge (`origin/claude/spiel-1-erfolge`)
 
-Platz: Verlauf → Segment „Erfolge“, rechts von „Fortschritt“.
-
-1. `ui/rides/RidesScreen.kt`: `historySegments(achievementsVisible = false)` an den Schalter binden, also `!ErfolgeStore.shared.state.hidden` (als State gesammelt). Ist der Schalter aus, fehlt das Segment; ist es gerade offen, fällt der Verlauf über `resolveSegment` auf „Touren“ zurück (getestet).
-2. Im `when (segment)` den Zweig `HistorySegment.ACHIEVEMENTS` füllen: eine Sicht, die wie `ProgressContent` den Kopf des Tabs als erstes Listenelement nimmt und darunter `ErfolgeContent(...)` zeigt. Die Vorbereitung dafür (Überblick laden, Neues als gesehen merken, Pausenwoche) steht im Branch in `ErfolgeSheet`; sie zieht aus dem Blatt in diese Sicht um. Das Blatt selbst und `ErfolgeEntry` (die Karte im früheren Training) entfallen.
-3. `historySegmentLabel` in `RidesScreen.kt` bekommt den Text für `ACHIEVEMENTS` (Schlüssel `rides_screen_segment_achievements`, „Erfolge“ / „Achievements“).
-4. Der Schalter „Erfolge anzeigen“: `ui/more/MoreScreen.kt`, `SettingsPageContent`, Zweig `SettingsPage.REMINDERS` – dort `ErfolgeSettingsSection()` als zweiten Abschnitt anfügen und `more_page_reminders_title` auf „Erinnerungen & Motivation“ ändern. Das `item { ErfolgeSettingsSection() }` am Listenende, das der Branch mitbringt, beim Merge verwerfen.
-5. Die Änderung des Branches an `ui/training/TrainingScreen.kt` entfällt ersatzlos (die Datei gibt es nicht mehr). Die Abzeichen-Zeile nach der Fahrt (`RideHighlights`) und der Backup-Anteil bleiben, wie der Branch sie bringt.
-
-Kein eigener Tab und kein Platz in der Leiste: `SHELL_TABS` bleibt bei vier.
+- `ui/rides/RidesScreen.kt`: `historySegments(achievementsVisible = !ErfolgeStore.shared.state.hidden)`. Ist der Schalter aus, fehlt das Segment; war es gerade offen, fällt der Verlauf über `resolveSegment` auf „Touren“ zurück (getestet).
+- Der Zweig `HistorySegment.ACHIEVEMENTS` zeigt `ErfolgeHistoryContent`: wie `ProgressContent` der Kopf des Tabs als erstes Listenelement, darunter `ErfolgeContent`. Überblick laden, Neues als gesehen merken und die Pausenwochen sind aus dem früheren Blatt hierher gezogen.
+- Entfallen: das Blatt `ErfolgeSheet`, die Karte `ErfolgeEntry`/`ErfolgeEntryCard` im früheren Tab „Training“ samt der Texte `erfolge_entry_*` und `erfolge_new_count`, die Änderung an `TrainingScreen.kt`, der Abschnitt am Ende der Einstellungsliste.
+- Der Schalter steht als zweiter Abschnitt auf der Seite, die jetzt „Erinnerungen & Motivation“ heißt (`SettingsPage.REMINDERS`).
+- Die Abzeichen-Zeile nach der Fahrt (`RideHighlights`, Uhr) und der Backup-Anteil (`progress`) sind unverändert übernommen.
+- Kein eigener Tab: `SHELL_TABS` bleibt bei vier.
+- Nicht übernommen: die Angabe „2 neu“, die an der entfallenen Karte stand. Neue Abzeichen tragen in der Sicht weiterhin „Neu“ und stehen in der Zeile nach der Fahrt; am Segment selbst steht keine Zahl.
 
 ### Herausforderung (`origin/claude/spiel-3-herausforderung`)
 
-Platz: Indoor → Segment „Herausforderungen“; verschicken im Blatt „Teilen“ der Tour.
-
-1. `ui/indoor/IndoorTabScreen.kt`: `indoorSegments(challengesAvailable = true, …)`; im `when (segment)` den Zweig `IndoorSegment.CHALLENGES` von der Sammelzeile lösen und dort `IndoorChallengeSection(...)` zeigen (mit dem Kopf des Tabs wie bei „Plan“). Zustand und Aktionen kommen aus dem `IndoorViewModel` des Tab-Eintrags (`vm.challenges`, `vm.useChallenge`, `vm.downloadCatalog`, `vm.deleteChallenge`, `vm.importChallengeFile`); dafür reicht `IndoorFlowScreen` im Modus `TAB` einen Slot für das Segment durch, statt den Abschnitt auf der Startseite zu zeichnen.
-2. Die Änderung des Branches an `IndoorHomeScreen.kt` (Abschnitt zwischen den Strecken) entfällt. Die Pille bei „Mitfahrer“ für eine gewählte Herausforderung bleibt.
-3. „Gegen … fahren“ setzt im ViewModel Strecke und Mitfahrer und wechselt auf das Segment „Strecken“ (`wantedSegment = IndoorSegment.ROUTES`), wo „Fahren“ wie gewohnt startet.
-4. Von außen (`ChallengeImportActivity` → `MainActivity`): statt nur die App zu öffnen, `requestTab(AppTab.INDOOR)` und das Segment vormerken – dafür `AppViewModel.requestIndoorRoutes()` als Vorlage nehmen und eine `requestChallenges()` danebenstellen.
-5. „Herausforderung teilen“: nicht als Block in der Auswertung, sondern als Zeile im Blatt „Teilen“ der gespeicherten Indoor-Tour. Einhängen über `RideShareDialog(..., extraRows = { … })` in `ui/rides/RideShare.kt` (aufgerufen in `RideDetailHost`, `ui/rides/TourList.kt`, Block `if (shareOpen)`); die Zeile löst `ChallengeShareDialog` bzw. `shareChallengeFile` aus. Die Auswertung führt mit „Tour ansehen“ dorthin. Das Ergebnis gegen eine Herausforderung (`ChallengeResultCard`) bleibt in der Auswertung.
+- `ui/AppNavigation.kt`: `shippedIndoorSegments()` liefert Strecken · Plan · Herausforderungen (`INDOOR_CHALLENGES_AVAILABLE = true`). `shownIndoorSegment` hält während einer Aufgabe „Strecken“ fest.
+- Die Sicht lebt im Indoor-Ablauf (`IndoorFlowScreen`, Parameter `challengesSegment`), weil sie denselben `IndoorViewModel` braucht wie die Startseite: `ChallengesStage` zeichnet Kopfzeile, Segmente und `IndoorChallengeSection`. Der Abschnitt zwischen den Strecken, den der Branch auf der Startseite zeichnete, ist entfallen.
+- „Gegen … fahren“ setzt Strecke und Mitfahrer und wechselt auf „Strecken“, wo „Fahren“ startet. „Strecke herunterladen“ wechselt ebenfalls dorthin, weil Voranschlag und Fortschritt dort stehen.
+- Von außen: `ChallengeImportActivity` gibt `EXTRA_OPEN_CHALLENGES` mit, `MainActivity` ruft `AppViewModel.requestChallenges()`.
+- Teilen: Zeile `ChallengeShareRow` im Blatt „Teilen“ (`RideShareDialog(extraRows = …)`, aufgerufen im Tourdetail und an der Tourkarte). Der Block und der Knopf in der Auswertung sind entfallen; `ChallengeResultCard` zeigt nur noch das Ergebnis.
+- Neu dafür: `ChallengeDraftStore`. Strecke samt Version und die Zeit-Weg-Kurve kennt nur der Ablauf am Ende der Fahrt, die gespeicherte Tour trägt sie nicht. Beim Speichern einer teilbaren Tour legt der Ablauf deshalb einen Entwurf ab (`<filesDir>/challenge-drafts`, höchstens 200, ohne Namen und Avatar); die Zeile erscheint nur bei Touren mit Entwurf. Touren, die vor diesem Stand gespeichert wurden, haben keinen und lassen sich nicht nachträglich teilen.
 
 ### Garage (`origin/claude/spiel-2-garage`)
 
-Platz: ein Symbol in der Kopfzeile des Indoor-Tabs, Sicht „Strecken“.
-
-1. `ui/AppNavigation.kt`: Route `AppRoutes.INDOOR_GARAGE = "indoor/garage"` ergänzen (jede Route, die kein Tab ist, gilt automatisch als gepushte Seite ohne Leiste).
-2. `ui/TrailscapeApp.kt`: `composable(AppRoutes.INDOOR_GARAGE) { GarageDestination(onBack = { navController.popBackStack() }) }` und einen `openGarage`-Rückruf wie `openWorlds`; an `IndoorTabScreen` und von dort an `IndoorFlowScreen` durchreichen.
-3. `IndoorHomeScreen.kt`: Der Branch bringt `onOpenGarage` und das Paletten-Symbol in den `actions` der Kopfzeile schon mit – das ist der eine Einstieg. Im gepushten Ablauf (`IndoorFlowMode.PUSHED`) das Symbol weglassen (`onOpenGarage = null` und das Symbol nur bei gesetztem Rückruf zeichnen).
-4. Die Zeile „Garage“, die der Branch in `IndoorSettingsScreen.kt` einfügt, beim Merge verwerfen (ein Einstieg genügt).
-5. Gesperrte Farben zeigen nur „ab Stufe N“, ohne Weg zu den Erfolgen (Entscheidung 3 der Seitenkarte).
+- Route `AppRoutes.INDOOR_GARAGE = "indoor/garage"`, gepushte Seite ohne Leiste; `openGarage` in `TrailscapeApp.kt` geht über `IndoorTabScreen` an `IndoorFlowScreen` und `IndoorHomeScreen`.
+- Ein Einstieg: das Paletten-Symbol in der Kopfzeile der Sicht „Strecken“. Im gepushten Ablauf (`IndoorFlowMode.PUSHED`) ist `onOpenGarage` `null`, das Symbol wird nicht gezeichnet (`garageEntryVisible`). Die Sichten „Plan“ und „Herausforderungen“ tragen es nicht.
+- Die Zeile „Garage“ in den Indoor-Einstellungen ist beim Merge verworfen, samt ihrer Texte.
+- Freischaltungen: weiter ungeschaltet (`progress = null`, alles frei). Gesperrtes zeigte nur „ab Stufe N“ ohne Weg zu den Erfolgen; die Kopplung an die Erfolge ist eine eigene Entscheidung (siehe `docs/indoor/garage.md`).
+- Backup: `avatar` steht neben `climbBests` und `progress`.
 
 ### Raum für Gruppenfahrten (`origin/claude/spiel-5-raum`)
 
-Der Branch hat noch keine Oberfläche (Protokoll, Client und Server-Teil). Platz für die kommende Oberfläche: Indoor → Segment „Raum“, das vierte Segment.
+Gemergt sind Protokoll (`core/…/room`), Client (`app/…/room`) und der Server-Teil. Der Branch hat **keine Oberfläche**; nichts in der App ruft den Client auf, es gibt keine neue Netzabfrage. Sein Platz bleibt unsichtbar (`INDOOR_ROOM_AVAILABLE = false`). Für die kommende Oberfläche gilt weiter:
 
-1. `ui/indoor/IndoorTabScreen.kt`: `indoorSegments(…, roomAvailable = true)` und den Zweig `IndoorSegment.ROOM` füllen: „Raum anlegen“ (nur mit eingetragenem eigenen Server, siehe Einstellungen → Sync mit eigenem Server) und „Raum beitreten“ (Einladungslink).
-2. Der Raum braucht eine Strecke: Die Wahl im Raum setzt wie eine Herausforderung Strecke und Modus im `IndoorViewModel` des Tabs und startet über das Blatt bzw. den Knopf „Fahren“ der Sicht „Strecken“.
+1. `ui/AppNavigation.kt`: `INDOOR_ROOM_AVAILABLE = true`; in `IndoorTabScreen.kt` den Zweig `IndoorSegment.ROOM` füllen: „Raum anlegen“ (nur mit eingetragenem eigenen Server, siehe Einstellungen → Sync mit eigenem Server) und „Raum beitreten“ (Einladungslink).
+2. Der Raum braucht eine Strecke: Die Wahl im Raum setzt wie eine Herausforderung Strecke und Modus im `IndoorViewModel` des Tabs und startet über den Knopf „Fahren“ der Sicht „Strecken“ – also wie die Herausforderungen als Sicht im Indoor-Ablauf (`indoorSegmentUsesFlow`).
 3. Ein Einladungslink von außen landet wie die Herausforderung über eine eigene `requestRoom()`-Funktion auf dem Segment.
-4. Ob vier Segmente auf 320 dp nebeneinander passen, ist offen; wenn nicht, werden „Herausforderungen“ und „Raum“ zu einem Segment „Gemeinsam“ mit zwei Abschnitten.
+4. Ob vier Segmente auf 320 dp nebeneinander passen, ist offen – schon bei dreien mit dem langen Wort „Herausforderungen“ ist es nur auf dem Gerät zu klären. Wenn nicht, werden „Herausforderungen“ und „Raum“ zu einem Segment „Gemeinsam“ mit zwei Abschnitten.
 
-Der Raum bringt die erste Netzverbindung zu einem selbst gewählten Server während der Fahrt mit sich; das ist Sache des Branches, nicht dieses Umbaus (hier ist keine Netzabfrage dazugekommen).
+Der Raum bringt die erste Netzverbindung zu einem selbst gewählten Server während der Fahrt mit sich; das ist Sache seiner Oberfläche, nicht dieses Einhängens.
 
 ## Abweichungen von der Seitenkarte
 
@@ -279,7 +292,10 @@ Die Screenshot-Tests laufen nur mit `-Pscreenshots` und schreiben nach `build/ou
 
 | Test | Änderung |
 |---|---|
-| `ScreenshotTest.tabs` | `03-training` entfällt; neu `02b-verlauf-fortschritt`, `03-indoor`, `03b-indoor-plan`. |
+| `ScreenshotTest.tabs` | `03-training` entfällt; neu `02b-verlauf-fortschritt`, `03-indoor`, `03b-indoor-plan`. Mit dem Einhängen: neu `02c-verlauf-erfolge`, `03c-indoor-herausforderungen`, `03d-indoor-garage` (Weg über das Symbol in der Kopfzeile, zurück mit der Zurück-Taste); `03-indoor` zeigt das Garage-Symbol, alle Verlauf- und Indoor-Bilder das dritte Segment. |
+| `ErfolgeScreenshotTest` | `einstiegskarte` / `einstiegskarteEnglisch` (die entfallene Karte) → `abzeichenZeile` / `abzeichenZeileEnglisch`, Bilder `erfolge-abzeichenzeile(-en)`; geprüft wird weiter der Text der Abzeichen-Zeile. Die Bilder der Sicht (`ErfolgeContent`) sind unverändert. |
+| `ChallengeScreenshotTest` | `spiel3-01-startseite-liste`, `spiel3-02-startseite-leer` → `spiel3-01-segment-liste`, `spiel3-02-segment-leer` (Inhalt des Segments); neu `spiel3-02b-strecken-mitfahrer` (Pille bei „Mitfahrer“) und `spiel3-09-teilen-zeile`. `spiel3-05` bis `-08`: Ergebnis ohne Teilen-Knopf, Auswertung mit dem Hinweis auf „Tour ansehen → Teilen“. |
+| `MoreScreenshotTest` (Einhängen) | `74-erinnerungen-*`: Titel „Erinnerungen & Motivation“, zweiter Abschnitt mit „Erfolge anzeigen“. |
 | `ScreenshotTest.tall` | `13-training-lang` → `13-fortschritt-lang`, `13b-training-plan-lang` → `13b-plan-lang`. |
 | `ScreenshotTest.trainingHinweise` | Weg über Indoor → Plan; Bildname bleibt `16-training-hinweise`. |
 | `ScreenshotTest.grosseSchrift`, `dunkel` | `24-training-gross` → `24-indoor-gross`, `53-training-dunkel` → `53-indoor-dunkel`. |
@@ -293,11 +309,17 @@ Die Screenshot-Tests laufen nur mit `-Pscreenshots` und schreiben nach `build/ou
 
 ## Nicht geprüft
 
-- **Ungebaut.** Weder `:core:test` noch `:app:testDebugUnitTest` liefen in der Umbau-Session. Der Kotlin-Code ist ohne Compiler geschrieben und von Hand gegengelesen.
+- **Ungebaut (Umbau-Session).** Weder `:core:test` noch `:app:testDebugUnitTest` liefen in der Umbau-Session. Der Kotlin-Code ist ohne Compiler geschrieben und von Hand gegengelesen.
+- **Ungebaut (Einhängen).** Auch die Session, die die vier Funktionen eingehängt hat, konnte nicht bauen (ein Versuch, Maven Central antwortete mit HTTP 429). Die vier Merges, ihre Konfliktauflösungen und der neue Code (`ErfolgeHistoryContent`, `ChallengesStage`, `ChallengeShareRow`, `ChallengeDraftStore`, die Garage-Route) sind ohne Compiler geschrieben und von Hand gegengelesen; die neuen und angepassten Tests (`AppNavigationTest`, `ChallengeDraftStoreTest`, `IndoorChallengeFlowTest`, die Screenshot-Tests) sind nicht gelaufen.
 - Die Screenshot-Tests sind in den Klickwegen angepasst, aber nicht ausgeführt. `ScreenshotTest` öffnet dabei erstmals den Indoor-Tab in der ganzen App unter Robolectric (echtes `IndoorViewModel`); ob das dort durchläuft, zeigt erst ein Lauf.
 - Zwei unabhängige Gegenlesungen des ganzen Diffs („sei der Compiler“) fanden keinen Build-Fehler; drei Logikfehler daraus sind behoben. Das ersetzt keinen Build.
 
 Nur auf einem echten Gerät prüfbar:
+
+- Ob drei Segmente im Indoor-Tab (Strecken · Plan · Herausforderungen) und im Verlauf (Touren · Fortschritt · Erfolge) auf 320 dp und mit großer Schrift einzeilig bleiben.
+- Ob Garage-Symbol und Zahnrad nebeneinander in die Kopfzeile der Sicht „Strecken“ passen.
+- „Herausforderung teilen“ aus dem Blatt „Teilen“: ein Dialog über einem Dialog, danach das Teilen-Blatt des Systems.
+- „Trailscape öffnen“ nach dem Import einer Herausforderung von außen: Landung auf Indoor → Herausforderungen, auch wenn die App schon lief.
 
 - Ob „Indoor“ neben „Heute“, „Karte“ und „Verlauf“ auf 320 dp und mit großer Schrift einzeilig bleibt.
 - Ob der Knopf „Fahren“ der Indoor-Startseite sauber über der schwebenden Leiste steht und die Liste darunter vollständig scrollt.

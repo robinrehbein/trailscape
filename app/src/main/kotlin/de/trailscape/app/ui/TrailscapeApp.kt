@@ -502,8 +502,10 @@ private fun TrailscapeAppContent() {
                     )
                 }
                 // Die Garage: gepusht vom Symbol in der Kopfzeile des Indoor-Tabs.
+                // Ohne [InsetPadded]: Die Seite loest ihre Insets wie der
+                // Indoor-Ablauf selbst auf (`IndoorPage`).
                 composable(AppRoutes.INDOOR_GARAGE) {
-                    InsetPadded { GarageDestination(onBack = { navController.popBackStack() }) }
+                    GarageDestination(onBack = { navController.popBackStack() })
                 }
                 composable(AppRoutes.INDOOR_WORLDS) {
                     InsetPadded { IndoorWorldsDestination(onBack = { navController.popBackStack() }) }
