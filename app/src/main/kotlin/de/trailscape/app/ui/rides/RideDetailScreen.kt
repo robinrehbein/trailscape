@@ -83,6 +83,8 @@ import de.trailscape.app.ui.progress.AchievementsCard
 import de.trailscape.app.ui.progress.rememberRideFacts
 import de.trailscape.core.milestonesReachedBy
 import de.trailscape.core.recordsSetBy
+import de.trailscape.app.ui.indoor.IndoorFromRideAction
+import de.trailscape.app.ui.indoor.indoorFromRideOffered
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.map.ElevationProfile
 import de.trailscape.app.ui.map.ElevationSample
@@ -203,6 +205,7 @@ internal fun RideDetailScreen(
     onRename: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
+    onRideIndoor: (() -> Unit)? = null,
 ) {
     val mapStyle by appViewModel.mapStyle.collectAsStateWithLifecycle()
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
@@ -399,6 +402,13 @@ internal fun RideDetailScreen(
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 )
+
+                // „Indoor fahren": dieselbe Strecke drinnen, die Aussenfahrt als
+                // Mitfahrer (ui/indoor/IndoorFromRide.kt). Unter den Hauptaktionen,
+                // damit Teilen und Loeschen ohne Scrollen erreichbar bleiben.
+                if (onRideIndoor != null && indoorFromRideOffered(ride)) {
+                    IndoorFromRideAction(planned = ride.planned, onClick = onRideIndoor)
+                }
 
                 // Idee 7: Tour <-> Planung umwandeln (siehe PlanFlip.kt).
                 if (!ride.indoor && ride.points.size >= 2) {

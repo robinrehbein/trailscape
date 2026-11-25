@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte zu „Draußen gefahren → drinnen nachfahren" (docs/indoor/app.md, Abschnitt
+    „Drinnen nachfahren"): Einstieg in der Tourdetailansicht, Außenfahrt als Mitfahrer
+    im HUD, Vergleich in der Auswertung.
+
+    Schlüssel-Präfix: idee01_
+    Regeln (Schlüsselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstück in values-en/strings_idee01.xml — gleiche Schlüssel, gleiche Reihenfolge.
+-->
+<resources>
+    <!-- IndoorFromRide.kt (Tourdetail) -->
+    <string name="idee01_detail_indoor_action">Indoor fahren</string>
+    <string name="idee01_detail_indoor_ridden_hint">Drinnen auf dem Trainer, deine Außenfahrt fährt als Mitfahrer mit.</string>
+    <string name="idee01_detail_indoor_planned_hint">Diese Planung drinnen auf dem Trainer fahren.</string>
+    <!-- IndoorTexts.kt: Anzeigename der Außenfahrt als Mitfahrer -->
+    <string name="idee01_ghost_outdoor_label">Außenfahrt vom %1$s</string>
+    <!-- IndoorRideHud.kt: Abstand samt Leistung der Außenfahrt an ihrer Stelle -->
+    <string name="idee01_hud_ghost_ahead_power">%1$s · %2$s vor dir · %3$d W</string>
+    <string name="idee01_hud_ghost_behind_power">%1$s · %2$s hinter dir · %3$d W</string>
+    <string name="idee01_hud_ghost_ahead_m_power">%1$s · %2$d m vor dir · %3$d W</string>
+    <string name="idee01_hud_ghost_behind_m_power">%1$s · %2$d m hinter dir · %3$d W</string>
+    <!-- IndoorOutdoorComparison.kt (Auswertung) -->
+    <string name="idee01_summary_eyebrow">Vergleich mit deiner Außenfahrt</string>
+    <string name="idee01_summary_ahead">Du warst %1$s vor deiner Außenfahrt.</string>
+    <string name="idee01_summary_behind">Du warst %1$s hinter deiner Außenfahrt.</string>
+    <string name="idee01_summary_even">Du warst gleichauf mit deiner Außenfahrt.</string>
+    <string name="idee01_summary_section">Verglichen auf %1$s km ab km %2$s.</string>
+    <string name="idee01_summary_section_full">Verglichen auf %1$s km.</string>
+    <string name="idee01_summary_col_indoor">Drinnen</string>
+    <string name="idee01_summary_col_outdoor">Draußen</string>
+    <string name="idee01_summary_row_time">Zeit</string>
+    <string name="idee01_summary_row_speed">Ø Tempo</string>
+    <string name="idee01_summary_row_power">Ø Leistung</string>
+    <string name="idee01_summary_no_power">Die Außenfahrt hat keine Leistungsdaten.</string>
+</resources>

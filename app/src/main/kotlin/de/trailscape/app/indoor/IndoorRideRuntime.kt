@@ -8,6 +8,7 @@ import de.trailscape.core.indoor.IndoorPhase
 import de.trailscape.core.indoor.IndoorRideRecord
 import de.trailscape.core.indoor.IndoorSession
 import de.trailscape.core.indoor.IndoorSessionState
+import de.trailscape.core.indoor.IndoorStep
 import de.trailscape.core.indoor.MovableIndoorSession
 import de.trailscape.core.indoor.IndoorShifter
 import de.trailscape.core.indoor.IndoorTrainer
@@ -122,6 +123,8 @@ class IndoorRideRuntime(
     private val rebuildSession: ((TrainerCapabilities) -> IndoorSession?)? = null,
     holdStart: Boolean = false,
     private val releaseOnFirstStroke: Boolean = false,
+    /** Wird je Schritt mit dem Ergebnis der Sitzung gerufen (Fahrprotokoll, geführter Abgleich); Fehler darin werden verschluckt. */
+    private val onStep: ((IndoorStep) -> Unit)? = null,
 ) {
     /** Die aktuelle Sitzung; nur vom Takt-Thread (bzw. nach dem Anhalten der Schleife). */
     private var session: IndoorSession = session
@@ -432,6 +435,7 @@ class IndoorRideRuntime(
             for (command in step.commands) {
                 guard(IndoorPart.CORE) { trainer.send(command) }
             }
+            onStep?.let { cb -> guard(IndoorPart.CORE) { cb(step) } }
             pushToRenderer(now, step.state)
             val movable = (session as? MovableIndoorSession)?.let { s -> guard(IndoorPart.CORE) { s.canMove } } ?: false
             _state.update {

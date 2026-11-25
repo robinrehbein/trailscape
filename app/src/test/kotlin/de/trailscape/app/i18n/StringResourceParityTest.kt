@@ -51,6 +51,9 @@ class StringResourceParityTest {
         // Idee 3 „Eine Auswertung für alles": Art-Filter der Tourenliste, FTP-Herkunft.
         "strings_idee03.xml" to "idee03_",
         "strings_idee08.xml" to "recipe_",
+        "strings_idee01.xml" to "idee01_",
+        "strings_idee06.xml" to "indoor_feel_",
+        "strings_idee11.xml" to "trail_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */

@@ -10,6 +10,7 @@ import de.trailscape.app.data.RideStorage
 import de.trailscape.app.indoor.catalog.CatalogDownloader
 import de.trailscape.app.indoor.catalog.CatalogStore
 import de.trailscape.app.indoor.BleHeartRateSource
+import de.trailscape.app.indoor.IndoorProtocolStore
 import de.trailscape.app.indoor.IndoorDayPlan
 import de.trailscape.app.indoor.IndoorDayRouteFinder
 import de.trailscape.app.indoor.DefaultIndoorGeneratedWorlds
@@ -49,6 +50,8 @@ import de.trailscape.core.indoor.DayRideEnd
 import de.trailscape.core.indoor.DayRouteAvailability
 import de.trailscape.core.indoor.DayRouteMatch
 import de.trailscape.core.indoor.DemoTrainer
+import de.trailscape.core.indoor.GhostOutcome
+import de.trailscape.core.indoor.ghostResultOf
 import de.trailscape.core.indoor.ErgWorkout
 import de.trailscape.core.indoor.GhostSpec
 import de.trailscape.core.indoor.IndoorDeviceRole
@@ -62,7 +65,11 @@ import de.trailscape.core.indoor.IndoorSessionState
 import de.trailscape.core.indoor.IndoorShifter
 import de.trailscape.core.indoor.IndoorStartPoints
 import de.trailscape.core.indoor.IndoorTrainer
+import de.trailscape.core.indoor.RideFeel
+import de.trailscape.core.indoor.RideProtocolRecorder
 import de.trailscape.core.indoor.RiderSetup
+import de.trailscape.core.indoor.calibrationGearShift
+import de.trailscape.core.indoor.flatCalibrationRoute
 import de.trailscape.core.indoor.ShifterEvent
 import de.trailscape.core.indoor.TrainerCapabilities
 import de.trailscape.core.indoor.TrainerConnection
@@ -182,9 +189,25 @@ class IndoorViewModel(
     serverDeps: IndoorServerDeps? = null,
     var onRideSaved: (String) -> Unit = {},
     var onPlanRoute: (RouteTarget) -> Unit = {},
+    protocolStore: IndoorProtocolStore? = null,
 ) : ViewModel() {
 
     private val scope: CoroutineScope = scope ?: viewModelScope
+
+    /** Fahrgefuehl, gefuehrter Abgleich und Fahrprotokolle (idee-06, docs/indoor/kalibrierung.md). */
+    private val feelController = IndoorFeelController(store, protocolStore)
+
+    /** Das eingestellte Fahrgefuehl (Gesamtwiderstand, Belagsstaerke). */
+    val feel: StateFlow<RideFeel> = feelController.feel
+
+    /** Stand des gefuehrten Abgleichs; `null`, wenn keiner laeuft. */
+    val calibration: StateFlow<IndoorCalibrationUi?> = feelController.calibration
+
+    /** Die abgelegten Fahrprotokolle (nur auf dem Geraet); `null`, wenn die Ablage fehlt (Tests). */
+    val protocols: IndoorProtocolStore? get() = feelController.protocols
+
+    /** Der naechste Start ist der Abgleich auf der ebenen Teststrecke. */
+    private var calibrationRequested = false
 
     /** Bereich „Bekannte Strecken" (docs/indoor/catalog.md). */
     private val catalogController = IndoorCatalogController(catalogStore, catalogDownloader, this.scope, io, catalogOnline, wallClock)
@@ -206,6 +229,9 @@ class IndoorViewModel(
     val server: StateFlow<IndoorServerUi> = serverController.ui
     private val sourcing = IndoorRouteSourcing(parts, rematchRouter)
 
+    /** Bergwertung und Kilometermarken der laufenden Fahrt (`IndoorTrail.kt`). */
+    private val trail = IndoorTrailController(store, wallClock)
+
     // -----------------------------------------------------------------------
     // Oeffentliche Zustaende
     // -----------------------------------------------------------------------
@@ -225,6 +251,7 @@ class IndoorViewModel(
             gearTable = readGearTable(),
             timeOfDay = readTimeOfDay(),
             otherRiders = readOtherRiders(),
+            trailOverlays = IndoorTrailController.readOverlays(store),
         ),
     )
     val pair: StateFlow<IndoorPairUi> = _pair.asStateFlow()
@@ -282,6 +309,9 @@ class IndoorViewModel(
 
     /** Von „Heute" gewaehlter Vorschlag, der beim Anzeigen vorausgewaehlt wird. */
     private var preferredDayKey: String? = null
+
+    /** „Indoor fahren" aus der Tourdetailansicht: diese Tour waehlen, sobald die Strecken gelesen sind. */
+    private var preferredRideId: String? = null
 
     /** Startpunkt des gewaehlten Vorschlags: Schluessel der Streckenwahl und Anteil der Laenge. */
     private var dayStartPick: Pair<String, Double>? = null
@@ -357,6 +387,8 @@ class IndoorViewModel(
         val startMaxM: Double = 0.0,
         val routeLengthM: Double = 0.0,
         val routeIsLoop: Boolean = false,
+        /** Der Mitfahrer ist die eigene Aussenfahrt ([IndoorGhostOption.PastRide]). */
+        val ghostOutdoor: Boolean = false,
     )
 
     init {
@@ -404,6 +436,63 @@ class IndoorViewModel(
      * [CHAINRING_MIN_TEETH]..[CHAINRING_MAX_TEETH] begrenzt. Bezug der
      * virtuellen Gaenge: `RiderSetup.realGearRatio = Kettenblatt / ZWIFT_COG_TEETH`.
      */
+    fun setFeelResistance(value: Double) = feelController.setResistance(value)
+
+    fun setFeelSurfaceStrength(value: Double) = feelController.setSurfaceStrength(value)
+
+    /** „Zuruecksetzen“: Fahrgefuehl wieder wie heute (Faktoren 1,0). */
+    fun resetFeel() = feelController.reset()
+
+    /**
+     * Startet den gefuehrten Abgleich „Fahrgefuehl einstellen“: eine Fahrt auf
+     * der ebenen Teststrecke ([flatCalibrationRoute]) ohne 3D-Ansicht, im
+     * passenden Gang, ohne Speichern. Braucht einen echten Trainer — der
+     * Demo-Trainer treibt kein Messgeraet an.
+     */
+    fun startCalibration() {
+        if (activeRuntime != null || _pair.value.demoTrainer || _pair.value.trainerName == null) return
+        val route = flatCalibrationRoute()
+        calibrationRequested = true
+        resetWorld()
+        baseRoute = route
+        routeName = route.name
+        startRide(withWorld = false)
+    }
+
+    /** Vorschlag annehmen. */
+    fun acceptCalibration() = feelController.acceptSuggestion()
+
+    /** „Fertig“ vor Ablauf des Messfensters. */
+    fun finishCalibrationNow() = feelController.finishCalibrationNow()
+
+    /** Beendet den Abgleich (nach Annehmen, Ablehnen oder Abbrechen) und kehrt zu den Einstellungen zurueck. Nichts wird als Tour gespeichert. */
+    fun leaveCalibration() {
+        val runtime = activeRuntime
+        feelController.endCalibration()
+        calibrationRequested = false
+        if (runtime == null) {
+            _ride.value = null
+            rideStatic = null
+            _stage.value = IndoorStage.SETTINGS
+            return
+        }
+        if (finishing) return
+        finishing = true
+        scope.launch {
+            runtime.finish()
+            feelController.endRide()
+            rideCollectJob?.cancel()
+            rideCollectJob = null
+            activeRuntime = null
+            _ride.value = null
+            rideStatic = null
+            pendingRide = null
+            resetWorld()
+            finishing = false
+            _stage.value = IndoorStage.SETTINGS
+        }
+    }
+
     fun setChainringTeeth(teeth: Int) {
         val clamped = teeth.coerceIn(CHAINRING_MIN_TEETH, CHAINRING_MAX_TEETH)
         runCatching { store.setString(KEY_CHAINRING_TEETH, clamped.toString()) }
@@ -437,6 +526,13 @@ class IndoorViewModel(
         runCatching { store.setString(KEY_OTHER_RIDERS, enabled.toString()) }
         _pair.update { it.copy(otherRiders = enabled) }
         _renderer.value?.let { r -> indoorCatching(IndoorPart.RENDER) { r.setOtherRidersEnabled(enabled) } }
+    }
+
+    /** Schalter „Einblendungen auf der Strecke" (Bergwertung, Kilometer im HUD). */
+    fun setTrailOverlays(enabled: Boolean) {
+        IndoorTrailController.writeOverlays(store, enabled)
+        _pair.update { it.copy(trailOverlays = enabled) }
+        republishRide()
     }
 
     private fun readOtherRiders(): Boolean = runCatching { store.getString(KEY_OTHER_RIDERS) != "false" }.getOrDefault(true)
@@ -561,6 +657,7 @@ class IndoorViewModel(
                     loadingOptions = false,
                 )
             }
+            applyPreferredRide()
         }
     }
 
@@ -570,6 +667,30 @@ class IndoorViewModel(
             rides = catalogRideRecordsOf(rideStorage.listSummaries().summaries),
         )
     }.getOrDefault(IndoorCatalogExtras())
+
+    /**
+     * „Indoor fahren" in der Tourdetailansicht (docs/indoor/app.md, „Drinnen
+     * nachfahren"): waehlt die Tour [rideId] auf der Startseite vor, im Modus
+     * „Frei fahren"; bei einer gefahrenen Tour (keine Planung) faehrt die
+     * Aussenfahrt als Mitfahrer mit. Alles Weitere — Trainer, „Wird einmal
+     * vorbereitet", „Fahren" — laeuft ueber die Startseite wie bei jeder
+     * anderen Wahl. Kennt die Liste die Tour nicht (z. B. unter zwei Punkten),
+     * bleibt die Startseite ohne Wahl.
+     */
+    fun preferRide(rideId: String) {
+        preferredRideId = rideId
+        if (routeOptionsRequested && !_route.value.loadingOptions) applyPreferredRide()
+    }
+
+    private fun applyPreferredRide() {
+        val id = preferredRideId ?: return
+        preferredRideId = null
+        val option = _route.value.options.firstOrNull { it is IndoorRouteOption.Saved && it.rideId == id } as? IndoorRouteOption.Saved
+            ?: return
+        selectRoute(option)
+        setMode(IndoorMode.SIM)
+        setGhost(if (option.planned) IndoorGhostOption.None else IndoorGhostOption.PastRide(option.rideId, ""))
+    }
 
     private fun savedOptions(): List<IndoorRouteOption.Saved> {
         val summaries = runCatching { rideStorage.listSummaries().summaries }.getOrDefault(emptyList())
@@ -822,6 +943,7 @@ class IndoorViewModel(
      * direkt los (ohne Voranschlag und ohne Netz).
      */
     fun continueFromRoute() {
+        calibrationRequested = false
         // Ohne Trainer (oder Demo) geht es nicht in die Fahrt; die Startseite
         // sagt das und bietet „Koppeln" an.
         if (!_route.value.canContinue || !_pair.value.canContinue) return
@@ -1255,7 +1377,7 @@ class IndoorViewModel(
         }
         val routeUi = _route.value
         val demo = _pair.value.demoTrainer
-        val mode = if (routeUi.mode == IndoorMode.ERG && ergWorkout != null) IndoorMode.ERG else IndoorMode.SIM
+        val mode = if (routeUi.mode == IndoorMode.ERG && ergWorkout != null && !calibrationRequested) IndoorMode.ERG else IndoorMode.SIM
 
         finishing = false
         pendingRide = null
@@ -1263,7 +1385,7 @@ class IndoorViewModel(
         _summary.value = null
         val ghostLabel = ghostLabelOf(routeUi.ghost)
         // Fortsetzen: die gemerkte Stelle dieser Strecke ist die Vorauswahl.
-        val resumeKey = routeUi.selected?.let { resumeKeyOf(it) }
+        val resumeKey = if (calibrationRequested) null else routeUi.selected?.let { resumeKeyOf(it) }
         val resumeM = resumeKey?.let { key ->
             runCatching { IndoorStartPoints.offer(readResume(key), route.lengthM, route.isLoop) }.getOrNull()
         }
@@ -1275,6 +1397,7 @@ class IndoorViewModel(
             ?.takeIf { it > 0 }
         val initialM = dayStartM ?: resumeM
         dismissedDayEnd = null
+        trail.start(route, routeUi.selected?.key ?: "route:${route.id}")
         rideStatic = RideStatic(
             routeName = routeName,
             trainerName = if (demo) texts.demoTrainerName() else (_pair.value.trainerName ?: ""),
@@ -1283,6 +1406,7 @@ class IndoorViewModel(
             demoPowerW = if (demo) DEMO_DEFAULT_POWER_W else null,
             demoCadenceRpm = if (demo) DEMO_DEFAULT_CADENCE_RPM else null,
             ghostLabel = ghostLabel,
+            ghostOutdoor = routeUi.ghost is IndoorGhostOption.PastRide,
             ergTitle = if (mode == IndoorMode.ERG) ergWorkout?.title else null,
             attribution = if (useWorld) manifest.attribution else emptyList(),
             mode = mode,
@@ -1349,6 +1473,7 @@ class IndoorViewModel(
                 realGearRatio = realGearRatioOf(_pair.value.chainringTeeth),
                 gearTable = _pair.value.gearTable,
             )
+            .let { feelController.feel.value.applyTo(it) }
         val config = IndoorSessionConfig(
             route = route,
             mode = mode,
@@ -1362,7 +1487,17 @@ class IndoorViewModel(
             capabilities = ASSUMED_CAPABILITIES,
             startedAtEpochMs = wallClock(),
         )
+        feelController.beginRide(
+            rider = rider,
+            header = RideProtocolRecorder.headerOf(rider, mode, routeName, config.startedAtEpochMs),
+            startedAtMs = config.startedAtEpochMs,
+            routeName = routeName,
+            calibrate = calibrationRequested,
+        )
         val session = indoorCatching(IndoorPart.CORE) { parts.createSession(config) }.getOrElse {
+            feelController.endRide()
+            feelController.endCalibration()
+            calibrationRequested = false
             indoorCatching(IndoorPart.CORE) { trainer.stop() }
             shifter?.let { s -> indoorCatching(IndoorPart.CORE) { s.stop() } }
             // Noch nicht gestartet: stop() schliesst ein Rohr dann nicht selbst.
@@ -1410,6 +1545,7 @@ class IndoorViewModel(
             // starten); der Demo-Trainer „tritt" sofort und wartet deshalb immer.
             holdStart = true,
             releaseOnFirstStroke = !demo,
+            onStep = feelController::onStep,
         )
         activeRuntime = runtime
         renderer?.let { r ->
@@ -1429,6 +1565,12 @@ class IndoorViewModel(
         publishRide(runtime.state.value)
         rideCollectJob = scope.launch { runtime.state.collect { publishRide(it) } }
         runtime.start()
+        if (calibrationRequested) {
+            // Abgleich: gleich los (keine Startpunkt-Karte) und in den Gang, der bei ~85 U/min moderate Leistung ergibt.
+            val shift = indoorCatching(IndoorPart.CORE) { calibrationGearShift(rider) }.getOrDefault(0)
+            repeat(kotlin.math.abs(shift)) { runtime.shift(if (shift > 0) ShifterEvent.UP else ShifterEvent.DOWN) }
+            runtime.releaseStart()
+        }
     }
 
     private fun showStartProblem(problem: IndoorProblem) {
@@ -1464,6 +1606,7 @@ class IndoorViewModel(
             }
         }
         applySky(force = false)
+        val trailLive = trail.update(rs.session)?.takeIf { _pair.value.trailOverlays }
         _ride.value = IndoorRideUi(
             routeName = st.routeName,
             session = rs.session,
@@ -1481,8 +1624,10 @@ class IndoorViewModel(
             ergTitle = st.ergTitle,
             attribution = st.attribution,
             runtimeProblem = rs.problem,
+            ghostOutdoor = st.ghostOutdoor,
             start = startUiOf(rs, st),
             dayEnd = dayEndOf(rs, st),
+            trail = trailLive,
         )
     }
 
@@ -1651,6 +1796,8 @@ class IndoorViewModel(
     fun finishRide() {
         val runtime = activeRuntime
         if (runtime == null) {
+            calibrationRequested = false
+            feelController.endCalibration()
             _ride.value = null
             rideStatic = null
             _stage.value = IndoorStage.WORLD
@@ -1660,6 +1807,7 @@ class IndoorViewModel(
         finishing = true
         scope.launch {
             val record = runtime.finish()
+            feelController.endRide()
             rememberPosition(rideStatic, runtime.state.value.session)
             rideCollectJob?.cancel()
             rideCollectJob = null
@@ -1700,7 +1848,11 @@ class IndoorViewModel(
             avgSpeedKmh = if (movingS > 0) distanceM / movingS * 3.6 else 0.0,
             laps = record?.laps ?: rs.session?.lap ?: 1,
             ghostLabel = st?.ghostLabel,
-            ghostGapS = record?.ghostFinalGapS,
+            // Vorrang hat die Zeitdifferenz auf demselben Abschnitt (IndoorGhostSection.kt).
+            ghostGapS = record?.let { r -> ghostResultOf(r)?.let { if (it.outcome == GhostOutcome.BEHIND) it.seconds else -it.seconds } }
+                ?: record?.ghostFinalGapS,
+            ghostOutdoor = st?.ghostOutdoor == true,
+            ghostSection = record?.ghostSection?.takeIf { st?.ghostOutdoor == true },
             // „Zu kurz" nur bei einer echten Aufzeichnung unter 60 s; fehlt sie
             // (fremder Teil warf in finish()) oder liess sie sich nicht
             // umwandeln, ist das ein eigener Zustand mit dem Grund.
@@ -1708,6 +1860,7 @@ class IndoorViewModel(
             recordMissing = pendingRide == null && (record == null || record.totals.movingS >= MIN_INDOOR_RIDE_S),
             recordProblem = if (record == null) rs.problem else null,
             startKm = startKm,
+            climbs = trail.efforts(),
         )
     }
 
@@ -1735,6 +1888,8 @@ class IndoorViewModel(
 
     /** Eine neue Fahrt: zurueck zur Streckenwahl. */
     fun startOver() {
+        calibrationRequested = false
+        trail.stop()
         pendingRide = null
         dayStartPick = null
         _summary.value = null
@@ -1784,6 +1939,9 @@ class IndoorViewModel(
 
     /** Gibt eine Fahrt frei, die nie einen Sitzungszustand lieferte, und kehrt zu „Welt laden" zurueck. */
     private fun abortRideStart() {
+        feelController.endRide()
+        feelController.endCalibration()
+        calibrationRequested = false
         rideCollectJob?.cancel()
         rideCollectJob = null
         activeRuntime?.close()
@@ -1806,6 +1964,7 @@ class IndoorViewModel(
 
     /** Gibt alles frei; eine laufende Fahrt wird ohne Aufzeichnung verworfen. */
     fun release() {
+        feelController.endRide()
         cancelRunningWorldJob()
         serverController.close()
         catalogController.release()
@@ -1923,6 +2082,7 @@ class IndoorViewModel(
                     catalogOnline = { AppServices.isNetworkAvailable() },
                     serverDeps = AppServices.indoorServerDeps,
                     onRideSaved = onRideSaved,
+                    protocolStore = IndoorProtocolStore(java.io.File(app.filesDir, "diag/fahrprotokolle")),
                 ) as T
             }
         }

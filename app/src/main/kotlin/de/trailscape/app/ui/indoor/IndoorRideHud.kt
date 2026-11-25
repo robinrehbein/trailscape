@@ -81,6 +81,7 @@ import de.trailscape.app.ui.theme.DarkSignalColors
 import de.trailscape.core.indoor.GhostState
 import de.trailscape.core.indoor.IndoorSessionState
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -271,18 +272,31 @@ internal fun HudChip(modifier: Modifier = Modifier, content: @Composable () -> U
     }
 }
 
-/** Abstand zum Geist: Punkt in dessen Farbe (wie im Hoehenprofil) und ein kurzer Satz. */
+/**
+ * Abstand zum Geist: Punkt in dessen Farbe (wie im Hoehenprofil) und ein kurzer Satz.
+ * Mit [showPower] (die eigene Aussenfahrt faehrt mit) steht dahinter ihre
+ * Leistung an ihrer Stelle („· 240 W"), sobald sie bekannt ist.
+ */
 @Composable
-internal fun HudGhostChip(ghost: GhostState, label: String?, modifier: Modifier = Modifier) {
+internal fun HudGhostChip(ghost: GhostState, label: String?, modifier: Modifier = Modifier, showPower: Boolean = false) {
     val name = label ?: stringResource(R.string.indoor_app_hud_ghost_default)
     val ahead = ghost.gapM >= 0.0
     val gapS = ghost.gapS
+    val watts = ghost.powerW?.takeIf { showPower && it.isFinite() }?.roundToInt()
     val text = if (gapS != null) {
         val time = formatIndoorGapSeconds(gapS)
-        stringResource(if (ahead) R.string.indoor_app_hud_ghost_ahead else R.string.indoor_app_hud_ghost_behind, name, time)
+        if (watts != null) {
+            stringResource(if (ahead) R.string.idee01_hud_ghost_ahead_power else R.string.idee01_hud_ghost_behind_power, name, time, watts)
+        } else {
+            stringResource(if (ahead) R.string.indoor_app_hud_ghost_ahead else R.string.indoor_app_hud_ghost_behind, name, time)
+        }
     } else {
         val meters = indoorGapMeters(ghost.gapM)
-        stringResource(if (ahead) R.string.indoor_app_hud_ghost_ahead_m else R.string.indoor_app_hud_ghost_behind_m, name, meters)
+        if (watts != null) {
+            stringResource(if (ahead) R.string.idee01_hud_ghost_ahead_m_power else R.string.idee01_hud_ghost_behind_m_power, name, meters, watts)
+        } else {
+            stringResource(if (ahead) R.string.indoor_app_hud_ghost_ahead_m else R.string.indoor_app_hud_ghost_behind_m, name, meters)
+        }
     }
     HudChip(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
