@@ -126,6 +126,11 @@ data class RenderSettings(
     val whiteBalance: Boolean = false,
     val vignette: Boolean = false,
     val dynamicResolutionMinScale: Double = 0.6,
+    /**
+     * Baeume aus der Bibliothek nah an der Kamera (`TreeInstanceBudget.forDetail`): 0 = aus, die
+     * gebackenen Baeume der Kachel wie bisher; 1 = Hoch; 2 = Ultra (mehr und weiter).
+     */
+    val treeDetail: Int = 0,
 ) {
     companion object {
         /** Voreinstellung je Qualitaetsstufe. */

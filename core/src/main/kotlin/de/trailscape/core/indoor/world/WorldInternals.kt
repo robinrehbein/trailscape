@@ -1,5 +1,6 @@
 package de.trailscape.core.indoor.world
 
+import de.trailscape.core.indoor.tree.TreeInstanceNames
 import de.trailscape.core.indoor.SurfaceKind
 import de.trailscape.core.indoor.SurfaceSection
 import kotlin.math.abs
@@ -607,8 +608,16 @@ internal class TileOutput(val spec: TileSpec) {
         return i * f + j
     }
 
-    /** Dreiecke aller Netze eines Knotens (ueber alle Teilflaechen). */
-    fun triangles(node: String): Int = parts.values.filter { it.node == node }.sumOf { it.mesh.triangleCount }
+    /** Dreiecke aller Netze eines Knotens (ueber alle Teilflaechen; `trees` samt seiner Abschnitte). */
+    fun triangles(node: String): Int = parts.values.filter { it.node == node || (node == WorldNames.NODE_TREES && isTreeBin(it.node)) }.sumOf { it.mesh.triangleCount }
+
+    /** Ein leerer Instanzknoten unter `trees` ([TreeInstanceNames]): Lage in Kachelkoordinaten, Drehung um y, Massstab. */
+    class TreeInstance(val name: String, val x: Double, val y: Double, val z: Double, val yawRad: Double, val scale: Double)
+
+    /** Instanzknoten der Baeume dieser Kachel (nur Stufe 0), in Einfuege-Reihenfolge. */
+    val treeInstances = ArrayList<TreeInstance>()
+
+    private fun isTreeBin(node: String) = node.startsWith(TreeInstanceNames.BIN_PREFIX)
 
     val triangleCount: Int get() = parts.values.sumOf { it.mesh.triangleCount }
 
@@ -634,12 +643,27 @@ internal class TileOutput(val spec: TileSpec) {
         if (spec.level == 0) {
             for (name in NODE_ORDER) {
                 val own = parts.values.filter { it.node == name && !it.mesh.isEmpty }
-                if (own.isEmpty()) continue
+                // Abschnitte der Bandbaeume und Instanzknoten haengen unter `trees`.
+                val bins = if (name != WorldNames.NODE_TREES) emptyList() else
+                    parts.values.filter { isTreeBin(it.node) && !it.mesh.isEmpty }.map { it.node }.distinct()
+                        .sortedBy { TreeInstanceNames.parseBin(it) ?: 0 }
+                val instances = if (name == WorldNames.NODE_TREES) treeInstances else emptyList()
+                if (own.isEmpty() && bins.isEmpty() && instances.isEmpty()) continue
                 val node = scene.addNode(name)
                 for (p in own) scene.addMesh(node, p.mesh, materialIndex(p.material))
+                for (bin in bins) {
+                    val child = scene.addNode(bin, parent = node)
+                    for (p in parts.values) if (p.node == bin && !p.mesh.isEmpty) scene.addMesh(child, p.mesh, materialIndex(p.material))
+                }
+                for (i in instances) {
+                    scene.addNode(
+                        i.name, parent = node, translation = Vec3(i.x, i.y, i.z),
+                        rotation = Quat.fromAxisAngle(Vec3(0.0, 1.0, 0.0), i.yawRad), scale = Vec3(i.scale, i.scale, i.scale),
+                    )
+                }
             }
             // Zusatzknoten (x_…) in Einfuege-Reihenfolge.
-            for (name in parts.values.map { it.node }.distinct().filter { it !in NODE_ORDER }) {
+            for (name in parts.values.map { it.node }.distinct().filter { it !in NODE_ORDER && !isTreeBin(it) }) {
                 val own = parts.values.filter { it.node == name && !it.mesh.isEmpty }
                 if (own.isEmpty()) continue
                 val node = scene.addNode(name)

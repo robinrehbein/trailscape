@@ -20,6 +20,9 @@ class RenderTiersTest {
         assertEquals(3, m.shadowCascades)
         assertEquals(300.0, m.shadowFarM)
         assertEquals(0.6, m.dynamicResolutionMinScale)
+        // Standard zeigt die gebackenen Baeume wie bisher, keine Instanzen aus der Bibliothek.
+        for (q in IndoorQuality.entries) assertEquals(0, RenderSettings.forQuality(q).treeDetail)
+        assertEquals(0, RenderSettings.SAFE.treeDetail)
     }
 
     @Test
@@ -36,6 +39,8 @@ class RenderTiersTest {
         assertEquals(RenderTiers.HIGH_DYNRES_MIN_SCALE, h.dynamicResolutionMinScale)
         assertEquals(RenderTiers.HIGH_DYNRES_MIN_SCALE, u.dynamicResolutionMinScale)
         assertTrue(u.shadowFarM > h.shadowFarM)
+        assertEquals(1, h.treeDetail)
+        assertEquals(2, u.treeDetail)
     }
 
     @Test
