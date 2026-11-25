@@ -1,6 +1,7 @@
 package de.trailscape.app.feedback
 
 import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.os.Build
@@ -35,6 +36,9 @@ object AppDiagnostics {
 
     /** Wie viele fruehere Prozessenden hoechstens pro Start nachgetragen werden. */
     private const val MAX_EXIT_INFOS = 5
+
+    /** Obergrenze fuer das gelesene Absturzprotokoll des Systems. */
+    private const val MAX_TOMBSTONE_BYTES = 8 * 1024 * 1024
 
     @Volatile
     private var installed = false
@@ -74,6 +78,7 @@ object AppDiagnostics {
      *
      * Blockiert (Datei- und Binder-I/O) — aus `Dispatchers.IO` aufrufen.
      */
+    @Synchronized
     fun recordExitReasons(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         runCatching { recordExitReasonsApi30(context.applicationContext) }
@@ -100,8 +105,50 @@ object AppDiagnostics {
                 atMs = info.timestamp,
             )
         }
+        // Nativer Absturz (z. B. Filament bricht ab, weil der Grafiktreiber einen
+        // Shader ablehnt): Den sieht der `uncaughtExceptionHandler` nie. Ab
+        // Android 12 hebt das System sein Absturzprotokoll auf — daraus entsteht
+        // derselbe lokale Bericht wie bei einem Kotlin-Absturz, den der Nutzer
+        // beim naechsten Start ansehen und selbst weitergeben kann.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            fresh.lastOrNull { it.reason == ApplicationExitInfo.REASON_CRASH_NATIVE }
+                ?.let { runCatching { writeNativeCrashReport(context, it) } }
+        }
         marker.parentFile?.mkdirs()
         marker.writeText(fresh.last().timestamp.toString())
+    }
+
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun writeNativeCrashReport(context: Context, info: ApplicationExitInfo) {
+        val file = CrashReporter.crashFile(context)
+        // Ein Kotlin-Bericht desselben Absturzes ist genauer — nicht ueberschreiben.
+        if (file.isFile) return
+        val bytes = info.traceInputStream?.use { input ->
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(64 * 1024)
+            while (out.size() < MAX_TOMBSTONE_BYTES) {
+                val n = input.read(buf)
+                if (n < 0) break
+                out.write(buf, 0, n)
+            }
+            out.toByteArray()
+        } ?: return
+        val text = TombstoneText.extract(bytes) ?: return
+        val runtime = Runtime.getRuntime()
+        val zone = runCatching { java.time.ZoneId.systemDefault() }.getOrDefault(java.time.ZoneId.of("UTC"))
+        val report = buildCrashReport(
+            info = CrashReporter.currentDeviceInfo(context),
+            timestamp = formatReportTimestamp(info.timestamp, zone),
+            threadName = "nativ",
+            stackTrace = "Nativer Absturz (Absturzprotokoll des Systems)\n$text",
+            memory = MemoryInfo(
+                freeBytes = runtime.freeMemory(),
+                totalBytes = runtime.totalMemory(),
+                maxBytes = runtime.maxMemory(),
+            ),
+        )
+        file.parentFile?.mkdirs()
+        file.writeText(report, Charsets.UTF_8)
     }
 
     /**
