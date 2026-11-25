@@ -168,6 +168,7 @@ private fun SettingsStage(vm: IndoorViewModel, onOpenWorlds: () -> Unit, onOpenD
         onGearTableChange = vm::setGearTable,
         onTimeOfDayChange = vm::setTimeOfDay,
         onOtherRidersChange = vm::setOtherRiders,
+        onTrailOverlaysChange = vm::setTrailOverlays,
         onOpenWorlds = onOpenWorlds,
         onRefreshCatalog = vm::refreshCatalog,
         onOpenDiagnostics = onOpenDiagnostics,

@@ -49,6 +49,7 @@ fun IndoorSettingsScreen(
     onRefreshCatalog: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onBack: () -> Unit,
+    onTrailOverlaysChange: (Boolean) -> Unit = {},
 ) {
     IndoorPage(
         title = stringResource(R.string.indoor_app_settings_title),
@@ -71,6 +72,7 @@ fun IndoorSettingsScreen(
                 )
             }
         }
+        TrailOverlaysCard(checked = ui.trailOverlays, onChange = onTrailOverlaysChange)
 
         Eyebrow(stringResource(R.string.indoor_app_settings_section_advanced))
         Card(modifier = Modifier.fillMaxWidth()) {

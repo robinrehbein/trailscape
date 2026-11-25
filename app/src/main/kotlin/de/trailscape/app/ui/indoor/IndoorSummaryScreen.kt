@@ -131,6 +131,7 @@ fun IndoorSummaryScreen(
         }
 
         SummaryFacts(ui)
+        IndoorTrailClimbs(ui.climbs)
         GhostComparison(ui)
     }
 

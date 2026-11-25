@@ -1,6 +1,7 @@
 package de.trailscape.core
 
 import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.indoor.climb.ClimbBestBook
 import java.time.LocalDate
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -160,6 +161,7 @@ fun buildBackupJson(
     profile: TrainingProfile?,
     exportedAtMs: Long = System.currentTimeMillis(),
     yearGoal: YearGoal? = null,
+    climbBests: ClimbBestBook? = null,
 ): String {
     val json = buildJsonObject {
         put("app", backupAppName)
@@ -167,6 +169,7 @@ fun buildBackupJson(
         put("exportedAt", formatIso8601Utc(exportedAtMs))
         put("profile", profile?.toJson() ?: JsonNull)
         yearGoal?.let { put("yearGoal", it.toBackupJson()) }
+        climbBests?.takeUnless { it.isEmpty() }?.let { put("climbBests", it.toJsonObject()) }
         put("rides", buildJsonArray { rides.forEach { add(it.toJson()) } })
     }
     return prettyJson.encodeToString(JsonObject.serializer(), json)
@@ -193,6 +196,7 @@ fun writeBackupJson(
     profile: TrainingProfile?,
     exportedAtMs: Long = System.currentTimeMillis(),
     yearGoal: YearGoal? = null,
+    climbBests: ClimbBestBook? = null,
 ) {
     // Kopf als eigenes Objekt serialisieren und die schliessende Klammer
     // abschneiden — so stammen Escaping und Einrueckung aller Kopffelder
@@ -203,6 +207,7 @@ fun writeBackupJson(
         put("exportedAt", formatIso8601Utc(exportedAtMs))
         put("profile", profile?.toJson() ?: JsonNull)
         yearGoal?.let { put("yearGoal", it.toBackupJson()) }
+        climbBests?.takeUnless { it.isEmpty() }?.let { put("climbBests", it.toJsonObject()) }
     }
     val headText = prettyJson.encodeToString(JsonObject.serializer(), head)
     // "…\n}" → "…" (der Kopf ist nie leer, die Klammer steht immer auf
@@ -251,6 +256,11 @@ data class BackupData(
     val profile: TrainingProfile? = null,
     /** Jahresziel aus dem optionalen Feld `yearGoal`; `null`, wenn es fehlt oder unlesbar ist. */
     val yearGoal: YearGoal? = null,
+    /**
+     * Bestzeiten an Anstiegen (Indoor-Bergwertung) aus dem optionalen Feld
+     * `climbBests` (Format: `ClimbBestBook`); leer, wenn es fehlt oder unlesbar ist.
+     */
+    val climbBests: ClimbBestBook = ClimbBestBook(),
 )
 
 /**
@@ -334,5 +344,10 @@ fun parseBackupJson(raw: String, texts: CoreTexts): BackupData {
         }
     }
 
-    return BackupData(rides = rides, profile = profile, yearGoal = parseYearGoal(decoded["yearGoal"]))
+    return BackupData(
+        rides = rides,
+        profile = profile,
+        yearGoal = parseYearGoal(decoded["yearGoal"]),
+        climbBests = ClimbBestBook.fromJsonObject(decoded["climbBests"] as? JsonObject),
+    )
 }

@@ -69,6 +69,8 @@ data class IndoorPairUi(
     val gearTable: VirtualGearTable = VirtualGearTable.EVEN,
     val timeOfDay: IndoorTimeOfDay = IndoorTimeOfDay.AUTO,
     val otherRiders: Boolean = true,
+    /** „Einblendungen auf der Strecke" (Bergwertung, Kilometer) im HUD, Vorgabe an. */
+    val trailOverlays: Boolean = true,
 ) {
     val canContinue: Boolean get() = demoTrainer || trainerName != null
 }
@@ -448,6 +450,8 @@ data class IndoorRideUi(
     val start: IndoorStartUi? = null,
     /** Einheit oder Strecke ist zu Ende, die andere nicht ([IndoorDayEndUi]); `null` = nichts. */
     val dayEnd: IndoorDayEndUi? = null,
+    /** Bergwertung und Kilometermarken (`IndoorTrail.kt`); `null` = nichts zu zeigen oder abgeschaltet. */
+    val trail: de.trailscape.core.indoor.climb.TrailLive? = null,
 )
 
 // ---------------------------------------------------------------------------
@@ -485,6 +489,8 @@ data class IndoorSummaryUi(
     val savedRideId: String? = null,
     val saveFailed: Boolean = false,
     val startKm: Double? = null,
+    /** Gefahrene Anstiege mit Zeiten (Bergwertung), in Reihenfolge; leer = keine. */
+    val climbs: List<de.trailscape.core.indoor.climb.ClimbEffort> = emptyList(),
 )
 
 // ---------------------------------------------------------------------------
