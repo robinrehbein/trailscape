@@ -37,6 +37,9 @@ import de.trailscape.app.i18n.AppLocale
 import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.localizedFor
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.erfolge.ErfolgeIcons
+import de.trailscape.app.ui.erfolge.badgeHighlightText
+import de.trailscape.app.ui.erfolge.rememberErfolgeOfRide
 import de.trailscape.app.ui.progress.IconBubble
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.ChallengeKind
@@ -49,6 +52,7 @@ import de.trailscape.core.earthCircumferenceKm
 import de.trailscape.core.everestM
 import de.trailscape.core.formatDuration
 import de.trailscape.core.rideHighlights
+import de.trailscape.core.withAchievementHighlight
 import java.time.LocalDate
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -115,8 +119,14 @@ internal fun rememberRideHighlights(
         value = if (eligible) appViewModel.routeComparisonFor(rideId) else null
     }
     val max = if (LocalConfiguration.current.screenHeightDp < HIGHLIGHTS_SHORT_SCREEN_DP) 2 else 3
-    return remember(eligible, rideId, facts, today, weekTargetKm, comparison, max) {
-        if (eligible) rideHighlights(rideId, facts, today, weekTargetKm, comparison, max = max) else emptyList()
+    // Neue Abzeichen der Tour (docs/erfolge.md); leer bei „Erfolge anzeigen" aus.
+    val badges = rememberErfolgeOfRide(appViewModel, rideId, active = eligible)
+    return remember(eligible, rideId, facts, today, weekTargetKm, comparison, max, badges) {
+        if (eligible) {
+            withAchievementHighlight(rideHighlights(rideId, facts, today, weekTargetKm, comparison, max = max), badges, max)
+        } else {
+            emptyList()
+        }
     }
 }
 
@@ -161,6 +171,7 @@ private fun highlightIcon(highlight: RideHighlight): Pair<ImageVector, Color> {
         is RideHighlight.WeekGoalReached -> Icons.Rounded.CheckCircle to signals.good
         is RideHighlight.WeekGoalProgress -> Icons.Rounded.Route to MaterialTheme.colorScheme.primary
         is RideHighlight.StreakExtended -> Icons.Rounded.LocalFireDepartment to signals.warning
+        is RideHighlight.AchievementsUnlocked -> ErfolgeIcons.Medal to signals.warning
         // Wie `challengeIcon` in `ui/progress/GoalCards.kt` (dort privat).
         is RideHighlight.ChallengeReached -> when (highlight.challenge.kind) {
             ChallengeKind.DISTANCE -> Icons.Rounded.Route
@@ -255,6 +266,8 @@ internal fun rideHighlightText(resources: Resources, formats: AppFormats, highli
 
         is RideHighlight.StreakExtended ->
             resources.getQuantityString(R.plurals.map_highlight_streak_count, highlight.weeks, highlight.weeks)
+
+        is RideHighlight.AchievementsUnlocked -> badgeHighlightText(resources, highlight.ids)
 
         is RideHighlight.ChallengeReached -> {
             val target = highlight.challenge.target

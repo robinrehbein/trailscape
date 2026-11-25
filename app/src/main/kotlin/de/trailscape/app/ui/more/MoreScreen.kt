@@ -410,6 +410,8 @@ private fun SettingsList(
                 )
             }
         }
+        // Erfolge (docs/erfolge.md): ein Schalter, keine eigene Seite.
+        item { de.trailscape.app.ui.erfolge.ErfolgeSettingsSection() }
         item {
             MoreGroup(label = stringResource(R.string.more_list_group_app)) {
                 // Strava steht nur da, wenn der Build es kann — sonst gibt es

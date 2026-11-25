@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Etappe 1 „Erfolge" (docs/erfolge.md). Praefix erfolge_, Quellen ui/erfolge/**, data/ErfolgeStore.kt. -->
+<resources>
+    <!-- ErfolgeScreen.kt -->
+    <string name="erfolge_title">Erfolge</string>
+    <string name="erfolge_entry_status">Stufe %1$d · %2$d von %3$d Abzeichen</string>
+    <string name="erfolge_entry_cd">Erfolge öffnen</string>
+    <string name="erfolge_level_title">Stufe %1$d</string>
+    <string name="erfolge_level_points">%1$d Punkte</string>
+    <string name="erfolge_level_next">Noch %1$d Punkte bis Stufe %2$d</string>
+    <string name="erfolge_level_top">Höchste Stufe erreicht</string>
+    <string name="erfolge_points_breakdown">Fahrzeit %1$d · Plan %2$d · Wochenziele %3$d · Challenges %4$d</string>
+    <string name="erfolge_points_explain">Punkte gibt es für Fahrzeit (1 je Minute, höchstens 180 am Tag), erledigte Planeinheiten, erreichte Wochenziele und Monats-Challenges – nicht für Tempo, Höhenmeter oder Intensität. Ruhetage kosten nichts.</string>
+    <string name="erfolge_points_since">Touren vor dem %1$s zählen für Abzeichen, aber nicht für Punkte.</string>
+    <string name="erfolge_streak_title">Wochenserie</string>
+    <string name="erfolge_streak_pause_this_week">Diese Woche als Pause</string>
+    <string name="erfolge_streak_pause_last_week">Letzte Woche als Pause</string>
+    <string name="erfolge_streak_pause_hint">Krank, im Urlaub? Eine Pausenwoche hält die Serie, verlängert sie aber nicht – höchstens 2 in 12 Wochen.</string>
+    <string name="erfolge_streak_pause_full">In den letzten 12 Wochen sind schon 2 Pausenwochen markiert.</string>
+    <string name="erfolge_group_rides">Touren</string>
+    <string name="erfolge_group_totals">Zusammen</string>
+    <string name="erfolge_group_routine">Dranbleiben</string>
+    <string name="erfolge_group_plan">Trainingsplan</string>
+    <string name="erfolge_group_indoor">Drinnen</string>
+    <string name="erfolge_group_explore">Entdecken</string>
+    <string name="erfolge_group_soon">Kommt bald</string>
+    <string name="erfolge_soon_hint">Diese Abzeichen kommen mit Funktionen, die noch nicht fertig sind.</string>
+    <string name="erfolge_new_label">Neu</string>
+    <string name="erfolge_reached_on">Erreicht am %1$s</string>
+    <string name="erfolge_reached">Erreicht</string>
+    <string name="erfolge_reached_cd">Erreicht</string>
+    <string name="erfolge_open_cd">Offen</string>
+    <string name="erfolge_progress_value">%1$s von %2$s</string>
+    <string name="erfolge_progress_km">%1$s von %2$s km</string>
+    <string name="erfolge_progress_meters">%1$s von %2$s hm</string>
+    <string name="erfolge_progress_hours">%1$s von %2$s h</string>
+    <string name="erfolge_progress_weeks">Serie jetzt: %1$s von %2$s Wochen</string>
+    <string name="erfolge_progress_sessions">Diese Woche: %1$s von %2$s Einheiten</string>
+    <string name="erfolge_progress_percent">Bisher %1$s %% der Einheiten erledigt</string>
+    <string name="erfolge_progress_month">Diesen Monat: %1$s von %2$s Challenges</string>
+    <string name="erfolge_progress_tiles">%1$s von %2$s Kacheln</string>
+    <string name="erfolge_progress_square">Größtes Quadrat: %1$s × %1$s</string>
+    <string name="erfolge_progress_rounds">Meistgefahrene Runde: %1$s von %2$s Mal</string>
+    <string name="erfolge_progress_no_goal">Noch kein Jahresziel gesetzt</string>
+    <string name="erfolge_progress_no_plan">Mit einem Trainingsplan erreichbar</string>
+    <string name="erfolge_progress_no_plan_week">Diese Woche gibt es keine Planeinheiten</string>
+    <string name="erfolge_progress_unknown">Wird berechnet …</string>
+    <string name="erfolge_progress_open">Noch offen</string>
+    <string name="erfolge_loading">Erfolge werden berechnet …</string>
+    <!-- ErfolgeSettings.kt -->
+    <string name="erfolge_settings_group">Motivation</string>
+    <string name="erfolge_settings_show_title">Erfolge anzeigen</string>
+    <string name="erfolge_settings_show_body">Abzeichen und Stufen im Training-Tab und nach der Fahrt. Ausgeschaltet geht nichts verloren.</string>
+    <!-- ErfolgeHighlights.kt -->
+    <string name="erfolge_highlight_one">Neues Abzeichen: %1$s</string>
+    <plurals name="erfolge_highlight_more_count">
+        <item quantity="one">Neue Abzeichen: %1$s und %2$d weiteres</item>
+        <item quantity="other">Neue Abzeichen: %1$s und %2$d weitere</item>
+    </plurals>
+    <plurals name="erfolge_streak_weeks_count">
+        <item quantity="one">%1$d Woche</item>
+        <item quantity="other">%1$d Wochen</item>
+    </plurals>
+    <plurals name="erfolge_streak_best_count">
+        <item quantity="one">Längste Serie: %1$d Woche</item>
+        <item quantity="other">Längste Serie: %1$d Wochen</item>
+    </plurals>
+    <plurals name="erfolge_new_count">
+        <item quantity="one">%1$d neu</item>
+        <item quantity="other">%1$d neu</item>
+    </plurals>
+    <!-- ErfolgeTexts.kt: Name und Bedingung je Abzeichen -->
+    <string name="erfolge_badge_first_ride_title">Losgefahren</string>
+    <string name="erfolge_badge_first_ride_body">Die erste Tour gespeichert.</string>
+    <string name="erfolge_badge_ride_50km_title">Halbe Sache</string>
+    <string name="erfolge_badge_ride_50km_body">Eine Tour mit mindestens 50 km.</string>
+    <string name="erfolge_badge_ride_100km_title">Hunderter</string>
+    <string name="erfolge_badge_ride_100km_body">Eine Tour mit mindestens 100 km.</string>
+    <string name="erfolge_badge_ride_1000m_title">Tausend Meter</string>
+    <string name="erfolge_badge_ride_1000m_body">Eine Tour mit mindestens 1000 Höhenmetern.</string>
+    <string name="erfolge_badge_ride_4h_title">Lange Leitung</string>
+    <string name="erfolge_badge_ride_4h_body">Eine Tour mit mindestens 4 Stunden Fahrzeit.</string>
+    <string name="erfolge_badge_rides_10_title">Zehn Touren</string>
+    <string name="erfolge_badge_rides_10_body">10 Touren gefahren.</string>
+    <string name="erfolge_badge_rides_100_title">Hundert Touren</string>
+    <string name="erfolge_badge_rides_100_body">100 Touren gefahren.</string>
+    <string name="erfolge_badge_total_1000km_title">Tausend Kilometer</string>
+    <string name="erfolge_badge_total_1000km_body">1000 km insgesamt.</string>
+    <string name="erfolge_badge_total_earth_title">Einmal um die Erde</string>
+    <string name="erfolge_badge_total_earth_body">40075 km insgesamt – so lang ist der Äquator.</string>
+    <string name="erfolge_badge_total_everest_title">Everest</string>
+    <string name="erfolge_badge_total_everest_body">8849 Höhenmeter insgesamt.</string>
+    <string name="erfolge_badge_streak_4_title">Vier Wochen dabei</string>
+    <string name="erfolge_badge_streak_4_body">4 Wochen in Folge mit mindestens einer Tour.</string>
+    <string name="erfolge_badge_streak_12_title">Ein Vierteljahr</string>
+    <string name="erfolge_badge_streak_12_body">12 Wochen in Folge mit mindestens einer Tour.</string>
+    <string name="erfolge_badge_streak_52_title">Ein ganzes Jahr</string>
+    <string name="erfolge_badge_streak_52_body">52 Wochen in Folge mit mindestens einer Tour. Pausenwochen halten die Serie.</string>
+    <string name="erfolge_badge_month_complete_title">Monat geschafft</string>
+    <string name="erfolge_badge_month_complete_body">Alle Monats-Challenges eines Monats erreicht.</string>
+    <string name="erfolge_badge_challenge_bonus_title">Zugabe</string>
+    <string name="erfolge_badge_challenge_bonus_body">Die Bonusstufe einer Monats-Challenge erreicht.</string>
+    <string name="erfolge_badge_year_goal_title">Jahresziel</string>
+    <string name="erfolge_badge_year_goal_body">Dein Jahresziel erreicht.</string>
+    <string name="erfolge_badge_plan_first_title">Nach Plan</string>
+    <string name="erfolge_badge_plan_first_body">Die erste Einheit deines Trainingsplans erledigt.</string>
+    <string name="erfolge_badge_plan_full_week_title">Volle Woche</string>
+    <string name="erfolge_badge_plan_full_week_body">Jede Einheit einer Planwoche gefahren, mindestens eine ganz.</string>
+    <string name="erfolge_badge_recovery_week_title">Erholung ist Training</string>
+    <string name="erfolge_badge_recovery_week_body">Eine Erholungswoche mit Tour, aber im Rahmen ihres Wochenziels.</string>
+    <string name="erfolge_badge_plan_finished_title">Durchgezogen</string>
+    <string name="erfolge_badge_plan_finished_body" formatted="false">Einen Trainingsplan bis zum Ende gefahren, mindestens 80 % der Einheiten erledigt.</string>
+    <string name="erfolge_badge_indoor_first_title">Drinnen</string>
+    <string name="erfolge_badge_indoor_first_body">Die erste Fahrt auf dem Rollentrainer.</string>
+    <string name="erfolge_badge_indoor_10h_title">Wintertraining</string>
+    <string name="erfolge_badge_indoor_10h_body">10 Stunden Fahrzeit auf dem Rollentrainer.</string>
+    <string name="erfolge_badge_ghost_beaten_title">Geist geschlagen</string>
+    <string name="erfolge_badge_ghost_beaten_body">Auf derselben Strecke vor dem Geist einer früheren eigenen Fahrt im Ziel.</string>
+    <string name="erfolge_badge_known_route_title">Bekannte Strecke</string>
+    <string name="erfolge_badge_known_route_body">Eine bekannte Strecke vollständig gefahren.</string>
+    <string name="erfolge_badge_climb_repeat_title">Bergkenner</string>
+    <string name="erfolge_badge_climb_repeat_body">Einen Anstieg zum zweiten Mal gefahren.</string>
+    <string name="erfolge_badge_climb_faster_title">Schneller oben</string>
+    <string name="erfolge_badge_climb_faster_body">Deine Bestzeit an einem Anstieg verbessert.</string>
+    <string name="erfolge_badge_round_5_title">Rundenkenner</string>
+    <string name="erfolge_badge_round_5_body">Dieselbe Runde fünfmal gefahren.</string>
+    <string name="erfolge_badge_tiles_100_title">Kartograf</string>
+    <string name="erfolge_badge_tiles_100_body">100 Entdeckt-Kacheln.</string>
+    <string name="erfolge_badge_tiles_square_5_title">Quadrat</string>
+    <string name="erfolge_badge_tiles_square_5_body">Ein Quadrat aus 5 × 5 Entdeckt-Kacheln.</string>
+    <string name="erfolge_badge_new_ways_100km_title">Neue Wege</string>
+    <string name="erfolge_badge_new_ways_100km_body">100 km auf Wegen, die du vorher noch nicht gefahren bist.</string>
+</resources>

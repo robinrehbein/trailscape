@@ -33,6 +33,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.R
 import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.progress.LifetimeCard
+import de.trailscape.app.ui.erfolge.ErfolgeEntry
+import de.trailscape.app.ui.erfolge.ErfolgeSheet
 import de.trailscape.app.ui.progress.MilestonesCard
 import de.trailscape.app.ui.progress.RecordsCard
 import de.trailscape.app.ui.progress.ChallengesCard
@@ -248,6 +250,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     }
     val suggestedYearGoalKm = remember(facts, today) { suggestYearGoalKm(facts, today) }
     var showYearGoal by rememberSaveable { mutableStateOf(false) }
+    var showErfolge by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -347,6 +350,8 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                             lastMonth = lastMonthChallenges,
                         )
                     }
+                    // Erfolge (docs/erfolge.md); leer, wenn sie ausgeschaltet sind.
+                    item(key = "erfolge") { ErfolgeEntry(appViewModel, onOpen = { showErfolge = true }) }
                     item(key = "jahresziel") {
                         YearGoalCard(
                             progress = yearGoal,
@@ -510,6 +515,10 @@ fun TrainingScreen(appViewModel: AppViewModel) {
             },
             onDismiss = { showYearGoal = false },
         )
+    }
+
+    if (showErfolge) {
+        ErfolgeSheet(appViewModel, onDismiss = { showErfolge = false })
     }
 
     if (showGoalEditor) {
