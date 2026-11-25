@@ -90,7 +90,10 @@ class IndoorRideService : Service() {
             else -> Unit
         }
         if (!inForeground) {
-            if (host.ride.value == null || !enterForeground()) {
+            // Erst in den Vordergrund, dann pruefen: Wer per
+            // startForegroundService kam, muss startForeground rufen, auch
+            // wenn es nichts mehr zu tun gibt.
+            if (!enterForeground() || host.ride.value == null) {
                 stopSelfSafely()
                 return START_NOT_STICKY
             }
