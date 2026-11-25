@@ -119,7 +119,7 @@ Winter, unbelaubt), das DOM1 ist älter als das Luftbild (Kahlschläge werden ü
 ausgeglichen, Neupflanzungen fehlen); außerhalb von NRW und BW gibt es weder Gelände 1 m noch
 Bäume an echter Stelle noch LoD2, außerhalb der Luftbild-Länder nicht einmal den echten Boden.
 
-## 5 Weitere Datenquellen (Bewertung, abgerufen am 25.11.2026)
+## 4 Weitere Datenquellen (Bewertung, abgerufen am 25.11.2026)
 
 Erweiterung des Auftrags durch den Inhaber („können wir noch mehr Daten als Luftdaten nutzen …
 z. B. Street View“). Regel der Orchestrierung: **eingebaut** wird nur, was eindeutig offen lizenziert ist,
@@ -145,9 +145,21 @@ des Servers, nicht des Nutzers — der Verlauf ist ihm trotzdem bekannt).
 | Google Photorealistic 3D Tiles | fertiges 3D-Netz | – | **im EWR technisch gesperrt** („Photorealistic 3D tiles are not available … 403 … from EEA projects“, developers.google.com/maps/comms/eea/map-tiles); außerdem kein Speichern/Offline, keine Geodaten-Extraktion (developers.google.com/maps/documentation/tile/policies) | ja + Abrechnung | – | – | – | ausgeschlossen |
 | Apple Look Around / Bing Streetside | – | – | nur interaktiv im eigenen Kartenwerkzeug mit Token (MapKit) bzw. Bing Maps for Enterprise abgekündigt | ja | – | – | – | ausgeschlossen |
 
-<!-- AMTLICH -->
+**Amtliche und weitere offene Daten** ([sek] = nur aus der Sekundärquelle technicalgis.com/aerial-imagery-atlas/germany, Stand 19.11.2026, an der Quelle noch zu prüfen):
 
-## 4 Option (nicht gebaut): Straßenfotos für Fassaden und Schilder
+| Quelle | Nutzen | Abdeckung | Lizenz (Fundstelle) | Konto | Menge | Handy / Katalog-Server | Aufwand | Urteil |
+|---|---|---|---|---|---|---|---|---|
+| **Laserdaten weiterer Länder** (DGM1, DOM1, LoD2) | was heute NRW/BW haben: Gelände, Bäume an echter Stelle, echte Dachformen | Bayern (geodaten.bayern.de/opengeodata: DGM1, LoD2 CityGML 2×2 km, LAZ 1×1 km, CC BY 4.0); Hessen (hvbg.hessen.de: DGM1/DOM1 per WCS, LoD2 per WFS, „Jede Nutzung … ohne Einschränkung oder Bedingung erlaubt“); Niedersachsen (DGM1 als COG mit STAC-API, DOM1, LoD2; Lizenz CC BY 4.0 [sek]); Rheinland-Pfalz (DGM1, DOM1, LoD2, Laserpunkte, dl-de/by-2.0); Sachsen (DGM1/DOM1 2×2 km, LoD2; dl-de/by-2.0 [sek]); Brandenburg (DGM, bDOM, nDOM-LAZ, LoD2, dl-de/by-2.0); Berlin (LoD2, ALS, dl-de/zero-2.0); Sachsen-Anhalt, Hamburg (LoD2 und LoD3.0-HH, dl-de/by-2.0), Schleswig-Holstein (DGM1, CC BY 4.0); Thüringen nicht geprüft (Captcha) | je Land, meist dl-de/zero, dl-de/by-2.0 oder CC BY 4.0 | nein | wie BW/NRW (10–25 MB je km) | Katalog/Server (Handy wegen Menge nein) | klein je Land (Eintrag in `laserSources`; Kachelschema wie BW) | **nächster Schritt**, eingebaut nur NRW/BW (bestehend) |
+| **TrueDOP** | Dächer liegen genau auf dem Grundriss (Dachbild aus dem Luftbild ohne Kippen) | belegt Sachsen-Anhalt (seit Bildflug 2019); NRW fliegt seit 2023 jährlich die halbe Landesfläche als 10-cm-TrueDOP (wms.nrw.de/rssfeeds/content/geobasis/html/302.html); Brandenburg/Berlin [sek] | Landeslizenzen wie oben | nein | wie DOP | auch Handy (WMS) | klein | bei Gelegenheit je Land prüfen |
+| **ALKIS tatsächliche Nutzung, ATKIS Basis-DLM** | genauere Landnutzung (Gehölz, Grünland, Acker); Basis-DLM mit `AX_Vegetationsmerkmal` (Hecken, Baumreihen als Linien) | NRW WFS `wfs_nw_alkis_vereinfacht` (Layer `ave:Nutzung`, dl-de/zero); Bayern, Niedersachsen, Sachsen, Hessen, RLP, SH offen; Schleswig-Holstein zusätzlich Knicks/Feldhecken (CC BY 4.0) | je Land | nein | Kreis 45–180 MB | Katalog/Server | mittel (Werte von `bewuchs` nicht geprüft) | Vorschlag |
+| **Baumkataster der Städte** | Straßenbäume mit Art, Höhe, Kronendurchmesser | Berlin WFS `baumbestand` (434 765 Straßenbäume, dl-de/zero-2.0, Felder `art_dtsch`, `baumhoehe`, `kronedurch`), Köln, Bonn (CC0), Leipzig, Frankfurt, Hamburg; Stuttgart/Düsseldorf nicht gefunden; Bayern landesweit „Einzelbäume“ (Höhe, ohne Art, CC BY 4.0) | je Stadt | nein | klein | Katalog/Server | klein je Stadt | Vorschlag (Städte) |
+| **3D-Meshes** | fotorealistische Gebäude/Bäume | NRW 3D-Mesh (SLPK, 3–181 GB je Gebiet, dl-de/zero), Bayern DOM-Mesh (CC BY 4.0); Berlin-Mesh nicht offen | | nein | sehr groß | nur Server, I3S-Wandlung | hoch | später |
+| **BKG bundesweit** | Landbedeckung LBM-DE (1 ha, CC BY 4.0), DGM200 | ganz DE; **Hausumringe und LoD2-DE nicht offen** (nur Bundesbehörden), kein offenes bundesweites DOP (gdz.bkg.bund.de) | | nein | | | | kaum Mehrwert |
+| **Kronenhöhen global** | Bäume dort, wo es keinen Laser gibt (Handy-Bau, Ausland) | Meta/WRI (Tolan et al. 2024): ~1 m, Maxar 2017–2020, MAE 2,8 m (Kalifornien/São Paulo), öffentlicher S3-Bucket `dataforgood-fb-data/forests/v1/…/chm/` ohne Konto, CC BY 4.0 (AWS Open Data Registry); ETH (Lang et al. 2023): 10 m, CC BY 4.0 | CC BY 4.0 | nein | 20–70 MB je Kachel | Katalog/Server (Range-Abruf ginge auch vom Handy, verriete aber die Gegend an AWS) | mittel | **Vorschlag mit hoher Wirkung außerhalb NRW/BW** (Baumlage statt Würfel) |
+| **Sentinel-2** | Jahreszeit, Feldzustand (gepflügt/grün/abgeerntet), Vegetationsfarbe | weltweit, 10 m, alle 2–5 Tage; Earth Search STAC (earth-search.aws.element84.com/v1, ohne Konto, Szene vom 24.11.2026 gefunden) | „free, full and open access“, Vermerk „Contains modified Copernicus Sentinel data [Jahr]“ (Sentinel Data Legal Notice) | nein | COG | Katalog/Server | mittel | Vorschlag (Farbabgleich Winterluftbild ↔ Jahreszeit) |
+
+
+## 5 Option (nicht gebaut): Straßenfotos für Fassaden und Schilder
 
 Was weder Vektorkacheln noch Luftbild noch Laser zeigen — Fassaden, Schaufenster, Verkehrszeichen,
 Ampeln, Wegweiser-Inhalte —, steht nur in Bildern von der Straße aus. Offene Sammlungen:
