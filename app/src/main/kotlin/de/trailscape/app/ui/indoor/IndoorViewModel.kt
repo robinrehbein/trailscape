@@ -229,6 +229,9 @@ class IndoorViewModel(
     val server: StateFlow<IndoorServerUi> = serverController.ui
     private val sourcing = IndoorRouteSourcing(parts, rematchRouter)
 
+    /** Bergwertung und Kilometermarken der laufenden Fahrt (`IndoorTrail.kt`). */
+    private val trail = IndoorTrailController(store, wallClock)
+
     // -----------------------------------------------------------------------
     // Oeffentliche Zustaende
     // -----------------------------------------------------------------------
@@ -248,6 +251,7 @@ class IndoorViewModel(
             gearTable = readGearTable(),
             timeOfDay = readTimeOfDay(),
             otherRiders = readOtherRiders(),
+            trailOverlays = IndoorTrailController.readOverlays(store),
         ),
     )
     val pair: StateFlow<IndoorPairUi> = _pair.asStateFlow()
@@ -522,6 +526,13 @@ class IndoorViewModel(
         runCatching { store.setString(KEY_OTHER_RIDERS, enabled.toString()) }
         _pair.update { it.copy(otherRiders = enabled) }
         _renderer.value?.let { r -> indoorCatching(IndoorPart.RENDER) { r.setOtherRidersEnabled(enabled) } }
+    }
+
+    /** Schalter „Einblendungen auf der Strecke" (Bergwertung, Kilometer im HUD). */
+    fun setTrailOverlays(enabled: Boolean) {
+        IndoorTrailController.writeOverlays(store, enabled)
+        _pair.update { it.copy(trailOverlays = enabled) }
+        republishRide()
     }
 
     private fun readOtherRiders(): Boolean = runCatching { store.getString(KEY_OTHER_RIDERS) != "false" }.getOrDefault(true)
@@ -1386,6 +1397,7 @@ class IndoorViewModel(
             ?.takeIf { it > 0 }
         val initialM = dayStartM ?: resumeM
         dismissedDayEnd = null
+        trail.start(route, routeUi.selected?.key ?: "route:${route.id}")
         rideStatic = RideStatic(
             routeName = routeName,
             trainerName = if (demo) texts.demoTrainerName() else (_pair.value.trainerName ?: ""),
@@ -1594,6 +1606,7 @@ class IndoorViewModel(
             }
         }
         applySky(force = false)
+        val trailLive = trail.update(rs.session)?.takeIf { _pair.value.trailOverlays }
         _ride.value = IndoorRideUi(
             routeName = st.routeName,
             session = rs.session,
@@ -1614,6 +1627,7 @@ class IndoorViewModel(
             ghostOutdoor = st.ghostOutdoor,
             start = startUiOf(rs, st),
             dayEnd = dayEndOf(rs, st),
+            trail = trailLive,
         )
     }
 
@@ -1846,6 +1860,7 @@ class IndoorViewModel(
             recordMissing = pendingRide == null && (record == null || record.totals.movingS >= MIN_INDOOR_RIDE_S),
             recordProblem = if (record == null) rs.problem else null,
             startKm = startKm,
+            climbs = trail.efforts(),
         )
     }
 
@@ -1874,6 +1889,7 @@ class IndoorViewModel(
     /** Eine neue Fahrt: zurueck zur Streckenwahl. */
     fun startOver() {
         calibrationRequested = false
+        trail.stop()
         pendingRide = null
         dayStartPick = null
         _summary.value = null

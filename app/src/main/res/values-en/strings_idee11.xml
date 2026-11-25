@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texts for “Life on the route” (idea 11): climb scoring and kilometre markers
+    in the indoor HUD, climbs in the ride summary, switch in the indoor settings.
+    Prefix trail_. Same order as values/strings_idee11.xml. Rules: docs/i18n.md.
+-->
+<resources>
+    <!-- IndoorTrailHud.kt -->
+    <string name="trail_hud_ahead">Climb in %1$d m: %2$s km, %3$s %%</string>
+    <string name="trail_hud_ahead_best">Best %1$s</string>
+    <string name="trail_hud_category">Cat %1$d</string>
+    <string name="trail_hud_category_hc">HC</string>
+    <string name="trail_hud_on_title">Climbing</string>
+    <string name="trail_hud_on_unranked">not ranked</string>
+    <string name="trail_hud_label_left">Left</string>
+    <string name="trail_hud_label_gain">Gain</string>
+    <string name="trail_hud_label_grade">Grade</string>
+    <string name="trail_hud_label_time">Time</string>
+    <string name="trail_hud_label_delta">vs best</string>
+    <string name="trail_hud_value_percent">%1$s %%</string>
+    <string name="trail_hud_done_title">Summit %1$s m</string>
+    <string name="trail_hud_done_time">Climb time %1$s</string>
+    <string name="trail_hud_done_new_best">New best</string>
+    <string name="trail_hud_done_new_best_by">New best · %1$s faster</string>
+    <string name="trail_hud_done_first">First time on this climb</string>
+    <string name="trail_hud_done_slower">%1$s behind your best</string>
+    <string name="trail_hud_done_unranked">Not ranked – not ridden from the bottom</string>
+    <string name="trail_hud_km">km %1$d</string>
+
+    <!-- IndoorTrailSummary.kt -->
+    <string name="trail_summary_title">Climbs</string>
+    <string name="trail_summary_climb">Climb %1$d</string>
+    <string name="trail_summary_climb_lap">Climb %1$d · lap %2$d</string>
+    <string name="trail_summary_detail">%1$s km · %2$s %% · %3$s m · to %4$s m</string>
+    <string name="trail_summary_best">Best %1$s</string>
+
+    <!-- IndoorTrailSettings.kt -->
+    <string name="trail_settings_overlays_title">On-route overlays</string>
+    <string name="trail_settings_overlays_body">Show climbs with your best time, summits and kilometres while riding. Climb times are measured even with the overlays off.</string>
+</resources>

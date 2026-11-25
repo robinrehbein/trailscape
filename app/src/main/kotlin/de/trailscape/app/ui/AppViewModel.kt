@@ -849,6 +849,7 @@ class AppViewModel(
                 rides = summaries.asSequence().mapNotNull { rideStorage.loadRide(it.id) },
                 profile = _profile.value,
                 yearGoal = _yearGoal.value,
+                climbBests = de.trailscape.app.indoor.ClimbBestStore.read(keyValueStore),
             )
         }
     }
