@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.google.android.filament.android.UiHelper
 import de.trailscape.core.garage.RiderAvatar
+import de.trailscape.core.indoor.tree.TreeLibrary
 import de.trailscape.core.indoor.world.CameraMode
 import de.trailscape.core.indoor.world.IndoorQuality
 import de.trailscape.core.indoor.world.RenderDeviceInfo
@@ -105,6 +106,10 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     private var otherRidersEnabled = true
     private var staticScene: LoadedAsset? = null
     private var streamer: TileStreamer? = null
+    private var trees: TreeInstancer? = null
+
+    /** Diagnose: Stand der Bibliotheksbaeume ([TreeInstancer.status]); `null` ohne Welt. */
+    val treeStatus: String? get() = trees?.status
     private var track: WorldTrack? = null
     private var originLatDeg = 51.0
 
@@ -579,12 +584,23 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             }
             is Request.World -> {
                 stage = RenderStage.TILES
+                val ioExec = io ?: return
+                val postMain: (Runnable) -> Unit = { r -> main.post { if (!destroyed) runCatching { r.run() }.onFailure { Log.w(TAG, "Kachel", it) } } }
+                // Baeume aus der Bibliothek (Grafikstufen Hoch/Ultra); im sicheren Modus nie.
+                val instancer = if (guard.safeMode) null else TreeInstancer(
+                    core = c,
+                    readLibrary = { runCatching { appContext.assets.open(TreeLibrary.ASSET_PATH).use { it.readBytes() } }.getOrNull() },
+                    io = ioExec,
+                    post = postMain,
+                )
+                trees = instancer
                 streamer = TileStreamer(
                     core = c,
                     worldDir = req.dir,
                     manifest = req.manifest,
-                    io = io ?: return,
-                    post = { r -> main.post { if (!destroyed) runCatching { r.run() }.onFailure { Log.w(TAG, "Kachel", it) } } },
+                    io = ioExec,
+                    post = postMain,
+                    trees = instancer,
                     callbacks = object : TileStreamer.Callbacks {
                         override fun onTileFailed(tileId: String, detail: String) {
                             postListener { it.onTileFailed(tileId, detail) }
@@ -672,8 +688,10 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
 
     /** Raeumt die Welt ab (Kacheln, Testszene); Fahrer und Geist bleiben. */
     private fun clearScene() {
+        // Der Streamer gibt den Instanzierer mit frei.
         streamer?.let { s -> runCatching { s.destroy() } }
         streamer = null
+        trees = null
         staticScene?.let { s -> runCatching { s.destroy() } }
         staticScene = null
         track = null
@@ -827,6 +845,9 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             // Kacheln
             streamer?.let { s ->
                 stage = RenderStage.TILES
+                // Erst die Baeume waehlen, dann die Sichtbarkeit: ein Abschnitt verschwindet im selben Bild,
+                // in dem seine Instanzen erscheinen.
+                trees?.let { t -> if (t.update(pose.eye.x, pose.eye.z, settings)) s.invalidateVisibility() }
                 s.update(riderMotion.distM, settings)
                 reportLoading(s)
             }

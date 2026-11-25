@@ -305,7 +305,8 @@ internal fun DiagnosticsScreen(onBack: () -> Unit, modifier: Modifier = Modifier
 
             // Messwerte und Geraet
             Eyebrow(stringResource(R.string.indoor_render_diag_stats))
-            InfoCard(rows = statsRows(renderer.lastStats))
+            // Die Messwerte kommen etwa einmal je Sekunde neu; die Baumzeile liest dabei den aktuellen Stand mit.
+            InfoCard(rows = statsRows(renderer.lastStats) + (R.string.render2_diag_stat_trees to (renderer.treeStatus ?: "")))
             Eyebrow(stringResource(R.string.render2_diag_res_title))
             ResolutionCard(renderer.resolution)
             Eyebrow(stringResource(R.string.indoor_render_diag_device))

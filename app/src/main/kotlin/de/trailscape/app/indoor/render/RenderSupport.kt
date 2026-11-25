@@ -1,5 +1,6 @@
 package de.trailscape.app.indoor.render
 
+import de.trailscape.core.indoor.tree.TreeInstanceNames
 import de.trailscape.core.indoor.world.RenderFailure
 import de.trailscape.core.indoor.world.RenderSettings
 import de.trailscape.core.indoor.world.WorldManifest
@@ -106,7 +107,7 @@ fun manifestProblem(m: WorldManifest): String? {
  * Was eine Stufe aus [RenderSettings] fuer einen Knoten einer Kachel
  * bedeutet: sichtbar oder nicht (Schalter `trees`, `buildings`, `props`).
  */
-fun nodeVisible(category: String?, settings: RenderSettings): Boolean = when (category) {
+fun nodeVisible(category: String?, settings: RenderSettings): Boolean = when (baseCategory(category)) {
     WorldNames.NODE_TREES -> settings.trees
     WorldNames.NODE_BUILDINGS -> settings.buildings
     WorldNames.NODE_PROPS -> settings.props
@@ -124,12 +125,14 @@ fun shadowFlags(category: String?): Pair<Boolean, Boolean> = when (category) {
 /**
  * Die Knotenart eines Knotens anhand seines Namens und der Namen seiner
  * Vorfahren (vom Knoten zur Wurzel): der erste bekannte Name gewinnt.
- * Teilflaechen `terrain_sub_i_j` werden als solche gemeldet.
+ * Teilflaechen `terrain_sub_i_j` und Baumabschnitte `x_trees_bin_<k>` werden als solche gemeldet.
  */
 fun nodeCategory(namesUpwards: List<String?>): String? {
     for (n in namesUpwards) {
         if (n == null) continue
         if (n.startsWith(WorldNames.NODE_TERRAIN_SUB_PREFIX)) return n
+        // Abschnitte der Bandbaeume (`x_trees_bin_<k>` unter `trees`): einzeln ausblendbar, sobald Instanzen stehen.
+        if (TreeInstanceNames.parseBin(n) != null) return n
         when (n) {
             WorldNames.NODE_TERRAIN, WorldNames.NODE_ROUTE, WorldNames.NODE_ROADS, WorldNames.NODE_BUILDINGS,
             WorldNames.NODE_TREES, WorldNames.NODE_WATER, WorldNames.NODE_PROPS,
@@ -139,9 +142,13 @@ fun nodeCategory(namesUpwards: List<String?>): String? {
     return null
 }
 
-/** Grundkategorie einer Teilflaeche ist das Gelaende. */
-fun baseCategory(category: String?): String? =
-    if (category != null && category.startsWith(WorldNames.NODE_TERRAIN_SUB_PREFIX)) WorldNames.NODE_TERRAIN else category
+/** Grundkategorie einer Teilflaeche ist das Gelaende, die eines Baumabschnitts `trees`. */
+fun baseCategory(category: String?): String? = when {
+    category == null -> null
+    category.startsWith(WorldNames.NODE_TERRAIN_SUB_PREFIX) -> WorldNames.NODE_TERRAIN
+    category.startsWith(TreeInstanceNames.BIN_PREFIX) -> WorldNames.NODE_TREES
+    else -> category
+}
 
 /** Seitlicher Versatz auf dem Weg (Vertrag 7.5): rechts der Mitte, hoechstens halbe Breite minus 0,4 m. */
 fun laneOffsetM(widthM: Double): Double {

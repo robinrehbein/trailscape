@@ -121,7 +121,8 @@ static Loaded loadAsset(Engine* engine, gltfio::AssetLoader* loader, gltfio::Res
             const char* n = l.asset->getName(cur);
             if (n) {
                 std::string s(n);
-                if (s.rfind("terrain_sub_", 0) == 0 || KNOWN.count(s)) {
+                // Baumabschnitte (`x_trees_bin_<k>` unter `trees`) sind wie Teilflaechen eine eigene Art.
+                if (s.rfind("terrain_sub_", 0) == 0 || s.rfind("x_trees_bin_", 0) == 0 || KNOWN.count(s)) {
                     cat = s;
                     break;
                 }
@@ -137,6 +138,282 @@ static Loaded loadAsset(Engine* engine, gltfio::AssetLoader* loader, gltfio::Res
 }
 
 static mat4f translation(float3 p) { return mat4f::translation(p); }
+
+// ---------------------------------------------------------------------------
+// Baeume aus der Bibliothek — spiegelt TreeInstancer.kt (App) und
+// TreeInstancePlanner (`:core`): Kacheln ab indoor-world/15 tragen je Bandbaum
+// einen leeren Knoten `x_treei_<art>_<variante>_<abschnitt>`; nah an der Kamera
+// stehen dort Vorlagen aus `trees.glb` (ein Vertexpuffer je Vorlage, ein
+// Renderable je Baum mit denselben Puffern und Materialinstanzen, automatische
+// Instanzierung), und der gebackene Abschnitt `x_trees_bin_<abschnitt>` ist aus.
+// Szene: "trees": {"library": "<trees.glb>", "detail": 1|2}.
+// ---------------------------------------------------------------------------
+
+struct TreeStats {
+    size_t nearCount = 0, midCount = 0, triangles = 0, templates = 0, binsHidden = 0;
+};
+
+struct TreeGlb {
+    json j;
+    std::vector<uint8_t> bin;
+};
+
+static TreeGlb parseTreeGlb(const std::vector<uint8_t>& b) {
+    auto u32 = [&](size_t o) { uint32_t v; memcpy(&v, b.data() + o, 4); return v; };
+    TreeGlb g;
+    if (b.size() < 28 || u32(0) != 0x46546C67) { fprintf(stderr, "filarender: Baumbibliothek ist keine GLB\n"); exit(2); }
+    const uint32_t jl = u32(12);
+    g.j = json::parse(b.begin() + 20, b.begin() + 20 + jl);
+    const uint32_t bl = u32(20 + jl);
+    g.bin.assign(b.begin() + 28 + jl, b.begin() + 28 + jl + bl);
+    return g;
+}
+
+struct TreeAccessor {
+    const uint8_t* p = nullptr;
+    size_t stride = 0, count = 0;
+    int componentType = 0, width = 0;
+};
+
+static TreeAccessor treeAccessor(const TreeGlb& g, int index) {
+    const json& a = g.j["accessors"][index];
+    const json& v = g.j["bufferViews"][a["bufferView"].get<int>()];
+    static const std::map<std::string, int> widths = { { "SCALAR", 1 }, { "VEC2", 2 }, { "VEC3", 3 }, { "VEC4", 4 } };
+    TreeAccessor r;
+    r.componentType = a["componentType"].get<int>();
+    r.width = widths.at(a["type"].get<std::string>());
+    const int cs = r.componentType == 5126 || r.componentType == 5125 ? 4 : r.componentType == 5123 || r.componentType == 5122 ? 2 : 1;
+    r.stride = opt(v, "byteStride", cs * r.width);
+    r.count = a["count"].get<size_t>();
+    r.p = g.bin.data() + opt(v, "byteOffset", 0) + opt(a, "byteOffset", 0);
+    return r;
+}
+
+// Quaternion des Tangentenrahmens zur Normale — wie TangentFrames.quat in `:core`.
+static void treeQuat(float nx, float ny, float nz, int16_t* out) {
+    double l = std::sqrt(double(nx) * nx + double(ny) * ny + double(nz) * nz);
+    double n[3] = { 0, 1, 0 };
+    if (l > 1e-9 && std::isfinite(l)) { n[0] = nx / l; n[1] = ny / l; n[2] = nz / l; }
+    double t[3] = { n[2], 0, -n[0] };
+    double tl = std::sqrt(t[0] * t[0] + t[2] * t[2]);
+    if (tl > 1e-6) { t[0] /= tl; t[2] /= tl; } else { t[0] = 1; t[2] = 0; }
+    double b[3] = { n[1] * t[2] - n[2] * t[1], n[2] * t[0] - n[0] * t[2], n[0] * t[1] - n[1] * t[0] };
+    double m00 = t[0], m01 = b[0], m02 = n[0], m10 = t[1], m11 = b[1], m12 = n[1], m20 = t[2], m21 = b[2], m22 = n[2];
+    double tr = m00 + m11 + m22, x, y, z, w;
+    if (tr > 0) { double s = std::sqrt(tr + 1.0) * 2; w = s / 4; x = (m21 - m12) / s; y = (m02 - m20) / s; z = (m10 - m01) / s; }
+    else if (m00 > m11 && m00 > m22) { double s = std::sqrt(1.0 + m00 - m11 - m22) * 2; w = (m21 - m12) / s; x = s / 4; y = (m01 + m10) / s; z = (m02 + m20) / s; }
+    else if (m11 > m22) { double s = std::sqrt(1.0 + m11 - m00 - m22) * 2; w = (m02 - m20) / s; x = (m01 + m10) / s; y = s / 4; z = (m12 + m21) / s; }
+    else { double s = std::sqrt(1.0 + m22 - m00 - m11) * 2; w = (m10 - m01) / s; x = (m02 + m20) / s; y = (m12 + m21) / s; z = s / 4; }
+    if (w < 0) { x = -x; y = -y; z = -z; w = -w; }
+    const double bias = 1.0 / 32767.0;
+    if (w < bias) { double f = std::sqrt(1.0 - bias * bias); x *= f; y *= f; z *= f; w = bias; }
+    const double q[4] = { x, y, z, w };
+    for (int c = 0; c < 4; c++) out[c] = (int16_t)std::lround(std::max(-1.0, std::min(1.0, q[c])) * 32767.0);
+}
+
+struct TreeMesh {
+    VertexBuffer* vb = nullptr;
+    IndexBuffer* ib = nullptr;
+    size_t triangles = 0;
+    float3 mn{ 1e9f }, mx{ -1e9f };
+};
+
+template <typename T>
+static backend::BufferDescriptor treeBuffer(std::vector<T>&& v) {
+    auto* keep = new std::vector<T>(std::move(v));
+    return backend::BufferDescriptor(keep->data(), keep->size() * sizeof(T), [](void*, size_t, void* user) { delete (std::vector<T>*)user; }, keep);
+}
+
+// Ein Primitiv der Bibliothek als Vertex-/Indexpuffer: Lage, Tangentenrahmen, UV (auch als UV1), Farbe.
+static TreeMesh treeMesh(Engine* engine, const TreeGlb& g, const json& prim) {
+    const json& at = prim["attributes"];
+    TreeAccessor pos = treeAccessor(g, at["POSITION"].get<int>()), nrm = treeAccessor(g, at["NORMAL"].get<int>());
+    const size_t n = pos.count;
+    std::vector<float> positions(n * 3), uvs(n * 2, 0.f);
+    std::vector<int16_t> quats(n * 4);
+    std::vector<uint8_t> colors(n * 4, 255);
+    TreeMesh m;
+    for (size_t i = 0; i < n; i++) {
+        float p[3], nn[3];
+        memcpy(p, pos.p + i * pos.stride, 12);
+        memcpy(nn, nrm.p + i * nrm.stride, 12);
+        memcpy(&positions[i * 3], p, 12);
+        treeQuat(nn[0], nn[1], nn[2], &quats[i * 4]);
+        m.mn = min(m.mn, float3{ p[0], p[1], p[2] });
+        m.mx = max(m.mx, float3{ p[0], p[1], p[2] });
+    }
+    if (at.contains("TEXCOORD_0")) {
+        TreeAccessor uv = treeAccessor(g, at["TEXCOORD_0"].get<int>());
+        for (size_t i = 0; i < n; i++) {
+            if (uv.componentType == 5126) memcpy(&uvs[i * 2], uv.p + i * uv.stride, 8);
+            else { uint16_t q[2]; memcpy(q, uv.p + i * uv.stride, 4); uvs[i * 2] = q[0] / 65535.f; uvs[i * 2 + 1] = q[1] / 65535.f; }
+        }
+    }
+    if (at.contains("COLOR_0")) {
+        TreeAccessor c = treeAccessor(g, at["COLOR_0"].get<int>());
+        if (c.componentType == 5121 && c.width == 4) for (size_t i = 0; i < n; i++) memcpy(&colors[i * 4], c.p + i * c.stride, 4);
+    }
+    TreeAccessor idx = treeAccessor(g, prim["indices"].get<int>());
+    std::vector<uint32_t> indices(idx.count);
+    for (size_t i = 0; i < idx.count; i++) {
+        if (idx.componentType == 5125) memcpy(&indices[i], idx.p + i * idx.stride, 4);
+        else { uint16_t v; memcpy(&v, idx.p + i * idx.stride, 2); indices[i] = v; }
+    }
+    m.triangles = idx.count / 3;
+    m.vb = VertexBuffer::Builder().vertexCount((uint32_t)n).bufferCount(4)
+               .attribute(VertexAttribute::POSITION, 0, VertexBuffer::AttributeType::FLOAT3, 0, 12)
+               .attribute(VertexAttribute::TANGENTS, 1, VertexBuffer::AttributeType::SHORT4, 0, 8).normalized(VertexAttribute::TANGENTS)
+               .attribute(VertexAttribute::UV0, 2, VertexBuffer::AttributeType::FLOAT2, 0, 8)
+               .attribute(VertexAttribute::UV1, 2, VertexBuffer::AttributeType::FLOAT2, 0, 8)
+               .attribute(VertexAttribute::COLOR, 3, VertexBuffer::AttributeType::UBYTE4, 0, 4).normalized(VertexAttribute::COLOR)
+               .build(*engine);
+    m.vb->setBufferAt(*engine, 0, treeBuffer(std::move(positions)));
+    m.vb->setBufferAt(*engine, 1, treeBuffer(std::move(quats)));
+    m.vb->setBufferAt(*engine, 2, treeBuffer(std::move(uvs)));
+    m.vb->setBufferAt(*engine, 3, treeBuffer(std::move(colors)));
+    m.ib = IndexBuffer::Builder().indexCount((uint32_t)indices.size()).bufferType(IndexBuffer::IndexType::UINT).build(*engine);
+    m.ib->setBuffer(*engine, treeBuffer(std::move(indices)));
+    return m;
+}
+
+struct TreeTemplate {
+    TreeMesh bark, leaves;
+    bool hasBark = false, hasLeaves = false;
+};
+
+struct TreeSpot {
+    std::string kind;  // art_variante, z. B. "beech_2"
+    mat4f world;
+    double dist = 0;
+    int lod = -1;      // 0 nah, 1 mittel, -1 gebacken
+};
+
+struct TreeBinSpots {
+    size_t tile = 0;
+    std::string node;  // x_trees_bin_<k>
+    std::vector<TreeSpot> trees;
+    double dist = 1e18;
+    bool active = false;
+};
+
+static TreeStats placeLibraryTrees(Engine* engine, Scene* scene, gltfio::AssetLoader* loader, gltfio::ResourceLoader* res,
+        const std::vector<Loaded>& tiles, const std::vector<float3>& tilePos, const json& T, double3 eye, bool shadows) {
+    TreeStats st;
+    const int detail = opt(T, "detail", 2);
+    if (detail <= 0) return st;
+    // TreeInstanceBudget.forDetail
+    const double nearM = detail == 1 ? 18.0 : 25.0, midM = detail == 1 ? 45.0 : 60.0;
+    const size_t maxNear = detail == 1 ? 10 : 16, maxTotal = detail == 1 ? 40 : 56;
+    auto& tm = engine->getTransformManager();
+    auto& rm = engine->getRenderableManager();
+
+    // Instanzknoten je Kachel und Abschnitt einsammeln
+    std::map<std::pair<size_t, std::string>, TreeBinSpots> bins;
+    for (size_t ti = 0; ti < tiles.size(); ti++) {
+        const Loaded& l = tiles[ti];
+        std::set<std::string> baked;
+        for (auto& [e, cat] : l.category) if (cat.rfind("x_trees_bin_", 0) == 0) baked.insert(cat);
+        const Entity* es = l.asset->getEntities();
+        for (size_t i = 0; i < l.asset->getEntityCount(); i++) {
+            const char* nm = l.asset->getName(es[i]);
+            if (!nm) continue;
+            std::string s(nm);
+            if (s.rfind("x_treei_", 0) != 0) continue;
+            const size_t cut = s.rfind('_');
+            const std::string node = "x_trees_bin_" + s.substr(cut + 1);
+            if (!baked.count(node)) continue;
+            TreeSpot spot;
+            spot.kind = s.substr(8, cut - 8);
+            spot.world = mat4f::translation(tilePos[ti]) * tm.getTransform(tm.getInstance(es[i]));
+            const double dx = spot.world[3][0] - eye.x, dz = spot.world[3][2] - eye.z;
+            spot.dist = std::sqrt(dx * dx + dz * dz);
+            TreeBinSpots& b = bins[{ ti, node }];
+            b.tile = ti;
+            b.node = node;
+            b.dist = std::min(b.dist, spot.dist);
+            b.trees.push_back(spot);
+        }
+    }
+    // TreeInstancePlanner.select (ein Bild: ohne Hysterese)
+    std::vector<TreeBinSpots*> order;
+    for (auto& [k, b] : bins) if (b.dist <= midM) order.push_back(&b);
+    std::sort(order.begin(), order.end(), [](const TreeBinSpots* a, const TreeBinSpots* b) { return a->dist < b->dist; });
+    std::vector<TreeSpot*> shown;
+    size_t total = 0;
+    for (size_t i = 0; i < order.size(); i++) {
+        if (i > 0 && total + order[i]->trees.size() > maxTotal) continue;
+        total += order[i]->trees.size();
+        order[i]->active = true;
+        for (auto& t : order[i]->trees) shown.push_back(&t);
+    }
+    std::sort(shown.begin(), shown.end(), [](const TreeSpot* a, const TreeSpot* b) { return a->dist < b->dist; });
+    size_t nearUsed = 0;
+    for (TreeSpot* t : shown) {
+        if (nearUsed < maxNear && t->dist <= nearM) { t->lod = 0; nearUsed++; } else t->lod = 1;
+    }
+    if (shown.empty()) return st;
+
+    // Bibliothek: Netze selbst, Materialien ueber gltfio (derselbe Tausch wie bei den Kacheln)
+    const std::string path = T["library"].get<std::string>();
+    const TreeGlb g = parseTreeGlb(readFile(path));
+    Loaded lib = loadAsset(engine, loader, res, path);
+    MaterialInstance* barkMi = nullptr;
+    MaterialInstance* leafMi = nullptr;
+    MaterialInstance* const* mis = lib.asset->getInstance()->getMaterialInstances();
+    for (size_t i = 0; i < lib.asset->getInstance()->getMaterialInstanceCount(); i++) {
+        const std::string nm = mis[i]->getName();
+        if (nm == "mat_tree_trunk") barkMi = mis[i];
+        if (nm == "x_mat_tree_cards") leafMi = mis[i];
+    }
+    if (!barkMi || !leafMi) { fprintf(stderr, "filarender: Materialien der Baumbibliothek fehlen\n"); exit(3); }
+    std::map<std::string, int> nodeByName;
+    for (size_t i = 0; i < g.j["nodes"].size(); i++) nodeByName[g.j["nodes"][i]["name"].get<std::string>()] = (int)i;
+    std::map<std::string, TreeTemplate> templates;
+    auto templ = [&](const std::string& name) -> TreeTemplate* {
+        auto it = templates.find(name);
+        if (it != templates.end()) return &it->second;
+        auto nit = nodeByName.find(name);
+        if (nit == nodeByName.end()) return nullptr;
+        TreeTemplate t;
+        const json& mesh = g.j["meshes"][g.j["nodes"][nit->second]["mesh"].get<int>()];
+        for (const auto& prim : mesh["primitives"]) {
+            const std::string mat = g.j["materials"][prim["material"].get<int>()]["name"];
+            if (mat == "mat_tree_trunk") { t.bark = treeMesh(engine, g, prim); t.hasBark = true; }
+            if (mat == "x_mat_tree_cards") { t.leaves = treeMesh(engine, g, prim); t.hasLeaves = true; }
+        }
+        return &(templates[name] = t);
+    };
+    engine->setAutomaticInstancingEnabled(true);
+    for (TreeSpot* s : shown) {
+        TreeTemplate* t = templ("x_tree_" + s->kind + (s->lod == 0 ? "_near" : "_mid"));
+        if (!t || (!t->hasBark && !t->hasLeaves)) { fprintf(stderr, "filarender: Vorlage %s fehlt\n", s->kind.c_str()); exit(3); }
+        float3 mn{ 1e9f }, mx{ -1e9f };
+        if (t->hasBark) { mn = min(mn, t->bark.mn); mx = max(mx, t->bark.mx); }
+        if (t->hasLeaves) { mn = min(mn, t->leaves.mn); mx = max(mx, t->leaves.mx); }
+        Entity e = utils::EntityManager::get().create();
+        RenderableManager::Builder b((t->hasBark ? 1 : 0) + (t->hasLeaves ? 1 : 0));
+        b.boundingBox({ (mn + mx) * 0.5f, (mx - mn) * 0.5f + float3{ 0.6f } }).culling(true).castShadows(shadows).receiveShadows(false);
+        size_t i = 0;
+        if (t->hasBark) { b.geometry(i, RenderableManager::PrimitiveType::TRIANGLES, t->bark.vb, t->bark.ib).material(i, barkMi); i++; st.triangles += t->bark.triangles; }
+        if (t->hasLeaves) { b.geometry(i, RenderableManager::PrimitiveType::TRIANGLES, t->leaves.vb, t->leaves.ib).material(i, leafMi); st.triangles += t->leaves.triangles; }
+        b.build(*engine, e);
+        tm.create(e, {}, s->world);
+        scene->addEntity(e);
+        if (s->lod == 0) st.nearCount++; else st.midCount++;
+    }
+    st.templates = templates.size();
+    // Gebackene Abschnitte ausblenden, an deren Stelle jetzt Instanzen stehen
+    for (auto& [k, b] : bins) {
+        if (!b.active) continue;
+        st.binsHidden++;
+        for (auto& [e, cat] : tiles[b.tile].category) {
+            if (cat != b.node) continue;
+            auto r = rm.getInstance(e);
+            rm.setLayerMask(r, 0xFF, 0);
+        }
+    }
+    return st;
+}
 
 static mat4f matFromJson(const json& j) {
     mat4f m;
@@ -831,6 +1108,7 @@ int main(int argc, char** argv) {
     auto& tmgr = engine->getTransformManager();
     size_t renderables = 0, primitives = 0, waterPrims = 0;
     std::vector<Loaded> tiles;
+    std::vector<float3> tilePos;
     for (const auto& t : S["tiles"]) {
         Loaded l = loadAsset(engine, loader, res, world + "/" + t["file"].get<std::string>());
         std::set<std::string> hidden;
@@ -839,7 +1117,7 @@ int main(int argc, char** argv) {
         tmgr.setTransform(ri, translation(f3(t["pos"])));
         for (auto& [e, cat] : l.category) {
             auto r = rm.getInstance(e);
-            std::string base = cat.rfind("terrain_sub_", 0) == 0 ? "terrain" : cat;
+            std::string base = cat.rfind("terrain_sub_", 0) == 0 ? "terrain" : cat.rfind("x_trees_bin_", 0) == 0 ? "trees" : cat;
             bool cast = base == "buildings" || base == "trees" || (terrainShadows && base == "terrain");
             bool recv0 = !(base == "trees" || base == "props");
             // EVSM (PCSS, auf das DPCF in 1.75.1 zurueckfaellt) verlangt: wer empfaengt, wirft auch.
@@ -863,6 +1141,15 @@ int main(int argc, char** argv) {
         }
         scene->addEntities(l.asset->getEntities(), l.asset->getEntityCount());
         tiles.push_back(l);
+        tilePos.push_back(f3(t["pos"]));
+    }
+
+    // ---- Baeume aus der Bibliothek (TreeInstancer in der App, docs/indoor/baeume.md) ----
+    TreeStats treeStats;
+    if (S.contains("trees") && !S["trees"].is_null() && opt(settings, "trees", true)) {
+        treeStats = placeLibraryTrees(engine, scene, loader, res, tiles, tilePos, S["trees"], d3(C["eye"]), shadows);
+        renderables += treeStats.nearCount + treeStats.midCount;
+        primitives += 2 * (treeStats.nearCount + treeStats.midCount);
     }
 
     // ---- Fahrer / Cockpit ----
@@ -929,8 +1216,10 @@ int main(int argc, char** argv) {
     stbi_write_png(argv[2], W, H, 4, px.data(), W * 4);
     auto tEnd = std::chrono::steady_clock::now();
     auto ms = [](auto a, auto b) { return (long)std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count(); };
-    printf("{\"renderables\": %zu, \"primitives\": %zu, \"waterPrimitives\": %zu, \"terrainMi\": %zu, \"foliageMi\": %zu, \"surfaceMi\": %zu, \"uberMi\": %zu, \"loadMs\": %ld, \"renderMs\": %ld}\n",
-        renderables, primitives, waterPrims, wp->counts[TERRAIN], wp->counts[FOLIAGE], wp->counts[SURFACE] + wp->counts[SURFACE_BLEND], wp->counts[UBER], ms(t0, tLoad), ms(tLoad, tEnd));
+    printf("{\"renderables\": %zu, \"primitives\": %zu, \"waterPrimitives\": %zu, \"terrainMi\": %zu, \"foliageMi\": %zu, \"surfaceMi\": %zu, \"uberMi\": %zu, "
+           "\"treeNear\": %zu, \"treeMid\": %zu, \"treeTriangles\": %zu, \"treeTemplates\": %zu, \"treeBinsHidden\": %zu, \"loadMs\": %ld, \"renderMs\": %ld}\n",
+        renderables, primitives, waterPrims, wp->counts[TERRAIN], wp->counts[FOLIAGE], wp->counts[SURFACE] + wp->counts[SURFACE_BLEND], wp->counts[UBER],
+        treeStats.nearCount, treeStats.midCount, treeStats.triangles, treeStats.templates, treeStats.binsHidden, ms(t0, tLoad), ms(tLoad, tEnd));
     fflush(stdout);
     // Aufraeumen ueberlassen wir dem Prozessende (Werkzeug, kein Dauerlauf).
     _exit(0);
