@@ -46,7 +46,6 @@
     <string name="erfolge_progress_no_plan_week">No plan sessions this week</string>
     <string name="erfolge_progress_unknown">Calculating …</string>
     <string name="erfolge_progress_open">Not yet</string>
-    <string name="erfolge_loading">Calculating achievements …</string>
     <!-- ErfolgeSettings.kt -->
     <string name="erfolge_settings_group">Motivation</string>
     <string name="erfolge_settings_show_title">Show achievements</string>

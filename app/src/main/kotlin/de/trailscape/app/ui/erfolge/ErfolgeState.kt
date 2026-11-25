@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.erfolge
 
+import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -101,9 +102,6 @@ internal fun rememberErfolge(
     val store = ErfolgeStore.shared
     val progress by store.state.collectAsStateWithLifecycle()
     val enabled = active && !progress.hidden
-    LaunchedEffect(enabled) {
-        if (enabled) withContext(Dispatchers.IO) { store.ensurePointsSince(context.applicationContext) }
-    }
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val yearGoal by appViewModel.yearGoal.collectAsStateWithLifecycle()
@@ -128,8 +126,19 @@ internal fun rememberErfolge(
         value = if (!enabled) {
             null
         } else {
+            // Erst den Punktebeginn festlegen, dann rechnen: Sonst hielte die
+            // allererste Rechnung mit allen importierten Touren eine Stufe fest
+            // (`keptLevel`), die es ohne sie nie gaebe.
+            val current = if (progress.pointsSince == null) {
+                withContext(Dispatchers.IO) {
+                    store.ensurePointsSince(context.applicationContext)
+                    store.value
+                }
+            } else {
+                progress
+            }
             withContext(Dispatchers.Default) {
-                computeSafely { achievementOverview(erfolgeInput(rides, plan, yearGoal, progress, rideLoads, now, sources)) }
+                computeSafely { achievementOverview(erfolgeInput(rides, plan, yearGoal, current, rideLoads, now, sources)) }
             }
         }
     }
@@ -183,6 +192,7 @@ internal fun rememberErfolgeOfRide(appViewModel: AppViewModel, rideId: String, a
  * aus unveraendert. Blockierend: nur von IO aufrufen. Wirft nie.
  */
 internal fun withErfolgeOutsideUi(
+    context: Context,
     rides: List<RideInfo>,
     rideId: String,
     now: LocalDateTime,
@@ -191,6 +201,7 @@ internal fun withErfolgeOutsideUi(
 ): List<RideHighlight> {
     val store = ErfolgeStore.shared
     if (store.value.hidden) return highlights
+    store.ensurePointsSince(context.applicationContext)
     val overview = computeSafely {
         achievementOverview(
             erfolgeInput(

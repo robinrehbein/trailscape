@@ -95,7 +95,7 @@ object WearAbschluss {
             max = AbschlussInfo.MAX_ZEILEN,
         )
         // Neue Abzeichen als eine der Zeilen (docs/erfolge.md) — das Protokoll bleibt, wie es ist.
-        val mitErfolgen = withErfolgeOutsideUi(summaries, rideId, now, highlights, AbschlussInfo.MAX_ZEILEN)
+        val mitErfolgen = withErfolgeOutsideUi(context, summaries, rideId, now, highlights, AbschlussInfo.MAX_ZEILEN)
         return rideHighlightTexts(context, mitErfolgen)
     }
 }

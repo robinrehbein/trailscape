@@ -46,7 +46,6 @@
     <string name="erfolge_progress_no_plan_week">Diese Woche gibt es keine Planeinheiten</string>
     <string name="erfolge_progress_unknown">Wird berechnet …</string>
     <string name="erfolge_progress_open">Noch offen</string>
-    <string name="erfolge_loading">Erfolge werden berechnet …</string>
     <!-- ErfolgeSettings.kt -->
     <string name="erfolge_settings_group">Motivation</string>
     <string name="erfolge_settings_show_title">Erfolge anzeigen</string>
