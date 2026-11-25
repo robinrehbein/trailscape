@@ -940,3 +940,95 @@ vorbereitet, `-09` Einstellungen, `-10`/`-11` englisch, `-12` Pause mit
 - Das Wort „Welt“ kommt in sichtbaren Texten nicht mehr vor: „Strecke“, wo das
   Ganze gemeint ist, „3D-Ansicht“, wo es um die Darstellung geht; „Testwelt“
   heißt „Teststrecke“. Bezeichner im Code bleiben (`World…`).
+
+## Drinnen nachfahren (25.11.2026)
+
+Idee „Draußen gefahren → drinnen nachfahren“: Jede gefahrene Tour und jede
+gespeicherte Planung lässt sich aus ihrer Detailansicht drinnen fahren, bei
+einer gefahrenen Tour gegen die eigene Außenfahrt.
+
+**Was vorher schon da war (übernommen)**
+
+- `IndoorGhostOption.PastRide` / `GhostSpec.PastRide`: Die frühere Fahrt
+  fährt als Zeit-Weg-Kurve auf den Laufmetern der Strecke mit (Projektion,
+  Pausen entfernt, Start mittendrin, `IndoorGhost.kt`). Wählbar nur, wenn die
+  gewählte Strecke genau diese gefahrene Tour ist (`sanitizeGhost`).
+- HUD-Chip „<Name> · 0:16 vor dir“ (bzw. Meter, solange der Hintere steht),
+  Punkt des Mitfahrers im Höhenprofil, Endabstand im Record
+  (`ghostFinalGapS`) und ein Satz in der Auswertung.
+
+**Was fehlte und jetzt dazukam**
+
+1. **Einstieg:** In der Tourdetailansicht (`RideDetailScreen`, unter „Diese
+   Tour nochmal fahren“) steht für jede Außenfahrt und jede Planung mit Spur
+   der umrandete Knopf **„Indoor fahren“** mit einem Satz darunter
+   (`ui/indoor/IndoorFromRide.kt`). Indoor-Fahrten bekommen ihn nicht (ihre
+   Spur ist virtuell). Der Tipp schließt das Detail und öffnet das
+   Indoor-Training (`AppViewModel.requestIndoorRide` → `IndoorFlowScreen` →
+   `IndoorViewModel.preferRide`).
+2. **Vorauswahl:** Sobald die Strecken gelesen sind, ist genau diese Tour
+   gewählt, Modus „Frei fahren“; bei einer gefahrenen Tour ist der
+   Mitfahrer „Frühere Fahrt“ = die Außenfahrt, bei einer Planung keiner.
+   Danach gilt die Startseite unverändert: Trainer fehlt → „Koppeln“;
+   Strecke noch nicht vorbereitet → Status „Wird einmal vorbereitet“, und
+   „Fahren“ führt in **Strecke vorbereiten** (derselbe Weg wie bei jeder
+   anderen Wahl, kein zweiter). Kennt die Liste die Tour nicht, bleibt die
+   Startseite ohne Wahl.
+3. **Name:** Der Mitfahrer heißt „Außenfahrt vom 09.10.“ (EN „Outdoor ride
+   on …“, `idee01_ghost_outdoor_label`) statt „Fahrt vom …“ — eine frühere
+   Fahrt ist hier immer eine Außenfahrt, denn Indoor-Fahrten sind keine
+   Strecke.
+4. **Leistungsverlauf als Gegner:** Hat die Außenfahrt Leistungsdaten
+   (mindestens die Hälfte der Punkte), trägt der Geist ihren Verlauf mit;
+   das HUD zeigt dann „Außenfahrt vom 09.10. · 0:16 vor dir · 238 W“ — die
+   Leistung, die du draußen an ihrer Stelle getreten hast (gleitend über
+   10 s). Ohne Leistungsdaten bleibt der Chip wie bisher.
+5. **Ergebnis am Ende:** „Du warst 0:42 vor deiner Außenfahrt.“ / „… hinter
+   …“ / „Du warst gleichauf mit deiner Außenfahrt.“ (unter 1 s). Die Zahl ist
+   die **Zeitdifferenz auf demselben Abschnitt** (vom Start bzw. Startpunkt
+   bis dahin, wo du aufgehört hast) — die Außenfahrt kennt ihre Zeit dafür
+   auch dann, wenn sie am Ende hinter dir lag. Fuhr sie den Abschnitt nie
+   ganz, gilt der bisherige Endabstand.
+6. **Vergleich in der Auswertung:** Karte „Vergleich mit deiner Außenfahrt“
+   (`IndoorOutdoorComparison.kt`): Ergebnis, „Verglichen auf 18,4 km
+   (ab km 7,4)“, Tabelle Drinnen/Draußen mit Zeit, Ø Tempo, Ø Leistung;
+   ohne Leistungsdaten der Außenfahrt „–“ und ein Satz. Mit einem anderen
+   Mitfahrer (feste Leistung) bleibt der bisherige Satz.
+
+**Grenzen (bewusst)**
+
+- Draußen zählen kurze Halte (Ampel) mit, gespeicherte Pausen über 30 s
+  nicht; drinnen nur die Fahrzeit. Der Vergleich ist damit leicht zugunsten
+  von drinnen — so wie der Geist selbst schon fährt.
+- Eine Planung, die gerade erst auf der Karte entsteht (noch nicht
+  gespeichert), hat keine Detailansicht und damit keinen Einstieg; „Indoor
+  fahren“ gibt es ab dem Speichern.
+- Der Abschnitt beginnt nach einem Versetzen in der Pause neu (wie der
+  Geist); „ab km …“ nennt auf Runden die fortlaufenden Laufmeter.
+
+**Umsetzung**
+
+- Kern (`:core`, nur ergänzt): `GhostCurve.workJ`/`workAt`/`avgPowerW`,
+  `GhostRunner.powerW`/`sectionS`/`sectionAvgPowerW`, `GhostState.powerW`
+  (Vorgabe `null`), `IndoorRideRecord.ghostSection` (Vorgabe `null`),
+  `GhostSection`, `ghostResultOf` (`IndoorGhostSection.kt`). Tests:
+  `IndoorGhostSectionTest`.
+- App: `IndoorFromRide.kt`, `IndoorOutdoorComparison.kt`;
+  `IndoorRideUi.ghostOutdoor`, `IndoorSummaryUi.ghostOutdoor`/`ghostSection`;
+  `HudGhostChip(showPower)`. Texte: `strings_idee01.xml` (de/en). Tests:
+  `IndoorViewModelDemoFlowTest.indoorFahrenAusDerTourWaehltStreckeUndAussenfahrtVor`,
+  `…aussenfahrtAlsMitfahrerZeigtVergleichInDerAuswertung`, Bilder
+  `IndoorOutdoorScreenshotTest` → `docs/indoor/bilder/nachfahren/`.
+
+**Auf dem Gerät zu prüfen**
+
+- [ ] Tourdetail einer Außenfahrt → „Indoor fahren“ → Startseite zeigt diese
+      Tour gewählt, Optionen „Frei fahren · Frühere Fahrt“
+- [ ] Noch nicht vorbereitete Tour: „Fahren“ führt zu „Strecke vorbereiten“,
+      danach in die Fahrt mit Mitfahrer
+- [ ] Planung → „Indoor fahren“ → gewählt, ohne Mitfahrer
+- [ ] HUD mit einer Außenfahrt mit Leistungsmesser: Watt im Chip plausibel,
+      ohne Leistungsmesser kein Watt
+- [ ] Auswertung: Satz und Tabelle stimmen mit dem Gefühl überein (z. B.
+      bewusst langsamer fahren → „hinter deiner Außenfahrt“)
+- [ ] Zurück aus dem Indoor-Training landet wieder im Verlauf
