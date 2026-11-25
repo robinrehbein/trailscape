@@ -133,7 +133,11 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Mova
     private val lengthM = route.lengthM
     private val workout: ErgWorkout? = config.workout?.takeIf { w -> w.steps.isNotEmpty() && w.steps.all { it.durationS > 0 } }
     private val mode: IndoorMode = if (config.mode == IndoorMode.ERG && workout != null) IndoorMode.ERG else IndoorMode.SIM
-    private val ghostCurve: GhostCurve? = (config.ghost as? GhostSpec.PastRide)?.let { pastRideCurve(route, it.points) }
+    private val ghostCurve: GhostCurve? = when (val g = config.ghost) {
+        is GhostSpec.PastRide -> pastRideCurve(route, g.points)
+        is GhostSpec.Shared -> g.curve.toGhostCurve()
+        else -> null
+    }
     private var ghost: GhostRunner? = makeGhost(0.0, 0L)
 
     /** Wo und wann (Fahrzeit) der Geist zuletzt angesetzt wurde — Bezug seines Schnitts. */
@@ -610,7 +614,8 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Mova
     private fun makeGhost(startDistM: Double, startRunningMs: Long): GhostRunner? = when (val spec = config.ghost) {
         GhostSpec.None -> null
         is GhostSpec.ConstantPower -> ConstantPowerGhost(route, rider, config.wind, spec.watts, startDistM)
-        is GhostSpec.PastRide -> ghostCurve?.let { PastRideGhost.startingAt(it, route, startDistM, startRunningMs / 1000.0) }
+        is GhostSpec.PastRide, is GhostSpec.Shared ->
+            ghostCurve?.let { PastRideGhost.startingAt(it, route, startDistM, startRunningMs / 1000.0) }
     }
 
     override val canMove: Boolean

@@ -144,6 +144,15 @@ sealed interface GhostSpec {
      *   machen den Geist unbrauchbar (dann faehrt keiner mit).
      */
     data class PastRide(val label: String, val points: List<TrackPoint>) : GhostSpec
+
+    /**
+     * Eine geteilte Herausforderung (`core/.../challenge`): die Kurve einer
+     * fremden Fahrt auf derselben Strecke. Faehrt wie [PastRide], nur ohne
+     * Punkte — die Kurve liegt schon in Laufmetern vor.
+     *
+     * @property label Anzeigename des Absenders.
+     */
+    data class Shared(val label: String, val curve: de.trailscape.core.challenge.ChallengeCurve) : GhostSpec
 }
 
 /** Alles, was eine Sitzung von Anfang an wissen muss. */
