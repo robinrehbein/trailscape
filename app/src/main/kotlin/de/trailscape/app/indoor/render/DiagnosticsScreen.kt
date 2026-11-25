@@ -306,6 +306,8 @@ internal fun DiagnosticsScreen(onBack: () -> Unit, modifier: Modifier = Modifier
             // Messwerte und Geraet
             Eyebrow(stringResource(R.string.indoor_render_diag_stats))
             InfoCard(rows = statsRows(renderer.lastStats))
+            Eyebrow(stringResource(R.string.render2_diag_res_title))
+            ResolutionCard(renderer.resolution)
             Eyebrow(stringResource(R.string.indoor_render_diag_device))
             InfoCard(rows = deviceRows(renderer.info))
 
@@ -374,15 +376,19 @@ internal fun DiagnosticsScreen(onBack: () -> Unit, modifier: Modifier = Modifier
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(CardPadding), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         val unknown = stringResource(R.string.render2_diag_bench_gpu_unknown)
+                        val unavailable = stringResource(R.string.render2_diag_res_unavailable)
                         benchResults.forEach { r ->
-                            Text(
-                                stringResource(
-                                    R.string.render2_diag_bench_row,
-                                    r.label, r.meanMs, r.meanFps, r.low1Ms, r.low1Fps,
-                                    r.gpuMeanMs?.let { String.format(Locale.ROOT, "%.1f ms", it) } ?: unknown,
-                                ),
-                                style = MaterialTheme.typography.bodyMedium,
+                            val row = stringResource(
+                                R.string.render2_diag_bench_row,
+                                r.label, r.meanMs, r.meanFps, r.low1Ms, r.low1Fps,
+                                r.gpuMeanMs?.let { String.format(Locale.ROOT, "%.1f ms", it) } ?: unknown,
                             )
+                            val res = stringResource(
+                                R.string.render2_diag_bench_res,
+                                r.dynScaleMean?.let { "${(it * 100).toInt()} %" } ?: unavailable,
+                                if (r.surfaceW > 0) "${r.surfaceW} × ${r.surfaceH} px" else unavailable,
+                            )
+                            Text("$row · $res", style = MaterialTheme.typography.bodyMedium)
                         }
                         Text(
                             stringResource(R.string.render2_diag_bench_note),
@@ -436,6 +442,16 @@ internal fun DiagnosticsScreen(onBack: () -> Unit, modifier: Modifier = Modifier
                     Slider(
                         value = settings.resolutionScale.toFloat(),
                         onValueChange = { settings = settings.copy(resolutionScale = (it * 20).toInt() / 20.0) },
+                        onValueChangeFinished = { renderer.setSettings(settings) },
+                        valueRange = 0.5f..1f,
+                    )
+                    Text(
+                        stringResource(R.string.render2_diag_res_min, (settings.dynamicResolutionMinScale * 100).toInt()),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Slider(
+                        value = settings.dynamicResolutionMinScale.toFloat(),
+                        onValueChange = { settings = settings.copy(dynamicResolutionMinScale = (it * 20).toInt() / 20.0) },
                         onValueChangeFinished = { renderer.setSettings(settings) },
                         valueRange = 0.5f..1f,
                     )
@@ -559,3 +575,24 @@ private fun settingSwitches(s: RenderSettings): List<Triple<Int, Boolean, (Boole
     Triple(R.string.render2_diag_switch_vignette, s.vignette) { v -> s.copy(vignette = v) },
     Triple(R.string.render2_diag_switch_effects_high, s.effectQuality >= 2) { v -> s.copy(effectQuality = if (v) 2 else 0) },
 )
+
+/** Zeichenflaeche, Faktor der dynamischen Aufloesung und tatsaechlich gezeichnete Pixel. */
+@Composable
+private fun ResolutionCard(r: ResolutionInfo?) {
+    val unavailable = stringResource(R.string.render2_diag_res_unavailable)
+    val surface = r?.takeIf { it.surfaceW > 0 }?.let { stringResource(R.string.render2_diag_res_px, it.surfaceW, it.surfaceH) } ?: ""
+    val dynamic = when {
+        r == null -> ""
+        !r.dynamicEnabled -> stringResource(R.string.render2_diag_res_off)
+        r.dynScale == null -> unavailable
+        else -> stringResource(R.string.render2_diag_res_percent, (r.dynScale * 100).toInt())
+    }
+    val rendered = r?.let { i -> i.renderW?.let { w -> stringResource(R.string.render2_diag_res_px, w, i.renderH ?: 0) } ?: unavailable } ?: ""
+    InfoCard(
+        rows = listOf(
+            R.string.render2_diag_res_surface to surface,
+            R.string.render2_diag_res_dynamic to dynamic,
+            R.string.render2_diag_res_rendered to rendered,
+        ),
+    )
+}

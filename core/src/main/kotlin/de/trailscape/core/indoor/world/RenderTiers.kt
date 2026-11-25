@@ -37,7 +37,18 @@ object RenderTiers {
         reflections = true,
         effectQuality = 1,
         whiteBalance = true,
+        dynamicResolutionMinScale = HIGH_DYNRES_MIN_SCALE,
     )
+
+    /**
+     * Untergrenze der dynamischen Aufloesung fuer Hoch/Ultra. Mit FSR-Hochskalierung
+     * gilt 0,75 je Achse (≈ 56 % der Pixel, AMDs Stufe „Quality“ 0,67–0,77) als Grenze,
+     * unter der das Bild sichtbar weich wird; 0,6 (Standard) entspricht schon
+     * „Balanced/Performance“. Hoeher heisst weniger Reserve: Faellt die GPU unter
+     * 60 B/s, sinkt bei Hoch/Ultra eher die Bildrate als die Schaerfe. Nicht auf dem
+     * Geraet gemessen — in der Diagnose einstellbar.
+     */
+    const val HIGH_DYNRES_MIN_SCALE = 0.75
 
     /** Stufe Ultra. */
     fun ultra(): RenderSettings = high().copy(
@@ -79,5 +90,6 @@ object RenderTiers {
         terrainShadows = false,
         whiteBalance = false,
         vignette = false,
+        dynamicResolutionMinScale = 0.6,
     )
 }

@@ -19,6 +19,7 @@ class RenderTiersTest {
         assertEquals(0, m.effectQuality)
         assertEquals(3, m.shadowCascades)
         assertEquals(300.0, m.shadowFarM)
+        assertEquals(0.6, m.dynamicResolutionMinScale)
     }
 
     @Test
@@ -32,6 +33,8 @@ class RenderTiersTest {
         assertEquals(4, u.shadowCascades)
         assertEquals(2, u.effectQuality)
         assertEquals(60, u.maxFps)
+        assertEquals(RenderTiers.HIGH_DYNRES_MIN_SCALE, h.dynamicResolutionMinScale)
+        assertEquals(RenderTiers.HIGH_DYNRES_MIN_SCALE, u.dynamicResolutionMinScale)
         assertTrue(u.shadowFarM > h.shadowFarM)
     }
 

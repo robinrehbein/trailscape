@@ -160,6 +160,10 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         benchDone = null
     }
 
+    /** Tatsaechliche Renderaufloesung, etwa einmal je Sekunde (Diagnose; Compose-Zustand). */
+    var resolution: ResolutionInfo? by mutableStateOf(null)
+        private set
+
     /** Bisherige Messwerte, fuer die Diagnoseseite (Compose-Zustand). */
     var lastStats: RenderStats? by mutableStateOf(null)
         private set
@@ -802,7 +806,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             noFrameSinceMs = 0L
             meter.frame(frameTimeNanos)?.let { (fps, p95) -> reportStats(fps, p95) }
             bench?.let { b ->
-                b.frame(frameTimeNanos, gpuTimes.latestMs(c.renderer))
+                b.frame(frameTimeNanos, gpuTimes.latestMs(c.renderer), c.lastDynamicResolutionScale(), c.viewportWidth, c.viewportHeight)
                 b.result?.let { r ->
                     bench = null
                     val done = benchDone
@@ -859,6 +863,13 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             triangles = s?.readyTriangles() ?: 0,
         )
         lastStats = stats
+        core?.let { c ->
+            resolution = ResolutionInfo(
+                c.viewportWidth, c.viewportHeight,
+                if (settings.dynamicResolution) c.lastDynamicResolutionScale() else 1.0,
+                settings.dynamicResolution,
+            )
+        }
         postListener { it.onStats(stats) }
     }
 

@@ -96,6 +96,7 @@ data class SkySetting(val hourOfDay: Double, val dayOfYear: Int, val haze: Doubl
  * @property terrainShadows Gelaende wirft Schatten (Haenge, Kuppen).
  * @property whiteBalance Weissabgleich je Tageszeit.
  * @property vignette sehr dezente Randabdunklung.
+ * @property dynamicResolutionMinScale Untergrenze der dynamischen Aufloesung (je Achse; bisher fest 0,6).
  */
 data class RenderSettings(
     val shadows: Boolean,
@@ -124,6 +125,7 @@ data class RenderSettings(
     val terrainShadows: Boolean = false,
     val whiteBalance: Boolean = false,
     val vignette: Boolean = false,
+    val dynamicResolutionMinScale: Double = 0.6,
 ) {
     companion object {
         /** Voreinstellung je Qualitaetsstufe. */

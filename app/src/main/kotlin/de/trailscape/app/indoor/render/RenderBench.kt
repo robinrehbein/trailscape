@@ -9,6 +9,9 @@ package de.trailscape.app.indoor.render
  * @property meanMs mittlere Bildzeit (Abstand zweier gezeichneter Bilder).
  * @property low1Ms „1 % niedrig“: die Bildzeit, die nur 1 % der Bilder ueberschreiten (99. Perzentil).
  * @property gpuMeanMs mittlere GPU-Zeit je Bild (`Renderer.FrameInfo.gpuFrameDuration`), `null` = Treiber liefert keine.
+ * @property surfaceW Breite der Zeichenflaeche in px (vor der dynamischen Aufloesung; 0 = unbekannt).
+ * @property surfaceH Hoehe der Zeichenflaeche in px.
+ * @property dynScaleMean mittlerer Faktor der dynamischen Aufloesung je Achse, `null` = nicht verfuegbar.
  */
 data class BenchResult(
     val label: String,
@@ -17,6 +20,9 @@ data class BenchResult(
     val meanMs: Double,
     val low1Ms: Double,
     val gpuMeanMs: Double?,
+    val surfaceW: Int = 0,
+    val surfaceH: Int = 0,
+    val dynScaleMean: Double? = null,
 ) {
     val meanFps: Double get() = if (meanMs > 0) 1000.0 / meanMs else 0.0
     val low1Fps: Double get() = if (low1Ms > 0) 1000.0 / low1Ms else 0.0
@@ -31,6 +37,9 @@ data class BenchResult(
 class RenderBench(val label: String, private val durationNs: Long = 30_000_000_000L, private val warmupNs: Long = 3_000_000_000L) {
     private val frameMs = ArrayList<Double>(4096)
     private val gpuMs = ArrayList<Double>(4096)
+    private val dynScale = ArrayList<Double>(4096)
+    private var surfaceW = 0
+    private var surfaceH = 0
     private var startNs = -1L
     private var lastNs = -1L
     private var measureStartNs = -1L
@@ -45,7 +54,7 @@ class RenderBench(val label: String, private val durationNs: Long = 30_000_000_0
         if (startNs < 0) 0.0 else ((nowNs - startNs).toDouble() / (warmupNs + durationNs)).coerceIn(0.0, 1.0)
 
     /** Ein gezeichnetes Bild zum Zeitpunkt [frameTimeNs]; [gpuFrameMs] = GPU-Zeit eines kuerzlich fertigen Bilds oder `null`. */
-    fun frame(frameTimeNs: Long, gpuFrameMs: Double? = null) {
+    fun frame(frameTimeNs: Long, gpuFrameMs: Double? = null, dynamicScale: Double? = null, width: Int = 0, height: Int = 0) {
         if (done) return
         if (startNs < 0) {
             startNs = frameTimeNs
@@ -58,6 +67,11 @@ class RenderBench(val label: String, private val durationNs: Long = 30_000_000_0
             val dt = (frameTimeNs - lastNs) / 1e6
             if (dt > 0 && dt < 2_000) frameMs += dt
             if (gpuFrameMs != null && gpuFrameMs > 0 && gpuFrameMs < 2_000) gpuMs += gpuFrameMs
+            if (dynamicScale != null && dynamicScale > 0) dynScale += dynamicScale
+            if (width > 0 && height > 0) {
+                surfaceW = width
+                surfaceH = height
+            }
         }
         lastNs = frameTimeNs
         if (measureStartNs >= 0 && frameTimeNs - measureStartNs >= durationNs) finish(frameTimeNs)
@@ -67,6 +81,7 @@ class RenderBench(val label: String, private val durationNs: Long = 30_000_000_0
     fun reset() {
         frameMs.clear()
         gpuMs.clear()
+        dynScale.clear()
         startNs = -1L
         lastNs = -1L
         measureStartNs = -1L
@@ -81,6 +96,9 @@ class RenderBench(val label: String, private val durationNs: Long = 30_000_000_0
             meanMs = if (frameMs.isEmpty()) 0.0 else frameMs.sum() / frameMs.size,
             low1Ms = FrameMeter.percentile(frameMs, 0.99),
             gpuMeanMs = if (gpuMs.size >= 10) gpuMs.sum() / gpuMs.size else null,
+            surfaceW = surfaceW,
+            surfaceH = surfaceH,
+            dynScaleMean = if (dynScale.size >= 10) dynScale.sum() / dynScale.size else null,
         )
     }
 }
@@ -107,4 +125,15 @@ internal class GpuFrameTimes {
             f.gpuFrameDuration / 1e6
         }
     }.getOrNull()
+}
+
+/**
+ * Tatsaechliche Renderaufloesung: Zeichenflaeche [surfaceW] × [surfaceH] px (nach der
+ * festen Skalierung) und Faktor [dynScale] der dynamischen Aufloesung je Achse
+ * (`null` = Filament liefert keinen Wert, [dynamicEnabled] = dynamische Aufloesung an).
+ */
+data class ResolutionInfo(val surfaceW: Int, val surfaceH: Int, val dynScale: Double?, val dynamicEnabled: Boolean) {
+    /** Tatsaechlich gezeichnete Pixel je Achse, `null` = unbekannt. */
+    val renderW: Int? get() = dynScale?.let { (surfaceW * it).toInt() }
+    val renderH: Int? get() = dynScale?.let { (surfaceH * it).toInt() }
 }

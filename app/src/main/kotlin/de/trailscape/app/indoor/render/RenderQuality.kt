@@ -70,7 +70,7 @@ internal object RenderQuality {
     fun applyDynamicResolution(view: View, s: RenderSettings) {
         view.dynamicResolutionOptions = view.dynamicResolutionOptions.apply {
             enabled = s.dynamicResolution
-            minScale = 0.6f
+            minScale = s.dynamicResolutionMinScale.coerceIn(0.5, 1.0).toFloat()
             maxScale = 1.0f
             quality = if (s.effectQuality >= 1) level(s.effectQuality) else View.QualityLevel.LOW
         }

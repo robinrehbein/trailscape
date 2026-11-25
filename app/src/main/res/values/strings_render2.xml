@@ -28,4 +28,14 @@
     <string name="render2_diag_bench_row">%1$s: Ø %2$.1f ms (%3$.0f B/s) · 1 %% niedrig %4$.1f ms (%5$.0f B/s) · GPU %6$s</string>
     <string name="render2_diag_bench_gpu_unknown">–</string>
     <string name="render2_diag_bench_note">Die Bildzeit ist durch die Obergrenze von 60 B/s begrenzt; die GPU-Zeit zeigt die Reserve (unter 16,7 ms = 60 B/s möglich).</string>
+    <string name="render2_diag_res_title">Renderauflösung</string>
+    <string name="render2_diag_res_surface">Zeichenfläche</string>
+    <string name="render2_diag_res_dynamic">Dynamische Auflösung</string>
+    <string name="render2_diag_res_rendered">Tatsächlich gezeichnet</string>
+    <string name="render2_diag_res_px">%1$d × %2$d px</string>
+    <string name="render2_diag_res_percent">%1$d %% je Achse</string>
+    <string name="render2_diag_res_off">aus (100 %%)</string>
+    <string name="render2_diag_res_unavailable">nicht verfügbar</string>
+    <string name="render2_diag_res_min">Untergrenze der dynamischen Auflösung: %1$d %%</string>
+    <string name="render2_diag_bench_res">Auflösung Ø %1$s von %2$s</string>
 </resources>

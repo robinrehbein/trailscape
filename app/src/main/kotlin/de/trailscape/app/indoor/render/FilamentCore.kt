@@ -180,6 +180,22 @@ internal class FilamentCore {
         updateProjection()
     }
 
+    /** Groesse der Zeichenflaeche in px (nach fester Skalierung, vor der dynamischen Aufloesung); 0 = unbekannt. */
+    val viewportWidth: Int get() = viewportW
+    val viewportHeight: Int get() = viewportH
+
+    private val dynScaleOut = FloatArray(2)
+
+    /**
+     * Zuletzt benutzter Faktor der dynamischen Aufloesung (Mittel beider Achsen,
+     * `View.getLastDynamicResolutionScale`, Filament 1.75.1); `null`, wenn der Aufruf scheitert.
+     */
+    fun lastDynamicResolutionScale(): Double? = runCatching {
+        view.getLastDynamicResolutionScale(dynScaleOut)
+        val v = (dynScaleOut[0] + dynScaleOut[1]) / 2.0
+        v.takeIf { it > 0.0 && it <= 4.0 }
+    }.getOrNull()
+
     /** Lenkerperspektive: eigener Bildwinkel, nahe Ebene und Verschiebung des Bildes (siehe [projectionFor]). */
     var handlebarView: Boolean = false
         set(value) {

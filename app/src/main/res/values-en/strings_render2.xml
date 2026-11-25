@@ -28,4 +28,14 @@
     <string name="render2_diag_bench_row">%1$s: avg %2$.1f ms (%3$.0f fps) · 1 %% low %4$.1f ms (%5$.0f fps) · GPU %6$s</string>
     <string name="render2_diag_bench_gpu_unknown">–</string>
     <string name="render2_diag_bench_note">Frame time is capped at 60 fps; the GPU time shows the headroom (below 16.7 ms = 60 fps possible).</string>
+    <string name="render2_diag_res_title">Render resolution</string>
+    <string name="render2_diag_res_surface">Drawing surface</string>
+    <string name="render2_diag_res_dynamic">Dynamic resolution</string>
+    <string name="render2_diag_res_rendered">Actually rendered</string>
+    <string name="render2_diag_res_px">%1$d × %2$d px</string>
+    <string name="render2_diag_res_percent">%1$d %% per axis</string>
+    <string name="render2_diag_res_off">off (100 %%)</string>
+    <string name="render2_diag_res_unavailable">not available</string>
+    <string name="render2_diag_res_min">Dynamic resolution lower limit: %1$d %%</string>
+    <string name="render2_diag_bench_res">resolution avg %1$s of %2$s</string>
 </resources>

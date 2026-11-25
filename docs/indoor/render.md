@@ -764,6 +764,21 @@ Bildzeit) und mittlere **GPU-Zeit** aus `Renderer.getFrameInfoHistory`
 (falls der Treiber sie liefert, sonst „–“). Die Bildzeit ist durch die
 Obergrenze von 60 B/s gedeckelt; erst die GPU-Zeit zeigt die Reserve.
 
+**Renderauflösung** (Wunsch des Inhabers): Die Diagnose zeigt unter
+„Renderauflösung“ die Zeichenfläche in px (nach der festen Skalierung), den
+zuletzt benutzten Faktor der dynamischen Auflösung je Achse
+(`View.getLastDynamicResolutionScale`, in Java 1.75.1 vorhanden; scheitert der
+Aufruf: „nicht verfügbar“) und die tatsächlich gezeichneten Pixel. Die Messung
+„Bildrate je Stufe“ mittelt den Faktor je Stufe und nennt die Zeichenfläche.
+**Untergrenze** der dynamischen Auflösung jetzt einstellbar
+(`RenderSettings.dynamicResolutionMinScale`, Regler in der Diagnose): Standard
+wie bisher 0,6; Hoch/Ultra 0,75 (`RenderTiers.HIGH_DYNRES_MIN_SCALE`) — mit
+FSR ist 0,75 je Achse etwa AMDs Stufe „Quality“, darunter wird das Bild
+sichtbar weich; dafür sinkt bei Überlast eher die Bildrate als die Schärfe.
+Nicht auf dem Gerät gemessen: Wenn die Messung bei Hoch/Ultra einen Faktor
+dauerhaft an der Untergrenze und „1 % niedrig“ über 25 ms zeigt, Untergrenze
+in der Diagnose auf 0,6 stellen und vergleichen.
+
 **Referenzrenderer:** neue Schalter (`settings.reflections`, `taa`,
 `effectQuality`, `cascades`, `shadowFarM`, `stableShadows`, `terrainShadows`,
 `whiteBalance`, `vignette`, `shadowType`, `lispsm`, …), `--seti`/`--sets`/
@@ -818,7 +833,7 @@ Alles in **Indoor → Einstellungen** bzw. **Diagnose** (Einstellungen → Erwei
 1. **Diagnose → „Messen (Standard, Hoch, Ultra je 30 s)“** (unter „Bildrate je
    Stufe“). Lädt die Testwelt und fährt selbst; ~2 Minuten Bildschirm an
    lassen, Handy nicht bewegen. **Bitte melden (Foto genügt):** je Stufe die
-   drei Zahlen „Ø … ms“, „1 % niedrig … ms“ und „GPU … ms“. Faustregel:
+   drei Zahlen „Ø … ms“, „1 % niedrig … ms“, „GPU … ms“ und die „Auflösung Ø … % von … px“. Faustregel:
    GPU unter 14 ms = 60 B/s mit Reserve; „1 % niedrig“ über 25 ms = spürbares Ruckeln.
 2. **Einstellungen → 3D-Ansicht → Grafikstufe Ultra**, dann eine echte Strecke
    (am besten Alpe d'Huez oder Sa Calobra, Tageszeit Abend und Mittag):
