@@ -384,5 +384,7 @@ class IndoorCatalogController(
         profile = e.profile ?: installed[e.id]?.manifest?.let(::profileOfWorld),
         previewPath = e.preview?.file?.let { previews[it] },
         isNew = e.id in newIds,
+        diskBytes = e.diskBytes,
+        aerialSource = e.aerialSource,
     )
 }
