@@ -25,7 +25,8 @@ import kotlin.math.sqrt
  *  * **Uebergangsstreifen** mit Boden-Detailtextur (Gras, Waldboden …), der als
  *    Boeschung vom Fahrbahnrand auf den Boden fuehrt und mit Vertex-Alpha ins
  *    Luftbild auslaeuft; seine Farbe ist an das Luftbild angeglichen.
- *  * **Markierung** nur auf breiten Kraftverkehrsstrassen.
+ *  * **Markierung**, Bröselkante, Flicken, Risse, Rinne, Schachtdeckel: [RoadDecals] (nach der
+ *    Fahrbahn gezeichnet, mit freigehaltenem Budget).
  *
  * Welche Kachel welches Stueck zeichnet, steht in [RouteGeometry]. Reicht das
  * Dreiecksbudget nicht, wird stufenweise vereinfacht ([DETAILS]) — erst die
@@ -38,13 +39,17 @@ internal class RouteLayer : TileLayer {
         val units = RouteGeometry.unitsOf(ctx.track, ctx.spec)
         if (units.isEmpty()) return
         val env = RouteEnv(ctx)
+        // Markierung und Abziehbilder (RoadDecals): Platz im Budget freihalten, nach der Fahrbahn zeichnen.
+        val decals = RoadDecals(ctx, env, units)
+        val reserve = decals.reserve()
         for ((k, detail) in DETAILS.withIndex()) {
             if (k < DETAILS.lastIndex) {
                 val probe = TileOutput(ctx.spec)
                 RouteEmitter(ctx, env, detail, probe).run(units)
-                if (probe.triangles(WorldNames.NODE_ROUTE) > ctx.budget.route) continue
+                if (probe.triangles(WorldNames.NODE_ROUTE) > ctx.budget.route - reserve) continue
             }
             RouteEmitter(ctx, env, detail, out).run(units)
+            decals.emit(detail, out, ctx.budget.route - out.triangles(WorldNames.NODE_ROUTE))
             return
         }
     }
@@ -661,7 +666,6 @@ private class RouteEmitter(
             piece(j, lanes)
             flush(stations[j].dist, stations[j + 1].dist, lanes)
         }
-        if (detail.extras) centreDashes(a, b)
         flush(track.track.distAt(a), track.track.distAt(b), null)
     }
 
@@ -829,7 +833,6 @@ private class RouteEmitter(
             if (urban) kerbAndSidewalk(j, side, lanes, base)
             val grassWay = sec.kind.visual == SurfaceKind.GRASS
             if (detail.extras && (a.fringeW[side] > 0.01 || b.fringeW[side] > 0.01) && !grassWay) fringe(j, side, lanes[base + 3])
-            if (detail.extras && RouteLayer.hasEdgeLines(sec) && RouteLayer.hasEdgeLines(p1.section)) edgeLine(j, side, lanes[base + 4])
             // Ein Belag je Stueck (der staerkste): Der Streifen ist deckend, zwei Belaege koennen nicht mehr
             // ueber Vertex-Deckung ineinander laufen (warum: RouteTextures.roadEdgeTexture).
             var best: RouteTextures.Verge? = null
@@ -1137,63 +1140,6 @@ private class RouteEmitter(
         }
     }
 
-    private fun markingColor(st: Station): Int {
-        val c = 0.62 + 0.10 * st.tone
-        return RouteGeometry.linColor(c, c, c * 0.97)
-    }
-
-    /** Durchgezogene Randlinie, 12 cm breit, 25 cm vom Fahrbahnrand. */
-    private fun edgeLine(j: Int, side: Int, lane: Lane) {
-        val m = plainMesh()
-        strip(lane, m, j, 2) { st ->
-            val t0 = st.hw - 0.37
-            val t1 = st.hw - 0.25
-            val col = markingColor(st)
-            val sl = if (side == 0) st.crown else -st.crown
-            if (side == 0) {
-                val i0 = vert(m, st, -t1, roadH(st, t1) + RouteLayer.OVERLAY_LIFT_M + 0.004, sl, 0.0, 0.0, col)
-                vert(m, st, -t0, roadH(st, t0) + RouteLayer.OVERLAY_LIFT_M + 0.004, sl, 0.0, 0.0, col)
-                i0
-            } else {
-                val i0 = vert(m, st, t0, roadH(st, t0) + RouteLayer.OVERLAY_LIFT_M + 0.004, sl, 0.0, 0.0, col)
-                vert(m, st, t1, roadH(st, t1) + RouteLayer.OVERLAY_LIFT_M + 0.004, sl, 0.0, 0.0, col)
-                i0
-            }
-        }
-    }
-
-    /** Unterbrochene Mittellinie (Leitlinie ausserorts: 4 m Strich, 8 m Luecke). */
-    private fun centreDashes(a: Int, b: Int) {
-        val from = track.track.distAt(a)
-        val to = track.track.distAt(b)
-        var k = floor(from / DASH_PERIOD_M).toInt() - 1
-        val m = plainMesh()
-        while (true) {
-            k++
-            val s0 = k * DASH_PERIOD_M
-            val mid = s0 + DASH_LENGTH_M / 2
-            if (mid >= to) break
-            if (mid < from || s0 < 0 || s0 + DASH_LENGTH_M > track.lengthM) continue
-            val i = min((mid / track.stepM).toInt(), track.count - 2)
-            if (!RouteLayer.hasCentreLine(env.profile(i).section) || !RouteLayer.hasCentreLine(env.profile(i + 1).section)) continue
-            var prev = -1
-            for (q in 0..2) {
-                val d = s0 + DASH_LENGTH_M * q / 2
-                RouteGeometry.centerAtDist(track, d, tmp)
-                val tone = RouteGeometry.tone(tmp[0], tmp[1], 0x70e)
-                val c = 0.62 + 0.10 * tone
-                val col = RouteGeometry.linColor(c, c, c * 0.97)
-                val h = tmp[2] + RouteLayer.OVERLAY_LIFT_M + 0.004
-                val re = tmp[4]
-                val rn = -tmp[3]
-                val i0 = m.vertex(ctx.x(tmp[0] - re * 0.06), ctx.y(h), ctx.z(tmp[1] - rn * 0.06), 0.0, 1.0, 0.0, 0.0, 0.0, col)
-                m.vertex(ctx.x(tmp[0] + re * 0.06), ctx.y(h), ctx.z(tmp[1] + rn * 0.06), 0.0, 1.0, 0.0, 0.0, 0.0, col)
-                if (prev >= 0) m.quad(prev, prev + 1, i0 + 1, i0)
-                prev = i0
-            }
-        }
-    }
-
     private companion object {
         const val LANES_PER_SIDE = 11
 
@@ -1216,8 +1162,6 @@ private class RouteEmitter(
         /** Spur des Auslaufs im Seitenblock (hinter den Randtexturen). */
         const val VERGE_FADE_LANE = 4
         const val LANES = 3 + 2 * LANES_PER_SIDE
-        const val DASH_PERIOD_M = 12.0
-        const val DASH_LENGTH_M = 4.0
 
         /** Mittlere Helligkeit der Fransentextur (linear). */
         const val FRINGE_BASE = 0.60

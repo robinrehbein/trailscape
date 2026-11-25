@@ -17,7 +17,8 @@ import kotlin.math.sin
  * Was deutsche Strassen und Wege glaubwuerdig macht — sparsam und nur
  * unmittelbar an der Strecke:
  *
- *  * **Leitpfosten** alle 50 m beidseitig an Kraftverkehrsstrassen ausserorts,
+ *  * **Leitpfosten** an Kraftverkehrsstrassen ausserorts (Abstand nach Kurvenradius) und
+ *    **Schutzplanken** an Bruecken und hohen Boeschungen ([RoadsideLayer]),
  *  * **Strassenlaternen** im Ort, wechselseitig alle 36 m,
  *  * **Ortstafel** (gelb, ohne Text) am Uebergang in den Ort,
  *  * **Weidezaeune** abschnittsweise, wo Wiese an den Weg grenzt,
@@ -303,49 +304,12 @@ internal class PropsLayer : TileLayer {
 
         // --- Leitpfosten ---------------------------------------------------------
 
-        private fun guidePosts() = eachGrid(50.0) { k, d ->
-            val p = poseAt(d + 25.0) ?: return@eachGrid
-            if (!RouteLayer.isMotorRoad(p.sec) || p.sec.effectiveWidthM < 4.5) return@eachGrid
-            for (side in intArrayOf(-1, 1)) {
-                if (edgeStyleOf(p.sec, landAt(p, side)) != EdgeStyle.BANKETT) continue
-                val e = sideE(p, side, p.hw + 0.5)
-                val n = sideN(p, side, p.hw + 0.5)
-                if (!free(e, n, 0.1)) continue
-                guidePost(e, n, p, side, Noise.hash01(k, side, 0x1e1))
-                commit()
-            }
-        }
-
-        /** Leitpfosten: 12 × 8 cm, 1 m hoch, weiss, schwarzes Schraegband (zur Fahrbahn fallend) mit Rueckstrahler. */
-        private fun guidePost(e: Double, n: Double, p: Pose, side: Int, rnd: Double) {
-            val g = ctx.ground.heightAt(e, n)
-            val white = RouteGeometry.linColor(0.74 + 0.06 * rnd, 0.74 + 0.06 * rnd, 0.72 + 0.06 * rnd)
-            val black = RouteGeometry.linColor(0.035, 0.035, 0.04)
-            // Breite quer zur Fahrtrichtung, Tiefe laengs; a = zur Fahrbahn, b = von ihr weg.
-            val ue = -p.tn * side
-            val un = p.te * side
-            val w = 0.06
-            val dpt = 0.04
-            val slant = 0.05
-            prism(e, n, ue, un, w, dpt, g - 0.02, g - 0.02, g + 0.66 + slant, g + 0.66 - slant, white, false)
-            prism(e, n, ue, un, w, dpt, g + 0.66 + slant, g + 0.66 - slant, g + 0.86 + slant, g + 0.86 - slant, black, false)
-            prism(e, n, ue, un, w, dpt, g + 0.86 + slant, g + 0.86 - slant, g + 1.0, g + 0.98, white, true)
-            // Rueckstrahler auf beiden Stirnseiten: rechts ein Rechteck, links zwei Punkte (hier: zwei kleine Rechtecke).
-            val refl = RouteGeometry.linColor(0.86, 0.86, 0.82)
-            for (dir in intArrayOf(-1, 1)) {
-                val fe = p.te * dir
-                val fn = p.tn * dir
-                val ce = e + fe * (dpt + 0.004)
-                val cn = n + fn * (dpt + 0.004)
-                // Von vorn gesehen steht der Pfosten rechts, wenn er in Blickrichtung rechts der Fahrbahn steht.
-                val rightOfViewer = side * -dir == 1
-                if (rightOfViewer) {
-                    plate(ce, cn, ue, un, fe, fn, 0.02, g + 0.68, g + 0.84, refl)
-                } else {
-                    plate(ce, cn, ue, un, fe, fn, 0.02, g + 0.69, g + 0.745, refl)
-                    plate(ce, cn, ue, un, fe, fn, 0.02, g + 0.775, g + 0.83, refl)
-                }
-            }
+        /**
+         * Leitpfosten (Abstand nach Kurvenradius) und Schutzplanken (Bruecken, hohe Boeschungen): [RoadsideLayer];
+         * treten zurueck, wo echte Daten ([RealRoadside]) Planken fuehren.
+         */
+        private fun guidePosts() {
+            used += RoadsideLayer.emit(ctx, out, ctx.budget.props - used)
         }
 
         // --- Laternen und Ortstafel ---------------------------------------------

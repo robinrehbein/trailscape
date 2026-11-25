@@ -360,6 +360,9 @@ internal interface MapData {
     fun areas(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapArea>
     fun waterways(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapWaterway>
 
+    /** Echte Straßenausstattung aus vollen Kartendaten ([RealRoadside]); ohne solche Daten [RealRoadside.NONE]. */
+    fun roadside(): RealRoadside = RealRoadside.NONE
+
     companion object {
         val EMPTY: MapData = object : MapData {
             override fun buildings(minE: Double, minN: Double, maxE: Double, maxN: Double) = emptyList<MapBuilding>()
