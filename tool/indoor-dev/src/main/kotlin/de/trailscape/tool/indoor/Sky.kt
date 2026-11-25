@@ -128,6 +128,9 @@ private fun lookJson(l: de.trailscape.core.indoor.sky.DaylightLighting): String 
         "saturation" to l.grade.saturation,
         "fogInScatteringStart" to l.fogInScatteringStart,
         "fogInScatteringSize" to l.fogInScatteringSize,
+        // Weissabgleich der Grafikstufen Hoch/Ultra (filarender: settings.whiteBalance)
+        "wbTemperature" to de.trailscape.core.indoor.sky.PhotoGrade.whiteBalance(l).first,
+        "wbTint" to de.trailscape.core.indoor.sky.PhotoGrade.whiteBalance(l).second,
     )
     return obj(look).dropLast(1) +
         ", \"skyMaterial\": ${obj(de.trailscape.core.indoor.sky.SkyShading.sky(l))}" +

@@ -46,6 +46,7 @@ class StringResourceParityTest {
         "strings_indoor_app.xml" to "indoor_app_",
         "strings_indoor_ble.xml" to "indoor_ble_",
         "strings_indoor_render.xml" to "indoor_render_",
+        "strings_render2.xml" to "render2_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */

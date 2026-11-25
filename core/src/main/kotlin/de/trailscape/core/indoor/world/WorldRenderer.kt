@@ -85,6 +85,17 @@ data class SkySetting(val hourOfDay: Double, val dayOfYear: Int, val haze: Doubl
  * @property wind Laub und Gras wiegen im Wind.
  * @property birds gelegentlich Voegel am Himmel.
  * @property otherRiders hoechstens so viele andere Radfahrer auf der Strecke (rein dekorativ; 0 = keine).
+ *
+ * Bildentstehung (Grafikstufen Hoch/Ultra, [RenderTiers]; Vorgaben = Stand davor, also aus):
+ * @property reflections Spiegelungs-Umgebungslicht aus dem Himmelsmodell (`SkyReflections`).
+ * @property temporalAA zeitliche Kantenglaettung statt MSAA (ruhigeres Laub).
+ * @property effectQuality 0..2: Guete von SSAO, Bloom und Hochskalierung.
+ * @property shadowCascades Kaskaden der Sonnenschatten (3 oder 4).
+ * @property shadowFarM Reichweite der Sonnenschatten in m.
+ * @property stableShadows Schattenkarten auf Texel ausgerichtet (kein Schwimmen bei Fahrt, etwas unschaerfer).
+ * @property terrainShadows Gelaende wirft Schatten (Haenge, Kuppen).
+ * @property whiteBalance Weissabgleich je Tageszeit.
+ * @property vignette sehr dezente Randabdunklung.
  */
 data class RenderSettings(
     val shadows: Boolean,
@@ -104,6 +115,15 @@ data class RenderSettings(
     val wind: Boolean = true,
     val birds: Boolean = true,
     val otherRiders: Int = 3,
+    val reflections: Boolean = false,
+    val temporalAA: Boolean = false,
+    val effectQuality: Int = 0,
+    val shadowCascades: Int = 3,
+    val shadowFarM: Double = 300.0,
+    val stableShadows: Boolean = false,
+    val terrainShadows: Boolean = false,
+    val whiteBalance: Boolean = false,
+    val vignette: Boolean = false,
 ) {
     companion object {
         /** Voreinstellung je Qualitaetsstufe. */

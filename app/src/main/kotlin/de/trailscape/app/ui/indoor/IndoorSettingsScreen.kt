@@ -29,7 +29,7 @@ import de.trailscape.core.indoor.sky.IndoorTimeOfDay
  *
  *  * **Fahrgefuehl:** Kettenblatt am Trainer, virtuelle Gaenge
  *    (frueher im Schritt „Koppeln").
- *  * **3D-Ansicht:** Tageszeit, andere Radfahrer (frueher „Koppeln").
+ *  * **3D-Ansicht:** Tageszeit, andere Radfahrer (frueher „Koppeln"), Grafikstufe.
  *  * **Erweitert:** Strecken auf dem Geraet (Weltverwaltung, frueher unter
  *    Mehr), Liste der bekannten Strecken aktualisieren (frueher in der
  *    Streckenwahl) samt Hinweis, was dabei geladen wird, und die Diagnose
@@ -45,6 +45,7 @@ fun IndoorSettingsScreen(
     onGearTableChange: (VirtualGearTable) -> Unit,
     onTimeOfDayChange: (IndoorTimeOfDay) -> Unit,
     onOtherRidersChange: (Boolean) -> Unit,
+    onGraphicsChange: (de.trailscape.core.indoor.world.IndoorGraphics) -> Unit = {},
     onOpenWorlds: () -> Unit,
     onRefreshCatalog: () -> Unit,
     onOpenDiagnostics: () -> Unit,
@@ -71,6 +72,8 @@ fun IndoorSettingsScreen(
                 )
             }
         }
+
+        GraphicsCard(selected = ui.graphics, onChange = onGraphicsChange)
 
         Eyebrow(stringResource(R.string.indoor_app_settings_section_advanced))
         Card(modifier = Modifier.fillMaxWidth()) {

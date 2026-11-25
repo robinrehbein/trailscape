@@ -59,6 +59,7 @@ enum class IndoorStage {
  * @property gearTable Gangtabelle der virtuellen Gaenge (`RiderSetup.gearTable`).
  * @property timeOfDay Tageszeit der 3D-Welt (Vorgabe: automatisch nach der Uhr).
  * @property otherRiders andere Radfahrer in der 3D-Welt anzeigen (rein dekorativ, Vorgabe an).
+ * @property graphics Grafikstufe der 3D-Ansicht (Vorgabe Standard = wie bisher).
  * @property canContinue Demo an oder ein Trainer gemerkt.
  */
 data class IndoorPairUi(
@@ -69,6 +70,7 @@ data class IndoorPairUi(
     val gearTable: VirtualGearTable = VirtualGearTable.EVEN,
     val timeOfDay: IndoorTimeOfDay = IndoorTimeOfDay.AUTO,
     val otherRiders: Boolean = true,
+    val graphics: de.trailscape.core.indoor.world.IndoorGraphics = de.trailscape.core.indoor.world.IndoorGraphics.STANDARD,
 ) {
     val canContinue: Boolean get() = demoTrainer || trainerName != null
 }

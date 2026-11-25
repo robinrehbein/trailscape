@@ -467,8 +467,9 @@ int main(int argc, char** argv) {
     }
     const View::QualityLevel fxq = effectQuality >= 2 ? View::QualityLevel::HIGH : effectQuality == 1 ? View::QualityLevel::MEDIUM : View::QualityLevel::LOW;
     {
-        // Wie FilamentCore: DPCF (in 1.75.1 veraltet, faellt auf PCSS = EVSM zurueck) oder ein anderer Typ.
-        const std::string st = opt<std::string>(settings, "shadowType", "DPCF");
+        // Wie FilamentCore: PCF; DPCF (in 1.75.1 veraltet, faellt auf PCSS = EVSM zurueck) zum Vergleich.
+        // Vorgabe PCF wie die App seit dem Geraetebefund (DPCF/PCSS zeigten keine Schatten).
+        const std::string st = opt<std::string>(settings, "shadowType", "PCF");
         View::ShadowType t = st == "PCF" ? View::ShadowType::PCF : st == "PCSS" ? View::ShadowType::PCSS
             : st == "VSM" ? View::ShadowType::VSM : st == "PCFd" ? View::ShadowType::PCFd : View::ShadowType::DPCF;
         view->setShadowType(shadows ? t : View::ShadowType::PCF);
@@ -490,8 +491,8 @@ int main(int argc, char** argv) {
             a.quality = fxq;
             a.lowPassFilter = fxq;
             a.upsampling = fxq;
-            a.radius = effectQuality >= 2 ? 0.6f : 0.5f;
-            a.power = 1.2f;
+            a.radius = effectQuality >= 2 ? 0.55f : 0.5f;
+            a.intensity = 0.9f;  // wie RenderQuality.applyAmbientOcclusion
         }
         view->setAmbientOcclusionOptions(a);
         View::BloomOptions b;

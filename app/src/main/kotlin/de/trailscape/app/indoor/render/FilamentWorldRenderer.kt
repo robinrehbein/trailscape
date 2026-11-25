@@ -19,6 +19,7 @@ import de.trailscape.core.indoor.world.RenderDeviceInfo
 import de.trailscape.core.indoor.world.RenderFailure
 import de.trailscape.core.indoor.world.RenderSettings
 import de.trailscape.core.indoor.world.RenderStats
+import de.trailscape.core.indoor.world.RenderTiers
 import de.trailscape.core.indoor.sky.SkyClouds
 import de.trailscape.core.indoor.world.SkySetting
 import de.trailscape.core.indoor.world.WorldManifest
@@ -66,7 +67,12 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     @set:JvmName("assignSettings")
     private var settings: RenderSettings = RenderSettings.forQuality(IndoorQuality.MEDIUM)
         set(value) {
-            field = if (guard.safeMode) value.copy(groundDetail = false, wind = false, birds = false, otherRiders = 0) else value
+            field = if (guard.safeMode) {
+                // Sicherer Modus: auch alle Zusaetze der Grafikstufen Hoch/Ultra aus.
+                RenderTiers.withoutTierExtras(value.copy(groundDetail = false, wind = false, birds = false, otherRiders = 0))
+            } else {
+                value
+            }
         }
     private var settingsExplicit = false
     private var sky: SkySetting = SkySetting.DEFAULT
@@ -134,6 +140,25 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
 
     /** Letzter Zustand (fuer die Ersatzansicht, wenn keine Bildschleife laeuft). */
     val lastState: WorldState? get() = pendingState.get()
+
+    // Bildzeitmessung der Diagnose (RenderBench) ---------------------------
+    private var bench: RenderBench? = null
+    private var benchDone: ((BenchResult) -> Unit)? = null
+    private val gpuTimes = GpuFrameTimes()
+
+    /** Fortschritt der laufenden Messung 0..1, `null` = keine. */
+    fun benchProgress(): Double? = bench?.progress(System.nanoTime())
+
+    /** Misst [seconds] s lang die Bildzeit (nach 3 s Vorlauf) und meldet das Ergebnis auf dem Hauptthread. */
+    fun startBench(label: String, seconds: Int = 30, onDone: (BenchResult) -> Unit) {
+        bench = RenderBench(label, seconds * 1_000_000_000L)
+        benchDone = onDone
+    }
+
+    fun cancelBench() {
+        bench = null
+        benchDone = null
+    }
 
     /** Bisherige Messwerte, fuer die Diagnoseseite (Compose-Zustand). */
     var lastStats: RenderStats? by mutableStateOf(null)
@@ -673,6 +698,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         noFrameSinceMs = 0L
         lastRenderedNs = 0L
         meter.reset()
+        bench?.reset()
     }
 
     private fun frame(frameTimeNanos: Long) {
@@ -775,6 +801,15 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             lastRenderedNs = frameTimeNanos
             noFrameSinceMs = 0L
             meter.frame(frameTimeNanos)?.let { (fps, p95) -> reportStats(fps, p95) }
+            bench?.let { b ->
+                b.frame(frameTimeNanos, gpuTimes.latestMs(c.renderer))
+                b.result?.let { r ->
+                    bench = null
+                    val done = benchDone
+                    benchDone = null
+                    main.post { done?.invoke(r) }
+                }
+            }
         } else if (c.swapChain != null) {
             // Eine Flaeche ist da, aber seit langem kommt kein Bild durch: nicht schwarz schweigen.
             if (noFrameSinceMs == 0L) {

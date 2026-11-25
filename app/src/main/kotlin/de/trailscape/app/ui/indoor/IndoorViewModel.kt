@@ -220,6 +220,7 @@ class IndoorViewModel(
             gearTable = readGearTable(),
             timeOfDay = readTimeOfDay(),
             otherRiders = readOtherRiders(),
+            graphics = readGraphics(),
         ),
     )
     val pair: StateFlow<IndoorPairUi> = _pair.asStateFlow()
@@ -435,6 +436,36 @@ class IndoorViewModel(
     }
 
     private fun readOtherRiders(): Boolean = runCatching { store.getString(KEY_OTHER_RIDERS) != "false" }.getOrDefault(true)
+
+    /**
+     * Grafikstufe der 3D-Ansicht — gemerkt in den Einstellungen; waehrend einer Fahrt sofort.
+     * Standard laesst die Darstellung wie bisher bei der Voreinstellung der Weltqualitaet.
+     */
+    fun setGraphics(graphics: de.trailscape.core.indoor.world.IndoorGraphics) {
+        runCatching { store.setString(KEY_GRAPHICS, graphics.name) }
+        _pair.update { it.copy(graphics = graphics) }
+        _renderer.value?.let { r -> indoorCatching(IndoorPart.RENDER) { applyGraphics(r) } }
+    }
+
+    private fun readGraphics(): de.trailscape.core.indoor.world.IndoorGraphics =
+        runCatching { de.trailscape.core.indoor.world.IndoorGraphics.fromNameOrNull(store.getString(KEY_GRAPHICS)) }.getOrNull()
+            ?: de.trailscape.core.indoor.world.IndoorGraphics.STANDARD
+
+    /**
+     * Zuletzt an die Darstellung gegebene Stufe (`null` = neue Fahrt). Standard ergibt genau
+     * die Voreinstellung, die `loadWorld` ohnehin setzt (`RenderSettings.forQuality`).
+     */
+    private var graphicsApplied: de.trailscape.core.indoor.world.IndoorGraphics? = null
+
+    private fun applyGraphics(r: de.trailscape.core.indoor.world.WorldRenderer) {
+        val g = _pair.value.graphics
+        if (g == de.trailscape.core.indoor.world.IndoorGraphics.STANDARD && graphicsApplied == g) return
+        val q = rendererWorldQuality ?: de.trailscape.core.indoor.world.IndoorQuality.MEDIUM
+        r.setSettings(de.trailscape.core.indoor.world.RenderTiers.settingsFor(g, q))
+        graphicsApplied = g
+    }
+
+    private var rendererWorldQuality: de.trailscape.core.indoor.world.IndoorQuality? = null
 
     /**
      * Zurueck von „Trainer koppeln" zur Startseite und die Strecken neu lesen
@@ -1412,6 +1443,9 @@ class IndoorViewModel(
             _renderer.value = r
             applySky(force = true)
             indoorCatching(IndoorPart.RENDER) { r.setOtherRidersEnabled(_pair.value.otherRiders) }
+            rendererWorldQuality = manifest?.quality
+            graphicsApplied = null
+            indoorCatching(IndoorPart.RENDER) { applyGraphics(r) }
         }
         publishRide(runtime.state.value)
         rideCollectJob = scope.launch { runtime.state.collect { publishRide(it) } }
@@ -1829,6 +1863,7 @@ class IndoorViewModel(
         /** Schluessel der Tageszeit der 3D-Welt (Enum-Name von [IndoorTimeOfDay]). */
         const val KEY_TIME_OF_DAY = "trailscape.indoor.time_of_day"
         const val KEY_OTHER_RIDERS = "trailscape.indoor.other_riders"
+        const val KEY_GRAPHICS = "trailscape.indoor.graphics"
 
         /** „Automatisch“: Himmel waehrend der Fahrt alle 10 Minuten der Uhr nachfuehren. */
         const val SKY_REFRESH_MS = 10 * 60_000L
