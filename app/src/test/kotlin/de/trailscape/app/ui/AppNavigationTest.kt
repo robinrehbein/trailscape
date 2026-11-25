@@ -130,6 +130,38 @@ class AppNavigationTest {
     }
 
     @Test
+    fun `im Indoor-Tab haengen jetzt die Herausforderungen, der Raum bleibt unsichtbar`() {
+        assertEquals(
+            listOf(IndoorSegment.ROUTES, IndoorSegment.PLAN, IndoorSegment.CHALLENGES),
+            shippedIndoorSegments(),
+        )
+        assertFalse(IndoorSegment.ROOM in shippedIndoorSegments(), "der Raum hat noch keine Oberflaeche")
+    }
+
+    @Test
+    fun `waehrend einer Aufgabe bleibt im Indoor-Tab die Sicht Strecken stehen`() {
+        val segments = shippedIndoorSegments()
+        for (wanted in IndoorSegment.entries) {
+            assertEquals(IndoorSegment.ROUTES, shownIndoorSegment(wanted, segments, taskActive = true), "$wanted")
+        }
+        assertEquals(IndoorSegment.ROUTES, shownIndoorSegment(null, segments, taskActive = true))
+        // Ohne Aufgabe gilt der Wunsch — ein Sprung von aussen landet auf den Herausforderungen.
+        assertEquals(IndoorSegment.CHALLENGES, shownIndoorSegment(IndoorSegment.CHALLENGES, segments, taskActive = false))
+        assertEquals(IndoorSegment.PLAN, shownIndoorSegment(IndoorSegment.PLAN, segments, taskActive = false))
+        // Ein Platz ohne Funktion faellt auf „Strecken" zurueck.
+        assertEquals(IndoorSegment.ROUTES, shownIndoorSegment(IndoorSegment.ROOM, segments, taskActive = false))
+        assertEquals(IndoorSegment.ROUTES, shownIndoorSegment(null, segments, taskActive = false))
+    }
+
+    @Test
+    fun `Strecken und Herausforderungen leben im Indoor-Ablauf, der Plan daneben`() {
+        assertTrue(indoorSegmentUsesFlow(IndoorSegment.ROUTES))
+        assertTrue(indoorSegmentUsesFlow(IndoorSegment.CHALLENGES))
+        assertFalse(indoorSegmentUsesFlow(IndoorSegment.PLAN))
+        assertFalse(indoorSegmentUsesFlow(IndoorSegment.ROOM))
+    }
+
+    @Test
     fun `ein Segment, das es nicht mehr gibt, faellt auf das erste zurueck`() {
         val withAchievements = historySegments(achievementsVisible = true)
         val without = historySegments(achievementsVisible = false)

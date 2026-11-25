@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Share route -->
+    <string name="spiel3_share_chooser_title">Share challenge</string>
+
+    <!-- “Challenges” segment of the Indoor tab -->
+    <string name="spiel3_section_empty">Rides that someone sends you as a file appear here. You then ride against the other person’s time.</string>
+    <string name="spiel3_section_pick_file">Choose file</string>
+    <string name="spiel3_delete_title">Delete challenge?</string>
+    <string name="spiel3_delete_body">“%1$s” will be deleted from this device. The file you received is left untouched.</string>
+    <string name="spiel3_row_selected">Selected</string>
+    <string name="spiel3_row_delete_cd">Delete challenge</string>
+    <string name="spiel3_row_ride">Ride against %1$s</string>
+    <string name="spiel3_row_ride_unnamed">Ride against this ride</string>
+    <string name="spiel3_row_download">Download route</string>
+    <string name="spiel3_row_mismatch">A newer version of this route is on this device. The time no longer matches it.</string>
+    <string name="spiel3_row_unknown">Your app version does not know this route. Update Trailscape.</string>
+    <string name="spiel3_unnamed">No name</string>
+
+    <!-- Preview: what the file contains -->
+    <string name="spiel3_preview_route">Route</string>
+    <string name="spiel3_preview_route_version">%1$s, version %2$d</string>
+    <string name="spiel3_preview_name">Name</string>
+    <string name="spiel3_preview_ride">Ride</string>
+    <string name="spiel3_preview_ride_value">%1$s in %2$s</string>
+    <string name="spiel3_preview_date">Date</string>
+    <string name="spiel3_preview_avatar">Appearance</string>
+    <string name="spiel3_preview_included">included</string>
+    <string name="spiel3_preview_not_included">not included</string>
+    <string name="spiel3_preview_never">Never included: heart rate, power, cadence, places, times of day, account or device.</string>
+
+    <!-- Import -->
+    <string name="spiel3_import_title">Challenge from %1$s</string>
+    <string name="spiel3_import_title_unnamed">Challenge</string>
+    <string name="spiel3_import_discard">Discard</string>
+    <string name="spiel3_import_saved">Saved</string>
+    <string name="spiel3_import_already">Already saved</string>
+    <string name="spiel3_import_full">Too many challenges</string>
+    <string name="spiel3_import_failed">Saving failed</string>
+    <string name="spiel3_import_saved_body">You will find it under Indoor → Challenges.</string>
+    <string name="spiel3_import_failed_body">Delete an older challenge or free up storage and try again.</string>
+    <string name="spiel3_import_open_app">Open Trailscape</string>
+    <string name="spiel3_avail_ready">The route is ready on this device.</string>
+    <string name="spiel3_avail_download">You need to download the route first. You can do that under Indoor → Challenges afterwards.</string>
+    <string name="spiel3_avail_mismatch">A newer version of this route is on this device. You can save the challenge but cannot ride it yet.</string>
+    <string name="spiel3_avail_unknown">Your app version does not know this route. You can save the challenge and ride it after an update.</string>
+    <string name="spiel3_reject_title">File not accepted</string>
+    <string name="spiel3_reject_too_new">This file comes from a newer version of Trailscape (format %1$d). Update the app and it can be opened.</string>
+    <string name="spiel3_reject_too_large">The file is too large for a challenge.</string>
+    <string name="spiel3_reject_not_ours">This is not a Trailscape challenge, or the file is damaged.</string>
+    <string name="spiel3_reject_own_route">This challenge comes from a personal route. Personal routes cannot be shared for privacy reasons.</string>
+    <string name="spiel3_reject_route">The route in the file cannot be read.</string>
+    <string name="spiel3_reject_curve">The times in the file are not consistent. It will not be used.</string>
+
+    <!-- Sharing your own ride (share sheet of the ride details) -->
+    <string name="spiel3_share_title">Share challenge</string>
+    <string name="spiel3_share_title_reply">Share as reply</string>
+    <string name="spiel3_share_failed">This ride cannot be shared as a challenge. Rides on known routes and the test route can be shared, if they started at the beginning and carry timestamps.</string>
+    <string name="spiel3_share_name_label">Your name in the file</string>
+    <string name="spiel3_share_name_hint">Free choice, at most %1$d characters</string>
+    <string name="spiel3_share_date_switch">Include the date of the ride</string>
+    <string name="spiel3_share_preview_title">What is in the file</string>
+    <string name="spiel3_share_privacy">The file only goes where you send it. Trailscape does not see it and uploads nothing.</string>
+    <string name="spiel3_share_action">Share</string>
+    <string name="spiel3_share_entry">Share challenge</string>
+
+    <!-- Summary -->
+    <string name="spiel3_result_eyebrow">Against the challenge</string>
+    <string name="spiel3_result_seconds">%1$d s</string>
+    <string name="spiel3_result_minutes">%1$d:%2$02d min</string>
+    <string name="spiel3_result_unknown">There is no comparison for this ride.</string>
+    <string name="spiel3_result_even">Level with %1$s</string>
+    <string name="spiel3_result_behind">%1$s behind %2$s</string>
+    <string name="spiel3_result_ahead">%1$s ahead of %2$s</string>
+    <string name="spiel3_result_reply">Share as reply</string>
+    <string name="spiel3_result_share_hint">Once saved, you can send this ride as a challenge: View ride → Share.</string>
+    <string name="spiel3_result_share_hint_reply">Once saved, you can send your time as a reply: View ride → Share.</string>
+
+    <!-- Companion choice -->
+    <string name="spiel3_ghost_pill">Challenge</string>
+    <string name="spiel3_ghost_challenge_body">You ride against the time from the challenge.</string>
+    <string name="spiel3_fallback_name">Challenge</string>
+</resources>

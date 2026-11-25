@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
         showTodayIfRequested(intent)
         importIfRequested(intent)
         planRecipeIfRequested(intent)
+        challengesIfRequested(intent)
         setContent {
             TrailscapeTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -83,6 +84,19 @@ class MainActivity : ComponentActivity() {
         showTodayIfRequested(intent)
         importIfRequested(intent)
         planRecipeIfRequested(intent)
+        challengesIfRequested(intent)
+    }
+
+    /**
+     * „Trailscape öffnen" nach dem Speichern einer Herausforderung von aussen
+     * ([de.trailscape.app.challenge.ChallengeImportActivity]): gleich zum
+     * Segment „Herausforderungen" im Tab „Indoor". Das Extra wird entfernt,
+     * damit eine Drehung nichts doppelt tut.
+     */
+    private fun challengesIfRequested(intent: Intent?) {
+        if (intent?.getBooleanExtra(de.trailscape.app.challenge.EXTRA_OPEN_CHALLENGES, false) != true) return
+        intent.removeExtra(de.trailscape.app.challenge.EXTRA_OPEN_CHALLENGES)
+        ViewModelProvider(this)[AppViewModel::class.java].requestChallenges()
     }
 
     /**

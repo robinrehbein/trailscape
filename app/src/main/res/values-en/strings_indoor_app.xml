@@ -84,6 +84,7 @@
     <string name="indoor_app_tab_title">Indoor</string>
     <string name="indoor_app_tab_segment_routes">Routes</string>
     <string name="indoor_app_tab_segment_plan">Plan</string>
+    <string name="indoor_app_tab_segment_challenges">Challenges</string>
     <string name="indoor_app_route_section_mode">Riding mode</string>
     <string name="indoor_app_route_section_ghost">Riding partner</string>
     <string name="indoor_app_route_testworld_title">Test route</string>

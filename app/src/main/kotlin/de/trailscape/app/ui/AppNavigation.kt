@@ -133,6 +133,37 @@ fun indoorSegments(challengesAvailable: Boolean, roomAvailable: Boolean): List<I
 }
 
 /**
+ * Welche der festgelegten Plaetze im Indoor-Tab eine Funktion haben
+ * (`docs/ux/umbau.md`, „Was jetzt wo haengt"): Die Herausforderungen sind da;
+ * der Raum fuer Gruppenfahrten hat noch keine Oberflaeche (nur Protokoll,
+ * Client und Server), sein Platz bleibt unsichtbar.
+ */
+const val INDOOR_CHALLENGES_AVAILABLE: Boolean = true
+const val INDOOR_ROOM_AVAILABLE: Boolean = false
+
+/** Die Segmente des Indoor-Tabs, wie die App sie heute zeigt. */
+fun shippedIndoorSegments(): List<IndoorSegment> =
+    indoorSegments(challengesAvailable = INDOOR_CHALLENGES_AVAILABLE, roomAvailable = INDOOR_ROOM_AVAILABLE)
+
+/**
+ * Das im Indoor-Tab gezeigte Segment. Laeuft im Tab eine Aufgabe (Koppeln,
+ * Vorbereiten, Fahrt, Auswertung — [taskActive]), bleibt „Strecken" stehen:
+ * Der Ablauf lebt in dieser Sicht, und ein Sprungwunsch von aussen (ein
+ * geoeffnetes Plan-Rezept, eine gespeicherte Herausforderung) darf eine Fahrt
+ * nicht aus der Komposition nehmen.
+ */
+fun shownIndoorSegment(wanted: IndoorSegment?, available: List<IndoorSegment>, taskActive: Boolean): IndoorSegment =
+    if (taskActive) IndoorSegment.ROUTES else resolveSegment(wanted, available)
+
+/**
+ * Ob [segment] im Indoor-Ablauf lebt (derselbe `IndoorViewModel` wie die
+ * Startseite): „Strecken" und „Herausforderungen". „Plan" ist eine eigene
+ * Sicht daneben.
+ */
+fun indoorSegmentUsesFlow(segment: IndoorSegment): Boolean =
+    segment == IndoorSegment.ROUTES || segment == IndoorSegment.CHALLENGES
+
+/**
  * Das gezeigte Segment, wenn [wanted] (gemerkt oder angefordert) nicht — oder
  * nicht mehr — in [available] steht: dann das erste. So faellt der Verlauf
  * auf „Touren" zurueck, wenn die Erfolge ausgeschaltet werden, waehrend ihr

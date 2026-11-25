@@ -3799,6 +3799,8 @@ fun MapScreen(appViewModel: AppViewModel) {
             load = insights.rideLoads[ride.id]?.takeIf { it.available }?.load,
             appViewModel = appViewModel,
             onDismiss = { shareDialogRide = null },
+            // Wie im Tourdetail: „Herausforderung teilen" einer teilbaren Indoor-Tour.
+            extraRows = { de.trailscape.app.ui.rides.ChallengeShareRow(ride) },
         )
     }
 

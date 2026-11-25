@@ -3,6 +3,10 @@ package de.trailscape.app.ui.indoor
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -95,6 +99,12 @@ import kotlinx.coroutines.delay
  * @param mode siehe oben.
  * @param tabHeader nur [IndoorFlowMode.TAB]: die Segmente des Tabs, direkt
  *   unter der Kopfzeile der Startseite.
+ * @param challengesSegment nur [IndoorFlowMode.TAB]: statt der Startseite die
+ *   Sicht „Herausforderungen" zeigen (Segment des Tabs, `docs/ux/umbau.md`).
+ *   Sie braucht dasselbe [IndoorViewModel] wie die Startseite, deshalb liegt
+ *   sie in diesem Ablauf und nicht daneben.
+ * @param onChallengeChosen „Gegen … fahren" oder „Strecke herunterladen" in
+ *   dieser Sicht: Der Tab wechselt auf „Strecken", wo „Fahren" startet.
  */
 @Composable
 fun IndoorFlowScreen(
@@ -104,6 +114,8 @@ fun IndoorFlowScreen(
     onOpenWorlds: () -> Unit = {},
     mode: IndoorFlowMode = IndoorFlowMode.PUSHED,
     tabHeader: (@Composable () -> Unit)? = null,
+    challengesSegment: Boolean = false,
+    onChallengeChosen: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val vm: IndoorViewModel = viewModel(
@@ -196,13 +208,23 @@ fun IndoorFlowScreen(
     }
     when (stage) {
         IndoorStage.ROUTE -> when (mode) {
-            IndoorFlowMode.TAB -> HomeStage(
-                vm = vm,
-                onExit = null,
-                onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
-                title = stringResource(R.string.indoor_app_tab_title),
-                tabHeader = tabHeader,
-            )
+            IndoorFlowMode.TAB -> if (challengesSegment) {
+                ChallengesStage(
+                    vm = vm,
+                    onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
+                    title = stringResource(R.string.indoor_app_tab_title),
+                    tabHeader = tabHeader,
+                    onChosen = onChallengeChosen,
+                )
+            } else {
+                HomeStage(
+                    vm = vm,
+                    onExit = null,
+                    onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
+                    title = stringResource(R.string.indoor_app_tab_title),
+                    tabHeader = tabHeader,
+                )
+            }
             IndoorFlowMode.PUSHED -> HomeStage(vm = vm, onExit = onExit, onOpenSettings = vm::openSettings)
             // Die Einstellungsseite ist geschlossen: zurueck in die Einstellungen der App.
             IndoorFlowMode.SETTINGS -> {
@@ -415,6 +437,8 @@ private fun HomeStage(
     val day by vm.day.collectAsStateWithLifecycle()
     val (bluetoothOn, permissionGranted) = rememberBluetoothState()
     BackHandler(enabled = onExit != null) { onExit?.invoke() }
+    // Eine geladene Strecke ändert, ob eine Herausforderung fahrbar ist (Mitfahrer-Pille).
+    LaunchedEffect(catalog) { vm.refreshChallenges() }
     IndoorHomeScreen(
         route = ui,
         pair = pair,
@@ -439,6 +463,62 @@ private fun HomeStage(
         onCatalogDiscard = vm::discardCatalogDownload,
         catalogExtras = catalogExtras,
     )
+}
+
+/**
+ * Die Sicht „Herausforderungen" des Indoor-Tabs (`docs/ux/umbau.md`,
+ * `docs/herausforderung.md`): gespeicherte Herausforderungen und „Datei
+ * wählen", unter derselben Kopfzeile und denselben Segmenten wie „Strecken".
+ * „Gegen … fahren" setzt Strecke und Mitfahrer im [IndoorViewModel] und
+ * wechselt auf „Strecken"; ebenso „Strecke herunterladen", weil Voranschlag
+ * und Fortschritt des Downloads dort stehen.
+ */
+@Composable
+private fun ChallengesStage(
+    vm: IndoorViewModel,
+    onOpenSettings: () -> Unit,
+    title: String,
+    tabHeader: (@Composable () -> Unit)?,
+    onChosen: () -> Unit,
+) {
+    val ui by vm.route.collectAsStateWithLifecycle()
+    val catalog by vm.catalog.collectAsStateWithLifecycle()
+    val challenges by vm.challenges.collectAsStateWithLifecycle()
+    val challengeImport by vm.challengeImport.collectAsStateWithLifecycle()
+    // Eine geladene Strecke ändert, ob eine Herausforderung fahrbar ist.
+    LaunchedEffect(catalog) { vm.refreshChallenges() }
+    ChallengeImportDialog(
+        ui = challengeImport,
+        onSave = vm::confirmChallengeImport,
+        onDismiss = vm::dismissChallengeImport,
+    )
+    IndoorPage(
+        title = title,
+        onBack = null,
+        headerExtra = tabHeader,
+        actions = {
+            IconButton(onClick = onOpenSettings) {
+                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.indoor_app_home_settings_cd))
+            }
+        },
+    ) {
+        IndoorChallengeSection(
+            ui = IndoorChallengesUi(
+                items = challenges,
+                selectedId = (ui.ghost as? IndoorGhostOption.Challenge)?.challengeId,
+            ),
+            onRide = { id, routeName ->
+                vm.useChallenge(id, routeName)
+                onChosen()
+            },
+            onDownload = { id ->
+                vm.downloadCatalog(id)
+                onChosen()
+            },
+            onDelete = vm::deleteChallenge,
+            onImport = vm::importChallengeFile,
+        )
+    }
 }
 
 @Composable

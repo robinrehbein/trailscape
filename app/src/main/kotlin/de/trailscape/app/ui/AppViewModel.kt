@@ -458,6 +458,16 @@ class AppViewModel(
         requestTab(AppTab.INDOOR)
     }
 
+    /**
+     * Oeffnet die gespeicherten Herausforderungen: Tab „Indoor", Segment
+     * „Herausforderungen" — das Ziel von „Trailscape öffnen" nach dem Import
+     * einer Datei von aussen (`ChallengeImportActivity`).
+     */
+    fun requestChallenges() {
+        _pendingIndoorSegment.value = IndoorSegment.CHALLENGES
+        requestTab(AppTab.INDOOR)
+    }
+
     private val _pendingHistorySegment = MutableStateFlow<HistorySegment?>(null)
 
     /** Das Segment, das der Verlauf als Naechstes zeigen soll (wie [pendingIndoorSegment]). */

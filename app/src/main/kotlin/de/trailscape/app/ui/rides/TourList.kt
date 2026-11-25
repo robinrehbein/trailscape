@@ -662,6 +662,8 @@ fun RideDetailHost(
             load = load,
             appViewModel = appViewModel,
             onDismiss = { shareOpen = false },
+            // „Herausforderung teilen" einer teilbaren Indoor-Tour (docs/ux/umbau.md).
+            extraRows = { ChallengeShareRow(loaded) },
         )
     }
 }

@@ -144,8 +144,24 @@ fun IndoorSummaryScreen(
         }
 
         SummaryFacts(ui)
-        // Mit der eigenen Aussenfahrt als Mitfahrer: der Vergleich mit ihr (IndoorOutdoorComparison.kt).
-        if (ui.ghostOutdoor) OutdoorComparison(ui) else GhostComparison(ui)
+        if (ui.challengeOpponent != null) {
+            // Gegen eine geteilte Herausforderung: „x s vor/hinter <Name>" (docs/herausforderung.md).
+            ChallengeResultCard(opponent = ui.challengeOpponent, gapS = ui.ghostGapS)
+        } else if (ui.ghostOutdoor) {
+            // Mit der eigenen Aussenfahrt als Mitfahrer: der Vergleich mit ihr (IndoorOutdoorComparison.kt).
+            OutdoorComparison(ui)
+        } else {
+            GhostComparison(ui)
+        }
+        // Geteilt wird nicht hier, sondern im Blatt „Teilen" der gespeicherten Tour
+        // (docs/ux/umbau.md); „Tour ansehen" fuehrt dorthin.
+        if (ui.canShareChallenge) {
+            MutedText(
+                stringResource(
+                    if (ui.challengeOpponent != null) R.string.spiel3_result_share_hint_reply else R.string.spiel3_result_share_hint,
+                ),
+            )
+        }
         IndoorTrailClimbs(ui.climbs)
     }
 

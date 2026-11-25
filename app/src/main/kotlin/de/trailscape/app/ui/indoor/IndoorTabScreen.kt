@@ -27,8 +27,10 @@ import de.trailscape.app.ui.IndoorSegment
 import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.SettingsAction
+import de.trailscape.app.ui.indoorSegmentUsesFlow
 import de.trailscape.app.ui.indoorSegments
-import de.trailscape.app.ui.resolveSegment
+import de.trailscape.app.ui.shippedIndoorSegments
+import de.trailscape.app.ui.shownIndoorSegment
 import de.trailscape.app.ui.training.PlanScreen
 
 /**
@@ -46,9 +48,13 @@ import de.trailscape.app.ui.training.PlanScreen
  *    dafuer zurueck ([AppViewModel.indoorTaskActive]).
  *  * **Plan** — der Trainingsplan ([PlanScreen]), frueher das zweite Segment
  *    von „Training". [AppViewModel.requestPlan] springt direkt hierher.
- *  * **Herausforderungen** und **Raum** — festgelegte Plaetze
- *    ([IndoorSegment.CHALLENGES], [IndoorSegment.ROOM]), unsichtbar, solange
- *    es die Funktionen nicht gibt.
+ *  * **Herausforderungen** — gespeicherte Herausforderungen anderer und
+ *    „Datei wählen" (`docs/herausforderung.md`). Die Sicht lebt im selben
+ *    Ablauf wie „Strecken" ([indoorSegmentUsesFlow]), weil „Gegen … fahren"
+ *    dort Strecke und Mitfahrer setzt; danach wechselt der Tab auf
+ *    „Strecken". [AppViewModel.requestChallenges] springt direkt hierher.
+ *  * **Raum** — festgelegter Platz ([IndoorSegment.ROOM]), unsichtbar,
+ *    solange der Raum fuer Gruppenfahrten keine Oberflaeche hat.
  *
  * Das Zahnrad oeffnet in jeder Sicht dieselbe Einstellungsseite der App; die
  * Indoor-Einstellungen liegen dort unter „Indoor".
@@ -63,9 +69,9 @@ fun IndoorTabScreen(
     onOpenDiagnostics: () -> Unit,
     onOpenWorlds: () -> Unit,
 ) {
-    // Herausforderungen und Raum gibt es noch nicht — ihre Plaetze bleiben
-    // unsichtbar (docs/ux/umbau.md: hier die beiden Schalter setzen).
-    val segments = indoorSegments(challengesAvailable = false, roomAvailable = false)
+    // Strecken | Plan | Herausforderungen. Der Raum hat noch keine
+    // Oberflaeche; sein Platz bleibt unsichtbar (docs/ux/umbau.md).
+    val segments = shippedIndoorSegments()
     var wantedSegment by rememberSaveable { mutableStateOf(IndoorSegment.ROUTES) }
 
     // Laeuft im Tab eine Aufgabe (Koppeln, Fahrt, Auswertung), bleibt die
@@ -80,7 +86,7 @@ fun IndoorTabScreen(
         wantedSegment = requested
         appViewModel.consumeIndoorSegmentRequest()
     }
-    val segment = if (taskActive) IndoorSegment.ROUTES else resolveSegment(wantedSegment, segments)
+    val segment = shownIndoorSegment(wantedSegment, segments, taskActive)
 
     val segmentRow: @Composable () -> Unit = {
         PillSegments(
@@ -118,9 +124,10 @@ fun IndoorTabScreen(
             )
         }
 
-        // Strecken — und die Plaetze, die es noch nicht gibt: [indoorSegments]
-        // liefert CHALLENGES und ROOM erst mit ihrer Funktion; bis dahin
-        // werden diese Zweige nie erreicht.
+        // Strecken und Herausforderungen leben im selben Ablauf (ein
+        // `IndoorViewModel`, eine Stelle in der Komposition — ein Wechsel
+        // zwischen beiden baut nichts neu). ROOM liefert [indoorSegments] erst
+        // mit seiner Funktion; bis dahin wird dieser Zweig nie erreicht.
         IndoorSegment.ROUTES,
         IndoorSegment.CHALLENGES,
         IndoorSegment.ROOM,
@@ -132,6 +139,9 @@ fun IndoorTabScreen(
             onOpenWorlds = onOpenWorlds,
             mode = IndoorFlowMode.TAB,
             tabHeader = segmentRow,
+            challengesSegment = segment == IndoorSegment.CHALLENGES,
+            // „Gegen … fahren": Strecke und Mitfahrer sind gesetzt, „Fahren" steht unter „Strecken".
+            onChallengeChosen = { wantedSegment = IndoorSegment.ROUTES },
         )
     }
 }
@@ -142,7 +152,8 @@ private fun indoorSegmentLabel(segment: IndoorSegment): String = stringResource(
     when (segment) {
         IndoorSegment.ROUTES -> R.string.indoor_app_tab_segment_routes
         IndoorSegment.PLAN -> R.string.indoor_app_tab_segment_plan
-        // Kommen mit ihren Funktionen; bis dahin sind die Segmente nie sichtbar.
-        IndoorSegment.CHALLENGES, IndoorSegment.ROOM -> R.string.indoor_app_tab_segment_routes
+        IndoorSegment.CHALLENGES -> R.string.indoor_app_tab_segment_challenges
+        // Kommt mit dem Raum fuer Gruppenfahrten; bis dahin ist das Segment nie sichtbar.
+        IndoorSegment.ROOM -> R.string.indoor_app_tab_segment_routes
     },
 )
