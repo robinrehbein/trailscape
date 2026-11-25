@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.PedalBike
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -206,6 +207,8 @@ internal fun RideDetailScreen(
     onShare: () -> Unit,
     onDelete: () -> Unit,
     onRideIndoor: (() -> Unit)? = null,
+    // „In 3D ansehen" (Idee 4, docs/indoor/vorschau.md); `null` = kein Einstieg.
+    onPreview3d: (() -> Unit)? = null,
 ) {
     val mapStyle by appViewModel.mapStyle.collectAsStateWithLifecycle()
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
@@ -402,6 +405,23 @@ internal fun RideDetailScreen(
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 )
+
+                // Strecke vor der Tour ansehen: 3D-Vorschau ohne Trainer. Nicht fuer
+                // Indoor-Fahrten — ihre Punkte sind die virtuelle Spur einer anderen Strecke.
+                if (onPreview3d != null && !ride.indoor && ride.points.size >= 2) {
+                    NeutralButton(
+                        onClick = onPreview3d,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            Icons.Filled.ViewInAr,
+                            contentDescription = null,
+                            modifier = Modifier.size(ButtonDefaults.IconSize),
+                        )
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Text(stringResource(R.string.idee04_detail_preview_action))
+                    }
+                }
 
                 // „Indoor fahren": dieselbe Strecke drinnen, die Aussenfahrt als
                 // Mitfahrer (ui/indoor/IndoorFromRide.kt). Unter den Hauptaktionen,

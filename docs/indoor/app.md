@@ -1038,3 +1038,9 @@ einer gefahrenen Tour gegen die eigene Außenfahrt.
 - [ ] Auswertung: Satz und Tabelle stimmen mit dem Gefühl überein (z. B.
       bewusst langsamer fahren → „hinter deiner Außenfahrt“)
 - [ ] Zurück aus dem Indoor-Training landet wieder im Verlauf
+## Strecke vor der Tour ansehen (25.11.2026)
+
+Neue Stufe `IndoorStage.PREVIEW`: Eine Planung oder gefahrene Tour lässt sich
+aus dem Tourdetail („In 3D ansehen“) ohne Trainer in 3D abfliegen — über
+denselben Weg „Strecke vorbereiten“ und dieselbe Darstellung. Ablauf,
+Abspieler, Tests, Bilder und offene Punkte: [`vorschau.md`](vorschau.md).
