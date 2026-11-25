@@ -791,7 +791,7 @@ internal class TreesLayer : TileLayer {
     }
 
     /**
-     * Farbe des Kronendachs: Artfarbe, zur Haelfte an die Farbe des Luftbilds an dieser Stelle gezogen
+     * Farbe des Kronendachs: Artfarbe, zu 30 % an die Farbe des Luftbilds an dieser Stelle gezogen
      * (bezogen auf die mittlere Helligkeit der Kronendach-Textur). Bis `indoor-world/11` nur die Artfarbe —
      * die Waldkoerper standen als dunkelgruener, satter Teppich mit harter Kante neben dem helleren,
      * graueren Luftbild der Nachbarflaechen und der Stufe 0.
@@ -948,11 +948,15 @@ internal class TreesLayer : TileLayer {
         const val ORCHARD_ROW_M = 10.0
         const val ORCHARD_STEP_M = 8.5
 
-        /** Mindestbedeckung im Luftbild der Stufe 1 fuer einen Waldkoerper. */
-        const val FAR_CANOPY_MIN = 0.35
+        /**
+         * Mindestbedeckung im Luftbild der Stufe 1 fuer einen Waldkoerper. Niedrig: Laubwald im Winterbild (Baden-
+         * Wuerttemberg, braun-grau) schaetzt die Kronenerkennung nur schwach — er soll bleiben; wegfallen sollen nur
+         * klar helle Flaechen (Fels, Macchie auf Kalk, Wiese, Kahlschlag), die die Landnutzung als Wald fuehrt.
+         */
+        const val FAR_CANOPY_MIN = 0.1
 
-        /** Anteil der Luftbildfarbe am Kronendach. */
-        const val CANOPY_AERIAL_SHARE = 0.5
+        /** Anteil der Luftbildfarbe am Kronendach (mehr machte Winterwaelder graubraun). */
+        const val CANOPY_AERIAL_SHARE = 0.3
 
         /** Mittlere Farbe (linear) der Kronendach-Textur ([FoliageAtlas.canopyImage]). */
         val CANOPY_TEX_MEAN = doubleArrayOf(0.42, 0.51, 0.31)
