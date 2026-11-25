@@ -645,6 +645,12 @@ data class TrainingSession(
     val textKey: SessionTextKey? = null,
     /** Ganzzahlige Argumente zu [textKey] (Minuten, Wiederholungen, km …). */
     val textArgs: List<Int> = emptyList(),
+    /**
+     * Die Einheit stammt aus einem importierten Plan-Rezept (`PlanRecipe.kt`).
+     * [adaptPlan] baut solche Einheiten nicht neu, sondern laesst sie stehen.
+     * Nur mit Wert geschrieben, ein fehlender Schluessel ist `false`.
+     */
+    val fromRecipe: Boolean = false,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("day", day)
@@ -661,6 +667,9 @@ data class TrainingSession(
         textKey?.let { put("textKey", it.jsonName) }
         if (textArgs.isNotEmpty()) {
             put("textArgs", buildJsonArray { textArgs.forEach { add(JsonPrimitive(it)) } })
+        }
+        if (fromRecipe) {
+            put("fromRecipe", true)
         }
     }
 
@@ -686,6 +695,7 @@ data class TrainingSession(
                 textArgs = (json["textArgs"] as? JsonArray)
                     ?.mapNotNull { (it as? JsonPrimitive)?.intOrNull }
                     .orEmpty(),
+                fromRecipe = json.optionalBoolean("fromRecipe") ?: false,
             )
         }
     }
@@ -748,6 +758,12 @@ data class TrainingPlan(
      * [fallbackGravelSpeedKmh].
      */
     val planSpeedKmh: Double? = null,
+    /**
+     * Herkunft aus einem importierten Plan-Rezept (Titel und Autor des
+     * Rezepts); `null` bei einem von der App erzeugten Plan. Ein Rezeptplan
+     * wird nicht von [adaptPlan] umgebaut und hat keine Zielprognose.
+     */
+    val recipe: PlanRecipeOrigin? = null,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("createdAt", createdAt)
@@ -757,6 +773,7 @@ data class TrainingPlan(
         // Ab hier ausschliesslich angehaengte Felder, nur mit Wert.
         preferences?.takeUnless { it.isEmpty }?.let { put("preferences", it.toJson()) }
         planSpeedKmh?.let { put("planSpeedKmh", it) }
+        recipe?.let { put("recipe", it.toJson()) }
     }
 
     companion object {
@@ -771,7 +788,24 @@ data class TrainingPlan(
             planSpeedKmh = (json.fieldOrNull("planSpeedKmh") as? JsonPrimitive)
                 ?.content?.toDoubleOrNull()
                 ?.takeIf { it.isFinite() && it in minPlausibleAvgSpeedKmh..maxPlausibleAvgSpeedKmh },
+            recipe = (json.fieldOrNull("recipe") as? JsonObject)?.let { PlanRecipeOrigin.fromJson(it) },
         )
+    }
+}
+
+/** Woher ein Rezeptplan stammt — Titel und (freiwillig) Autor des Rezepts. */
+data class PlanRecipeOrigin(val title: String, val author: String? = null) {
+    fun toJson(): JsonObject = buildJsonObject {
+        put("title", title)
+        author?.let { put("author", it) }
+    }
+
+    companion object {
+        /** Tolerant: ohne Titel gibt es keine Herkunft. */
+        fun fromJson(json: JsonObject): PlanRecipeOrigin? {
+            val title = json.optionalString("title")?.takeIf { it.isNotBlank() } ?: return null
+            return PlanRecipeOrigin(title, json.optionalString("author")?.takeIf { it.isNotBlank() })
+        }
     }
 }
 
