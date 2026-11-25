@@ -5,10 +5,10 @@
 
     <!-- Section on the indoor home page -->
     <string name="spiel3_section_title">Challenges</string>
-    <string name="spiel3_section_empty">Rides that someone sends you as a file appear here. You then ride against the other person\'s time.</string>
+    <string name="spiel3_section_empty">Rides that someone sends you as a file appear here. You then ride against the other person’s time.</string>
     <string name="spiel3_section_pick_file">Choose file</string>
     <string name="spiel3_delete_title">Delete challenge?</string>
-    <string name="spiel3_delete_body">\"%1$s\" will be deleted from this device. The file you received is left untouched.</string>
+    <string name="spiel3_delete_body">“%1$s” will be deleted from this device. The file you received is left untouched.</string>
     <string name="spiel3_row_selected">Selected</string>
     <string name="spiel3_row_delete_cd">Delete challenge</string>
     <string name="spiel3_row_ride">Ride against %1$s</string>
@@ -38,7 +38,7 @@
     <string name="spiel3_import_already">Already saved</string>
     <string name="spiel3_import_full">Too many challenges</string>
     <string name="spiel3_import_failed">Saving failed</string>
-    <string name="spiel3_import_saved_body">You will find it on the indoor home page under \"Challenges\".</string>
+    <string name="spiel3_import_saved_body">You will find it on the indoor home page under “Challenges”.</string>
     <string name="spiel3_import_failed_body">Delete an older challenge or free up storage and try again.</string>
     <string name="spiel3_import_open_app">Open Trailscape</string>
     <string name="spiel3_avail_ready">The route is ready on this device.</string>
