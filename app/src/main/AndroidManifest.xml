@@ -223,6 +223,51 @@
             </intent-filter>
         </activity>
 
+        <!-- Import eines Plan-Rezepts per „Oeffnen mit" / „Teilen" (siehe
+             PlanRecipeImportActivity und docs/plan-rezepte.md): eigene
+             Activity mit eigenem MIME-Typ, damit weder der GPX/FIT-Import
+             (ImportActivity) noch der Backup-Import sie anrueht.
+
+             Filter 1: der eigene Typ, den Trailscape beim Teilen setzt.
+             Filter 2: Dateimanager und Mailanhaenge melden eine .json-Datei
+             meist als application/json oder octet-stream; deshalb zusaetzlich
+             ein VIEW-Filter auf die Endung .tsplan.json. Ob der Dateiname im
+             content:-Pfad steht, entscheidet der Anbieter — wo nicht, bleibt der
+             Dateiwaehler unter Training → Plan → „Rezept oeffnen".
+             Nur content: (kein file:); die Activity weist ausserdem URIs der
+             eigenen Anbieter ab. -->
+        <activity
+            android:name=".PlanRecipeImportActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|keyboard|uiMode|density">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/vnd.trailscape.plan+json" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.trailscape.plan+json" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.tsplan\\.json" />
+                <data android:pathPattern=".*\\..*\\.tsplan\\.json" />
+                <data android:pathPattern=".*\\..*\\..*\\.tsplan\\.json" />
+            </intent-filter>
+        </activity>
+
         <!-- Ruecksprung der Strava-Anmeldung (trailscape://strava-callback,
              siehe strava/StravaAuthActivity): durchsichtiges Trampolin wie
              die ImportActivity. Exportiert, weil der Browser sie aufrufen

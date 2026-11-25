@@ -203,9 +203,10 @@ internal class FilamentCore {
         }
         view.isPostProcessingEnabled = s.postProcessing
         applyAntiAliasing(s.antiAliasing)
-        // Weiche Schattenkanten (DPCF) statt hartem PCF; faellt einzeln auf PCF zurueck.
+        // PCF: DPCF ist in Filament 1.75.1 veraltet und faellt auf PCSS zurueck — damit
+        // erschien auf dem Geraet kein Schatten (und die Schattenkarten kosteten ~130 MB).
         runCatching {
-            view.setShadowType(if (s.shadows) View.ShadowType.DPCF else View.ShadowType.PCF)
+            view.setShadowType(View.ShadowType.PCF)
             view.softShadowOptions = view.softShadowOptions.apply {
                 penumbraScale = 1.5f
                 penumbraRatioScale = 1.0f

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Streckenkarten (Idee 10): Filter, Sortierung, Kurzprofil, Detailansicht. Präfix indoor_i10_. -->
+<resources>
+    <string name="indoor_i10_filter_title">Filter und Sortierung</string>
+    <string name="indoor_i10_filter_open">Filter und Sortierung öffnen</string>
+    <string name="indoor_i10_filter_close">Filter und Sortierung schließen</string>
+    <string name="indoor_i10_filter_active">%1$d Filter aktiv</string>
+    <string name="indoor_i10_group_length">Länge</string>
+    <string name="indoor_i10_group_climb">Anstieg</string>
+    <string name="indoor_i10_group_surface">Belag</string>
+    <string name="indoor_i10_group_state">Stand</string>
+    <string name="indoor_i10_group_sort">Sortieren nach</string>
+    <string name="indoor_i10_length_short">Kurz (unter 15 km)</string>
+    <string name="indoor_i10_length_medium">Mittel (15–30 km)</string>
+    <string name="indoor_i10_length_long">Lang (ab 30 km)</string>
+    <string name="indoor_i10_climb_flat">Flach</string>
+    <string name="indoor_i10_climb_rolling">Wellig</string>
+    <string name="indoor_i10_climb_hilly">Bergig</string>
+    <string name="indoor_i10_surface_asphalt">Asphalt</string>
+    <string name="indoor_i10_surface_cobbles">Pflaster</string>
+    <string name="indoor_i10_surface_gravel">Schotter und Waldweg</string>
+    <string name="indoor_i10_state_loaded">Schon geladen</string>
+    <string name="indoor_i10_state_not_ridden">Noch nicht gefahren</string>
+    <string name="indoor_i10_sort_name">Name</string>
+    <string name="indoor_i10_sort_length">Länge</string>
+    <string name="indoor_i10_sort_ascent">Höhenmeter</string>
+    <string name="indoor_i10_sort_time">Fahrzeit</string>
+    <string name="indoor_i10_selected">ausgewählt</string>
+    <string name="indoor_i10_not_selected">nicht ausgewählt</string>
+    <plurals name="indoor_i10_count">
+        <item quantity="one">%1$d von %2$d Strecke</item>
+        <item quantity="other">%1$d von %2$d Strecken</item>
+    </plurals>
+    <string name="indoor_i10_empty_title">Keine Strecke passt zu diesen Filtern</string>
+    <string name="indoor_i10_empty_body">Lockere die Auswahl oder setze die Filter zurück, um alle Strecken zu sehen.</string>
+    <string name="indoor_i10_reset">Filter zurücksetzen</string>
+
+    <!-- Karte -->
+    <string name="indoor_i10_facts_length">Länge</string>
+    <string name="indoor_i10_facts_ascent">Höhenmeter</string>
+    <string name="indoor_i10_facts_grade">Steigung</string>
+    <string name="indoor_i10_facts_time">Fahrzeit</string>
+    <string name="indoor_i10_km_value">%1$s km</string>
+    <string name="indoor_i10_ascent_value">%1$s m</string>
+    <string name="indoor_i10_grade_both">Ø %1$s %% · max. %2$s %%</string>
+    <string name="indoor_i10_grade_avg">Ø %1$s %%</string>
+    <string name="indoor_i10_time_value">≈ %1$s</string>
+    <string name="indoor_i10_time_basis_profile">bei deiner Leistung</string>
+    <string name="indoor_i10_time_basis_neutral">Richtwert, trage FTP und Gewicht im Profil ein</string>
+    <string name="indoor_i10_time_h_min">%1$d h %2$02d min</string>
+    <string name="indoor_i10_time_min">%1$d min</string>
+    <string name="indoor_i10_ridden">Gefahren · Bestzeit %1$s</string>
+    <string name="indoor_i10_ridden_label">Gefahren</string>
+    <string name="indoor_i10_best_time">Eigene Bestzeit</string>
+    <string name="indoor_i10_never_ridden">Noch nicht gefahren</string>
+    <string name="indoor_i10_details">Details</string>
+    <string name="indoor_i10_details_cd">Details zu %1$s öffnen</string>
+    <string name="indoor_i10_card_cd">%1$s, %2$s, %3$s Kilometer, %4$s Höhenmeter, %5$s</string>
+    <string name="indoor_i10_surface_bar_cd">Belag: %1$s</string>
+
+    <!-- Detailansicht -->
+    <string name="indoor_i10_detail_close">Schließen</string>
+    <string name="indoor_i10_detail_profile">Höhenprofil</string>
+    <string name="indoor_i10_detail_profile_none">Für diese Strecke liegt noch kein Höhenprofil vor.</string>
+    <string name="indoor_i10_detail_about">Über die Strecke</string>
+    <string name="indoor_i10_detail_numbers">Zahlen</string>
+    <string name="indoor_i10_detail_surfaces">Belag</string>
+    <string name="indoor_i10_detail_sources">Quellen</string>
+    <string name="indoor_i10_detail_source_aerial">Luftbild: %1$s</string>
+    <string name="indoor_i10_detail_source_aerial_none">Kein Luftbild: Der Boden ist aus der Landnutzung erzeugt.</string>
+    <string name="indoor_i10_detail_source_map">Kartendaten: © OpenStreetMap-Mitwirkende (ODbL)</string>
+    <string name="indoor_i10_detail_package">Paketgröße</string>
+    <string name="indoor_i10_detail_package_value">%1$s Download, %2$s auf dem Gerät</string>
+    <string name="indoor_i10_detail_package_download_only">%1$s Download</string>
+    <string name="indoor_i10_detail_laser">Mit Laserdaten gebaut: Gelände, Gebäude und Bäume nach amtlichen Messdaten.</string>
+    <string name="indoor_i10_detail_status">Stand</string>
+    <string name="indoor_i10_action_ride">Diese Strecke fahren</string>
+    <string name="indoor_i10_action_download">Herunterladen · %1$s</string>
+    <string name="indoor_i10_action_download_unknown">Herunterladen</string>
+    <string name="indoor_i10_action_update">Aktualisieren · %1$s</string>
+    <string name="indoor_i10_action_cancel">Download abbrechen</string>
+    <string name="indoor_i10_action_discard">Angefangenen Download löschen</string>
+    <string name="indoor_i10_action_choose">Strecke auswählen</string>
+    <string name="indoor_i10_action_chosen">Strecke ist ausgewählt. Mit „Fahren“ unten auf der Seite geht es weiter.</string>
+    <string name="indoor_i10_hint_delete_installed">Eine fertig geladene Strecke löschst du in den Indoor-Einstellungen: Dort kannst du Strecken löschen und Speicher freigeben.</string>
+    <string name="indoor_i10_detail_image_cd">Bild der Strecke %1$s</string>
+</resources>

@@ -192,6 +192,11 @@ class IndoorViewModel(
     /** Zustand der Katalogkarten im Schritt Streckenwahl. */
     val catalog: StateFlow<IndoorCatalogUi> = catalogController.ui
 
+    private val _catalogExtras = MutableStateFlow(IndoorCatalogExtras())
+
+    /** Fahrerangaben und eigene Indoor-Fahrten fuer die Streckenkarten (Fahrzeit, „Gefahren"). */
+    val catalogExtras: StateFlow<IndoorCatalogExtras> = _catalogExtras.asStateFlow()
+
     /** Bau auf dem eigenen Server (docs/indoor/serverbau.md). */
     private val serverController = IndoorServerBuildController(serverDeps, this.scope, io) { rideId, dir, manifest, laser, replaced ->
         onServerWorldInstalled(rideId, dir, manifest, laser, replaced)
@@ -535,6 +540,7 @@ class IndoorViewModel(
         scope.launch {
             val (saved, erg) = withContext(io) { savedOptions() to computeErg() }
             ergWorkout = erg
+            _catalogExtras.value = withContext(io) { readCatalogExtras() }
             launchDaySearch()
             val ghostWatts = defaultGhostWatts()
             _route.update { current ->
@@ -557,6 +563,13 @@ class IndoorViewModel(
             }
         }
     }
+
+    private fun readCatalogExtras(): IndoorCatalogExtras = runCatching {
+        IndoorCatalogExtras(
+            rider = catalogRiderOf(profile()),
+            rides = catalogRideRecordsOf(rideStorage.listSummaries().summaries),
+        )
+    }.getOrDefault(IndoorCatalogExtras())
 
     private fun savedOptions(): List<IndoorRouteOption.Saved> {
         val summaries = runCatching { rideStorage.listSummaries().summaries }.getOrDefault(emptyList())

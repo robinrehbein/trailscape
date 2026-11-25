@@ -402,7 +402,6 @@ const val pauseWeeksPerWindow: Int = 2
 /** … in je so vielen aufeinanderfolgenden Wochen. */
 const val pauseWindowWeeks: Int = 12
 
-private fun mondayOfWeek(date: LocalDate): LocalDate = date.with(DayOfWeek.MONDAY)
 
 /**
  * Die Pausenwochen, die wirklich gelten (Abschnitt 2.2 des Konzepts): als

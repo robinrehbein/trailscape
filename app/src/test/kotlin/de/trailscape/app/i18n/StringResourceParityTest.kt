@@ -44,10 +44,15 @@ class StringResourceParityTest {
         "strings_widget.xml" to "widget_",
         // Etappe 1 „Erfolge" (docs/erfolge.md).
         "strings_spiel1.xml" to "erfolge_",
+        "strings_idee07.xml" to "gpxplan_",
         // Indoor-Training: je Slice eine Datei (siehe docs/indoor.md, Abschnitt 3).
         "strings_indoor_app.xml" to "indoor_app_",
         "strings_indoor_ble.xml" to "indoor_ble_",
         "strings_indoor_render.xml" to "indoor_render_",
+        "strings_idee10.xml" to "indoor_i10_",
+        // Idee 3 „Eine Auswertung für alles": Art-Filter der Tourenliste, FTP-Herkunft.
+        "strings_idee03.xml" to "idee03_",
+        "strings_idee08.xml" to "recipe_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */

@@ -317,6 +317,9 @@ private fun TrailscapeAppContent() {
         return
     }
 
+    // Idee 7: „als Planung/als Tour erkannt" nach Teilen/Oeffnen mit.
+    ImportRecognitionHost(appViewModel)
+
     // Erst unterhalb der Einfuehrung: Solange sie steht, ist der `NavHost`
     // nicht komponiert. Ein Tab-Wunsch in dieser Zeit (etwa „Oeffnen mit
     // Trailscape" direkt nach der Installation) liefe sonst ins Leere oder

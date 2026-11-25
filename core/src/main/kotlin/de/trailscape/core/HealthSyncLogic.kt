@@ -624,6 +624,8 @@ fun mergeHeartRateIntoRide(
         // ihr Puls in die Indoor-Tour gemischt — die Tour muss Indoor bleiben,
         // sonst tauchte sie in Neue Wege und Entdeckt-Kacheln auf.
         indoor = ride.indoor,
+        // Und der Herkunft der Leistung (siehe [Ride.powerMeasured]).
+        powerMeasured = ride.powerMeasured,
     )
 }
 
