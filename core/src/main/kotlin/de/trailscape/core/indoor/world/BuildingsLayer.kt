@@ -81,10 +81,12 @@ internal class BuildingsLayer : TileLayer {
                 total -= meshes[i].triangles
             }
         }
+        val aerialRoofs = AerialRoofs.of(ctx) // Dachbild aus dem Luftbild (Detailtreue), sonst Atlas
         for (i in designs.indices) {
             if (dropped[i]) continue
             val d = designs[i]
             out.mesh(WorldNames.NODE_BUILDINGS, wallMat, d.ce, d.cn).append(meshes[i].wall)
+            if (aerialRoofs?.adopt(meshes[i].roof, d.ridgeU - d.groundMinU) { out.mesh(WorldNames.NODE_BUILDINGS, aerialRoofs.material, d.ce, d.cn) } == true) continue
             out.mesh(WorldNames.NODE_BUILDINGS, roofMat, d.ce, d.cn).append(meshes[i].roof)
         }
     }

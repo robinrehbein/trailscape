@@ -56,7 +56,8 @@ internal class PropsLayer : TileLayer {
         private val mesh by lazy { out.mesh(WorldNames.NODE_PROPS, TileMaterial(MATERIAL, roughness = 0.85f)) }
         private val scratch = MeshBuilder(64, 64)
         private val tmp = DoubleArray(5)
-        private var used = 0
+        // Echte Punktobjekte ([PoiLayer]) laufen vorher und zaehlen mit.
+        private var used = out.triangles(WorldNames.NODE_PROPS)
 
         /** Lage neben der Strecke: Mitte, Richtung, Rechtsvektor am Laufmeter. */
         private class Pose(val e: Double, val n: Double, val u: Double, val te: Double, val tn: Double, val hw: Double, val sec: SurfaceSection)
@@ -637,6 +638,12 @@ internal class PropsLayer : TileLayer {
 
         // --- Wegweiser -----------------------------------------------------------
 
+        /** Die Karte fuehrt im Umkreis von 1,5 km Wanderwegweiser — dann gelten nur diese. */
+        private val realGuideposts by lazy {
+            val s = ctx.spec
+            ctx.map.pois(s.minE - 1500, s.minN - 1500, s.maxE + 1500, s.maxN + 1500).any { it.cls == "information" && it.subclass == "guidepost" }
+        }
+
         private fun signposts() {
             for (r in net.roads) {
                 if (r.spec.rail || r.spec.rank > 3) continue
@@ -650,6 +657,8 @@ internal class PropsLayer : TileLayer {
                     if (inside == prevInside || r.onTrack[i] || r.onTrack[i - 1]) continue
                     val o = if (inside) i - 1 else i
                     if (Noise.hash01(floor(r.e[o] / 3).toInt(), floor(r.n[o] / 3).toInt(), 0x516e) > 0.55) continue
+                    // Wo die Karte echte Wegweiser fuehrt, keine erfundenen ([PoiLayer] stellt die echten auf).
+                    if (realGuideposts) continue
                     val e = r.e[o] + r.re[o] * (r.halfWidth + 0.8)
                     val n = r.n[o] + r.rn[o] * (r.halfWidth + 0.8)
                     if (!free(e, n, 0.25)) continue

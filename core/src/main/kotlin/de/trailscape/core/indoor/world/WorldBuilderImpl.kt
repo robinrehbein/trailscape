@@ -472,6 +472,7 @@ internal class WorldBuilderImpl(
             tiles = tiles,
             budget = WorldBudget(maxTex, maxTri, tileBytes),
             attribution = attribution,
+            places = WorldPlaces.of(inputs.map, inputs.track),
         )
         // diskBytes enthaelt das Manifest selbst: so lange rechnen, bis die Laenge stabil ist.
         var json = manifest.toJson()

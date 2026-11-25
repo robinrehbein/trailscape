@@ -72,6 +72,11 @@ data class WorldManifest(
     val tiles: List<WorldTile>,
     val budget: WorldBudget,
     val attribution: List<WorldAttribution>,
+    /**
+     * Orte an der Strecke mit Laufmeter ([WorldPlaces]); **optional** (seit `indoor-world/13`), fehlt in
+     * aelteren Manifesten und wird nur geschrieben, wenn nicht leer. Aeltere Leser ueberspringen das Feld.
+     */
+    val places: List<WorldPlace> = emptyList(),
 ) {
     fun toJson(): String = buildJsonObject {
         put("format", FORMAT)
@@ -88,6 +93,7 @@ data class WorldManifest(
         put("tiles", buildJsonArray { tiles.forEach { add(it.toJson()) } })
         put("budget", budget.toJson())
         put("attribution", buildJsonArray { attribution.forEach { add(it.toJson()) } })
+        if (places.isNotEmpty()) put("places", buildJsonArray { places.forEach { add(it.toJson()) } })
     }.toString()
 
     companion object {
@@ -125,6 +131,7 @@ data class WorldManifest(
                 budget = WorldBudget.fromJson(o.requiredObject("budget")),
                 attribution = (o["attribution"] as? JsonArray).orEmpty()
                     .mapNotNull { (it as? JsonObject)?.let(WorldAttribution::fromJson) },
+                places = (o["places"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(WorldPlace::fromJson) },
             )
         } catch (e: IllegalArgumentException) {
             throw e
@@ -556,6 +563,24 @@ data class WorldAttribution(val source: GeoSourceKind, val text: String, val lic
                 license = o.optionalString("license") ?: "",
                 url = o.optionalString("url") ?: "",
             )
+        }
+    }
+}
+
+/** Ein Ort an der Strecke: Name (wie auf der Ortstafel) und Laufmeter der naechsten Annaeherung. */
+data class WorldPlace(val name: String, val distM: Double) {
+    fun toJson(): JsonObject = buildJsonObject {
+        put("name", name)
+        put("distM", distM)
+    }
+
+    companion object {
+        /** `null` bei fehlendem Namen oder unbrauchbarem Laufmeter (der Eintrag entfaellt, nie das Manifest). */
+        fun fromJson(o: JsonObject): WorldPlace? {
+            val name = o.optionalString("name")?.takeIf { it.isNotBlank() } ?: return null
+            val d = o.optionalDouble("distM") ?: return null
+            if (!d.isFinite() || d < 0) return null
+            return WorldPlace(name, d)
         }
     }
 }

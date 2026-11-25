@@ -29,8 +29,10 @@ internal object FullWorldParts : WorldParts {
     private val trees = TreesLayer()
     private val water = WaterLayer()
     private val props = PropsLayer()
+    private val pois = PoiLayer()
+    private val vines = VineyardLayer()
 
-    private val level0 = listOf<TileLayer>(terrain, water, route, roads, buildings, trees, props)
+    private val level0 = listOf<TileLayer>(terrain, water, route, roads, buildings, trees, vines, pois, props)
     private val level1 = listOf<TileLayer>(terrain, water, buildings, trees)
     private val level2 = listOf<TileLayer>(terrain)
 

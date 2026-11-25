@@ -118,3 +118,33 @@ keiner der genutzten Quellen; das Luftbild ist ein Schnappschuss einer Befliegun
 Winter, unbelaubt), das DOM1 ist älter als das Luftbild (Kahlschläge werden über das Luftbild
 ausgeglichen, Neupflanzungen fehlen); außerhalb von NRW und BW gibt es weder Gelände 1 m noch
 Bäume an echter Stelle noch LoD2, außerhalb der Luftbild-Länder nicht einmal den echten Boden.
+
+## 4 Option (nicht gebaut): Straßenfotos für Fassaden und Schilder
+
+Was weder Vektorkacheln noch Luftbild noch Laser zeigen — Fassaden, Schaufenster, Verkehrszeichen,
+Ampeln, Wegweiser-Inhalte —, steht nur in Bildern von der Straße aus. Offene Sammlungen:
+
+| | Mapillary | KartaView | Panoramax |
+|---|---|---|---|
+| Lizenz der Bilder | CC BY-SA 4.0 | CC BY-SA 4.0 | je nach Instanz CC BY-SA 4.0 / etalab (Frankreich), offene Instanz des OSM-Umfelds |
+| Zugang | API v4 mit **Zugangsschlüssel** (kostenloses Entwicklerkonto bei Meta), Abfragegrenzen | API ohne verlässliche Pflege | offene API je Instanz, ohne Konto lesbar |
+| Abgeleitete Daten | **„Map features“**: erkannte Verkehrszeichen, Ampeln, Masten, Hydranten mit Lage — als Punktliste nutzbar wie die POI-Ebene | – | Bilder; Erkennung nicht zentral |
+| Abdeckung | Städte und Hauptstraßen gut, Feld- und Waldwege lückenhaft, Alter der Bilder sehr gemischt | gering | wachsend, in Deutschland noch dünn |
+
+Was es bringen würde:
+
+- **Schilder und Ampeln** (einfach): die erkannten Verkehrszeichen (Art + Lage) aus Mapillary als
+  zusätzliche Punktobjekte, Modelle wie in `PoiLayer` — Ortstafeln, Vorfahrt, Tempo 30, Ampeln an der
+  richtigen Stelle. Aufwand mittel; Daten sind Erkennungen mit Fehlern.
+- **Fassaden** (schwer): Bildausschnitte je Wand bräuchten Kamerapose, Entzerrung, Auswahl unverdeckter
+  Bilder, Belichtungsausgleich und viel Speicher; realistisch nur Fassaden**farbe** je Gebäude (Median
+  der Wandpixel) als Ersatz für den gewürfelten Putzton. Aufwand hoch.
+
+Folgen: neues Konto/Token (Mapillary) und ein neuer Host in `PRIVACY.md` und der Positivliste; Abruf
+**nur im Katalog- oder Server-Bau**, nie vom Handy mit der Lage einer eigenen Strecke (die Anfrage
+verriete Wohnort und Hausrunde). Datenschutz: Gesichter und Kennzeichen sind bei Mapillary
+automatisch unkenntlich gemacht, aber nicht fehlerfrei — Bildausschnitte in einer veröffentlichten
+Welt sind eine Weitergabe; Farbwerte oder Schildarten (keine Bilder) sind unkritisch. Lizenz: CC BY-SA
+verlangt Namensnennung und für abgeleitete Bilder „Weitergabe unter gleichen Bedingungen“ — Texturen
+aus Fotos würden das Paket teilweise unter CC BY-SA stellen; reine Fakten (Lage und Art eines
+Schilds) sind weniger heikel. Kosten: keine Gebühren, aber Abfragegrenzen und Rechenzeit im Bau.

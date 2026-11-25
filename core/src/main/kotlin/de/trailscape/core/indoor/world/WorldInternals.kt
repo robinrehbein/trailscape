@@ -351,9 +351,15 @@ internal class MapWaterway(val line: DoubleArray, val cls: String, val brunnel: 
 /** Ein benannter Ort der Karte (`place`: city, town, village, hamlet, suburb …). */
 internal class MapPlace(val e: Double, val n: Double, val name: String, val cls: String)
 
+/** Ein Punkt der POI-Ebene (`class`/`subclass` wie in OpenMapTiles, z. B. `bus`/`bus_stop`, `lift_gate`). */
+internal class MapPoi(val e: Double, val n: Double, val cls: String, val subclass: String?, val name: String?)
+
 internal interface MapData {
     /** Benannte Orte im Rechteck (fuer Ortstafeln); ohne Daten leer. */
     fun places(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapPlace> = emptyList()
+
+    /** Punkte der POI-Ebene im Rechteck ([PoiLayer], Detailtreue); ohne Daten leer. */
+    fun pois(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapPoi> = emptyList()
 
     fun buildings(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapBuilding>
     fun roads(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapRoad>
