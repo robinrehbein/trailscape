@@ -46,6 +46,8 @@ class StringResourceParityTest {
         "strings_indoor_app.xml" to "indoor_app_",
         "strings_indoor_ble.xml" to "indoor_ble_",
         "strings_indoor_render.xml" to "indoor_render_",
+        // Idee 2: Trainingsplan steuert drinnen, draussen und Uhr (in :app und :wear).
+        "strings_idee02.xml" to "idee02_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */
