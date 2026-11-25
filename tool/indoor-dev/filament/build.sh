@@ -15,6 +15,8 @@ if [ ! -x build/filament/bin/matc ]; then
   rm build/filament.tgz
 fi
 [ -f build/json.hpp ] || curl -sSL -o build/json.hpp https://raw.githubusercontent.com/nlohmann/json/v3.11.3/single_include/nlohmann/json.hpp
+# stb_image (Nahdetail-Karten, JPEG) aus demselben Stand wie stb_image_write
+[ -f build/stb_image.h ] || curl -sSL -o build/stb_image.h https://raw.githubusercontent.com/nothings/stb/5c205738c191bcb0abc65c4febfa9bd25ff35234/stb_image.h
 [ -f build/stb_image_write.h ] || curl -sSL -o build/stb_image_write.h https://raw.githubusercontent.com/nothings/stb/5c205738c191bcb0abc65c4febfa9bd25ff35234/stb_image_write.h
 F=build/filament
 clang++ -O2 -std=c++20 -stdlib=libc++ -I"$F/include" -Ibuild filarender.cpp -o build/filarender \

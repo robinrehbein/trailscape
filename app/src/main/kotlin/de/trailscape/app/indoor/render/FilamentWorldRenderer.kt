@@ -460,6 +460,8 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             runCatching { appContext.assets.open("$MATERIAL_DIR/$name.filamat").use { it.readBytes() } }
                 .onSuccess { out[name] = it }
         }
+        // Nahdetail der Fahrbahn (Karten neben den Materialien); im sicheren Modus nicht.
+        if (!guard.safeMode) out.putAll(SurfaceNearTextures.loadAssets(appContext.assets))
         return out
     }
 
