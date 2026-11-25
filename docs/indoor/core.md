@@ -14,6 +14,7 @@ Vertrag: [`docs/indoor.md`](../indoor.md), Abschnitte 2, 3.1, 4, 5, 6, 11.
 | `VirtualGears.kt` | Gangtabellen, Startgang, Ersatzsteigung für `SetSimulation` |
 | `ErgWorkouts.kt` | `ergWorkoutFor` |
 | `RiderSetupFrom.kt` | `riderSetupFrom` |
+| `RideFeel.kt`, `FeelCalibration.kt`, `RideProtocol.kt` | Fahrgefühl-Regler, geführter Abgleich, Fahrprotokoll — siehe [`kalibrierung.md`](kalibrierung.md) |
 | `IndoorGhost.kt` | Geist (Vergleichsleistung, frühere Fahrt) |
 | `IndoorSessionImpl.kt` | die Sitzung als reiner Automat |
 | `FtmsCodec.kt`, `FtmsTrainer.kt` | FTMS-Bytes und Kontroll-Automat |

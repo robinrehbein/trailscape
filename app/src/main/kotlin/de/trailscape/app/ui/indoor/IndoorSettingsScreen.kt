@@ -18,6 +18,7 @@ import de.trailscape.app.R
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.more.SettingsNavRow
 import de.trailscape.app.ui.more.SettingsSwitchRow
+import de.trailscape.core.indoor.RideFeel
 import de.trailscape.core.indoor.VirtualGearTable
 import de.trailscape.core.indoor.sky.IndoorTimeOfDay
 
@@ -49,6 +50,15 @@ fun IndoorSettingsScreen(
     onRefreshCatalog: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onBack: () -> Unit,
+    // idee-06: Feinabstimmung, geführter Abgleich, Fahrprotokolle (alles mit Vorgaben, damit ältere Aufrufer bleiben).
+    feel: RideFeel = RideFeel.DEFAULT,
+    onResistanceChange: (Double) -> Unit = {},
+    onSurfaceStrengthChange: (Double) -> Unit = {},
+    onResetFeel: () -> Unit = {},
+    onStartCalibration: (() -> Unit)? = null,
+    calibrationNeedsTrainer: Boolean = false,
+    protocolCount: Int = 0,
+    onOpenProtocols: (() -> Unit)? = null,
 ) {
     IndoorPage(
         title = stringResource(R.string.indoor_app_settings_title),
@@ -57,6 +67,23 @@ fun IndoorSettingsScreen(
         Eyebrow(stringResource(R.string.indoor_app_settings_section_ride))
         ChainringCard(teeth = ui.chainringTeeth, onChange = onChainringChange)
         GearTableCard(selected = ui.gearTable, onChange = onGearTableChange)
+        FeelCard(
+            feel = feel,
+            onResistanceChange = onResistanceChange,
+            onSurfaceChange = onSurfaceStrengthChange,
+            onReset = onResetFeel,
+        )
+        if (onStartCalibration != null) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                SettingsNavRow(
+                    title = stringResource(R.string.indoor_feel_calibrate_title),
+                    status = stringResource(
+                        if (calibrationNeedsTrainer) R.string.indoor_feel_calibrate_needs_trainer else R.string.indoor_feel_calibrate_body,
+                    ),
+                    onClick = { if (!calibrationNeedsTrainer) onStartCalibration() },
+                )
+            }
+        }
 
         Eyebrow(stringResource(R.string.indoor_app_settings_section_view))
         TimeOfDayCard(selected = ui.timeOfDay, onChange = onTimeOfDayChange)
@@ -103,6 +130,15 @@ fun IndoorSettingsScreen(
                     title = stringResource(R.string.indoor_app_settings_diagnostics_title),
                     status = stringResource(R.string.indoor_app_settings_diagnostics_body),
                     onClick = onOpenDiagnostics,
+                )
+            }
+        }
+        if (onOpenProtocols != null) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                SettingsNavRow(
+                    title = stringResource(R.string.indoor_feel_protocols_title),
+                    status = stringResource(R.string.indoor_feel_protocols_body),
+                    onClick = onOpenProtocols,
                 )
             }
         }

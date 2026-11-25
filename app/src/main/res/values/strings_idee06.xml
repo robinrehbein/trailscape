@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Idee 6: Kalibrierung nach den ersten Fahrten (Fahrgefühl, Abgleich, Fahrprotokolle) -->
+
+    <!-- IndoorFeelScreens.kt: Regler -->
+    <string name="indoor_feel_card_title">Feinabstimmung</string>
+    <string name="indoor_feel_resistance_title">Gesamtwiderstand</string>
+    <string name="indoor_feel_resistance_light">leichter</string>
+    <string name="indoor_feel_resistance_heavy">schwerer</string>
+    <string name="indoor_feel_resistance_body" formatted="false">Wie schwer sich die Pedale insgesamt anfühlen. Mehr als 100 % bremst der Trainer stärker, weniger weniger. Die Geschwindigkeit der Fahrt in der Strecke ändert sich dadurch nicht.</string>
+    <string name="indoor_feel_surface_title">Stärke des Belags</string>
+    <string name="indoor_feel_surface_light">kaum zu spüren</string>
+    <string name="indoor_feel_surface_heavy">sehr deutlich</string>
+    <string name="indoor_feel_surface_body" formatted="false">Wie deutlich Schotter, Waldboden und Wiese gegenüber Asphalt zu spüren sind. 100 % ist die Tabelle von heute, 0 % fühlt sich überall gleich an.</string>
+    <string name="indoor_feel_value_percent">%1$d %%</string>
+    <string name="indoor_feel_reset">Zurücksetzen</string>
+    <string name="indoor_feel_default_note" formatted="false">Vorgabe: 100 % — so rechnet die App heute.</string>
+
+    <!-- Einstiege in den Einstellungen -->
+    <string name="indoor_feel_calibrate_title">Fahrgefühl einstellen</string>
+    <string name="indoor_feel_calibrate_body">2–3 Minuten gleichmäßig fahren; die App schlägt einen Gesamtwiderstand vor.</string>
+    <string name="indoor_feel_calibrate_needs_trainer">Dafür muss ein echter Trainer gekoppelt sein (nicht der Demo-Trainer).</string>
+    <string name="indoor_feel_protocols_title">Fahrprotokolle</string>
+    <string name="indoor_feel_protocols_body">Was der Trainer bekam und was dabei herauskam — nur auf diesem Gerät.</string>
+
+    <!-- Geführter Abgleich -->
+    <string name="indoor_feel_cal_title">Fahrgefühl einstellen</string>
+    <string name="indoor_feel_cal_intro">Tritt 2–3 Minuten gleichmäßig auf einer flachen Strecke: etwa 80–90 U/min, ruhig und ohne zu schalten. Die App vergleicht deine Leistung mit dem, was ein Rad in der Ebene braucht.</string>
+    <string name="indoor_feel_cal_waiting">Los geht’s: mindestens 100 Watt und 60–110 U/min.</string>
+    <string name="indoor_feel_cal_warmup">Einlaufen … noch %1$d Sekunden, bis die Messung beginnt.</string>
+    <string name="indoor_feel_cal_measuring">Messung läuft — gleichmäßig weitertreten. Noch %1$d Sekunden.</string>
+    <string name="indoor_feel_cal_live">%1$d W · %2$d U/min · Gang %3$d</string>
+    <string name="indoor_feel_cal_gear_less">Leichter schalten</string>
+    <string name="indoor_feel_cal_gear_more">Schwerer schalten</string>
+    <string name="indoor_feel_cal_finish_now">Jetzt auswerten</string>
+    <string name="indoor_feel_cal_cancel">Abbrechen</string>
+    <string name="indoor_feel_cal_result_title">Vorschlag</string>
+    <string name="indoor_feel_cal_result_suggest">Gesamtwiderstand von %1$d %% auf %2$d %%</string>
+    <string name="indoor_feel_cal_result_same">Der Widerstand passt: %1$d %% bleibt.</string>
+    <string name="indoor_feel_cal_result_detail">Gemessen %1$d W bei %2$d U/min; für ein Rad in der Ebene erwartet: %3$d W. Genauigkeit des Faktors etwa ±%4$d %%.</string>
+    <string name="indoor_feel_cal_result_clamped" formatted="false">Der gerechnete Wert lag außerhalb der Grenzen (70–130 %) und wurde begrenzt.</string>
+    <string name="indoor_feel_cal_accept">Übernehmen</string>
+    <string name="indoor_feel_cal_decline">Nicht übernehmen</string>
+    <string name="indoor_feel_cal_accepted">Übernommen. Gilt ab der nächsten Fahrt; unter Fahrgefühl lässt es sich jederzeit zurücksetzen.</string>
+    <string name="indoor_feel_cal_done">Fertig</string>
+    <string name="indoor_feel_cal_note">Eine ebene Strecke zeigt den Widerstand nur grob. Fahre nach der Übernahme ein paar Mal und stelle bei Bedarf nach; das Fahrprotokoll hilft dabei.</string>
+    <string name="indoor_feel_cal_reject_title">Kein Vorschlag</string>
+    <string name="indoor_feel_cal_reject_too_few">Zu wenige brauchbare Messwerte. Tritt die ganze Zeit mindestens 100 Watt bei 60–110 U/min.</string>
+    <string name="indoor_feel_cal_reject_power">Die Leistung war zu niedrig für eine verlässliche Messung (unter 100 Watt).</string>
+    <string name="indoor_feel_cal_reject_cadence">Die Trittfrequenz lag außerhalb von 60–110 U/min. Wähle einen Gang, der etwa 85 U/min ergibt.</string>
+    <string name="indoor_feel_cal_reject_unsteady">Die Leistung oder Trittfrequenz war zu unruhig oder ist gewandert. Versuche es noch einmal und tritt gleichmäßig.</string>
+    <string name="indoor_feel_cal_reject_speed">Die Geschwindigkeit der Fahrt passte nicht zur Leistung — vermutlich war die Fahrt noch nicht eingeschwungen. Bitte noch einmal.</string>
+    <string name="indoor_feel_cal_reject_gear">Der Gang wurde gewechselt. Bleibe in einem Gang und versuche es noch einmal.</string>
+    <string name="indoor_feel_cal_reject_implausible">Das Ergebnis läge weit außerhalb des Üblichen (mehr als der halbe bis doppelte Widerstand). Das deutet eher auf einen Messfehler hin; es wird nichts vorgeschlagen.</string>
+    <string name="indoor_feel_cal_retry">Noch einmal</string>
+
+    <!-- Fahrprotokolle -->
+    <string name="indoor_feel_log_title">Fahrprotokolle</string>
+    <string name="indoor_feel_log_intro">Je Fahrt eine Zeile alle 5 Sekunden: gesetzte Steigung bzw. Widerstand, gemessene Leistung, simulierte Geschwindigkeit, Gang. Die Dateien bleiben auf diesem Gerät; geteilt wird nur, was du selbst teilst. Es werden höchstens 12 Fahrten aufbewahrt.</string>
+    <string name="indoor_feel_log_empty">Noch kein Protokoll. Es entsteht bei jeder Fahrt.</string>
+    <string name="indoor_feel_log_open">Ansehen</string>
+    <string name="indoor_feel_log_share">Teilen</string>
+    <string name="indoor_feel_log_delete">Löschen</string>
+    <string name="indoor_feel_log_delete_all">Alle löschen</string>
+    <string name="indoor_feel_log_back_to_list">Zur Liste</string>
+    <string name="indoor_feel_log_entry">%1$s · %2$d KB</string>
+    <string name="indoor_feel_log_share_chooser">Fahrprotokoll teilen</string>
+    <string name="indoor_feel_log_share_subject">Trailscape Fahrprotokoll</string>
+    <string name="indoor_feel_log_truncated">Hier nur die ersten %1$d Zeilen; geteilt wird die ganze Datei.</string>
+</resources>

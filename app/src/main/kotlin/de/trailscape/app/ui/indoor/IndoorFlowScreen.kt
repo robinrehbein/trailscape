@@ -43,6 +43,7 @@ import de.trailscape.core.TrainingSession
 import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.i18n.sessionTitle
 import de.trailscape.core.indoor.IndoorPhase
+import de.trailscape.core.indoor.ShifterEvent
 import kotlinx.coroutines.delay
 
 /**
@@ -160,6 +161,13 @@ private fun PairStage(vm: IndoorViewModel) {
 private fun SettingsStage(vm: IndoorViewModel, onOpenWorlds: () -> Unit, onOpenDiagnostics: () -> Unit) {
     val ui by vm.pair.collectAsStateWithLifecycle()
     val catalog by vm.catalog.collectAsStateWithLifecycle()
+    val feel by vm.feel.collectAsStateWithLifecycle()
+    // Unterseite Fahrprotokolle (kein eigener Ablaufschritt: bleibt in den Einstellungen).
+    var showProtocols by rememberSaveable { mutableStateOf(false) }
+    if (showProtocols) {
+        ProtocolsPage(vm, onBack = { showProtocols = false })
+        return
+    }
     BackHandler { vm.closeSubPage() }
     IndoorSettingsScreen(
         ui = ui,
@@ -172,6 +180,43 @@ private fun SettingsStage(vm: IndoorViewModel, onOpenWorlds: () -> Unit, onOpenD
         onRefreshCatalog = vm::refreshCatalog,
         onOpenDiagnostics = onOpenDiagnostics,
         onBack = vm::closeSubPage,
+        feel = feel,
+        onResistanceChange = vm::setFeelResistance,
+        onSurfaceStrengthChange = vm::setFeelSurfaceStrength,
+        onResetFeel = vm::resetFeel,
+        onStartCalibration = vm::startCalibration,
+        calibrationNeedsTrainer = ui.demoTrainer || ui.trainerName == null,
+        onOpenProtocols = if (vm.protocols != null) ({ showProtocols = true }) else null,
+    )
+}
+
+/** Liste und Ansicht der Fahrprotokolle; liest und löscht Dateien im Hintergrund-unkritischen Umfang (klein, höchstens 12). */
+@Composable
+private fun ProtocolsPage(vm: IndoorViewModel, onBack: () -> Unit) {
+    val store = vm.protocols ?: run { onBack(); return }
+    val context = LocalContext.current
+    var version by remember { mutableStateOf(0) }
+    var openedName by rememberSaveable { mutableStateOf<String?>(null) }
+    val entries = remember(version) { store.list() }
+    val format = remember { java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT) }
+    val rows = entries.map { ProtocolRowUi(it.file.name, format.format(java.util.Date(it.modifiedMs)), ((it.sizeBytes + 1023) / 1024).toInt()) }
+    val opened = entries.firstOrNull { it.file.name == openedName }
+    val openedText = remember(opened) { opened?.let { store.read(it) } }
+    BackHandler { if (openedName != null) openedName = null else onBack() }
+    IndoorProtocolScreen(
+        rows = rows,
+        openedId = opened?.file?.name,
+        openedText = openedText,
+        onOpen = { openedName = it },
+        onShare = { id -> entries.firstOrNull { it.file.name == id }?.let { e -> runCatching { shareProtocol(context, e) } } },
+        onDelete = { id ->
+            entries.firstOrNull { it.file.name == id }?.let { store.delete(it) }
+            openedName = null
+            version++
+        },
+        onDeleteAll = { store.clear(); openedName = null; version++ },
+        onCloseOpened = { openedName = null },
+        onBack = onBack,
     )
 }
 
@@ -258,6 +303,20 @@ private fun WorldStage(vm: IndoorViewModel) {
 
 @Composable
 private fun RideStage(vm: IndoorViewModel) {
+    // Geführter Abgleich „Fahrgefühl einstellen“: eigene Seite statt Fahransicht.
+    val calibration by vm.calibration.collectAsStateWithLifecycle()
+    calibration?.let { cal ->
+        BackHandler { vm.leaveCalibration() }
+        IndoorCalibrationScreen(
+            ui = cal,
+            onGearLess = { vm.shift(ShifterEvent.DOWN) },
+            onGearMore = { vm.shift(ShifterEvent.UP) },
+            onFinishNow = vm::finishCalibrationNow,
+            onAccept = vm::acceptCalibration,
+            onLeave = vm::leaveCalibration,
+        )
+        return
+    }
     val ride by vm.ride.collectAsStateWithLifecycle()
     val renderer by vm.renderer.collectAsStateWithLifecycle()
     var askLeave by rememberSaveable { mutableStateOf(false) }
