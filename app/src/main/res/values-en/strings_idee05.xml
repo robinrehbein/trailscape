@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Indoor ride in the background (docs/indoor/hintergrund.md). -->
+<resources>
+    <string name="idee05_settings_section">Background</string>
+    <string name="idee05_settings_background_title">Keep riding in the background</string>
+    <string name="idee05_settings_background_body">The ride keeps going when you leave the app or lock the screen. A notification shows power, time and distance. Off: leaving the app pauses the ride.</string>
+
+    <string name="idee05_notification_channel">Indoor ride</string>
+    <string name="idee05_notification_title_ready">Ready · %1$s</string>
+    <string name="idee05_notification_title_riding">Indoor · %1$s</string>
+    <string name="idee05_notification_title_paused">Paused · %1$s</string>
+    <string name="idee05_notification_title_finishing">Ride ending · %1$s</string>
+    <string name="idee05_notification_text">%1$s · %2$s · %3$s</string>
+    <string name="idee05_notification_power">%1$d W</string>
+    <string name="idee05_notification_power_none">– W</string>
+    <string name="idee05_notification_distance">%1$s km</string>
+    <string name="idee05_notification_action_pause">Pause</string>
+    <string name="idee05_notification_action_resume">Resume</string>
+    <string name="idee05_notification_action_finish">Finish</string>
+
+    <string name="idee05_notification_result_channel">Indoor ride finished</string>
+    <string name="idee05_result_title">Indoor ride finished</string>
+    <string name="idee05_result_saved">The ride has been saved.</string>
+    <string name="idee05_result_too_short">The ride was shorter than a minute and was not saved.</string>
+    <string name="idee05_result_failed">The ride could not be saved. It will be restored the next time you open the app.</string>
+    <string name="idee05_result_in_app">Tap here to see the summary and save the ride.</string>
+
+    <string name="idee05_recovered_name">%1$s (restored)</string>
+    <string name="idee05_recovered_title">Indoor ride restored</string>
+    <string name="idee05_recovered_body">The ride was interrupted. The part you rode is saved as “%1$s”; on the same route you can continue from that point.</string>
+</resources>

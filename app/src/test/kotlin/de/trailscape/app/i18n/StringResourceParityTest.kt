@@ -46,6 +46,8 @@ class StringResourceParityTest {
         "strings_indoor_app.xml" to "indoor_app_",
         "strings_indoor_ble.xml" to "indoor_ble_",
         "strings_indoor_render.xml" to "indoor_render_",
+        // Indoor-Fahrt im Hintergrund (docs/indoor/hintergrund.md).
+        "strings_idee05.xml" to "idee05_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */

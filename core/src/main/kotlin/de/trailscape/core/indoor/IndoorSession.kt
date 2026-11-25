@@ -309,6 +309,14 @@ interface IndoorSession {
 
     /** Beendet die Fahrt und liefert die Aufzeichnung. Mehrfacher Aufruf liefert dieselbe. */
     fun finish(): IndoorRideRecord
+
+    /**
+     * Die bisher aufgezeichneten Punkte ab dem Index [fromIndex] (0 = alle) —
+     * fuer die laufende Sicherung der Fahrt gegen einen Prozesstod
+     * (docs/indoor/hintergrund.md). Eine Kopie; ohne Sicherung (Attrappen)
+     * eine leere Liste. Vom Takt-Thread wie [step].
+     */
+    fun recordedPointsFrom(fromIndex: Int): List<TrackPoint> = emptyList()
 }
 
 /**

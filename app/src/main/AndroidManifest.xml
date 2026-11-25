@@ -16,6 +16,14 @@
          den zehn Minuten abbrechen, die WorkManager einer gewoehnlichen
          Arbeit zugesteht. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Fuer die Indoor-Fahrt im Hintergrund (indoor/background/IndoorRideService,
+         docs/indoor/hintergrund.md): Der Dienst haelt die Bluetooth-Verbindung
+         zum Rollentrainer (FTMS) und schickt ihm laufend Steigung bzw.
+         Zielleistung, auch bei gesperrtem Display. Ab Android 14 verlangt der
+         Typ „connectedDevice" diese Berechtigung UND eine erteilte
+         BLUETOOTH_CONNECT; ohne die startet der Dienst nicht, und die Fahrt
+         pausiert wie frueher beim Verlassen der App. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Fuer den GPS-Wachhund der Aufzeichnung (RecordingService): Nach einem
          AlarmManager-Weckruf haelt der Dienst fuer wenige Sekunden einen
@@ -67,8 +75,9 @@
          3D-Welt (Filament) braucht OpenGL ES 3.0 — mit required="false",
          damit Play kein Geraet ausfiltert: Ohne ES 3.0 zeigt die
          Indoor-Seite eine Meldung, der Rest der App laeuft unveraendert.
-         Eigene Berechtigungen braucht das Feature nicht (kein Standort,
-         kein Vordergrunddienst im Prototyp). -->
+         Kein Standort. Fuer die Fahrt im Hintergrund kommt der
+         Vordergrunddienst-Typ „connectedDevice" hinzu (siehe oben und
+         IndoorRideService). -->
     <uses-feature
         android:glEsVersion="0x00030000"
         android:required="false" />
@@ -312,6 +321,18 @@
             android:name=".record.RecordingService"
             android:exported="false"
             android:foregroundServiceType="location"
+            android:stopWithTask="false" />
+
+        <!-- Indoor-Fahrt im Hintergrund (docs/indoor/hintergrund.md). Gestartet
+             beim Start einer Fahrt (aus dem Vordergrund), beendet sich mit
+             ihr. Typ „connectedDevice": Er haelt die BLE-Verbindung zum
+             Rollentrainer und steuert ihn — ein Standort wird nicht
+             gebraucht. stopWithTask="false": Wer die App aus den Letzten Apps
+             wischt, faehrt weiter; zurueck geht es ueber die Benachrichtigung. -->
+        <service
+            android:name=".indoor.background.IndoorRideService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"
             android:stopWithTask="false" />
 
         <!-- Handy-Bruecke: empfaengt Sensordaten und Befehle einer gekoppelten

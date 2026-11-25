@@ -112,7 +112,7 @@ class IndoorRideRuntime(
     session: IndoorSession,
     private val trainer: IndoorTrainer,
     private val shifter: IndoorShifter?,
-    private val renderer: WorldRenderer?,
+    renderer: WorldRenderer?,
     private val heartRate: IndoorHeartRateSource? = null,
     initialRender: IndoorRenderUi = if (renderer == null) IndoorRenderUi.NoWorld else IndoorRenderUi.Loading(0, 0),
     dispatcher: CoroutineDispatcher? = null,
@@ -122,7 +122,23 @@ class IndoorRideRuntime(
     private val rebuildSession: ((TrainerCapabilities) -> IndoorSession?)? = null,
     holdStart: Boolean = false,
     private val releaseOnFirstStroke: Boolean = false,
+    private val journal: IndoorRideJournalSink? = null,
+    private val journalIntervalMs: Long = JOURNAL_INTERVAL_MS,
 ) {
+    /**
+     * Die Darstellung; austauschbar, weil eine Fahrt im Hintergrund die
+     * Oberflaeche ueberleben kann ([replaceRenderer], docs/indoor/hintergrund.md).
+     * Gelesen und getauscht nur unter [rendererLock].
+     */
+    @Volatile private var renderer: WorldRenderer? = renderer
+    private val rendererLock = Any()
+
+    // --- Sicherung (nur vom Takt-Thread) -------------------------------------
+    private var journaledPoints = 0
+    private var lastJournalMs = Long.MIN_VALUE
+    private var lastJournalPhase: IndoorPhase? = null
+    @Volatile private var journalRequested = false
+
     /** Die aktuelle Sitzung; nur vom Takt-Thread (bzw. nach dem Anhalten der Schleife). */
     private var session: IndoorSession = session
 
@@ -379,6 +395,32 @@ class IndoorRideRuntime(
         }
     }
 
+    /**
+     * Tauscht die Darstellung (docs/indoor/hintergrund.md): `null`, wenn die
+     * Oberflaeche geht und die Fahrt im Hintergrunddienst weiterlaeuft; eine
+     * neue, wenn sie zurueckkehrt — der naechste Takt setzt sie an die
+     * aktuelle Stelle (die Darstellung springt ab 30 m Abstand). [render]
+     * ist der Anzeigezustand ab jetzt. Hauptthread.
+     *
+     * @return die bisherige Darstellung; der Aufrufer loest ihren Listener und
+     *   zerstoert sie (nach diesem Aufruf ruft die Laufzeit sie nicht mehr).
+     */
+    fun replaceRenderer(next: WorldRenderer?, render: IndoorRenderUi): WorldRenderer? {
+        val old = synchronized(rendererLock) {
+            val o = renderer
+            renderer = next
+            renderEnabled = next != null
+            o
+        }
+        _state.update { it.copy(render = render) }
+        return old
+    }
+
+    /** Sichert im naechsten Takt (App geht in den Hintergrund, Pause). */
+    fun requestJournal() {
+        journalRequested = true
+    }
+
     /** Blendet den aktuellen Hinweis aus. */
     fun dismissNotice() {
         synchronized(noticeLock) { noticeUntilMs = 0L }
@@ -433,6 +475,7 @@ class IndoorRideRuntime(
                 guard(IndoorPart.CORE) { trainer.send(command) }
             }
             pushToRenderer(now, step.state)
+            maybeJournal(now, step.state)
             val movable = (session as? MovableIndoorSession)?.let { s -> guard(IndoorPart.CORE) { s.canMove } } ?: false
             _state.update {
                 it.copy(
@@ -469,10 +512,21 @@ class IndoorRideRuntime(
         guard(IndoorPart.CORE) { trainer.send(TrainerCommand.Stop) }
         guard(IndoorPart.CORE) { trainer.tick(clock()) }
         releaseDevices()
-        if (renderEnabled && renderer != null) {
+        if (result != null && journal != null) {
+            // Der Rest seit der letzten Sicherung (samt angefangener Sekunde):
+            // So liegt die ganze Aufzeichnung auf dem Datentraeger, bis sie
+            // gespeichert oder verworfen ist.
+            val rest = result.points.drop(journaledPoints)
+            journaledPoints = result.points.size
+            val last = runCatching { session.state }.getOrNull() ?: _state.value.session
+            if (last != null) runCatching { journal.append(rest, last) }
+        }
+        if (renderEnabled) {
             val last = _state.value.session
             if (last != null) {
-                runCatchingPart(IndoorPart.RENDER) { renderer.setState(worldStateOf(clock(), last, paused = true)) }
+                synchronized(rendererLock) {
+                    renderer?.let { r -> runCatchingPart(IndoorPart.RENDER) { r.setState(worldStateOf(clock(), last, paused = true)) } }
+                }
             }
         }
         _state.update { it.copy(finished = true, session = runCatching { session.state }.getOrNull() ?: it.session) }
@@ -539,14 +593,35 @@ class IndoorRideRuntime(
         val fresh = indoorCatching(IndoorPart.CORE) { rebuild(caps) }.getOrNull() ?: return
         for (replay in log) guard(IndoorPart.CORE) { replay(fresh) }
         session = fresh
+        journaledPoints = 0
         // Der Trainer meldet seine Faehigkeiten je Verbindung neu; getauscht wird einmal.
         preStartLog = null
     }
 
+    /**
+     * Sichert neue Punkte alle [journalIntervalMs], bei jedem Phasenwechsel
+     * (Pause, Weiter) und auf Wunsch ([requestJournal]). Ein Schreibfehler
+     * haelt die Fahrt nicht auf.
+     */
+    private fun maybeJournal(now: Long, s: IndoorSessionState) {
+        val sink = journal ?: return
+        val due = journalRequested || s.phase != lastJournalPhase ||
+            lastJournalMs == Long.MIN_VALUE || now - lastJournalMs >= journalIntervalMs
+        if (!due) return
+        journalRequested = false
+        lastJournalMs = now
+        lastJournalPhase = s.phase
+        val fresh = guard(IndoorPart.CORE) { session.recordedPointsFrom(journaledPoints) } ?: return
+        journaledPoints += fresh.size
+        runCatching { sink.append(fresh, s) }
+    }
+
     private fun pushToRenderer(now: Long, s: IndoorSessionState) {
-        val r = renderer ?: return
         if (!renderEnabled) return
-        val ok = runCatchingPart(IndoorPart.RENDER) { r.setState(worldStateOf(now, s, paused = s.phase != IndoorPhase.RUNNING)) }
+        val ok = synchronized(rendererLock) {
+            val r = renderer ?: return
+            runCatchingPart(IndoorPart.RENDER) { r.setState(worldStateOf(now, s, paused = s.phase != IndoorPhase.RUNNING)) }
+        }
         if (!ok) {
             renderEnabled = false
             val problem = _state.value.problem
@@ -607,6 +682,9 @@ class IndoorRideRuntime(
         /** Abstand der Takte: 10 Hz. */
         const val TICK_MS: Long = 100L
 
+        /** Abstand der Sicherungen waehrend der Fahrt (docs/indoor/hintergrund.md). */
+        const val JOURNAL_INTERVAL_MS: Long = 5_000L
+
         /** So lange bleibt ein Hinweis stehen, wenn niemand ihn wegtippt. */
         const val NOTICE_DURATION_MS: Long = 5_000L
 
@@ -655,4 +733,14 @@ interface IndoorHeartRateSource {
     fun currentBpm(): Int?
 
     fun release()
+}
+
+/**
+ * Empfaenger der laufenden Sicherung einer Fahrt ([IndoorRideRuntime],
+ * Parameter `journal`): neue Punkte seit dem letzten Aufruf und der aktuelle
+ * Zustand. Wird vom Takt-Thread gerufen; darf nicht lange blockieren
+ * (ein paar Zeilen anhaengen).
+ */
+fun interface IndoorRideJournalSink {
+    fun append(points: List<de.trailscape.core.TrackPoint>, state: IndoorSessionState)
 }

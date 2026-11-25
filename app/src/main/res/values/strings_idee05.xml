@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Indoor-Fahrt im Hintergrund (docs/indoor/hintergrund.md): Einstellung,
+     Benachrichtigung des Vordergrunddienstes, Ergebnis- und
+     Wiederherstellungsmeldungen. -->
+<resources>
+    <!-- Einstellungen des Indoor-Trainings -->
+    <string name="idee05_settings_section">Hintergrund</string>
+    <string name="idee05_settings_background_title">Im Hintergrund weiterfahren</string>
+    <string name="idee05_settings_background_body">Die Fahrt läuft weiter, wenn du die App verlässt oder das Display sperrst. Eine Benachrichtigung zeigt Leistung, Zeit und Distanz. Aus: Verlassen der App pausiert die Fahrt.</string>
+
+    <!-- Laufende Benachrichtigung -->
+    <string name="idee05_notification_channel">Indoor-Fahrt</string>
+    <string name="idee05_notification_title_ready">Bereit · %1$s</string>
+    <string name="idee05_notification_title_riding">Indoor · %1$s</string>
+    <string name="idee05_notification_title_paused">Pausiert · %1$s</string>
+    <string name="idee05_notification_title_finishing">Fahrt endet · %1$s</string>
+    <string name="idee05_notification_text">%1$s · %2$s · %3$s</string>
+    <string name="idee05_notification_power">%1$d W</string>
+    <string name="idee05_notification_power_none">– W</string>
+    <string name="idee05_notification_distance">%1$s km</string>
+    <string name="idee05_notification_action_pause">Pause</string>
+    <string name="idee05_notification_action_resume">Weiter</string>
+    <string name="idee05_notification_action_finish">Beenden</string>
+
+    <!-- Nach dem Ende ohne sichtbare App -->
+    <string name="idee05_notification_result_channel">Indoor-Fahrt beendet</string>
+    <string name="idee05_result_title">Indoor-Fahrt beendet</string>
+    <string name="idee05_result_saved">Die Fahrt ist als Tour gespeichert.</string>
+    <string name="idee05_result_too_short">Die Fahrt war kürzer als eine Minute und wurde nicht gespeichert.</string>
+    <string name="idee05_result_failed">Die Fahrt ließ sich nicht speichern. Sie wird beim nächsten Start der App wiederhergestellt.</string>
+    <string name="idee05_result_in_app">Tippe hier, um die Auswertung zu sehen und die Fahrt zu speichern.</string>
+
+    <!-- Wiederherstellung nach einem Prozesstod -->
+    <string name="idee05_recovered_name">%1$s (wiederhergestellt)</string>
+    <string name="idee05_recovered_title">Indoor-Fahrt wiederhergestellt</string>
+    <string name="idee05_recovered_body">Die Fahrt wurde unterbrochen. Der gefahrene Teil ist als „%1$s“ gespeichert; auf derselben Strecke kannst du an dieser Stelle weiterfahren.</string>
+</resources>

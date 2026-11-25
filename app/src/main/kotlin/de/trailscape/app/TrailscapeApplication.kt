@@ -8,6 +8,7 @@ import de.trailscape.app.data.AppServices
 import de.trailscape.app.feedback.AppDiagnostics
 import de.trailscape.app.feedback.CrashReporter
 import de.trailscape.app.i18n.AppLocale
+import de.trailscape.app.indoor.background.IndoorRideRecovery
 import de.trailscape.app.record.RecordingService
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.reminder.ReminderScheduler
@@ -49,6 +50,10 @@ class TrailscapeApplication : Application() {
             // hochfaehrt — der hat Vorrang, denn nur er weiss, ob er eine
             // laufende Fahrt fortsetzen will. Siehe `RecoveryGate`.
             RecordingService.recoverIfNeeded(this@TrailscapeApplication, AppServices.rideStorage)
+        }
+        AppServices.appScope.launch {
+            // Indoor-Fahrten, die ein Prozesstod unterbrach (docs/indoor/hintergrund.md).
+            runCatching { IndoorRideRecovery.run(this@TrailscapeApplication) }
         }
         StravaServices.init(this)
         installWidgetRefresh()

@@ -668,6 +668,11 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Mova
         }
     }
 
+    override fun recordedPointsFrom(fromIndex: Int): List<TrackPoint> {
+        val from = fromIndex.coerceIn(0, points.size)
+        return points.subList(from, points.size).toList()
+    }
+
     override fun finish(): IndoorRideRecord {
         record?.let { return it }
         flushPartialSecond(lastHr)

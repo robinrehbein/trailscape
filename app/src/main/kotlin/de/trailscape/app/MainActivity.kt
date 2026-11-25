@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import de.trailscape.app.indoor.background.IndoorRideHost
+import de.trailscape.app.indoor.background.IndoorRideService
+import kotlinx.coroutines.launch
 import de.trailscape.app.feedback.CrashReportPrompt
 import de.trailscape.app.health.HealthPermissionRequester
 import de.trailscape.app.i18n.AppLocale
@@ -49,6 +53,8 @@ class MainActivity : ComponentActivity() {
         AppLocale.refresh(this)
         showTodayIfRequested(intent)
         importIfRequested(intent)
+        openIndoorIfRequested(intent, appStart = savedInstanceState == null)
+        collectIndoorSavedRides()
         setContent {
             TrailscapeTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -75,6 +81,30 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         showTodayIfRequested(intent)
         importIfRequested(intent)
+        openIndoorIfRequested(intent, appStart = false)
+    }
+
+    /**
+     * Zurueck in die laufende Indoor-Fahrt (docs/indoor/hintergrund.md): aus
+     * der Benachrichtigung des [IndoorRideService] und beim App-Start, wenn
+     * im Hintergrund noch eine Fahrt laeuft. Ohne Fahrt fuehrt das Extra auf
+     * die Indoor-Startseite (z. B. nach „Fahrt gespeichert"). Touren, die
+     * ohne Oberflaeche gespeichert wurden, landen ueber [IndoorRideHost.savedRides]
+     * in der Tourenliste.
+     */
+    private fun openIndoorIfRequested(intent: Intent?, appStart: Boolean) {
+        val host = IndoorRideHost.shared
+        val requested = intent?.getBooleanExtra(IndoorRideService.EXTRA_OPEN_INDOOR, false) == true
+        if (requested) intent?.removeExtra(IndoorRideService.EXTRA_OPEN_INDOOR)
+        if (requested || (appStart && host.isRiding)) {
+            ViewModelProvider(this)[AppViewModel::class.java].requestIndoor()
+        }
+    }
+
+    /** Je Activity-Instanz (auch nach einer Drehung): ohne Oberflaeche gespeicherte Indoor-Touren nachladen. */
+    private fun collectIndoorSavedRides() {
+        val appViewModel = ViewModelProvider(this)[AppViewModel::class.java]
+        lifecycleScope.launch { IndoorRideHost.shared.savedRides.collect { appViewModel.onIndoorRideSaved(it) } }
     }
 
     /**

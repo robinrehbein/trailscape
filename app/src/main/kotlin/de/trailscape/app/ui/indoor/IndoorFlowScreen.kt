@@ -64,8 +64,9 @@ import kotlinx.coroutines.delay
  *  * Auswertung: ungespeicherte Fahrt → Rueckfrage „Verwerfen?"; sonst raus.
  *
  * ## Lebenszyklus
- * `ON_STOP` → [IndoorViewModel.onAppBackground] (die Fahrt pausiert, es gibt
- * keinen Vordergrunddienst, docs/indoor.md 11.2 Nr. 4), `ON_START` →
+ * `ON_STOP` → [IndoorViewModel.onAppBackground] (mit „Im Hintergrund
+ * weiterfahren" laeuft die Fahrt im Vordergrunddienst weiter, sonst pausiert
+ * sie; docs/indoor/hintergrund.md), `ON_START` →
  * [IndoorViewModel.onAppForeground]. Der Bildschirm bleibt waehrend der Fahrt
  * an (`KeepScreenOn` in [IndoorRideScreen]).
  *
@@ -160,6 +161,7 @@ private fun PairStage(vm: IndoorViewModel) {
 private fun SettingsStage(vm: IndoorViewModel, onOpenWorlds: () -> Unit, onOpenDiagnostics: () -> Unit) {
     val ui by vm.pair.collectAsStateWithLifecycle()
     val catalog by vm.catalog.collectAsStateWithLifecycle()
+    val backgroundRide by vm.backgroundRide.collectAsStateWithLifecycle()
     BackHandler { vm.closeSubPage() }
     IndoorSettingsScreen(
         ui = ui,
@@ -172,6 +174,8 @@ private fun SettingsStage(vm: IndoorViewModel, onOpenWorlds: () -> Unit, onOpenD
         onRefreshCatalog = vm::refreshCatalog,
         onOpenDiagnostics = onOpenDiagnostics,
         onBack = vm::closeSubPage,
+        backgroundRide = backgroundRide,
+        onBackgroundRideChange = vm::setBackgroundRide,
     )
 }
 

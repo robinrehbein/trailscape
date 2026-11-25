@@ -33,6 +33,10 @@ import de.trailscape.app.indoor.indoorRideToRide
 import de.trailscape.app.indoor.problemOf
 import de.trailscape.app.indoor.technicalDetailOf
 import de.trailscape.app.indoor.world.WorldLibrary
+import de.trailscape.app.indoor.background.IndoorRideCloser
+import de.trailscape.app.indoor.background.IndoorRideHost
+import de.trailscape.app.indoor.background.IndoorRideJournal
+import de.trailscape.app.indoor.background.IndoorRideService
 import de.trailscape.app.indoor.worldRouteOf
 import de.trailscape.app.sensors.indoor.IndoorDeviceRef
 import de.trailscape.app.sensors.indoor.IndoorDevices
@@ -153,6 +157,10 @@ import kotlinx.coroutines.withContext
  * @param autoLoop `false` = keine Schleife; Tests rufen `tickOnce()` selbst.
  * @param onRideSaved meldet die ID einer gespeicherten Indoor-Tour (die
  *   Integration laedt damit die Touren im `AppViewModel` neu).
+ * @param rideHost Halter der Fahrt im Hintergrund (docs/indoor/hintergrund.md);
+ *   `null` = keine Fahrt im Hintergrund (Tests, altes Verhalten).
+ * @param journal laufende Sicherung der Fahrt gegen einen Prozesstod; `null` = keine.
+ * @param startBackgroundService startet den Vordergrunddienst; `false` = ging nicht.
  */
 class IndoorViewModel(
     private val parts: IndoorParts,
@@ -182,6 +190,9 @@ class IndoorViewModel(
     serverDeps: IndoorServerDeps? = null,
     var onRideSaved: (String) -> Unit = {},
     var onPlanRoute: (RouteTarget) -> Unit = {},
+    private val rideHost: IndoorRideHost? = null,
+    private val journal: IndoorRideJournal? = null,
+    private val startBackgroundService: () -> Boolean = { false },
 ) : ViewModel() {
 
     private val scope: CoroutineScope = scope ?: viewModelScope
@@ -331,6 +342,28 @@ class IndoorViewModel(
     /** Stelle in der Runde, an der die Fahrt mit dem ersten Tritt begann; `null` vorher. */
     private var rideStartRouteM: Double? = null
 
+    /** Die Fahrt beim [rideHost] (Hintergrund), `null` = Fahrt gehoert nur dem Bildschirm. */
+    private var hostRide: IndoorRideHost.Ride? = null
+
+    /** „Beenden" aus der Benachrichtigung, solange dieses ViewModel die Fahrt zeigt. */
+    private val finishFromHost: () -> Unit = { finishRide() }
+
+    private val _backgroundRide = MutableStateFlow(true)
+
+    /** Schalter „Im Hintergrund weiterfahren" (Vorgabe an). */
+    val backgroundRide: StateFlow<Boolean> = _backgroundRide.asStateFlow()
+
+    /** Was ein neues ViewModel braucht, um eine im Hintergrund laufende Fahrt wieder zu zeigen. */
+    private class ParkedRide(
+        val static: RideStatic,
+        val routeName: String,
+        val rideStartRouteM: Double?,
+        val dismissedDayEnd: DayRideEnd?,
+        val worldDir: File?,
+        val manifest: WorldManifest?,
+        val hadRenderer: Boolean,
+    )
+
     /** Was sich waehrend der Fahrt nicht aus der Laufzeit ergibt. */
     private data class RideStatic(
         val routeName: String,
@@ -435,6 +468,22 @@ class IndoorViewModel(
     }
 
     private fun readOtherRiders(): Boolean = runCatching { store.getString(KEY_OTHER_RIDERS) != "false" }.getOrDefault(true)
+
+    /**
+     * Schalter „Im Hintergrund weiterfahren" — gemerkt in den Einstellungen,
+     * gilt ab der naechsten Fahrt (docs/indoor/hintergrund.md).
+     */
+    fun setBackgroundRide(enabled: Boolean) {
+        runCatching { store.setString(KEY_BACKGROUND_RIDE, enabled.toString()) }
+        _backgroundRide.value = enabled
+    }
+
+    private fun readBackgroundRide(): Boolean =
+        runCatching { store.getString(KEY_BACKGROUND_RIDE) != "false" }.getOrDefault(true)
+
+    /** Die Fahrt laeuft im Vordergrunddienst weiter, wenn die App geht. */
+    private val runsInBackground: Boolean
+        get() = hostRide?.let { !it.serviceFailed } ?: false
 
     /**
      * Zurueck von „Trainer koppeln" zur Startseite und die Strecken neu lesen
@@ -1397,6 +1446,7 @@ class IndoorViewModel(
             // starten); der Demo-Trainer „tritt" sofort und wartet deshalb immer.
             holdStart = true,
             releaseOnFirstStroke = !demo,
+            journal = beginBackgroundJournal(mode),
         )
         activeRuntime = runtime
         renderer?.let { r ->
@@ -1416,6 +1466,144 @@ class IndoorViewModel(
         publishRide(runtime.state.value)
         rideCollectJob = scope.launch { runtime.state.collect { publishRide(it) } }
         runtime.start()
+        registerBackgroundRide(runtime)
+    }
+
+    // -----------------------------------------------------------------------
+    // Fahrt im Hintergrund (docs/indoor/hintergrund.md)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Legt die Sicherung der Fahrt an — unabhaengig vom Schalter, denn auch
+     * eine Fahrt, die im Hintergrund pausiert, kann der Prozesstod treffen.
+     * `null` ohne Sicherung oder wenn sie sich nicht anlegen liess.
+     */
+    private fun beginBackgroundJournal(mode: IndoorMode): IndoorRideJournal? {
+        val j = journal ?: return null
+        val st = rideStatic ?: return null
+        return runCatching {
+            j.begin(
+                IndoorRideJournal.Header(
+                    startedAtEpochMs = wallClock(),
+                    rideName = texts.rideName(st.routeName),
+                    mode = mode,
+                    resumeKey = st.resumeKey,
+                    routeLengthM = st.routeLengthM,
+                    routeIsLoop = st.routeIsLoop,
+                ),
+            )
+            j
+        }.getOrNull()
+    }
+
+    /** Meldet die gerade gestartete Fahrt beim Halter an und startet den Vordergrunddienst. */
+    private fun registerBackgroundRide(runtime: IndoorRideRuntime) {
+        val host = rideHost ?: return
+        if (!_backgroundRide.value) return
+        val st = rideStatic ?: return
+        // Nur Werte, kein `this`: Der Abschluss ohne Oberflaeche darf das ViewModel nicht festhalten.
+        val storage = rideStorage
+        val ioDispatcher = io
+        val t = texts
+        val name = st.routeName
+        val ride = IndoorRideHost.Ride(
+            runtime = runtime,
+            routeName = name,
+            journal = journal?.takeIf { it.exists() },
+            closer = IndoorRideCloser(
+                save = { r -> withContext(ioDispatcher) { storage.saveRide(r) } },
+                store = store,
+                nameOf = { km -> if (km != null) t.rideNameFrom(name, km) else t.rideName(name) },
+                resumeKey = st.resumeKey,
+                routeLengthM = st.routeLengthM,
+                routeIsLoop = st.routeIsLoop,
+                wallClock = wallClock,
+                minShownStartM = MIN_SHOWN_START_M,
+            ),
+        )
+        hostRide = ride
+        host.begin(ride)
+        host.attachUi(finishFromHost)
+        if (!runCatching { startBackgroundService() }.getOrDefault(false)) ride.serviceFailed = true
+    }
+
+    /** Die Fahrt endet (beendet oder verworfen): beim Halter abmelden — der Dienst beendet sich. */
+    private fun endBackgroundRide() {
+        val ride = hostRide ?: return
+        hostRide = null
+        rideHost?.detachUi(finishFromHost)
+        rideHost?.end(ride)
+    }
+
+    /**
+     * Die Oberflaeche geht, die Fahrt bleibt im Dienst: Darstellung abgeben,
+     * Zustand fuer ein spaeteres ViewModel ablegen.
+     */
+    private fun parkBackgroundRide(runtime: IndoorRideRuntime, ride: IndoorRideHost.Ride) {
+        val st = rideStatic ?: return
+        rideCollectJob?.cancel()
+        rideCollectJob = null
+        val hadRenderer = _renderer.value != null
+        runtime.replaceRenderer(null, runtime.state.value.render)
+        destroyRenderer()
+        ride.parked = ParkedRide(
+            static = st,
+            routeName = routeName,
+            rideStartRouteM = rideStartRouteM,
+            dismissedDayEnd = dismissedDayEnd,
+            worldDir = worldDir,
+            manifest = worldManifest,
+            hadRenderer = hadRenderer,
+        )
+        rideHost?.detachUi(finishFromHost)
+        hostRide = null
+        activeRuntime = null
+    }
+
+    /** Ein neues ViewModel (App wieder geoeffnet) uebernimmt eine im Hintergrund laufende Fahrt. */
+    private fun adoptBackgroundRide() {
+        val host = rideHost ?: return
+        val ride = host.ride.value ?: return
+        val parked = ride.parked as? ParkedRide ?: return
+        ride.parked = null
+        val runtime = ride.runtime
+        hostRide = ride
+        activeRuntime = runtime
+        rideStatic = parked.static
+        routeName = parked.routeName
+        rideStartRouteM = parked.rideStartRouteM
+        dismissedDayEnd = parked.dismissedDayEnd
+        worldDir = parked.worldDir
+        worldManifest = parked.manifest
+        finishing = false
+        pendingRide = null
+        _summary.value = null
+        _stage.value = IndoorStage.RIDE
+        val dir = parked.worldDir
+        val manifest = parked.manifest
+        if (parked.hadRenderer && dir != null && manifest != null) {
+            indoorCatching(IndoorPart.RENDER) { parts.createRenderer() }.fold(
+                onSuccess = { r ->
+                    runtime.replaceRenderer(r, IndoorRenderUi.Loading(0, 0))
+                    val loaded = indoorCatching(IndoorPart.RENDER) {
+                        r.setListener(runtime.rendererListener)
+                        r.setCamera(parked.static.camera)
+                        r.loadWorld(dir, manifest)
+                    }
+                    skyOrigin = manifest.origin
+                    loaded.exceptionOrNull()?.let { e ->
+                        runtime.rendererListener.onFailure(RenderFailure.INTERNAL, problemOf(IndoorPart.RENDER, e).detail)
+                    }
+                    _renderer.value = r
+                    applySky(force = true)
+                    indoorCatching(IndoorPart.RENDER) { r.setOtherRidersEnabled(_pair.value.otherRiders) }
+                },
+                onFailure = { e -> runtime.replaceRenderer(null, IndoorRenderUi.Failed(null, problemOf(IndoorPart.RENDER, e))) },
+            )
+        }
+        host.attachUi(finishFromHost)
+        publishRide(runtime.state.value)
+        rideCollectJob = scope.launch { runtime.state.collect { publishRide(it) } }
     }
 
     private fun showStartProblem(problem: IndoorProblem) {
@@ -1448,6 +1636,7 @@ class IndoorViewModel(
                 var d = s.routeDistM - s.totals.distanceM
                 if (d < 0 && st.routeIsLoop) d += st.routeLengthM
                 rideStartRouteM = d.coerceAtLeast(0.0)
+                hostRide?.closer?.startRouteM = rideStartRouteM
             }
         }
         applySky(force = false)
@@ -1622,9 +1811,14 @@ class IndoorViewModel(
         republishRide()
     }
 
-    /** Die App verlaesst den Vordergrund — die Fahrt pausiert. */
+    /**
+     * Die App verlaesst den Vordergrund. Laeuft die Fahrt im Vordergrunddienst
+     * (docs/indoor/hintergrund.md), geht sie weiter und wird nur sofort
+     * gesichert; sonst pausiert sie wie bisher.
+     */
     fun onAppBackground() {
-        activeRuntime?.onAppBackground()
+        val runtime = activeRuntime ?: return
+        if (runsInBackground) runtime.requestJournal() else runtime.onAppBackground()
     }
 
     fun onAppForeground() {
@@ -1654,6 +1848,11 @@ class IndoorViewModel(
             destroyRenderer()
             _summary.value = summaryOf(record, runtime.state.value)
             activeRuntime = null
+            endBackgroundRide()
+            // Zu kurz fuer eine Tour: nichts zu sichern. Sonst bleibt die
+            // Sicherung, bis gespeichert oder verworfen ist (Prozesstod in der
+            // Auswertung → wiederhergestellte Tour beim naechsten Start).
+            if (record != null && pendingRide == null && _summary.value?.tooShort == true) journal?.discard()
             _stage.value = IndoorStage.SUMMARY
         }
     }
@@ -1707,6 +1906,7 @@ class IndoorViewModel(
         scope.launch {
             val ok = withContext(io) { runCatching { rideStorage.saveRide(ride) }.isSuccess }
             if (ok) {
+                journal?.discard()
                 _summary.update { it?.copy(saving = false, savedRideId = ride.id) }
                 runCatching { onRideSaved(ride.id) }
             } else {
@@ -1718,10 +1918,12 @@ class IndoorViewModel(
     /** Verwirft die Aufzeichnung — danach laesst sie sich nicht mehr speichern. */
     fun discardRide() {
         pendingRide = null
+        journal?.discard()
     }
 
     /** Eine neue Fahrt: zurueck zur Streckenwahl. */
     fun startOver() {
+        if (pendingRide != null) journal?.discard()
         pendingRide = null
         dayStartPick = null
         _summary.value = null
@@ -1775,6 +1977,8 @@ class IndoorViewModel(
         rideCollectJob = null
         activeRuntime?.close()
         activeRuntime = null
+        endBackgroundRide()
+        journal?.discard()
         destroyRenderer()
         _ride.value = null
         rideStatic = null
@@ -1796,15 +2000,31 @@ class IndoorViewModel(
         cancelRunningWorldJob()
         serverController.close()
         catalogController.release()
+        val runtime = activeRuntime
+        val ride = hostRide
+        if (runtime != null && ride != null && runsInBackground && !finishing && !runtime.state.value.finished) {
+            // Im Hintergrund weiterfahren: Die Fahrt bleibt im Dienst, nur die Oberflaeche geht.
+            parkBackgroundRide(runtime, ride)
+            return
+        }
         rideCollectJob?.cancel()
         activeRuntime?.close()
         activeRuntime = null
+        // Eine Sicherung bleibt liegen: Die Fahrt endete ungeplant (die
+        // Activity ging), beim naechsten Start der App wird sie zur Tour.
+        if (ride != null) endBackgroundRide()
         destroyRenderer()
     }
 
     override fun onCleared() {
         release()
         super.onCleared()
+    }
+
+    init {
+        // Am Ende der Klasse, damit alle Felder schon belegt sind.
+        _backgroundRide.value = readBackgroundRide()
+        adoptBackgroundRide()
     }
 
     companion object {
@@ -1829,6 +2049,9 @@ class IndoorViewModel(
         /** Schluessel der Tageszeit der 3D-Welt (Enum-Name von [IndoorTimeOfDay]). */
         const val KEY_TIME_OF_DAY = "trailscape.indoor.time_of_day"
         const val KEY_OTHER_RIDERS = "trailscape.indoor.other_riders"
+
+        /** Schluessel des Schalters „Im Hintergrund weiterfahren" (`"false"` = aus, sonst an). */
+        const val KEY_BACKGROUND_RIDE = "trailscape.indoor.background_ride"
 
         /** „Automatisch“: Himmel waehrend der Fahrt alle 10 Minuten der Uhr nachfuehren. */
         const val SKY_REFRESH_MS = 10 * 60_000L
@@ -1910,6 +2133,9 @@ class IndoorViewModel(
                     catalogOnline = { AppServices.isNetworkAvailable() },
                     serverDeps = AppServices.indoorServerDeps,
                     onRideSaved = onRideSaved,
+                    rideHost = IndoorRideHost.shared,
+                    journal = IndoorRideJournal.inFilesDir(app.filesDir),
+                    startBackgroundService = { IndoorRideService.start(app) },
                 ) as T
             }
         }

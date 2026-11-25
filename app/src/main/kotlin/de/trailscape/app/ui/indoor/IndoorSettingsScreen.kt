@@ -29,6 +29,7 @@ import de.trailscape.core.indoor.sky.IndoorTimeOfDay
  *
  *  * **Fahrgefuehl:** Kettenblatt am Trainer, virtuelle Gaenge
  *    (frueher im Schritt „Koppeln").
+ *  * **Hintergrund:** „Im Hintergrund weiterfahren" (docs/indoor/hintergrund.md).
  *  * **3D-Ansicht:** Tageszeit, andere Radfahrer (frueher „Koppeln").
  *  * **Erweitert:** Strecken auf dem Geraet (Weltverwaltung, frueher unter
  *    Mehr), Liste der bekannten Strecken aktualisieren (frueher in der
@@ -49,6 +50,8 @@ fun IndoorSettingsScreen(
     onRefreshCatalog: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onBack: () -> Unit,
+    backgroundRide: Boolean = true,
+    onBackgroundRideChange: (Boolean) -> Unit = {},
 ) {
     IndoorPage(
         title = stringResource(R.string.indoor_app_settings_title),
@@ -57,6 +60,20 @@ fun IndoorSettingsScreen(
         Eyebrow(stringResource(R.string.indoor_app_settings_section_ride))
         ChainringCard(teeth = ui.chainringTeeth, onChange = onChainringChange)
         GearTableCard(selected = ui.gearTable, onChange = onGearTableChange)
+
+        // Fahrt im Hintergrund (docs/indoor/hintergrund.md).
+        Eyebrow(stringResource(R.string.idee05_settings_section))
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                SettingsSwitchRow(
+                    title = stringResource(R.string.idee05_settings_background_title),
+                    subtitle = stringResource(R.string.idee05_settings_background_body),
+                    checked = backgroundRide,
+                    onCheckedChange = onBackgroundRideChange,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+        }
 
         Eyebrow(stringResource(R.string.indoor_app_settings_section_view))
         TimeOfDayCard(selected = ui.timeOfDay, onChange = onTimeOfDayChange)
