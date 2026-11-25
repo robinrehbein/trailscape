@@ -63,6 +63,7 @@ import de.trailscape.app.ui.components.RecCapsuleButton
 import de.trailscape.app.ui.components.RecCapsuleButtonDefaults
 import de.trailscape.app.ui.indoor.IndoorFlowScreen
 import de.trailscape.app.ui.indoor.IndoorWorldsDestination
+import de.trailscape.app.ui.indoor.garage.GarageDestination
 import de.trailscape.app.ui.map.MapScreen
 import de.trailscape.app.ui.more.MoreScreen
 import de.trailscape.app.ui.onboarding.OnboardingScreen
@@ -265,6 +266,9 @@ private const val INDOOR_ROUTE = "indoor"
 private const val INDOOR_WORLDS_ROUTE = "indoor/welten"
 private const val INDOOR_DIAGNOSTICS_ROUTE = "indoor/diagnose"
 
+/** Garage: Fahrer und Rad anpassen (docs/indoor/garage.md). */
+private const val INDOOR_GARAGE_ROUTE = "indoor/garage"
+
 private fun IndoorDestination.route(): String = when (this) {
     IndoorDestination.FLOW -> INDOOR_ROUTE
     IndoorDestination.WORLDS -> INDOOR_WORLDS_ROUTE
@@ -273,7 +277,8 @@ private fun IndoorDestination.route(): String = when (this) {
 
 /** Gepushte zweite Ebene (Mehr, Indoor): Shared-Axis-Uebergang statt Fade through. */
 private fun isPushedRoute(route: String?): Boolean =
-    route == MORE_ROUTE || route == INDOOR_ROUTE || route == INDOOR_WORLDS_ROUTE || route == INDOOR_DIAGNOSTICS_ROUTE
+    route == MORE_ROUTE || route == INDOOR_ROUTE || route == INDOOR_WORLDS_ROUTE || route == INDOOR_DIAGNOSTICS_ROUTE ||
+        route == INDOOR_GARAGE_ROUTE
 
 /**
  * Wurzel der Oberflaeche: stellt die Sprache bereit und zeichnet darin die
@@ -512,7 +517,13 @@ private fun TrailscapeAppContent() {
                         onOpenWorlds = {
                             navController.navigate(INDOOR_WORLDS_ROUTE) { launchSingleTop = true }
                         },
+                        onOpenGarage = {
+                            navController.navigate(INDOOR_GARAGE_ROUTE) { launchSingleTop = true }
+                        },
                     )
+                }
+                composable(INDOOR_GARAGE_ROUTE) {
+                    GarageDestination(onBack = { navController.popBackStack() })
                 }
                 composable(INDOOR_WORLDS_ROUTE) {
                     InsetPadded { IndoorWorldsDestination(onBack = { navController.popBackStack() }) }

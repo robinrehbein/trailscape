@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -118,6 +119,7 @@ fun IndoorHomeScreen(
     onDayPath: (IndoorDayPath) -> Unit = {},
     initialOptionsOpen: Boolean = false,
     initialCatalogOpen: Boolean = false,
+    onOpenGarage: () -> Unit = {},
 ) {
     val lang = LocalAppFormats.current.language.tag
     val readiness = indoorRouteReadiness(
@@ -131,6 +133,10 @@ fun IndoorHomeScreen(
         title = stringResource(R.string.indoor_app_route_title),
         onBack = onBack,
         actions = {
+            // Garage: Fahrer und Rad anpassen (docs/indoor/garage.md).
+            IconButton(onClick = onOpenGarage) {
+                Icon(Icons.Outlined.Palette, contentDescription = stringResource(R.string.garage_home_cd))
+            }
             IconButton(onClick = onOpenSettings) {
                 Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.indoor_app_home_settings_cd))
             }

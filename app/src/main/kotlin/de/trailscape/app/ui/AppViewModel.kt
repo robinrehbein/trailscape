@@ -69,6 +69,8 @@ import de.trailscape.core.encodeRouteConsentRequests
 import de.trailscape.core.explorerTilesCacheGaps
 import de.trailscape.core.explorerTilesNewInRide
 import de.trailscape.core.formatDuration
+import de.trailscape.core.garage.RiderAvatar
+import de.trailscape.core.garage.RiderAvatarStore
 import de.trailscape.core.getSyncConfig
 import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.i18n.coreTexts
@@ -831,6 +833,8 @@ class AppViewModel(
                 rides = summaries.asSequence().mapNotNull { rideStorage.loadRide(it.id) },
                 profile = _profile.value,
                 yearGoal = _yearGoal.value,
+                // Garage: nur, wenn je etwas gewaehlt wurde (sonst bleibt das Backup wie bisher).
+                avatar = runCatching { RiderAvatarStore(keyValueStore).takeIf { it.hasSaved() }?.load() }.getOrNull(),
             )
         }
     }
@@ -2020,6 +2024,11 @@ class AppViewModel(
      * Stellt ein Jahresziel aus einem Backup wieder her — mit [YearGoal.since]
      * wie gesichert (anders als [setYearGoalKm], das den Starttag neu setzt).
      */
+    /** Aussehen aus einem Backup (Garage); ueberschreibt das gespeicherte. */
+    fun restoreAvatar(avatar: RiderAvatar) {
+        viewModelScope.launch { withContext(io) { RiderAvatarStore(keyValueStore).save(avatar) } }
+    }
+
     fun restoreYearGoal(goal: YearGoal) {
         val value = goal.copy(targetKm = goal.targetKm.coerceIn(minYearGoalKm, maxYearGoalKm))
         _yearGoal.value = value

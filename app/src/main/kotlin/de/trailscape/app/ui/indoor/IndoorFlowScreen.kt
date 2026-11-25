@@ -72,6 +72,7 @@ import kotlinx.coroutines.delay
  * @param onExit verlaesst den Ablauf (Backstack-Eintrag entfernen).
  * @param onOpenDiagnostics oeffnet `indoor/diagnose`.
  * @param onOpenWorlds oeffnet `indoor/welten` (Strecken auf dem Geraet).
+ * @param onOpenGarage oeffnet `indoor/garage` (Fahrer und Rad anpassen).
  */
 @Composable
 fun IndoorFlowScreen(
@@ -79,6 +80,7 @@ fun IndoorFlowScreen(
     onExit: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenWorlds: () -> Unit = {},
+    onOpenGarage: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val vm: IndoorViewModel = viewModel(
@@ -134,9 +136,9 @@ fun IndoorFlowScreen(
 
     val stage by vm.stage.collectAsStateWithLifecycle()
     when (stage) {
-        IndoorStage.ROUTE -> HomeStage(vm, onExit)
+        IndoorStage.ROUTE -> HomeStage(vm, onExit, onOpenGarage)
         IndoorStage.PAIR -> PairStage(vm)
-        IndoorStage.SETTINGS -> SettingsStage(vm, onOpenWorlds, onOpenDiagnostics)
+        IndoorStage.SETTINGS -> SettingsStage(vm, onOpenWorlds, onOpenDiagnostics, onOpenGarage)
         IndoorStage.WORLD -> WorldStage(vm)
         IndoorStage.RIDE -> RideStage(vm)
         IndoorStage.SUMMARY -> SummaryStage(vm, onExit)
@@ -157,7 +159,7 @@ private fun PairStage(vm: IndoorViewModel) {
 }
 
 @Composable
-private fun SettingsStage(vm: IndoorViewModel, onOpenWorlds: () -> Unit, onOpenDiagnostics: () -> Unit) {
+private fun SettingsStage(vm: IndoorViewModel, onOpenWorlds: () -> Unit, onOpenDiagnostics: () -> Unit, onOpenGarage: () -> Unit) {
     val ui by vm.pair.collectAsStateWithLifecycle()
     val catalog by vm.catalog.collectAsStateWithLifecycle()
     BackHandler { vm.closeSubPage() }
@@ -172,6 +174,7 @@ private fun SettingsStage(vm: IndoorViewModel, onOpenWorlds: () -> Unit, onOpenD
         onRefreshCatalog = vm::refreshCatalog,
         onOpenDiagnostics = onOpenDiagnostics,
         onBack = vm::closeSubPage,
+        onOpenGarage = onOpenGarage,
     )
 }
 
@@ -200,7 +203,7 @@ private fun rememberBluetoothState(): Pair<Boolean, Boolean> {
 }
 
 @Composable
-private fun HomeStage(vm: IndoorViewModel, onExit: () -> Unit) {
+private fun HomeStage(vm: IndoorViewModel, onExit: () -> Unit, onOpenGarage: () -> Unit) {
     val ui by vm.route.collectAsStateWithLifecycle()
     val pair by vm.pair.collectAsStateWithLifecycle()
     val catalog by vm.catalog.collectAsStateWithLifecycle()
@@ -227,6 +230,7 @@ private fun HomeStage(vm: IndoorViewModel, onExit: () -> Unit) {
         onCatalogDownload = vm::downloadCatalog,
         onCatalogCancel = vm::cancelCatalogDownload,
         onCatalogDiscard = vm::discardCatalogDownload,
+        onOpenGarage = onOpenGarage,
     )
 }
 

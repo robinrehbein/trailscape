@@ -49,6 +49,7 @@ fun IndoorSettingsScreen(
     onRefreshCatalog: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onBack: () -> Unit,
+    onOpenGarage: () -> Unit = {},
 ) {
     IndoorPage(
         title = stringResource(R.string.indoor_app_settings_title),
@@ -60,6 +61,14 @@ fun IndoorSettingsScreen(
 
         Eyebrow(stringResource(R.string.indoor_app_settings_section_view))
         TimeOfDayCard(selected = ui.timeOfDay, onChange = onTimeOfDayChange)
+        Card(modifier = Modifier.fillMaxWidth()) {
+            // Garage: Fahrer und Rad anpassen (docs/indoor/garage.md).
+            SettingsNavRow(
+                title = stringResource(R.string.garage_entry_title),
+                status = stringResource(R.string.garage_entry_body),
+                onClick = onOpenGarage,
+            )
+        }
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(vertical = 4.dp)) {
                 SettingsSwitchRow(

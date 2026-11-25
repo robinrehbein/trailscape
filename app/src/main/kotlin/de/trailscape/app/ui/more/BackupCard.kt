@@ -170,6 +170,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                 appViewModel.addRides(newRides)
                 data.profile?.let { appViewModel.setProfile(it) }
                 data.yearGoal?.let { appViewModel.restoreYearGoal(it) }
+                data.avatar?.let { appViewModel.restoreAvatar(it) }
                 DiagLog.shared.log(DiagEvent.BACKUP_IMPORT_OK, count = newRides.size.toLong())
 
                 appViewModel.showMessage(backupImportMessage(newRides.size, skipped, data.profile != null))

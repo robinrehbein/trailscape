@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte der Garage (Etappe 2 aus docs/konzept-spiel-community.md): Bildschirm Garage, Farben,
+    Muster und die Einstiege aus den Indoor-Einstellungen und der Indoor-Startseite.
+    Schluessel-Praefix: garage_
+    Regeln (Schluesselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstueck in values/strings_spiel2.xml — gleiche Schluessel, gleiche Reihenfolge.
+-->
+<resources>
+    <!-- GarageScreen.kt -->
+    <string name="garage_title">Garage</string>
+    <string name="garage_preview_cd">Preview of your rider in the chosen colours</string>
+    <string name="garage_preview_hint">Preview as a drawing. You’ll ride like this in the 3D view from the next time you start a route.</string>
+    <string name="garage_section_rider">Rider</string>
+    <string name="garage_section_kit">Kit</string>
+    <string name="garage_section_bike">Bike</string>
+    <string name="garage_slot_skin">Skin tone</string>
+    <string name="garage_slot_helmet">Helmet</string>
+    <string name="garage_slot_jersey">Jersey</string>
+    <string name="garage_slot_pattern">Pattern</string>
+    <string name="garage_slot_jersey_accent">Jersey accent colour</string>
+    <string name="garage_slot_bibs">Bib shorts</string>
+    <string name="garage_slot_shoes">Shoes</string>
+    <string name="garage_slot_frame">Frame</string>
+    <string name="garage_slot_frame_accent">Frame accent</string>
+    <string name="garage_slot_bar_tape">Bar tape</string>
+    <string name="garage_skin_tone_cd">Tone %1$d</string>
+    <string name="garage_pattern_solid">Plain</string>
+    <string name="garage_pattern_band">Chest band</string>
+    <string name="garage_pattern_split">Two-tone</string>
+    <string name="garage_pattern_fade">Fade</string>
+    <string name="garage_pattern_stripes">Stripes</string>
+    <string name="garage_locked_level">from level %1$d</string>
+    <string name="garage_locked_badge">with badge no. %1$d</string>
+    <string name="garage_option_selected_cd">%1$s, selected</string>
+    <string name="garage_option_locked_cd">%1$s, locked, %2$s</string>
+    <string name="garage_color_other">other colour %1$s</string>
+    <string name="garage_cosmetic_note">Looks only: colours and patterns don’t change physics, power or comparisons. Other riders and your riding partner keep their own colours.</string>
+    <string name="garage_safe_mode_hint">Safe graphics mode is on. Your colours still apply; other riders stay hidden.</string>
+    <string name="garage_reset_action">Restore default</string>
+    <!-- Farben (GaragePalettes) -->
+    <string name="garage_color_red">Red</string>
+    <string name="garage_color_orange">Orange</string>
+    <string name="garage_color_yellow">Yellow</string>
+    <string name="garage_color_lime">Lime</string>
+    <string name="garage_color_green">Green</string>
+    <string name="garage_color_teal">Teal</string>
+    <string name="garage_color_sky">Sky blue</string>
+    <string name="garage_color_blue">Blue</string>
+    <string name="garage_color_navy">Navy</string>
+    <string name="garage_color_purple">Purple</string>
+    <string name="garage_color_pink">Pink</string>
+    <string name="garage_color_white">White</string>
+    <string name="garage_color_silver">Silver</string>
+    <string name="garage_color_grey">Grey</string>
+    <string name="garage_color_anthracite">Anthracite</string>
+    <string name="garage_color_black">Black</string>
+    <string name="garage_color_olive">Olive</string>
+    <string name="garage_color_brown">Brown</string>
+    <string name="garage_color_cork">Cork</string>
+    <string name="garage_color_gold">Gold</string>
+    <string name="garage_color_copper">Copper</string>
+    <string name="garage_color_unnamed">Colour</string>
+    <!-- Einstiege: IndoorSettingsScreen.kt, IndoorHomeScreen.kt -->
+    <string name="garage_entry_title">Garage</string>
+    <string name="garage_entry_body">Customise rider and bike: colours and jersey patterns</string>
+    <string name="garage_home_cd">Garage: customise rider and bike</string>
+</resources>

@@ -46,6 +46,8 @@ class StringResourceParityTest {
         "strings_indoor_app.xml" to "indoor_app_",
         "strings_indoor_ble.xml" to "indoor_ble_",
         "strings_indoor_render.xml" to "indoor_render_",
+        // Garage (Etappe 2, docs/konzept-spiel-community.md).
+        "strings_spiel2.xml" to "garage_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */

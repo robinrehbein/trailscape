@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte der Garage (Etappe 2 aus docs/konzept-spiel-community.md): Bildschirm Garage, Farben,
+    Muster und die Einstiege aus den Indoor-Einstellungen und der Indoor-Startseite.
+    Schluessel-Praefix: garage_
+    Regeln (Schluesselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstueck in values-en/strings_spiel2.xml — gleiche Schluessel, gleiche Reihenfolge.
+-->
+<resources>
+    <!-- GarageScreen.kt -->
+    <string name="garage_title">Garage</string>
+    <string name="garage_preview_cd">Vorschau deines Fahrers mit den gewählten Farben</string>
+    <string name="garage_preview_hint">Vorschau als Zeichnung. In der 3D-Ansicht fährst du so ab dem nächsten Start einer Strecke.</string>
+    <string name="garage_section_rider">Fahrer</string>
+    <string name="garage_section_kit">Kleidung</string>
+    <string name="garage_section_bike">Rad</string>
+    <string name="garage_slot_skin">Hautton</string>
+    <string name="garage_slot_helmet">Helm</string>
+    <string name="garage_slot_jersey">Trikot</string>
+    <string name="garage_slot_pattern">Muster</string>
+    <string name="garage_slot_jersey_accent">Akzentfarbe des Trikots</string>
+    <string name="garage_slot_bibs">Hose</string>
+    <string name="garage_slot_shoes">Schuhe</string>
+    <string name="garage_slot_frame">Rahmen</string>
+    <string name="garage_slot_frame_accent">Rahmen-Akzent</string>
+    <string name="garage_slot_bar_tape">Lenkerband</string>
+    <string name="garage_skin_tone_cd">Ton %1$d</string>
+    <string name="garage_pattern_solid">Einfarbig</string>
+    <string name="garage_pattern_band">Brustband</string>
+    <string name="garage_pattern_split">Zweifarbig</string>
+    <string name="garage_pattern_fade">Farbverlauf</string>
+    <string name="garage_pattern_stripes">Streifen</string>
+    <string name="garage_locked_level">ab Stufe %1$d</string>
+    <string name="garage_locked_badge">mit Abzeichen Nr. %1$d</string>
+    <string name="garage_option_selected_cd">%1$s, ausgewählt</string>
+    <string name="garage_option_locked_cd">%1$s, gesperrt, %2$s</string>
+    <string name="garage_color_other">andere Farbe %1$s</string>
+    <string name="garage_cosmetic_note">Nur das Aussehen: Farben und Muster ändern nichts an Physik, Leistung oder Vergleichen. Andere Radfahrer und dein Mitfahrer behalten ihre eigenen Farben.</string>
+    <string name="garage_safe_mode_hint">Der sichere Grafikmodus ist an. Deine Farben gelten trotzdem, andere Radfahrer bleiben ausgeblendet.</string>
+    <string name="garage_reset_action">Vorgabe wiederherstellen</string>
+    <!-- Farben (GaragePalettes) -->
+    <string name="garage_color_red">Rot</string>
+    <string name="garage_color_orange">Orange</string>
+    <string name="garage_color_yellow">Gelb</string>
+    <string name="garage_color_lime">Hellgrün</string>
+    <string name="garage_color_green">Grün</string>
+    <string name="garage_color_teal">Petrol</string>
+    <string name="garage_color_sky">Himmelblau</string>
+    <string name="garage_color_blue">Blau</string>
+    <string name="garage_color_navy">Marineblau</string>
+    <string name="garage_color_purple">Violett</string>
+    <string name="garage_color_pink">Pink</string>
+    <string name="garage_color_white">Weiß</string>
+    <string name="garage_color_silver">Silber</string>
+    <string name="garage_color_grey">Grau</string>
+    <string name="garage_color_anthracite">Anthrazit</string>
+    <string name="garage_color_black">Schwarz</string>
+    <string name="garage_color_olive">Oliv</string>
+    <string name="garage_color_brown">Braun</string>
+    <string name="garage_color_cork">Kork</string>
+    <string name="garage_color_gold">Gold</string>
+    <string name="garage_color_copper">Kupfer</string>
+    <string name="garage_color_unnamed">Farbe</string>
+    <!-- Einstiege: IndoorSettingsScreen.kt, IndoorHomeScreen.kt -->
+    <string name="garage_entry_title">Garage</string>
+    <string name="garage_entry_body">Fahrer und Rad anpassen: Farben und Trikotmuster</string>
+    <string name="garage_home_cd">Garage: Fahrer und Rad anpassen</string>
+</resources>
