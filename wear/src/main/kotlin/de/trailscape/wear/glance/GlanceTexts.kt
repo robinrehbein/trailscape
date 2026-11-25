@@ -2,6 +2,7 @@ package de.trailscape.wear.glance
 
 import android.content.Context
 import de.trailscape.core.GlanceAnzeige
+import de.trailscape.core.HeuteVorschlag
 import de.trailscape.wear.R
 import java.util.Locale
 import kotlin.math.floor
@@ -66,6 +67,22 @@ object GlanceTexts {
     /** Fuer Screenreader: „Serie 5 Wochen, 42 von 60 km". */
     fun beschreibung(context: Context, a: GlanceAnzeige): String =
         context.getString(R.string.wear_glance_cd, serieLang(context, a), fortschritt(context, a))
+
+    /**
+     * Die Zeile zur Einheit des Tages: „Heute drinnen · 60 min", „Heute
+     * draußen" oder „Einheit erledigt ✓" — aus dem Vorschlag, den „Heute" auf
+     * dem Telefon zuletzt gezeigt hat (samt Wahl des Nutzers).
+     */
+    fun heute(context: Context, v: HeuteVorschlag): String {
+        if (v.erledigt) return context.getString(R.string.idee02_wear_today_done)
+        val min = v.minuten
+        return when {
+            v.drinnen && min != null -> context.getString(R.string.idee02_wear_today_indoor_min, min)
+            v.drinnen -> context.getString(R.string.idee02_wear_today_indoor)
+            min != null -> context.getString(R.string.idee02_wear_today_outdoor_min, min)
+            else -> context.getString(R.string.idee02_wear_today_outdoor)
+        }
+    }
 
     private fun locale(context: Context): Locale =
         context.resources.configuration.locales[0] ?: Locale.getDefault()

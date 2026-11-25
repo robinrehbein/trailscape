@@ -15,7 +15,8 @@ Form · 4 Belastungsverhältnis akut/chronisch · 5 Erholungssignale (HRV, Ruhep
 Schlaf, Readiness) · 6 Intensitätsverteilung · 7 Intervallformen · 8 Belastungs-
 steigerung · 9 Entlastungswochen und Blockstruktur · 10 Taper · 11 Längste
 Vorbereitungsfahrt und Zieltypen · 12 FTP und 20-min-Test · 13 Kalorien und Wirkungsgrad ·
-14 VO2max-Schätzung · 15 Was die App bewusst nicht behauptet · 16 Literatur
+14 VO2max-Schätzung · 15 Was die App bewusst nicht behauptet · 16 Literatur ·
+17 Drinnen oder draußen, und wann eine Einheit erledigt ist
 
 ---
 
@@ -931,3 +932,91 @@ wurde am Abstract (bzw., wo angegeben, am Volltext) geprüft.
 - Friel J. *The Cyclist's Training Bible* — LTHR-Zonen; Prozentwerte nur über Sekundärquellen bestätigt, Ausgabe nicht geprüft.
 - ACSM's Guidelines for Exercise Testing and Prescription — Beinergometrie-Gleichung; Formel über Sekundärquellen bestätigt, Ausgabe nicht geprüft.
 - HRV4Training (60-Tage-Baseline), „Garmin-Konvention" (Band 0,8–1,5), TrainingPeaks-Bänder für Rampe und TSB — Herstellerangaben, nicht geprüft.
+
+---
+
+## 17 Drinnen oder draußen, und wann eine Einheit erledigt ist
+
+Stand 2026-11-25. Code: `core/…/TodayPlace.kt`, `core/…/SunTimes.kt`,
+`core/…/TrainingPlanProgress.kt` (`weekSessionProgress`); Oberfläche
+`app/…/ui/today/TodayPlaceCard.kt`; Uhr `core/…/WearGlance.kt` (Feld `heute`).
+
+### 17.1 Der Vorschlag
+
+Die Einheit des Tages (`daySessionFor`, also schon von der Tagesform gedämpft) bekommt
+auf *Heute* einen begründeten Vorschlag „draußen“ oder „drinnen“. Draußen bringt sie die
+Runde der Tagesentscheidung mit (`TodayRoute.target`, Knopf „Runde planen“), drinnen die
+Indoor-Karte direkt darunter, die die passende Strecke zur Einheit bereits ausgesucht hat
+(bekannte oder generierte Strecke, `docs/indoor/app.md`). Ein Tipp dreht den Vorschlag um;
+die Wahl gilt bis Mitternacht. Am Ruhe- und am Zieltag gibt es keinen Vorschlag.
+
+Punkte, positiv heißt drinnen; ab **+2** lautet der Vorschlag drinnen, sonst draußen
+(im Zweifel draußen):
+
+| Grund | Punkte | Bedingung |
+|---|---|---|
+| Dunkel | +5 | jetzt vor Sonnenauf- oder nach -untergang, Polarnacht, oder ≥ 25 % der Einheit nach Sonnenuntergang |
+| Dämmerung | +1 | weniger als 25 % der Einheit nach Sonnenuntergang |
+| Tageslicht | −1 | Einheit endet vor Sonnenuntergang |
+| Intervalle | +3 | Intervalle, Qualitätseinheit, 20-min-Test oder harte Einheit |
+| Lange Grundlage | −3 | ruhige Einheit ab 120 min |
+| Regen | +3 | Regenwahrscheinlichkeit ≥ 70 % (und, falls bekannt, ≥ 1 mm) oder ≥ 5 mm |
+| Sturm | +2 | Mittelwind ≥ 39 km/h (Beaufort 6) |
+| Frost | +2 | Höchstwert ≤ 1 °C |
+
+Die Tageslichtrechnung zählt 15 min Vorlauf (Umziehen, Rad) zur Einheit. Sonnenauf- und
+-untergang: NOAA-Näherung, Sonnenmittelpunkt 0,833° unter dem Horizont, etwa ±2 min;
+die bürgerliche Dämmerung ist bewusst nicht als Licht gezählt. Folgen der Tabelle:
+Intervalle bei Tageslicht → drinnen (+3 −1); lange Grundlage bei Tageslicht → draußen;
+nach Einbruch der Dunkelheit jede Einheit drinnen, auch die lange (+5 −3).
+
+**Evidenz:** Faustregel. Gestützt ist nur der Grundgedanke: Strukturierte Intervalle
+lassen sich auf dem Rollentrainer gleichmäßiger und ohne Unterbrechung fahren;
+lange Grundlagenfahrten sind draußen leichter durchzuhalten. Die Punkte sind eigene
+Festlegungen und im Test (`TodayPlaceTest`) festgeschrieben.
+
+**Daten, alle schon auf dem Gerät:**
+- *Ort*: der Start der jüngsten Tour draußen, auf eine Nachkommastelle gerundet
+  (≈ 10 km). Keine Standortberechtigung, keine Anfrage. Ohne Tour draußen entfällt das
+  Tageslichtkriterium.
+- *Uhrzeit*: stündlich aktualisiert (wie der Wochen-Fahrplan); um 15:40 rechnet die Karte
+  noch mit 15:00.
+- *Wetter*: nur, wenn der Schalter „Wetter für den Wochenplan“ an ist **und** schon eine
+  Vorhersage im Zwischenspeicher liegt (höchstens drei Stunden alt). Die Karte fragt selbst
+  nichts ab. Da der Wochen-Fahrplan neben einem aktiven Trainingsplan nicht erscheint, ist
+  das mit Trainingsplan selten der Fall — in der Regel entscheiden Licht und Art der Einheit.
+  Eine eigene Abfrage für den Vorschlag wäre eine neue ausgehende Anfrage mit eigenem
+  Schalter (gerundeter Ort an Open-Meteo, wie beim Wochenplan) und ist nicht gebaut.
+
+### 17.2 Automatisch erledigt — draußen wie drinnen
+
+Eine Planeinheit gilt als erledigt, sobald eine passende gefahrene Tour vorliegt
+(`weekSessionProgress`, berechnet, nie gespeichert). Indoor-Fahrten (`Ride.indoor`) zählen
+genauso wie Fahrten draußen. Regeln:
+
+- **Zeitfenster:** Tag der Einheit ± 1 Tag (`sessionMatchToleranceDays`), eine Tour deckt
+  höchstens eine Einheit (unverändert).
+- **Erfüllungsgrad:** Maximum aus km-Anteil, Last-Anteil und — neu — **Zeit-Anteil**
+  (Bewegungszeit, sonst Gesamtdauer, gegen `durationMin` der Einheit). Ab **60 %**
+  (`sessionDoneShare`) erledigt, darunter teilweise. Der Zeit-Anteil schließt die Lücke
+  bei Indoor-Fahrten: Deren Kilometer sind virtuell (am Berg der Strecke langsamer, im
+  ERG-Modus nach Zeit gefahren), 60 min Intervalle auf der Rolle ergaben vorher oft nur
+  „teilweise“.
+- **Alte Pläne ohne `durationMin`:** Bei Indoor-Fahrten gilt dann die Dauer, die auch die
+  ERG-Einheit fährt (Plan-km bei 25 km/h, 20–240 min); bei reinen Fahrten draußen bleibt es
+  bei km und Last wie bisher.
+- **Mehrere Fahrten an einem Tag:** Reicht die beste Tour allein nicht, zählen die übrigen
+  freien Touren **genau vom Tag der Einheit** dazu (km, Last, Zeit als Summe) — draußen
+  abgebrochen und drinnen zu Ende gefahren ist eine Einheit. Touren vom Nachbartag werden
+  nicht dazugenommen, sie gehören womöglich zu dessen Einheit. Reicht die beste Tour allein,
+  bleibt eine zweite frei.
+- Das Ergebnis nennt zusätzlich, ob draußen, drinnen oder beides gefahren wurde, und die
+  Minuten; *Heute* zeigt danach „Einheit erledigt · Drinnen gefahren · 61 min“ statt des
+  Vorschlags, die Uhr „Einheit erledigt ✓“.
+
+Tests: `PlanSessionDoneTest` (Indoor über Zeit, Zeit draußen, alter Plan, Kombination,
+Nachbartag, zweite Tour bleibt frei), bestehend `TrainingPlanProgressTest`.
+
+**Bekannte Grenze:** Das Tourblatt („Passt zum Plan“, `ui/rides/RideEffort.kt`) erkennt
+die Zuordnung nur für die Haupttour (`rideId`), nicht für mitgezählte Touren
+(`extraRideIds`).

@@ -514,6 +514,12 @@ passt, und fährt sie im ERG-Modus.
   Am Ruhetag steht dort ehrlich „Heute ist Ruhetag“ mit „Trotzdem frei
   fahren“; am Zieltag, solange die Suche läuft oder wenn der Kern nichts
   liefert, die bisherige Einstiegskarte.
+- Direkt darüber steht seit 25.11.2026 die Karte **„Wo fährst du heute?“**
+  (`ui/today/TodayPlaceCard.kt`): ein begründeter Vorschlag draußen oder
+  drinnen (Tageslicht, Art und Dauer der Einheit, vorhandenes Wetter; Regeln
+  in `docs/trainingswissenschaft.md` 17), mit einem Tipp umdrehbar. Drinnen
+  verweist sie auf diese Karte; draußen bringt sie die Runde mit. Nach einer
+  passenden Fahrt (draußen oder auf der Rolle) zeigt sie „Einheit erledigt“.
 - Auf der Startseite steht dieselbe Karte unter dem Trainer (`IndoorHomeScreen`,
   Parameter `day`). „Fahren“ wählt Strecke, ERG-Modus und Startpunkt und geht
   direkt weiter (`IndoorViewModel.rideDaySuggestion`).
@@ -1032,3 +1038,9 @@ einer gefahrenen Tour gegen die eigene Außenfahrt.
 - [ ] Auswertung: Satz und Tabelle stimmen mit dem Gefühl überein (z. B.
       bewusst langsamer fahren → „hinter deiner Außenfahrt“)
 - [ ] Zurück aus dem Indoor-Training landet wieder im Verlauf
+## Strecke vor der Tour ansehen (25.11.2026)
+
+Neue Stufe `IndoorStage.PREVIEW`: Eine Planung oder gefahrene Tour lässt sich
+aus dem Tourdetail („In 3D ansehen“) ohne Trainer in 3D abfliegen — über
+denselben Weg „Strecke vorbereiten“ und dieselbe Darstellung. Ablauf,
+Abspieler, Tests, Bilder und offene Punkte: [`vorschau.md`](vorschau.md).

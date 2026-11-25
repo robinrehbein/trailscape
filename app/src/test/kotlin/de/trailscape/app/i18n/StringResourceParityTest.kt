@@ -54,6 +54,10 @@ class StringResourceParityTest {
         "strings_idee01.xml" to "idee01_",
         "strings_idee06.xml" to "indoor_feel_",
         "strings_idee11.xml" to "trail_",
+        // Idee 2: Trainingsplan steuert drinnen, draussen und Uhr (in :app und :wear).
+        "strings_idee02.xml" to "idee02_",
+        // Idee 4: Strecke vor der Tour ansehen (docs/indoor/vorschau.md).
+        "strings_idee04.xml" to "idee04_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */
