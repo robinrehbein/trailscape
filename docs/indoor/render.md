@@ -379,6 +379,10 @@ Horizonts (Bäume und Gelände spiegeln sich, ohne dass wir sie zeichnen).
 Wasser wirft keinen Schatten. Abschaltbar mit dem Schalter „Himmel“
 (`RenderSettings.sky`), dann wieder das Material der Kachel.
 
+**Überarbeitet (25.11.2026, `claude/grafik-wasser`):** eigene Wellenkarte,
+Wolken- und Uferspiegelung, Transparenz mit weichem Uferrand — siehe
+[wasser.md](wasser.md).
+
 ### Lenkerperspektive (`CameraRig`, `CockpitModel`, `FilamentCore.projectionFor`)
 
 Befund (Vorher-Bilder): Die Kamera saß 1,45 m hoch 0,25 m vor dem
