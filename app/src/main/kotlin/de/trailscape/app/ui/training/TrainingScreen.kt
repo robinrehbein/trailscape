@@ -352,8 +352,6 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                             lastMonth = lastMonthChallenges,
                         )
                     }
-                    // Erfolge (docs/erfolge.md); leer, wenn sie ausgeschaltet sind.
-                    item(key = "erfolge") { ErfolgeEntry(appViewModel, onOpen = { showErfolge = true }) }
                     item(key = "jahresziel") {
                         YearGoalCard(
                             progress = yearGoal,
@@ -501,6 +499,13 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                             onShortSleeperHintShown = appViewModel::markShortSleeperHintShown,
                         )
                     }
+                }
+
+                // ------------------------------------------------------ Erfolge
+                // Bewusst ganz unten (docs/erfolge.md): Die bestehenden Karten
+                // behalten ihren Platz; leer, wenn die Erfolge aus sind.
+                if (segment == SEGMENT_PROGRESS && facts.isNotEmpty()) {
+                    item(key = "erfolge") { ErfolgeEntry(appViewModel, onOpen = { showErfolge = true }) }
                 }
             }
         }

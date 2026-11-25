@@ -607,25 +607,22 @@ class AchievementsTest {
     private val streak = RideHighlight.StreakExtended(3)
 
     @Test
-    fun badgeComesAfterANewLongestRide() {
+    fun badgeNeverDisplacesAHighlight() {
         val ids = listOf(AchievementId.RIDE_50_KM)
-        val result = withAchievementHighlight(listOf(distance, ascent, streak), ids, max = 3)
-        assertEquals(listOf(distance, RideHighlight.AchievementsUnlocked(ids), ascent), result)
-    }
-
-    @Test
-    fun badgeComesFirstOtherwise() {
-        val ids = listOf(AchievementId.STREAK_4, AchievementId.RIDES_10)
-        assertEquals(
-            listOf(RideHighlight.AchievementsUnlocked(ids), ascent),
-            withAchievementHighlight(listOf(ascent, streak), ids, max = 2),
-        )
-        assertEquals(listOf(RideHighlight.AchievementsUnlocked(ids)), withAchievementHighlight(emptyList(), ids, max = 3))
+        val badge = RideHighlight.AchievementsUnlocked(ids)
+        // Tourblatt: eine Zeile zusaetzlich, am Ende.
+        assertEquals(listOf(distance, ascent, streak, badge), withAchievementHighlight(listOf(distance, ascent, streak), ids, 3, extraLine = true))
+        assertEquals(listOf(distance, ascent, badge), withAchievementHighlight(listOf(distance, ascent, streak), ids, 2, extraLine = true))
+        // Uhr: nur, wenn Platz ist.
+        assertEquals(listOf(distance, ascent), withAchievementHighlight(listOf(distance, ascent, streak), ids, 2))
+        assertEquals(listOf(distance, badge), withAchievementHighlight(listOf(distance), ids, 2))
+        assertEquals(listOf(badge), withAchievementHighlight(emptyList(), ids, 2))
     }
 
     @Test
     fun noBadgeLeavesTheHighlightsAlone() {
         assertEquals(listOf(distance, ascent), withAchievementHighlight(listOf(distance, ascent, streak), emptyList(), 2))
-        assertEquals(emptyList<RideHighlight>(), withAchievementHighlight(listOf(distance), listOf(AchievementId.FIRST_RIDE), 0))
+        assertEquals(listOf(distance, ascent), withAchievementHighlight(listOf(distance, ascent, streak), emptyList(), 2, extraLine = true))
+        assertEquals(emptyList<RideHighlight>(), withAchievementHighlight(listOf(distance), listOf(AchievementId.FIRST_RIDE), 0, extraLine = true))
     }
 }

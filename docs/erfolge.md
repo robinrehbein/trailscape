@@ -155,16 +155,20 @@ Pausen und Stufe sind je Gerät. Ein Endpunkt `PUT /api/state/progress` bleibt K
 ## 6 Oberfläche
 
 - **Training → Fortschritt**: Karte „Erfolge" (Stufe, „x von y Abzeichen", Weg zur nächsten
-  Stufe, „2 neu") unter den Monats-Challenges. Antippen öffnet das Blatt.
+  Stufe, „2 neu") **ganz unten**, unter den Körperwerten — die bestehenden Karten behalten ihren
+  Platz. Antippen öffnet das Blatt. Der Schalter „Erfolge anzeigen" steht als letzter Abschnitt
+  der Einstellungen.
 - **Blatt „Erfolge"** (`ui/erfolge/ErfolgeScreen.kt`): Stufe mit Punkten und Herkunft, kurze
   Erklärung der Punkte, Hinweis auf den Punktebeginn (nur, wenn es ältere Touren gibt);
   Wochenserie mit Pausenschaltern; Abzeichen nach Gruppen (Touren, Zusammen, Dranbleiben,
   Trainingsplan, Drinnen, Entdecken), erreicht mit Datum, offen mit Bedingung, Fortschritt und
   Balken; „Kommt bald". Was beim Öffnen neu war, trägt „Neu" und gilt danach als gesehen.
 - **Nach der Fahrt** (Tourblatt auf der Karte): neue Abzeichen der Tour als **eine** Zeile
-  („Neues Abzeichen: Hunderter" bzw. „… und 2 weitere"), direkt nach einer neuen Bestweite,
-  sonst ganz oben (`withAchievementHighlight`).
-- **Uhr**: dieselbe Zeile als eine der zwei Zeilen von `PFAD_ABSCHLUSS`
+  („Neues Abzeichen: Hunderter" bzw. „… und 2 weitere") **am Ende**
+  (`withAchievementHighlight`). Sie verdrängt nie ein bestehendes Highlight: auf normalen
+  Bildschirmen ist sie eine zusätzliche Zeile, auf niedrigen (< 700 dp) steht sie nur, wenn unter
+  den zwei Zeilen noch Platz ist.
+- **Uhr**: dieselbe Zeile als eine der zwei Zeilen von `PFAD_ABSCHLUSS`, nur wenn eine frei ist
   (`wear/WearAbschluss.kt`). Das Protokoll (`AbschlussInfo`, je Zeile höchstens 60 Zeichen)
   bleibt unverändert; ein Test prüft, dass jede Zeile in 60 Zeichen passt.
 - **Symbole**: selbst gezeichnete, einfarbige Liniensymbole (`ErfolgeIcons.kt`), je Gruppe eins,

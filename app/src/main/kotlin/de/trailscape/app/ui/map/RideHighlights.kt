@@ -118,12 +118,20 @@ internal fun rememberRideHighlights(
     val comparison by produceState<RouteComparison?>(null, rideId, rideUpdatedAt, eligible) {
         value = if (eligible) appViewModel.routeComparisonFor(rideId) else null
     }
-    val max = if (LocalConfiguration.current.screenHeightDp < HIGHLIGHTS_SHORT_SCREEN_DP) 2 else 3
+    val short = LocalConfiguration.current.screenHeightDp < HIGHLIGHTS_SHORT_SCREEN_DP
+    val max = if (short) 2 else 3
     // Neue Abzeichen der Tour (docs/erfolge.md); leer bei „Erfolge anzeigen" aus.
+    // Sie verdraengen kein Highlight: auf normalen Bildschirmen eine Zeile
+    // zusaetzlich, auf niedrigen nur, wenn noch Platz ist.
     val badges = rememberErfolgeOfRide(appViewModel, rideId, active = eligible)
     return remember(eligible, rideId, facts, today, weekTargetKm, comparison, max, badges) {
         if (eligible) {
-            withAchievementHighlight(rideHighlights(rideId, facts, today, weekTargetKm, comparison, max = max), badges, max)
+            withAchievementHighlight(
+                rideHighlights(rideId, facts, today, weekTargetKm, comparison, max = max),
+                badges,
+                max,
+                extraLine = !short,
+            )
         } else {
             emptyList()
         }

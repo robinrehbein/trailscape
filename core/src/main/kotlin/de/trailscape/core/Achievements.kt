@@ -977,23 +977,22 @@ private fun putPlanStates(input: AchievementInput, facts: List<RideFact>, put: (
 // ---------------------------------------------------------------------------
 
 /**
- * [highlights] mit den Abzeichen, die die Tour gebracht hat
- * ([RideHighlight.AchievementsUnlocked]), gekuerzt auf [max].
+ * [highlights] (auf [max] gekuerzt) mit den Abzeichen, die die Tour gebracht
+ * hat ([RideHighlight.AchievementsUnlocked]). Mehrere Abzeichen einer Tour
+ * stehen in **einer** Zeile.
  *
- * Ein neues Abzeichen ist selten und deshalb weit vorn: direkt nach einer
- * neuen Bestweite bzw. Rundenbestzeit, sonst ganz oben. Mehrere Abzeichen
- * einer Tour stehen in **einer** Zeile.
+ * Abzeichen verdraengen nie ein bestehendes Highlight: Die Zeile kommt **ans
+ * Ende**. Mit [extraLine] (Tourblatt) ist sie eine zusaetzliche Zeile ueber
+ * [max] hinaus; ohne (Uhr, feste Zeilenzahl im Protokoll) steht sie nur, wenn
+ * unter [max] noch Platz ist.
  */
 fun withAchievementHighlight(
     highlights: List<RideHighlight>,
     unlocked: List<AchievementId>,
     max: Int,
+    extraLine: Boolean = false,
 ): List<RideHighlight> {
-    if (unlocked.isEmpty() || max <= 0) return highlights.take(max.coerceAtLeast(0))
-    val lead = highlights.takeWhile {
-        (it is RideHighlight.Record && it.gain.kind == RecordKind.DISTANCE) || it is RideHighlight.RouteBest
-    }.size.coerceAtMost(1)
-    val result = highlights.toMutableList()
-    result.add(lead, RideHighlight.AchievementsUnlocked(unlocked))
-    return result.take(max)
+    val base = highlights.take(max.coerceAtLeast(0))
+    if (unlocked.isEmpty() || max <= 0) return base
+    return if (extraLine || base.size < max) base + RideHighlight.AchievementsUnlocked(unlocked) else base
 }
