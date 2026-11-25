@@ -810,6 +810,26 @@ class GlbMeshFile(bytes: ByteArray) {
         GlbNodePlacement(name, t[0], t[1], t[2], yaw, s)
     }
 
+    /**
+     * Groesster waagrechter Abstand (x/z) einer Ecke des Knotens [nodeName] von der Hochachse durch
+     * seinen Ursprung — liest nur die Lagen. `null`, wenn es den Knoten nicht gibt oder Daten fehlen.
+     */
+    fun horizontalReach(nodeName: String): Float? {
+        val node = p.nodes.getOrNull(byName[nodeName] ?: return null) ?: return null
+        val mesh = p.meshes.getOrNull(node["mesh"].int() ?: return null) ?: return null
+        var best = 0f
+        for (prim in mesh.list("primitives")) {
+            val pos = floats(prim["attributes"].obj()?.get("POSITION").int(), 3) ?: return null
+            for (i in 0 until pos.size / 3) {
+                val x = pos[i * 3]
+                val z = pos[i * 3 + 2]
+                val d = x * x + z * z
+                if (d > best) best = d
+            }
+        }
+        return kotlin.math.sqrt(best)
+    }
+
     private fun floats(accessor: Int?, width: Int): FloatArray? {
         val (v, _) = p.accessorView(accessor ?: return null)
         if (v == null || v.width != width) return null

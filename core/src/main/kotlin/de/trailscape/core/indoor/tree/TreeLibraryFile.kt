@@ -53,6 +53,19 @@ class TreeLibraryFile(bytes: ByteArray) {
         return Template(bark, leaves)
     }
 
+    /**
+     * Waagrechte Ausladung (m) der Vorlage um ihren Fusspunkt, die groessere beider Stufen
+     * ([TreePlace.reachM] = dieser Wert × Massstab); `null`, wenn die Vorlage fehlt.
+     */
+    fun reachM(kind: TreeKind, variant: Int): Double? {
+        var best: Double? = null
+        for (lod in TreeLod.entries) {
+            val r = glb.horizontalReach(TreeLibrary.nodeName(kind, variant, lod)) ?: continue
+            if (best == null || r > best) best = r.toDouble()
+        }
+        return best
+    }
+
     /** Die Material-GLB ([TreeLibrary.materialsGlb]) mit den Atlanten dieser Datei; `null`, wenn einer fehlt. */
     fun materialsGlb(): ByteArray? {
         val bark = glb.baseColorImage(TreeLibrary.MAT_TRUNK) ?: return null
