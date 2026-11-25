@@ -140,7 +140,7 @@ class WeekPlanCardScreenshotTest {
         show(plan, WeekPlanWeatherUi.AUS)
         assertEquals(WeekPlanTightCause.OBERGRENZE, plan.tightCause)
         assertEquals(5, plan.rides.size)
-        compose.onNodeWithText("Selbst mit 5 Fahrten", substring = true).assertExists()
+        compose.onNodeWithText("Selbst mit 5 Touren", substring = true).assertExists()
         shot("heute-wochenplan-knapp-obergrenze")
     }
 

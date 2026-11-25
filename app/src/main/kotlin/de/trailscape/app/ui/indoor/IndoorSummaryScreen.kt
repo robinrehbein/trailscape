@@ -48,6 +48,10 @@ private const val GHOST_EVEN_SECONDS = 1.0
  * Fahrten unter 60 Sekunden ([IndoorSummaryUi.tooShort]) lassen sich nicht
  * speichern; ein Fehlschlag beim Speichern ([IndoorSummaryUi.saveFailed])
  * bleibt sichtbar, die Fahrt geht erst mit „Verwerfen" verloren.
+ *
+ * Nach dem Speichern fuehrt der Hauptknopf „Tour ansehen" ([onOpenTour]) ins
+ * Tourdetail der neuen Tour (Seitenkarte, Befund 9: die Auswertung endete
+ * frueher nur mit „Fertig" am Ausgangsort); „Fertig" bleibt daneben.
  */
 @Composable
 fun IndoorSummaryScreen(
@@ -55,6 +59,7 @@ fun IndoorSummaryScreen(
     onSave: () -> Unit,
     onDiscard: () -> Unit,
     onDone: () -> Unit,
+    onOpenTour: (() -> Unit)? = null,
 ) {
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
     val saved = ui.savedRideId != null
@@ -64,6 +69,14 @@ fun IndoorSummaryScreen(
         onBack = null,
         bottomBar = {
             when {
+                saved && onOpenTour != null -> {
+                    Button(onClick = onOpenTour, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.indoor_app_summary_open_tour_action))
+                    }
+                    NeutralButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.indoor_app_action_done))
+                    }
+                }
                 saved || ui.tooShort || ui.recordMissing -> {
                     Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.indoor_app_action_done))

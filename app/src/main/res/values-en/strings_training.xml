@@ -89,7 +89,7 @@
     </plurals>
     <string name="training_prognosis_fitness_label">Your fitness</string>
     <string name="training_prognosis_fitness_body" formatted="false">The higher your fitness on race day, the longer you can hold the same pace. We use the fitness your plan builds by then — at most 8 % faster than today.</string>
-    <string name="training_prognosis_route_label">The course</string>
+    <string name="training_prognosis_route_label">The route</string>
     <string name="training_prognosis_route_ascent_pill">%1$s&#160;km · %2$d&#160;m</string>
     <string name="training_prognosis_route_body">Climbing costs time: every metre of elevation gain counts like 9 m of flat road. If the race is longer than your longest ride, we add a little time.</string>
     <plurals name="training_prognosis_uncertainty_count">
@@ -176,7 +176,7 @@
     <!-- WeekCard.kt -->
     <string name="training_week_title">This week’s load</string>
     <string name="training_week_budget_hint">The target equals ≈ %1$s h of riding in a mixed week, with your budget of %2$s h per week. Ride harder and you need less time for the same target.</string>
-    <string name="training_week_budget_missing_hint">The target equals ≈ %1$s h of riding in a mixed week. Add your time budget in the More tab and we’ll take it into account.</string>
+    <string name="training_week_budget_missing_hint">The target equals ≈ %1$s h of riding in a mixed week. Add your time budget under Settings → Profile and we’ll take it into account.</string>
     <string name="training_week_load_label">Load (7 days)</string>
     <string name="training_week_average_label">Avg week (4 weeks)</string>
     <string name="training_week_target_label">Target</string>
@@ -190,11 +190,11 @@
     <string name="training_plan_week_progress">%1$s of %2$d km</string>
     <string name="training_plan_week_target">Target: %1$d km</string>
     <string name="training_plan_session_km_load">%1$d km · load %2$d</string>
-    <string name="training_plan_route_cd">Plan a matching loop for “%1$s”</string>
+    <string name="training_plan_route_cd">Build a loop for “%1$s”</string>
     <string name="training_plan_session_ridden">ridden: %1$s, %2$s km</string>
     <string name="training_plan_session_today">today · %1$s</string>
     <string name="training_plan_session_skipped">skipped</string>
-    <string name="training_plan_loop_action">Loop</string>
+    <string name="training_plan_loop_action">Build a loop</string>
     <string name="training_plan_feasibility_title">Plan and goal don’t match</string>
     <string name="training_plan_feasibility_longest_label">Longest ride</string>
     <string name="training_plan_feasibility_goal_label">Goal</string>

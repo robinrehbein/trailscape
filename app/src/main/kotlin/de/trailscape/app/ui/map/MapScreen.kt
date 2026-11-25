@@ -198,7 +198,7 @@ import kotlinx.coroutines.withContext
  *  * die Karte selbst im [MapController] (siehe `MapViewHost.kt`).
  *
  * ## Der Kartenmodus
- * Ob langes Druecken einen Wegpunkt setzt, ob die Zurueck-Geste die Planung
+ * Ob ein Tipp auf die Karte einen Wegpunkt setzt, ob die Zurueck-Geste die Planung
  * verlaesst, welche Stufe das untere Blatt zeigt — all das entschied bis vor
  * Kurzem eine eigene Kombination aus `planning: Boolean` und
  * `navTarget != null`, an jeder Stelle neu zusammengesetzt. [MapMode]
@@ -322,10 +322,14 @@ import kotlinx.coroutines.withContext
  *     Erkunden-Gesicht ist das die Suchzeile ([ExploreSheet]), waehrend der
  *     Planung die Statuszeile der Planung (`PlanningSheet`). Die Karte bleibt
  *     fast vollstaendig sichtbar.
- *  2. [MapSheetStage.AUFGEZOGEN]: zusaetzlich die Aktionszeile „Route planen ·
- *     Kartenstil · Offline" — die drei Einstiege dieses Tabs.
- *  3. [MapSheetStage.PLANEN]: an Stelle der Aktionszeile der Planungsinhalt
- *     (`PlanningSheet` in `PlanningPanel.kt`).
+ *  2. [MapSheetStage.AUFGEZOGEN]: zurueck auf dem Blatt „Wohin?" (aus der
+ *     Planung heraus beendet das die Planung). Die frueher hier genannte
+ *     Aktionszeile gibt es nicht mehr: „Route planen" und „Runde bauen" stehen
+ *     als Knoepfe direkt unter der Suchzeile, Kartenstil und Offline hinter
+ *     dem Ebenen-Knopf.
+ *  3. [MapSheetStage.PLANEN]: der Planungsinhalt (`PlanningSheet` in
+ *     `PlanningPanel.kt`), erreichbar ueber „Route planen", „Route hierher"
+ *     und eine uebernommene Runde.
  *
  * Gewechselt wird per Tipp auf den Griff und per vertikalem Ziehen (beides
  * bringt [SwipeableSheet] mit), aus der Planung heraus zusaetzlich ueber den
@@ -517,8 +521,8 @@ fun MapScreen(appViewModel: AppViewModel) {
     // behaelt die obere Haelfte.
     var planSheetHalf by rememberSaveable { mutableStateOf(false) }
 
-    // Das „Wohin?"-Blatt hochgewischt: gespeicherte Routen, zuletzt gesuchte
-    // Orte, Offline-Karten.
+    // Das „Wohin?"-Blatt hochgewischt: gespeicherte Routen und zuletzt
+    // gesuchte Orte.
     var exploreSheetExpanded by rememberSaveable { mutableStateOf(false) }
 
     // Das Tour-Blatt hochgewischt: Hoehenprofil und weitere Werte. Jede neu
@@ -562,6 +566,28 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Hand geplant wird, faellt es zurueck auf `false`.
     var routeFromGenerator by rememberSaveable { mutableStateOf(false) }
 
+    // „Rückgängig" der Planung: je Aenderung der Wegpunktliste der Stand davor
+    // (reine Logik in `MapTapPlanning.kt`). Bewusst nicht `rememberSaveable`:
+    // Nach einem Prozesstod steht die Liste wieder da, der Weg dorthin nicht.
+    var waypointUndo by remember { mutableStateOf(WaypointUndoStack()) }
+
+    /**
+     * Setzt die Wegpunktliste und merkt den Stand davor fuer „Rückgängig" —
+     * der Weg fuer jede **einzelne** Aenderung (Tipp, langer Druck, Ort als
+     * Wegpunkt, Standort als Start, ✕ einer Zeile).
+     */
+    fun changeWaypoints(next: List<Waypoint>) {
+        waypointUndo = waypointUndo.merke(vorher = waypoints, nachher = next)
+        waypoints = next
+    }
+
+    /** „Rückgängig" im Planungsblatt: nimmt die letzte Aenderung der Wegpunktliste zurueck. */
+    fun undoLastWaypointChange() {
+        val (earlier, rest) = waypointUndo.undo() ?: return
+        waypointUndo = rest
+        waypoints = earlier
+    }
+
     // `searchOpen` steht nur noch fuer das **modale** Suchblatt, das heute
     // ausschliesslich die Wegpunktsuche der Planung bedient (siehe
     // `openPlaceSearch`). Die Ortssuche des Erkunden-Blatts laeuft dort an Ort
@@ -602,11 +628,11 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Verlauf als Karte (Fuehrung „Klartext"): alle Spuren plus Kacheln, mit
     // eigener Zusammenfassung unten; ✕ fuehrt zurueck in den Verlauf.
     var historyMode by rememberSaveable { mutableStateOf(false) }
-    // Dasselbe Angebot wie „Heute" und der Losfahren-Dialog (siehe
-    // [decideToday]): am Ruhetag die lockere Runde, nie die Trainingsrunde.
+    // Dieselbe Tagesentscheidung wie auf „Heute" ([decideToday]); die Karte
+    // braucht daraus nur noch das Wochenziel (die Runde des Tages hat ihren
+    // Einstieg auf „Heute" und im Blatt „Losfahren").
     val now = rememberNow()
     val todayDecision = rememberTodayDecision(appViewModel, now)
-    val todayOffer = todayDecision.offer
     // Fuer „Was die Tour gebracht hat" auf dem Tourblatt (`RideHighlights.kt`):
     // die Touren als Fakten und dasselbe Wochenziel wie auf „Heute"
     // ([rememberWeekTarget]) — sonst stuende hier „Wochenziel geschafft" bei
@@ -1419,6 +1445,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     fun exitPlanning() {
         mode = MapMode.ERKUNDEN
         waypoints = emptyList()
+        waypointUndo = WaypointUndoStack()
         plannedRoute = null
         plannedFor = null
         planError = null
@@ -1436,6 +1463,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     fun restorePlanning(snapshot: PlanningSnapshot) {
         mode = MapMode.PLANEN
         waypoints = snapshot.waypoints
+        waypointUndo = WaypointUndoStack()
         plannedRoute = snapshot.route
         plannedFor = snapshot.plannedFor
         routeFromGenerator = snapshot.fromGenerator
@@ -1567,6 +1595,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         RouteGenerationController.close()
         appViewModel.select(null)
         waypoints = emptyList()
+        waypointUndo = WaypointUndoStack()
         plannedFor = null
         planError = null
         planBusy = false
@@ -1726,13 +1755,15 @@ fun MapScreen(appViewModel: AppViewModel) {
                 appViewModel.showMessage(UiText.Res(R.string.map_screen_position_failed_error))
                 return@launch
             }
-            waypoints = listOf(
-                Waypoint(
-                    position.latitude,
-                    position.longitude,
-                    name = context.getString(R.string.map_planning_my_position_name),
-                ),
-            ) + waypoints
+            changeWaypoints(
+                listOf(
+                    Waypoint(
+                        position.latitude,
+                        position.longitude,
+                        name = context.getString(R.string.map_planning_my_position_name),
+                    ),
+                ) + waypoints,
+            )
             controller.moveTo(position.latitude, position.longitude, MIN_RECORDING_ZOOM)
         }
     }
@@ -1741,68 +1772,124 @@ fun MapScreen(appViewModel: AppViewModel) {
         withPermissions(PendingAction.PLAN_START) { runUseMyPositionAsStart() }
     }
 
-    /**
-     * Langes Druecken auf die Karte — seit der Fuehrung „Klartext" die
-     * **einzige** Geste, die auf der Karte etwas anlegt:
-     *
-     *  * Beim Erkunden setzt sie einen Punkt und oeffnet dafuer die Ortskarte
-     *    („Route hierher", „Runde ab hier").
-     *  * In der Planung haengt sie einen Wegpunkt an.
-     *
-     * Ein gewoehnlicher Tipp tut dagegen nichts mehr: Er legte frueher in der
-     * Planung Wegpunkte an und **loeschte** still einen, wenn er zufaellig in
-     * 24 dp Naehe eines vorhandenen landete. Entfernt wird ein Wegpunkt jetzt
-     * nur noch ueber das × in der Liste.
-     *
-     * Waehrend Aufzeichnung und Navigation tut die Geste nichts. Jeder andere
-     * lange Druck erledigt zugleich den einmaligen Tipp (`LongPressHint.kt`):
-     * Wer die Geste gefunden hat, muss sie nicht mehr erklaert bekommen.
-     */
-    fun onMapLongPress(lat: Double, lon: Double) {
-        if (isRecording || navTarget != null) return
-        if (mode != MapMode.PLANEN && generation.target != null) return
-        // Wer die Geste von selbst gefunden hat, braucht den Tipp nicht mehr.
-        // Erst hier, nach den Faellen, in denen der Druck nichts bewirkt: Ein
-        // wirkungsloser Druck ist kein Beleg, dass die Geste verstanden ist.
+    /** Der Tipp zum Punktesetzen ist erledigt, sobald die Geste einmal etwas bewirkt hat. */
+    fun markPointGestureKnown() {
         if (!longPressHintDone) {
             longPressHintDone = true
             merkeLangDrueckHinweisErledigt(AppServices.keyValueStore)
         }
-        if (mode != MapMode.PLANEN) {
-            appViewModel.select(null)
-            selectedPlace = Place(
-                displayName = context.getString(R.string.map_screen_marked_point_name),
-                lat = lat,
-                lon = lon,
-            )
-            return
-        }
-        if (routeFromGenerator) {
-            // Ein einziger Fehltipp machte aus der uebernommenen 48-km-Runde
-            // einen einzelnen Wegpunkt — unwiederbringlich, „Letzten entfernen"
-            // holt sie nicht zurueck. Die Runde bleibt deshalb stehen, bis die
-            // Nutzerin das eigene Planen ausdruecklich bestaetigt; der Tipp
-            // selbst ist dann der erste Wegpunkt und geht nicht verloren.
-            scope.launch {
-                val answer = snackbarHostState.showSnackbar(
-                    message = context.getString(R.string.map_screen_loop_kept_status),
-                    actionLabel = context.getString(R.string.map_screen_plan_yourself_action),
-                    duration = SnackbarDuration.Long,
-                )
-                if (answer == SnackbarResult.ActionPerformed) {
-                    routeFromGenerator = false
-                    plannedRoute = null
-                    plannedFor = null
-                    waypoints = listOf(Waypoint(lat, lon))
-                    planSheetExpanded = false
-                }
-            }
-            return
-        }
+    }
+
+    /** Ruhezustand: markiert den Punkt und oeffnet dafuer die Ortskarte. */
+    fun markPointOnMap(lat: Double, lon: Double) {
+        appViewModel.select(null)
+        selectedPlace = Place(
+            displayName = context.getString(R.string.map_screen_marked_point_name),
+            lat = lat,
+            lon = lon,
+        )
+    }
+
+    /** Planung: haengt den Punkt als naechsten Wegpunkt an („Rückgängig" nimmt ihn zurueck). */
+    fun appendWaypointOnMap(lat: Double, lon: Double) {
         // Wer auf der Karte plant, arbeitet mit der Karte: Das Blatt geht
         // beim ersten Wegpunkt zu und gibt sie frei.
         if (waypoints.isEmpty()) planSheetExpanded = false
-        waypoints = waypoints + Waypoint(lat, lon)
+        changeWaypoints(waypoints + Waypoint(lat, lon))
+    }
+
+    /**
+     * Einfacher Tipp auf die Karte — setzt seit dem Umbau der Bedienstruktur
+     * (docs/ux/seitenkarte.md, Entscheidungsfrage 4) den naechsten Punkt:
+     *
+     *  * Beim Erkunden markiert er einen Punkt und oeffnet die Ortskarte
+     *    („Route hierher", „Runde ab hier").
+     *  * In der Planung haengt er einen Wegpunkt an. Einen Fehltipper nimmt
+     *    „Rückgängig" im Planungsblatt zurueck; geloescht wird durch einen
+     *    Tipp nie etwas.
+     *
+     * Waehrend Aufzeichnung und Navigation tut er nichts, ebenso ueber einer
+     * offenen Aufgabe (gewaehlte Tour, Rundenwahl, Verlaufskarte, Suche) —
+     * die Regeln stehen getestet in [mapTapAction].
+     */
+    fun onMapTap(lat: Double, lon: Double) {
+        val action = mapTapAction(
+            mode = mode,
+            aufzeichnung = isRecording,
+            navigation = navTarget != null,
+            vorschlaegeOffen = generation.target != null,
+            rundeUebernommen = routeFromGenerator,
+            andereAufgabeOffen = selectedRide != null || historyMode || roundTripSetupOpen ||
+                exploreSearching || exploreSheetExpanded || searchOpen,
+        )
+        when (action) {
+            MapPointAction.PUNKT_MARKIEREN -> {
+                markPointGestureKnown()
+                markPointOnMap(lat, lon)
+            }
+
+            MapPointAction.WEGPUNKT_ANHAENGEN -> {
+                markPointGestureKnown()
+                appendWaypointOnMap(lat, lon)
+            }
+
+            MapPointAction.RUNDE_ERSETZEN_FRAGEN, MapPointAction.KEINE -> Unit
+        }
+    }
+
+    /**
+     * Langes Druecken auf die Karte — tut dasselbe wie der einfache Tipp
+     * ([onMapTap]) und bleibt als zweiter Weg erhalten:
+     *
+     *  * Beim Erkunden setzt es einen Punkt und oeffnet dafuer die Ortskarte
+     *    („Route hierher", „Runde ab hier") — anders als der Tipp auch ueber
+     *    eine gewaehlte Tour hinweg.
+     *  * In der Planung haengt es einen Wegpunkt an; bei einer uebernommenen
+     *    Runde fragt es vorher nach.
+     *
+     * Entfernt wird ein Wegpunkt ueber das × in der Liste oder ueber
+     * „Rückgängig". Waehrend Aufzeichnung und Navigation tut die Geste nichts
+     * ([mapLongPressAction]).
+     */
+    fun onMapLongPress(lat: Double, lon: Double) {
+        val action = mapLongPressAction(
+            mode = mode,
+            aufzeichnung = isRecording,
+            navigation = navTarget != null,
+            vorschlaegeOffen = generation.target != null,
+            rundeUebernommen = routeFromGenerator,
+        )
+        // Wer die Geste von selbst gefunden hat, braucht den Tipp nicht mehr.
+        // Nicht bei einem wirkungslosen Druck: Der ist kein Beleg, dass die
+        // Geste verstanden ist.
+        if (action != MapPointAction.KEINE) markPointGestureKnown()
+        when (action) {
+            MapPointAction.KEINE -> Unit
+            MapPointAction.PUNKT_MARKIEREN -> markPointOnMap(lat, lon)
+            MapPointAction.WEGPUNKT_ANHAENGEN -> appendWaypointOnMap(lat, lon)
+            MapPointAction.RUNDE_ERSETZEN_FRAGEN -> {
+                // Ein einziger Fehlgriff machte aus der uebernommenen
+                // 48-km-Runde einen einzelnen Wegpunkt. Die Runde bleibt
+                // deshalb stehen, bis die Nutzerin das eigene Planen
+                // ausdruecklich bestaetigt; der Punkt selbst ist dann der
+                // erste Wegpunkt und geht nicht verloren.
+                scope.launch {
+                    val answer = snackbarHostState.showSnackbar(
+                        message = context.getString(R.string.map_screen_loop_kept_status),
+                        actionLabel = context.getString(R.string.map_screen_plan_yourself_action),
+                        duration = SnackbarDuration.Long,
+                    )
+                    if (answer == SnackbarResult.ActionPerformed) {
+                        routeFromGenerator = false
+                        plannedRoute = null
+                        plannedFor = null
+                        waypoints = listOf(Waypoint(lat, lon))
+                        waypointUndo = WaypointUndoStack()
+                        planSheetExpanded = false
+                    }
+                }
+            }
+        }
     }
 
     /** Neuer Text im Suchfeld — ohne jede Anfrage (siehe [PlaceSearchState.changeQuery]). */
@@ -1919,6 +2006,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 Waypoint(it.latitude, it.longitude, name = context.getString(R.string.map_planning_my_position_name))
             }
             waypoints = listOfNotNull(start) + Waypoint(place.lat, place.lon, name = place.displayName)
+            waypointUndo = WaypointUndoStack()
         }
     }
 
@@ -1989,49 +2077,14 @@ fun MapScreen(appViewModel: AppViewModel) {
                     plannedRoute = null
                     plannedFor = null
                     waypoints = listOf(Waypoint(place.lat, place.lon, name = place.displayName))
+                    waypointUndo = WaypointUndoStack()
                     planSheetExpanded = false
                 }
             }
             return
         }
-        waypoints = waypoints + Waypoint(place.lat, place.lon, name = place.displayName)
+        changeWaypoints(waypoints + Waypoint(place.lat, place.lon, name = place.displayName))
         controller.moveTo(place.lat, place.lon, MIN_RECORDING_ZOOM)
-    }
-
-    /**
-     * „+ Als Wegpunkt" auf der Ortskarte — die Aktion, die es dort **in jedem**
-     * Kartenmodus gibt (siehe den Karte-Screen in
-     * `docs/design/prototyp-eine-leiste.html`): Sie ist der Weg, auf dem aus
-     * einem gesuchten Ort eine Route aus mehreren Orten wird, ohne vorher
-     * „Route planen" zu suchen.
-     *
-     * Zwei Faelle, ein Ergebnis:
-     *  * **Planung laeuft nicht** — die Planung beginnt hier (derselbe Einstieg
-     *    [enterPlanning] wie die Aktionszeile des Kartenblatts), und der Ort ist
-     *    ihr erster Wegpunkt. Was von einer frueheren Planung noch herumliegt
-     *    (eine Route, die die Aufzeichnung ueberlebt hat, siehe [runRecording],
-     *    oder eine uebernommene Generator-Runde), wird dabei zum neuen Anfang
-     *    weggeraeumt.
-     *  * **Planung laeuft** — der Ort haengt sich hinten an, ueber genau
-     *    dieselbe [addPlaceAsWaypoint], die auch die Wegpunktsuche der
-     *    Planungsliste benutzt. Damit entstehen Name und Koordinate auf beiden
-     *    Wegen identisch, samt der dortigen Sonderregel fuer eine noch nicht
-     *    bestaetigte uebernommene Runde.
-     *
-     * [enterPlanning] lehnt waehrend einer laufenden Aufzeichnung ab (mit
-     * eigener Meldung); dass es dazu kam, steht danach am Modus — deshalb die
-     * zweite Abfrage statt einer Kopie jener Bedingung.
-     */
-    fun addPlaceAsWaypointFromCard(place: Place) {
-        if (mode != MapMode.PLANEN) {
-            enterPlanning()
-            if (mode != MapMode.PLANEN) return
-            routeFromGenerator = false
-            plannedRoute = null
-            plannedFor = null
-            waypoints = emptyList()
-        }
-        addPlaceAsWaypoint(place)
     }
 
     fun shareRoute(name: String, points: List<TrackPoint>) {
@@ -2174,25 +2227,6 @@ fun MapScreen(appViewModel: AppViewModel) {
         )
         // Das Blatt zu: Waehrend der Suche gehoert der Platz dem
         // Rundkurs-Panel und der Karte.
-        planSheetExpanded = false
-        generateRoutes()
-    }
-
-    /**
-     * „Heute X km" im Blatt „Wohin?": das Trainingsziel des Tages als Runde.
-     *
-     * Bewusst direkt hier und nicht ueber
-     * [AppViewModel.requestRouteGeneration]: Der Umweg bittet die Huelle um
-     * den Karten-Tab, auf dem wir schon stehen — und ein Tab-Wechsel auf das
-     * sichtbare Ziel legte die Karte still (siehe `navigateToTab` in
-     * `TrailscapeApp.kt` und die zwei Effekte in `MapViewHost`). Derselbe Weg
-     * wie „Runde ab hier" ([startRoundTrip]), der diesen Fehler nie hatte:
-     * Panel oeffnen, Blatt einklappen, sofort suchen.
-     */
-    fun startTodayRound(target: RouteTarget) {
-        if (mode == MapMode.PLANEN) exitPlanning()
-        appViewModel.select(null)
-        RouteGenerationController.open(target)
         planSheetExpanded = false
         generateRoutes()
     }
@@ -2453,9 +2487,9 @@ fun MapScreen(appViewModel: AppViewModel) {
     LaunchedEffect(sheetUnderNav) { appViewModel.setMapSheetUnderNav(sheetUnderNav) }
     DisposableEffect(Unit) { onDispose { appViewModel.setMapSheetUnderNav(false) } }
 
-    // ------------------------------------------ Tipp: lange auf die Karte
-    // Einmal, beim ruhigen Erkunden, erklaert eine Snackbar die einzige Geste,
-    // die auf der Karte etwas anlegt (Entscheidung in `LongPressHint.kt`).
+    // ------------------------------------------ Tipp: auf die Karte tippen
+    // Einmal, beim ruhigen Erkunden, erklaert eine Snackbar, dass ein Tipp
+    // auf die Karte einen Punkt setzt (Entscheidung in `LongPressHint.kt`).
     // Jede eigene Bewegung der Karte startet die Wartezeit neu (Schluessel
     // `userPanning` und `lastUserPanAt`, gesetzt erst beim Stillstand — ein
     // langer Wischer mit Nachgleiten zaehlt also ganz); eine fremde Snackbar
@@ -2893,7 +2927,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 controller = controller,
                 style = mapStyle,
                 locationEnabled = locationGranted,
-                onMapTap = { _, _ -> },
+                onMapTap = ::onMapTap,
                 onMapLongPress = ::onMapLongPress,
                 onUserPan = {
                     followMe = false
@@ -3380,7 +3414,15 @@ fun MapScreen(appViewModel: AppViewModel) {
                             locating = locating,
                             onUseMyPosition = ::useMyPositionAsStart,
                             onRemoveWaypoint = { index ->
-                                waypoints = waypoints.filterIndexed { i, _ -> i != index }
+                                changeWaypoints(waypoints.filterIndexed { i, _ -> i != index })
+                            },
+                            canUndo = waypointUndo.canUndo && !routeFromGenerator,
+                            onUndo = ::undoLastWaypointChange,
+                            // „Verwerfen": Planung samt Route wegwerfen und
+                            // zurueck auf „Wohin?" — per Snackbar rueckholbar
+                            // wie jeder andere Ausgang aus der Planung.
+                            onDiscard = {
+                                exitPlanningWithUndo(context.getString(R.string.map_screen_planning_discarded_status))
                             },
                             onAddWaypointViaSearch = { openPlaceSearch { place -> addPlaceAsWaypoint(place) } },
                             onClear = {
@@ -3396,6 +3438,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 )
                                 routeFromGenerator = false
                                 waypoints = emptyList()
+                                waypointUndo = WaypointUndoStack()
                                 plannedRoute = null
                                 plannedFor = null
                                 planError = null
@@ -3459,14 +3502,9 @@ fun MapScreen(appViewModel: AppViewModel) {
                             },
                             onRouteHere = { runRouteToPlace(card) },
                             onRoundTripHere = { openRoundTripSetup(card) },
-                            // Beide Wegpunkt-Aktionen — „Als Wegpunkt"
-                            // waehrend der Planung und „+ Als Wegpunkt" im
-                            // Erkunden-Zustand — gehen durch **dieselbe**
-                            // Funktion: Sie startet die Planung, falls sie noch
-                            // nicht laeuft, und haengt den Ort sonst hinten an
-                            // (siehe [addPlaceAsWaypoint]).
-                            onAddWaypoint = { addPlaceAsWaypointFromCard(card) },
-                            onAddAsWaypoint = { addPlaceAsWaypointFromCard(card) },
+                            // „Als Wegpunkt" gibt es nur in der Planung;
+                            // dort haengt es den Ort hinten an.
+                            onAddWaypoint = { addPlaceAsWaypoint(card) },
                             onClose = { selectedPlace = null },
                             bottomInset = sheetBottomInset,
                         )
@@ -3568,11 +3606,12 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 endExploreSearch()
                                 onPlaceChosen(place)
                             },
-                            todayOffer = todayOffer,
-                            onTodayRoute = {
-                                todayOffer?.let { startTodayRound(it.target) }
-                            },
+                            // „Route planen": die Planung beginnt leer; der
+                            // erste Punkt kommt per Tipp auf die Karte, per
+                            // Suche oder als „Mein Standort als Start".
+                            onPlanRoute = { goToSheetStage(MapSheetStage.PLANEN) },
                             onRoundTripHere = { openRoundTripSetup(null) },
+                            onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
                             expanded = exploreSheetExpanded,
                             onExpandedChange = { exploreSheetExpanded = it },
                             savedRoutes = savedRoutes,
@@ -3580,7 +3619,6 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 exploreSheetExpanded = false
                                 appViewModel.select(route.id)
                             },
-                            onOpenOfflineMaps = { showStyleSheet = true },
                             expandedHeight = exploreExpandedHeight,
                             onRevealFraction = { exploreReveal = it },
                             bottomInset = sheetBottomInset,
@@ -3646,8 +3684,10 @@ fun MapScreen(appViewModel: AppViewModel) {
                 onDismiss = { saveRouteDialog = false },
                 onConfirm = { name ->
                     saveRouteDialog = false
+                    // Die Route bleibt nach dem Speichern stehen: Wer sie
+                    // gespeichert hat, will sie meist gleich fahren
+                    // („Losfahren") — weg kommt sie ueber „Verwerfen".
                     appViewModel.addRide(rideFromPlannedRoute(name, route))
-                    exitPlanning()
                 },
             )
         }

@@ -44,7 +44,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.R
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
-import de.trailscape.app.ui.MoreSection
+import de.trailscape.app.ui.HistorySegment
+import de.trailscape.app.ui.historySegments
+import de.trailscape.app.ui.resolveSegment
+import de.trailscape.app.ui.components.PillSegments
+import de.trailscape.app.ui.more.rememberArchiveImportAction
+import de.trailscape.app.ui.training.ProgressContent
+import androidx.compose.ui.semantics.Role
 import de.trailscape.app.ui.components.ForwardBackwardHost
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.ScreenHeader
@@ -61,7 +67,18 @@ import kotlinx.coroutines.Job
 /**
  * # Der Verlauf-Tab — was bin ich gefahren?
  *
- * Dritter Platz der Navigationskapsel. Zieldesign
+ * Vierter Platz der Navigationskapsel (Heute · Karte · Indoor · Verlauf).
+ *
+ * ## Segmente: Touren | Fortschritt [| Erfolge]
+ * Seit dem Umbau nach der Seitenkarte (`docs/ux/umbau.md`) hat der Verlauf
+ * Segmente unter dem Titel ([historySegments]): „Touren" ist die Liste,
+ * „Fortschritt" die fruehere erste Sicht des Tabs „Training"
+ * ([ProgressContent]) — beides ist der Blick zurueck. Der Platz fuer
+ * „Erfolge" ist festgelegt ([HistorySegment.ACHIEVEMENTS]), bleibt aber
+ * unsichtbar, solange es die Funktion nicht gibt. Von aussen springt
+ * [AppViewModel.requestProgress] direkt auf „Fortschritt".
+ *
+ * Zieldesign der Liste:
  * `docs/design/prototyp-klartext.html`, Screen `#s-verlauf` (Listenansicht)
  * und `NOTES.verlauf`: Touren nach Monaten gruppiert, je mit Mini-Karte und
  * einem Wort fuer die Haerte statt „TL 68"; Suche und Import oben rechts neben
@@ -136,10 +153,25 @@ fun RidesScreen(appViewModel: AppViewModel) {
     // Der Datei-Import (GPX/FIT, Mehrfachauswahl) samt SAF-Launcher und Fehlerdialog — die
     // geteilte Aktion aus `ui/ActivityImportAction.kt`.
     val importAction = rememberActivityImportAction(appViewModel)
-    // Der Archiv-Import (ZIP mit Fortschritts- und Ergebnisdialog) wohnt in
-    // Einstellungen → Daten & Backup; der Sprung dorthin ist der eine Weg,
-    // ihn nicht ein zweites Mal zu verdrahten.
-    val importArchive = { appViewModel.requestMoreSection(MoreSection.BACKUP) }
+    // Der Archiv-Import (ZIP mit Fortschritts- und Ergebnisdialog) startet
+    // direkt von hier: Touren kommen dort hinein, wo sie danach liegen. Die
+    // Aktion samt Dialogen ist dieselbe wie auf der Backup-Seite
+    // (`ui/more/ArchiveImportAction.kt`).
+    val archiveImport = rememberArchiveImportAction(appViewModel)
+    val importArchive = archiveImport.start
+
+    // Die Segmente des Tabs. Erfolge gibt es noch nicht — der Platz bleibt
+    // unsichtbar (docs/ux/umbau.md, „Erfolge": hier `achievementsVisible`
+    // an den Schalter „Erfolge anzeigen" binden).
+    val segments = historySegments(achievementsVisible = false)
+    var wantedSegment by rememberSaveable { mutableStateOf(HistorySegment.TOURS) }
+    val pendingSegment by appViewModel.pendingHistorySegment.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingSegment) {
+        val requested = pendingSegment ?: return@LaunchedEffect
+        wantedSegment = requested
+        appViewModel.consumeHistorySegmentRequest()
+    }
+    val segment = resolveSegment(wantedSegment, segments)
 
     // Von der Startseite („Letzte Tour") angeforderte Detailansicht. Erst
     // quittieren, wenn die Tour wirklich in [rides] vorliegt, sonst ginge eine
@@ -192,32 +224,51 @@ fun RidesScreen(appViewModel: AppViewModel) {
                         .padding(innerPadding),
                     contentAlignment = Alignment.TopCenter,
                 ) {
-                    TourListContent(
-                        appViewModel = appViewModel,
-                        query = if (searchOpen) query else "",
-                        onOpenDetail = { detailRideId = it },
-                        onRecord = { appViewModel.requestRecording() },
-                        onImportFile = importAction.start,
-                        onImportArchive = importArchive,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = screenContentPadding(),
-                        header = {
-                            item(key = "kopf") {
-                                VerlaufHeader(
-                                    searchOpen = searchOpen,
-                                    query = query,
-                                    onQueryChange = { query = it },
-                                    onToggleSearch = {
-                                        if (searchOpen) closeSearch() else searchOpen = true
-                                    },
-                                    onImportFile = importAction.start,
-                                    onImportArchive = importArchive,
-                                    onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
-                                    onShowMap = if (hasRiddenRides) appViewModel::requestHistoryMap else null,
-                                )
-                            }
-                        },
-                    )
+                    // Derselbe Kopf (Titel, Aktionen, Segmente) ueber jeder Sicht.
+                    val header: @Composable () -> Unit = {
+                        VerlaufHeader(
+                            segments = segments,
+                            segment = segment,
+                            onSegment = {
+                                if (it != HistorySegment.TOURS) closeSearch()
+                                wantedSegment = it
+                            },
+                            searchOpen = searchOpen,
+                            query = query,
+                            onQueryChange = { query = it },
+                            onToggleSearch = {
+                                if (searchOpen) closeSearch() else searchOpen = true
+                            },
+                            onImportFile = importAction.start,
+                            onImportArchive = importArchive,
+                            onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
+                            onShowMap = if (hasRiddenRides) appViewModel::requestHistoryMap else null,
+                        )
+                    }
+                    when (segment) {
+                        HistorySegment.TOURS -> TourListContent(
+                            appViewModel = appViewModel,
+                            query = if (searchOpen) query else "",
+                            onOpenDetail = { detailRideId = it },
+                            onRecord = { appViewModel.requestRecording() },
+                            onImportFile = importAction.start,
+                            onImportArchive = importArchive,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = screenContentPadding(),
+                            header = { item(key = "kopf") { header() } },
+                        )
+
+                        HistorySegment.PROGRESS -> ProgressContent(
+                            appViewModel = appViewModel,
+                            header = header,
+                            onImport = importAction.start,
+                        )
+
+                        // Platz der Erfolge (docs/ux/umbau.md): Solange
+                        // [historySegments] das Segment nicht liefert, wird
+                        // dieser Zweig nie erreicht.
+                        HistorySegment.ACHIEVEMENTS -> Unit
+                    }
                 }
             }
         },
@@ -250,14 +301,19 @@ fun RidesScreen(appViewModel: AppViewModel) {
 
 /**
  * Der Kopf des Verlaufs (Zieldesign `.head` + `.title`): rechts oben Suche,
- * Import und Zahnrad, darunter der Titel und — sobald es eine gefahrene Tour
- * gibt — der Knopf „Alle Touren auf der Karte". Ist die Suche offen, steht
- * das Suchfeld darunter; die Lupe wird dann zum Schliessen-Knopf.
+ * Import und Zahnrad, darunter der Titel, die Segmente und — in der Sicht
+ * „Touren", sobald es eine gefahrene Tour gibt — der Knopf „Alle Touren auf
+ * der Karte". Ist die Suche offen, steht das Suchfeld darunter; die Lupe wird
+ * dann zum Schliessen-Knopf. Die Lupe gehoert zur Tourenliste und fehlt in
+ * den anderen Sichten; „+" (Import) und Zahnrad stehen immer da.
  *
  * @param onShowMap `null` blendet den Kartenknopf aus (keine gefahrene Tour).
  */
 @Composable
 private fun VerlaufHeader(
+    segments: List<HistorySegment>,
+    segment: HistorySegment,
+    onSegment: (HistorySegment) -> Unit,
     searchOpen: Boolean,
     query: String,
     onQueryChange: (String) -> Unit,
@@ -268,18 +324,21 @@ private fun VerlaufHeader(
     onShowMap: (() -> Unit)?,
 ) {
     var importMenuOpen by remember { mutableStateOf(false) }
+    val onTours = segment == HistorySegment.TOURS
 
     Column(modifier = Modifier.fillMaxWidth()) {
         ScreenHeader(
             title = stringResource(R.string.rides_screen_title),
             actions = {
-                IconButton(onClick = onToggleSearch) {
-                    Icon(
-                        imageVector = if (searchOpen) Icons.Outlined.SearchOff else Icons.Outlined.Search,
-                        contentDescription = stringResource(
-                            if (searchOpen) R.string.rides_screen_search_close_cd else R.string.rides_screen_search_cd,
-                        ),
-                    )
+                if (onTours) {
+                    IconButton(onClick = onToggleSearch) {
+                        Icon(
+                            imageVector = if (searchOpen) Icons.Outlined.SearchOff else Icons.Outlined.Search,
+                            contentDescription = stringResource(
+                                if (searchOpen) R.string.rides_screen_search_close_cd else R.string.rides_screen_search_cd,
+                            ),
+                        )
+                    }
                 }
                 Box {
                     IconButton(onClick = { importMenuOpen = true }) {
@@ -295,11 +354,20 @@ private fun VerlaufHeader(
                 SettingsAction(onClick = onOpenSettings)
             },
         )
+        // Die Sichten des Tabs. Wechselt die Ansicht, ist also ein Tab und
+        // keine Auswahl.
+        PillSegments(
+            options = segments.map { historySegmentLabel(it) },
+            selectedIndex = segments.indexOf(segment).coerceAtLeast(0),
+            onSelect = { index -> segments.getOrNull(index)?.let(onSegment) },
+            modifier = Modifier.padding(top = 8.dp),
+            role = Role.Tab,
+        )
         // Die Karte aller Spuren wohnt im Karten-Tab (echte Grundkarte,
         // Kacheln); der Knopf wechselt dorthin, ✕ kommt zurueck. Ein
         // ausgeschriebener Knopf statt Segment „Liste | Karte": Das Wort
         // „Karte" allein gehoert der Navigationskapsel.
-        if (onShowMap != null) {
+        if (onTours && onShowMap != null) {
             NeutralButton(
                 onClick = onShowMap,
                 modifier = Modifier
@@ -311,7 +379,7 @@ private fun VerlaufHeader(
                 Text(stringResource(R.string.rides_screen_show_map_action))
             }
         }
-        if (searchOpen) {
+        if (onTours && searchOpen) {
             // Wer die Lupe antippt, will tippen: Fokus (und damit Tastatur)
             // gleich ins Feld.
             val focusRequester = remember { FocusRequester() }
@@ -327,3 +395,14 @@ private fun VerlaufHeader(
         }
     }
 }
+
+/** Die Beschriftung eines Segments des Verlaufs. */
+@Composable
+private fun historySegmentLabel(segment: HistorySegment): String = stringResource(
+    when (segment) {
+        HistorySegment.TOURS -> R.string.rides_screen_segment_tours
+        HistorySegment.PROGRESS -> R.string.rides_screen_segment_progress
+        // Kommt mit den Erfolgen; bis dahin ist das Segment nie sichtbar.
+        HistorySegment.ACHIEVEMENTS -> R.string.rides_screen_segment_progress
+    },
+)

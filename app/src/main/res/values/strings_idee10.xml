@@ -19,7 +19,7 @@
     <string name="indoor_i10_surface_asphalt">Asphalt</string>
     <string name="indoor_i10_surface_cobbles">Pflaster</string>
     <string name="indoor_i10_surface_gravel">Schotter und Waldweg</string>
-    <string name="indoor_i10_state_loaded">Schon geladen</string>
+    <string name="indoor_i10_state_loaded">Schon heruntergeladen</string>
     <string name="indoor_i10_state_not_ridden">Noch nicht gefahren</string>
     <string name="indoor_i10_sort_name">Name</string>
     <string name="indoor_i10_sort_length">Länge</string>
@@ -82,6 +82,6 @@
     <string name="indoor_i10_action_discard">Angefangenen Download löschen</string>
     <string name="indoor_i10_action_choose">Strecke auswählen</string>
     <string name="indoor_i10_action_chosen">Strecke ist ausgewählt. Mit „Fahren“ unten auf der Seite geht es weiter.</string>
-    <string name="indoor_i10_hint_delete_installed">Eine fertig geladene Strecke löschst du in den Indoor-Einstellungen: Dort kannst du Strecken löschen und Speicher freigeben.</string>
+    <string name="indoor_i10_hint_delete_installed">Eine heruntergeladene Strecke löschst du unter Einstellungen → Indoor → Strecken auf dem Gerät: Dort kannst du Strecken löschen und Speicher freigeben.</string>
     <string name="indoor_i10_detail_image_cd">Bild der Strecke %1$s</string>
 </resources>

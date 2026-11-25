@@ -141,8 +141,8 @@ class ShellScreenshotTest {
         listOf(
             R.string.shell_nav_today_label to "Today",
             R.string.shell_nav_map_label to "Map",
+            R.string.shell_nav_indoor_label to "Indoor",
             R.string.shell_nav_history_label to "History",
-            R.string.shell_nav_training_label to "Training",
         ).forEach { (id, expected) ->
             assertEquals(expected, context.getString(id))
             compose.onAllNodesWithText(expected)[0].assertExists()

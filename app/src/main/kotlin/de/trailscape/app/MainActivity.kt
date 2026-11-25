@@ -88,13 +88,14 @@ class MainActivity : ComponentActivity() {
     /**
      * Die [PlanRecipeImportActivity] hat ein Plan-Rezept gelesen und in
      * [de.trailscape.app.ui.training.PendingPlanRecipe] abgelegt. Hier geht es
-     * nur zum Tab „Training"; die Vorschau zeigt der Host im Compose-Inhalt.
+     * nur zur Sicht „Plan" (Tab „Indoor"); die Vorschau zeigt der Host im
+     * Compose-Inhalt.
      * Das Extra wird entfernt, damit eine Drehung nichts doppelt tut.
      */
     private fun planRecipeIfRequested(intent: Intent?) {
         if (intent?.getBooleanExtra(EXTRA_PLAN_RECIPE_PENDING, false) != true) return
         intent.removeExtra(EXTRA_PLAN_RECIPE_PENDING)
-        ViewModelProvider(this)[AppViewModel::class.java].requestTab(AppTab.TRAINING)
+        ViewModelProvider(this)[AppViewModel::class.java].requestPlan()
     }
 
     /**

@@ -409,7 +409,7 @@ private fun ReadableRecipeDialog(appViewModel: AppViewModel, recipe: PlanRecipe)
                             listOf(recipe.title),
                         ),
                     )
-                    appViewModel.requestTab(AppTab.TRAINING)
+                    appViewModel.requestPlan()
                     PendingPlanRecipe.clear()
                 },
             ) {

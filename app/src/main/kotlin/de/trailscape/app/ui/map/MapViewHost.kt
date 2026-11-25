@@ -87,18 +87,17 @@ internal fun MapViewHost(
     style: MapStyle,
     locationEnabled: Boolean,
     /**
-     * Gewoehnlicher Tipp auf die Karte. Die Karte des Hauptscreens reicht hier
-     * bewusst nichts durch (Fuehrung „Klartext"): Ein Tipp legt nirgends etwas
-     * an und loescht nichts — er bleibt frei fuer Marker, Linien und das
-     * blosse Anfassen der Karte.
+     * Gewoehnlicher Tipp auf die Karte. Im Hauptscreen setzt er den naechsten
+     * Punkt: beim Erkunden einen markierten Punkt samt Ortskarte, in der
+     * Planung einen Wegpunkt (siehe `onMapTap` in `MapScreen.kt`); waehrend
+     * Aufzeichnung und Navigation nichts. Ein Tipp loescht nie etwas.
      */
     onMapTap: (Double, Double) -> Unit,
     /**
-     * Langer Druck auf die Karte — die **einzige** Geste, die auf der Karte
-     * etwas anlegt: beim Erkunden einen Punkt samt Ortskarte, in der Planung
-     * einen Wegpunkt (siehe `onMapLongPress` in `MapScreen.kt`). Weil man sie
-     * nicht sieht, erklaeren sie ein einmaliger Tipp und eine Zeile im
-     * „Wohin?"-Blatt (`LongPressHint.kt`).
+     * Langer Druck auf die Karte — tut dasselbe wie der Tipp und bleibt als
+     * zweiter Weg erhalten (siehe `onMapLongPress` in `MapScreen.kt`). Weil
+     * man die Geste nicht sieht, erklaeren sie ein einmaliger Tipp und eine
+     * Zeile im „Wohin?"-Blatt (`LongPressHint.kt`).
      */
     onMapLongPress: (Double, Double) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
@@ -290,13 +289,15 @@ internal fun MapViewHost(
                     .zoom(savedZoom)
                     .bearing(savedBearing)
                     .build()
+                // Ein Tipp setzt den naechsten Punkt (docs/ux/seitenkarte.md,
+                // Entscheidungsfrage 4); ob er gerade etwas bewirken darf,
+                // entscheidet der Aufrufer (`mapTapAction`).
                 map.addOnMapClickListener { latLng ->
                     currentTap(latLng.latitude, latLng.longitude)
                     true
                 }
-                // Langes Druecken setzt einen Punkt (Fuehrung „Klartext"): in
-                // jedem Kartenzustand dieselbe Geste, damit ein normaler Tipp
-                // nie versehentlich etwas anlegt oder loescht.
+                // Langes Druecken setzt ebenfalls einen Punkt — der zweite,
+                // aeltere Weg neben dem Tipp.
                 map.addOnMapLongClickListener { latLng ->
                     currentLongPress(latLng.latitude, latLng.longitude)
                     true

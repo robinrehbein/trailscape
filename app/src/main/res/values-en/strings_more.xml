@@ -23,15 +23,21 @@
     <string name="more_screen_title">Settings</string>
     <string name="more_page_profile_title">Profile</string>
     <string name="more_page_health_title">Watch &amp; health data</string>
-    <string name="more_page_sensors_title">Sensors</string>
+    <string name="more_page_sensors_title">Sensors &amp; trainer</string>
     <string name="more_page_recording_title">Recording &amp; voice prompts</string>
     <string name="more_page_reminders_title">Reminders</string>
     <string name="more_page_offline_title">Offline maps</string>
-    <string name="more_page_backup_title">Import &amp; backup</string>
+    <string name="more_page_backup_title">Backup</string>
     <string name="more_page_strava_title">Strava</string>
     <string name="more_page_sync_title">Sync with your own server</string>
     <string name="more_page_about_title">About Trailscape</string>
+    <string name="more_list_group_you">You</string>
+    <string name="more_list_group_devices">Devices</string>
+    <string name="more_list_group_riding">Riding</string>
+    <string name="more_list_group_data">Data</string>
     <string name="more_list_group_app">App</string>
+    <string name="more_list_indoor_title">Indoor</string>
+    <string name="more_list_indoor_status">Gearing, ride feel, 3D view, storage &amp; diagnostics</string>
     <!-- %1$s = Versionsnummer -->
     <string name="more_list_about_status">Version %1$s</string>
     <string name="more_recording_section_recording">Recording</string>
@@ -157,12 +163,10 @@
     <string name="more_backup_imported_with_profile">%1$s · profile restored</string>
     <string name="more_backup_read_error">The backup file couldn’t be read. Choose the JSON file Trailscape created with “Export backup”.</string>
     <string name="more_backup_archive_read_error">The archive couldn’t be read. Trailscape expects a ZIP file with GPX or FIT files inside, such as a Strava or Garmin export.</string>
-    <string name="more_backup_hint">Back up rides and profile in one file — or bring in GPX, FIT and whole Strava/Garmin exports (ZIP).</string>
+    <string name="more_backup_hint">Save your rides and profile to one file and restore them from it. Import rides from GPX, FIT or ZIP in History via “+”.</string>
     <string name="more_backup_privacy_hint">The backup is unencrypted and contains every GPS point and your health data — only share it with people you trust.</string>
     <string name="more_backup_export_action">Export backup</string>
     <string name="more_backup_import_action">Import backup</string>
-    <string name="more_backup_import_rides_action">Import rides (GPX/FIT)</string>
-    <string name="more_backup_import_archive_action">Import archive (ZIP)</string>
     <string name="more_backup_archive_progress_title">Importing archive…</string>
     <!-- %1$d = bisher importiert, %2$d = gesamt -->
     <string name="more_backup_archive_progress_known">%1$d of %2$d imported…</string>
@@ -226,6 +230,7 @@
     <!-- OfflineMapsCard.kt -->
     <string name="more_offline_maps_list_error">The saved offline maps couldn’t be listed. Restart the app; if that doesn’t help, open the map, which opens the map storage itself.</string>
     <string name="more_offline_maps_hint">Lets you see the map without a connection. Download new areas on the map.</string>
+    <string name="more_offline_maps_open_map_action">Choose a new area on the map</string>
     <string name="more_offline_maps_loading">Loading…</string>
     <string name="more_offline_maps_empty">No offline maps saved.</string>
     <string name="more_offline_maps_delete_all_action">Delete all</string>
@@ -312,7 +317,7 @@
     <string name="more_profile_defaults_hint">Not entered yet — until then we roughly assume %1$d years and %2$s kg.</string>
     <string name="more_profile_weekly_hours_label">Time per week (hours, optional)</string>
     <string name="more_profile_weekly_hours_hint">Caps the weekly target at what’s doable in that time.</string>
-    <string name="more_profile_advanced_action">Advanced: heart rate and FTP</string>
+    <string name="more_profile_values_title">Heart rate and FTP</string>
     <string name="more_profile_advanced_hint">Without your own values, we estimate max HR and threshold from your age.</string>
     <string name="more_profile_hr_max_learn_more">The estimate is 208 − 0.7 × age. A max HR field test is more accurate: after a good warm-up, a hard 3–5 minute climb with an all-out finish.</string>
     <string name="more_profile_hr_max_label">Max HR (bpm, optional)</string>

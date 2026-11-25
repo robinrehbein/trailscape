@@ -99,8 +99,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  * ## Eine Zeile, eine Handlung
  * Mini-Karte, Name, darunter gedaempft „Di 23.9. · 32,4 km · 1:24 h", rechts
  * das Wort fuer die Haerte ([EffortPill]). Ein Tipp oeffnet die
- * Detailansicht; Umbenennen, Teilen, Loeschen und „Karte zeigen" wohnen
- * seit dem Klartext-Umbau nur noch dort, als beschriftete Kacheln — ein
+ * Detailansicht; Umbenennen, Teilen, Loeschen und „Auf der Karte zeigen"
+ * wohnen nur noch dort (Symbol „Teilen" und Menue der Tour in der Kopfzeile,
+ * siehe `RideDetailScreen.kt`) — ein
  * Ueberlaufmenue je Zeile machte die Liste unruhig und bot dieselben vier
  * Handgriffe zweimal an. „aus Health Connect" steht ebenfalls nur noch im
  * Detail: In der Zeile war es eine zweite Textzeile fuer eine Auskunft, die
@@ -561,9 +562,10 @@ private fun RidesEmptyState(
  * Loeschen, und eine Snackbar in ihrem Fenster (samt der Coroutine, die auf
  * „Rückgängig" wartet) verschwaende mit ihr, bevor jemand tippen kann.
  *
- * ## Teilen: Bild oder GPX
+ * ## Teilen: Bild, GPX, Strava
  * „Teilen" oeffnet [RideShareDialog]: das Tour-Bild als Story oder Quadrat
- * ([shareRideImage]) oder die Spur als GPX ([shareRideGpx]). Die Trainingslast
+ * ([shareRideImage]), die Spur als GPX ([shareRideGpx]) und darunter die
+ * Strava-Zeile ([StravaShareRow]). Die Trainingslast
  * fuer das Bild kommt aus [AppViewModel.insights] — nur gelesen, keine neue
  * Rechnung.
  *
@@ -631,7 +633,7 @@ fun RideDetailHost(
         onRename = { renameTarget = summary },
         onShare = { shareOpen = true },
         onDelete = { onDelete(loaded.id) },
-        // „Indoor fahren" (ui/indoor/IndoorFromRide.kt): wie „nochmal fahren"
+        // „Indoor fahren" (Blatt „Nochmal fahren", ui/rides/RideAgain.kt): wie „nochmal fahren"
         // schliesst das Detail, dann oeffnet der Indoor-Ablauf mit dieser Strecke.
         onRideIndoor = {
             onBack()

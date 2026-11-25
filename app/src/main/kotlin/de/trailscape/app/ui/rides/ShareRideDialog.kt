@@ -84,6 +84,13 @@ import kotlinx.coroutines.withContext
  * die Tour zum Kuerzen zu kurz ist, oder nur die Kennzahlen, weil es keine
  * Spur gibt. Der Schalter fehlt, wo es nichts zu kuerzen gibt (weniger als
  * zwei Punkte oder eine Spur ohne Strecke, [ShareTrackNote.NONE]) und beim GPX, das immer die vollstaendige Spur enthaelt.
+ *
+ * ## Alles, was die App verlaesst, an einem Ort
+ * Das Blatt ist der eine Ort fuers Teilen (docs/ux/seitenkarte.md, „Blatt
+ * Teilen"). Unter der Wahl Bild/GPX stehen ueber [extraRows] weitere Wege mit
+ * eigenen Knoepfen: heute die Strava-Zeile ([StravaShareRow], vom Wirt
+ * [RideShareDialog] eingesetzt), spaeter z. B. „Herausforderung teilen" einer
+ * Indoor-Tour. `null` zeichnet nichts — kein leerer Platz.
  */
 @Composable
 internal fun ShareRideDialog(
@@ -94,6 +101,7 @@ internal fun ShareRideDialog(
     onDismiss: () -> Unit,
     onShareGpx: () -> Unit,
     onShareImage: (ShareCardFormat) -> Unit,
+    extraRows: (@Composable () -> Unit)? = null,
 ) {
     var selected by rememberSaveable(ride.id) { mutableIntStateOf(SEGMENT_STORY) }
     val format = when (selected) {
@@ -173,6 +181,9 @@ internal fun ShareRideDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                // Weitere Wege aus der App (Strava, spaeter „Herausforderung
+                // teilen"): unter der Wahl Bild/GPX, mit eigenen Knoepfen.
+                extraRows?.invoke()
             }
         },
         confirmButton = {

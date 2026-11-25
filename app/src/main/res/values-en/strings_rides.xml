@@ -28,6 +28,8 @@
 
     <!-- RidesScreen.kt -->
     <string name="rides_screen_title">History</string>
+    <string name="rides_screen_segment_tours">Rides</string>
+    <string name="rides_screen_segment_progress">Progress</string>
     <string name="rides_screen_search_cd">Search rides</string>
     <string name="rides_screen_search_close_cd">Close search</string>
     <string name="rides_screen_import_cd">Import rides</string>
@@ -72,7 +74,7 @@
     <string name="rides_note_easy_title">Easy ride.</string>
     <string name="rides_note_easy_body">Rides like this build your base without tiring you for long.</string>
     <string name="rides_note_moderate_title">Moderate effort.</string>
-    <string name="rides_note_moderate_body">A real workout, usually absorbed within a day.</string>
+    <string name="rides_note_moderate_body">A real effort, usually absorbed within a day.</string>
     <string name="rides_note_hard_title">Hard ride.</string>
     <string name="rides_note_hard_body">Take an easy day afterwards so it can pay off.</string>
 
@@ -118,11 +120,22 @@
     <string name="rides_detail_date_line_health_connect">%1$s · %2$s · from Health Connect</string>
     <string name="rides_detail_date_line_planned_health_connect">%1$s · %2$s · planned route · from Health Connect</string>
     <string name="rides_detail_planned_notice">This is a saved planned route, not a ride you’ve done. It doesn’t count towards weekly progress, fitness or form.</string>
-    <string name="rides_detail_ride_again_action">Ride this again</string>
-    <string name="rides_detail_show_map_action">Show map</string>
+    <string name="rides_detail_ride_again_action">Ride again</string>
+    <string name="rides_detail_show_map_action">Show on the map</string>
     <string name="rides_detail_rename_action">Rename</string>
     <string name="rides_detail_share_cd">Share ride</string>
-    <string name="rides_detail_delete_cd">Delete ride</string>
+    <string name="rides_detail_menu_cd">More actions for this ride</string>
+    <string name="rides_detail_route_hint_menu">You can convert it in the ride’s menu at the top.</string>
+
+    <!-- RideAgain.kt -->
+    <string name="rides_again_planned_action">Ride this planned route</string>
+    <string name="rides_again_outdoor_title">Outdoors with navigation</string>
+    <string name="rides_again_outdoor_body">Puts the track on the map as a route.</string>
+    <string name="rides_again_indoor_title">Ride indoors</string>
+    <string name="rides_again_indoor_body">Indoors on the trainer, with your outdoor ride alongside you.</string>
+    <string name="rides_again_indoor_planned_body">Ride this planned route indoors on the trainer.</string>
+    <string name="rides_again_preview_title">View in 3D</string>
+    <string name="rides_again_preview_body">The route as a camera flight, no trainer needed.</string>
     <string name="rides_detail_all_values_action">All values</string>
     <string name="rides_detail_fewer_values_action">Fewer values</string>
     <!-- %1$s = Name der Tour -->

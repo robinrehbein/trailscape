@@ -64,7 +64,7 @@
     <string name="recipe_problem_not_text">Die Datei ist keine lesbare Textdatei.</string>
     <string name="recipe_problem_not_json">Die Datei ist kein gültiges JSON.</string>
     <string name="recipe_problem_too_deep">Die Datei ist zu tief verschachtelt.</string>
-    <string name="recipe_problem_not_recipe">Das ist kein Plan-Rezept. Ein Backup öffnest du unter Einstellungen → Import &amp; Backup.</string>
+    <string name="recipe_problem_not_recipe">Das ist kein Plan-Rezept. Ein Backup öffnest du unter Einstellungen → Backup.</string>
     <string name="recipe_problem_newer">Dieses Rezept stammt aus einer neueren Version von Trailscape (Format %1$d). Bitte aktualisiere die App.</string>
     <string name="recipe_problem_invalid">Im Rezept stimmt etwas nicht, bei „%1$s“.</string>
     <string name="recipe_problem_invalid_nopath">Im Rezept stimmt etwas nicht.</string>

@@ -94,6 +94,12 @@ private const val GHOST_WATTS_MAX = 1000
  *
  * [onGhostChange] bekommt bei „Frühere Fahrt" ein `PastRide` mit leerem Label
  * — das ViewModel setzt Namen und Datum selbst.
+ *
+ * ## Als Tab
+ * Im Tab „Indoor" (`IndoorTabScreen.kt`) ist diese Seite die Sicht
+ * „Strecken": [onBack] ist dann `null` (kein Zurueck-Pfeil), [title] der Name
+ * des Tabs, [headerExtra] traegt die Segmente, und das Zahnrad
+ * ([onOpenSettings]) oeffnet die eine Einstellungsseite der App.
  */
 @Composable
 fun IndoorHomeScreen(
@@ -104,7 +110,7 @@ fun IndoorHomeScreen(
     onModeChange: (IndoorMode) -> Unit,
     onGhostChange: (IndoorGhostOption) -> Unit,
     onRide: () -> Unit,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     onOpenPair: () -> Unit,
     onOpenSettings: () -> Unit,
     catalog: IndoorCatalogUi = IndoorCatalogUi(emptyList()),
@@ -121,6 +127,8 @@ fun IndoorHomeScreen(
     catalogExtras: IndoorCatalogExtras = IndoorCatalogExtras(),
     initialCatalogFilterOpen: Boolean = false,
     initialCatalogDetailId: String? = null,
+    title: String = stringResource(R.string.indoor_app_route_title),
+    headerExtra: (@Composable () -> Unit)? = null,
 ) {
     val lang = LocalAppFormats.current.language.tag
     val readiness = indoorRouteReadiness(
@@ -131,8 +139,9 @@ fun IndoorHomeScreen(
     )
     val canRide = indoorCanRide(trainerIssue, route, readiness)
     IndoorPage(
-        title = stringResource(R.string.indoor_app_route_title),
+        title = title,
         onBack = onBack,
+        headerExtra = headerExtra,
         actions = {
             IconButton(onClick = onOpenSettings) {
                 Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.indoor_app_home_settings_cd))

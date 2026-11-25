@@ -10,7 +10,6 @@
 -->
 <resources>
     <!-- RideDetailScreen.kt -->
-    <string name="idee04_detail_preview_action">In 3D ansehen</string>
     <!-- IndoorFlowScreen.kt: Strecke vorbereiten im Vorschau-Modus -->
     <string name="idee04_world_without_action">Nur Höhenprofil ansehen</string>
     <string name="idee04_world_continue_action">Vorschau starten</string>

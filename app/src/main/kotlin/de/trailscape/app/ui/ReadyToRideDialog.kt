@@ -153,10 +153,6 @@ private fun FreeRideDialog(appViewModel: AppViewModel, onDismiss: () -> Unit) {
                     offer?.let { appViewModel.requestRouteGeneration(it.target) }
                     onDismiss()
                 },
-                onIndoor = {
-                    appViewModel.requestIndoor()
-                    onDismiss()
-                },
             )
         },
     )
@@ -197,10 +193,6 @@ private fun PlannedRideDialog(
                     appViewModel.requestRecording()
                     onDismiss()
                 },
-                onIndoor = {
-                    appViewModel.requestIndoor()
-                    onDismiss()
-                },
             )
         },
     )
@@ -219,7 +211,6 @@ private fun DialogButtonStack(
     onPrimary: () -> Unit,
     secondaryLabel: String?,
     onSecondary: () -> Unit,
-    onIndoor: (() -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -242,14 +233,8 @@ private fun DialogButtonStack(
                 ),
             ) { Text(secondaryLabel, style = MaterialTheme.typography.labelLarge) }
         }
-        // Indoor-Training (docs/indoor.md 10.1): leiser als die beiden
-        // Fahr-Angebote — wer draussen fahren will, soll nicht daran haengen
-        // bleiben, wer auf der Rolle sitzt, findet es hier trotzdem.
-        if (onIndoor != null) {
-            TextButton(onClick = onIndoor, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.indoor_app_ready_action), style = MaterialTheme.typography.labelLarge)
-            }
-        }
+        // Kein Indoor-Angebot mehr an dieser Stelle: Indoor ist ein eigener
+        // Tab (docs/ux/umbau.md); dieser Dialog gehoert der Fahrt draussen.
     }
 }
 

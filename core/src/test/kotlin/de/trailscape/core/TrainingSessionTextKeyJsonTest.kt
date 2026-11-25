@@ -134,7 +134,7 @@ class TrainingSessionTextKeyJsonTest {
     fun `Klartext der Wochenliste in beiden Sprachen`() {
         val sessions = planDe().weeks.first().sessions
         val long = sessions.first { it.textKey == SessionTextKey.LONG_RIDE }
-        assertEquals("Lange Fahrt ${long.targetKm} km", plainSessionTitle(long, CoreTextsDe))
+        assertEquals("Lange Tour ${long.targetKm} km", plainSessionTitle(long, CoreTextsDe))
         assertEquals("Long ride ${long.targetKm} km", plainSessionTitle(long, CoreTextsEn))
         assertEquals("steady, with climbing like in the race", plainSessionHint(long, goal, CoreTextsEn))
     }

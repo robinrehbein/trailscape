@@ -393,7 +393,7 @@ class ShareCardTest {
         val at = LocalDateTime.of(2025, 9, 23, 18, 12)
 
         assertEquals("Dienstag, 23. September 2025", shareCardDateLine(at, planned = false))
-        assertEquals("Geplante Route · 23. September 2025", shareCardDateLine(at, planned = true))
+        assertEquals("Planung · 23. September 2025", shareCardDateLine(at, planned = true))
     }
 
     @Test
@@ -404,7 +404,7 @@ class ShareCardTest {
             de.trailscape.app.ui.rides.shareCardDateLine(at, planned = false, language = AppLanguage.DE, indoor = true),
         )
         // Eine Planung bleibt eine Planung, auch mit Kennzeichen.
-        assertEquals("Geplante Route · 23. September 2025", RidesXmlStrings.DE.resolve(
+        assertEquals("Planung · 23. September 2025", RidesXmlStrings.DE.resolve(
             de.trailscape.app.ui.rides.shareCardDateLine(at, planned = true, language = AppLanguage.DE, indoor = true),
         ))
         // Die Spur bleibt auf dem Bild.
@@ -428,7 +428,7 @@ class ShareCardTest {
     fun `Planung zeigt keine Trainingslast und sagt Geplante Route`() {
         val content = shareCardContent(ride(planned = true), load = 90.0, toLocal = utc)
 
-        assertTrue(content.dateLine.startsWith("Geplante Route · "))
+        assertTrue(content.dateLine.startsWith("Planung · "))
         assertTrue(content.stats.none { it.label == "Trainingslast" })
     }
 

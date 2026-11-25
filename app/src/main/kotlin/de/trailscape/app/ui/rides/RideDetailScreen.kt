@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -21,22 +22,24 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PedalBike
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -68,9 +71,7 @@ import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.i18n.UiText
 import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.AppViewModel
-import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.MapStyle
-import de.trailscape.app.ui.components.ActionTileRow
 import de.trailscape.app.ui.components.CoachCard
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.components.Fact
@@ -78,14 +79,11 @@ import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.TagPill
-import de.trailscape.app.ui.components.TileAction
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.progress.AchievementsCard
 import de.trailscape.app.ui.progress.rememberRideFacts
 import de.trailscape.core.milestonesReachedBy
 import de.trailscape.core.recordsSetBy
-import de.trailscape.app.ui.indoor.IndoorFromRideAction
-import de.trailscape.app.ui.indoor.indoorFromRideOffered
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.map.ElevationProfile
 import de.trailscape.app.ui.map.ElevationSample
@@ -144,7 +142,8 @@ import kotlinx.coroutines.withContext
  * zuerst nur, was man nach einer Fahrt wissen will — und alles andere einen
  * Tipp tiefer, aber vollstaendig:
  *
- *  1. Kopf: „‹ Verlauf". Kein ⋮ mehr — siehe Punkt 5.
+ *  1. Kopf: „‹ Verlauf", rechts das Symbol „Teilen" und das Menue der Tour
+ *     (⋮) — siehe Punkt 5.
  *  2. Name gross, darunter gedaempft Wochentag, Datum, Uhrzeit — und die
  *     Herkunft („aus Health Connect", „geplante Route") genau einmal.
  *  3. Karte mit der Spur, darunter km · Std. · Hm · Ø Puls.
@@ -155,15 +154,23 @@ import kotlinx.coroutines.withContext
  *     3:12 min schneller als beim letzten Mal".
  *  4b. Was die Tour gebracht hat ([RideImpactCard]) — Fitness/Frische,
  *     Wochenziel, neue Kacheln, neue Bestzeiten; entfaellt ganz ohne Daten.
- *  5. Die eine Hauptaktion **„Diese Tour nochmal fahren"** — die Spur als
- *     Route auf der Karte ([AppViewModel.requestRideAsRoute]) — und darunter
- *     sichtbar und beschriftet: Karte zeigen, Umbenennen, Teilen, Loeschen.
- *     Diese vier lagen frueher hinter ⋮; eine App ohne versteckte Funktionen
- *     kann sich kein Menue leisten, dessen Inhalt man erraten muss.
- *     „Teilen" fragt nach dem Was: Tour-Bild (Story oder Quadrat) oder GPX
- *     (`ShareRideDialog.kt`) — eine fuenfte Kachel haette die Reihe umbrochen.
- *     Darunter optional eine eigene Zeile fuer Strava ([StravaRideAction]),
- *     nur wenn ein Strava-Konto verbunden ist.
+ *  5. Die Aktionen sind nach Haeufigkeit geordnet (docs/ux/seitenkarte.md,
+ *     Befund 4; docs/ux/umbau.md):
+ *      * **ein fester Knopf unten** — „Nochmal fahren" (bei einer Planung
+ *        „Planung fahren"). Er oeffnet das Blatt [RideAgainSheet] mit allen
+ *        Arten des Nachfahrens: draussen mit Navigation
+ *        ([AppViewModel.requestRideAsRoute]), Indoor fahren, in 3D ansehen.
+ *        Welche Zeilen es zeigt, entscheidet [rideAgainOptions]; bleibt nur
+ *        eine, loest der Knopf sie direkt aus.
+ *      * **„Teilen" als Symbol oben** — das Blatt `ShareRideDialog.kt`: Bild
+ *        (Story, Quadrat), GPX und Strava ([StravaShareRow]), Strava auch ohne
+ *        Verbindung als sichtbare Zeile.
+ *      * **Menue der Tour (⋮)** — [RideDetailMenu]: Auf der Karte zeigen,
+ *        Umbenennen, Tour <-> Planung umwandeln (`PlanFlip.kt`), Loeschen.
+ *     Die vier Kacheln und die Einzelknoepfe „Indoor fahren" / „In 3D
+ *     ansehen" im scrollenden Inhalt sind dafuer entfallen: Mit ihnen standen
+ *     bis zu neun gleichrangige Aktionen untereinander, „Löschen" direkt neben
+ *     „Teilen".
  *  6. Hoehenprofil.
  *  7. „Alle Werte" klappt den Rest auf: Fahrzeit, Ø Tempo, Hm ↓, Max. Puls,
  *     Tempo- und Pulskurve, die Coach-Auswertung (Trainingslast als Zahl,
@@ -171,7 +178,7 @@ import kotlinx.coroutines.withContext
  *
  * „Auf der Karte öffnen" als eigener Knopf unter der Karte ist entfallen: Es
  * gab dafuer zwei Woerter an zwei Stellen („zeigen" im Listenmenue, „öffnen"
- * hier). Jetzt gibt es eines: die Kachel „Karte zeigen".
+ * hier). Jetzt gibt es eines: „Auf der Karte zeigen" im Menue der Tour.
  *
  * ## Warum die Karte hier nicht bedienbar ist
  * MapLibre bringt eine eigene Gestenerkennung mit; in einer scrollbaren
@@ -282,11 +289,80 @@ internal fun RideDetailScreen(
     // Aufgeklappt bleibt aufgeklappt, auch ueber eine Drehung hinweg.
     var allValues by rememberSaveable(ride.id) { mutableStateOf(false) }
 
+    // Menue der Tour (⋮) und die Rueckfrage vor dem Umwandeln Tour <-> Planung.
+    var menuOpen by remember { mutableStateOf(false) }
+    var confirmFlip by rememberSaveable(ride.id) { mutableStateOf(false) }
+    // Umwandeln kann jede Nicht-Indoor-Tour mit Spur (siehe PlanFlip.kt).
+    val canFlip = !ride.indoor && ride.points.size >= 2
+    val looksLikeRoute = remember(ride.id, ride.updatedAt) {
+        classifyTrackOrigin(ride.points) == TrackOrigin.PLANNED_ROUTE
+    }
+
+    // Der eine Hauptknopf: was er anbietet, entscheidet [rideAgainOptions].
+    val againOptions = remember(ride.id, ride.indoor, ride.points.size, onRideIndoor != null, onPreview3d != null) {
+        rideAgainOptions(
+            indoor = ride.indoor,
+            pointCount = ride.points.size,
+            indoorAvailable = onRideIndoor != null,
+            previewAvailable = onPreview3d != null,
+        )
+    }
+    var againOpen by rememberSaveable(ride.id) { mutableStateOf(false) }
+    val pickAgain: (RideAgainOption) -> Unit = { option ->
+        againOpen = false
+        when (option) {
+            RideAgainOption.OUTDOOR -> onRideAgain()
+            RideAgainOption.INDOOR -> onRideIndoor?.invoke()
+            RideAgainOption.PREVIEW_3D -> onPreview3d?.invoke()
+        }
+    }
+
     Scaffold(
         // Die Insets hat der Wirt (Dialogfenster in `RidesScreen.kt`) oben und
         // seitlich bereits aufgeloest.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            // Fest am unteren Rand statt im scrollenden Inhalt: Die Hauptaktion
+            // ist immer erreichbar, egal wie lang die Auswertung ist.
+            if (againOptions.isNotEmpty()) {
+                Surface(color = MaterialTheme.colorScheme.surface) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = ScreenPadding, vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Button(
+                            onClick = {
+                                // Bleibt nur eine Art, braucht es kein Blatt.
+                                if (againOptions.size == 1) pickAgain(againOptions.first()) else againOpen = true
+                            },
+                            modifier = Modifier
+                                .widthIn(max = ContentMaxWidth)
+                                .fillMaxWidth(),
+                        ) {
+                            Icon(
+                                Icons.Filled.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(ButtonDefaults.IconSize),
+                            )
+                            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                            Text(
+                                stringResource(
+                                    if (ride.planned) {
+                                        R.string.rides_again_planned_action
+                                    } else {
+                                        R.string.rides_detail_ride_again_action
+                                    },
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
+        },
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -315,6 +391,36 @@ internal fun RideDetailScreen(
                     ).asString(),
                     backLabel = stringResource(R.string.rides_detail_back_label),
                     onBack = onBack,
+                    actions = {
+                        // Alles, was die App verlaesst, liegt hinter diesem einen
+                        // Symbol (Blatt „Teilen": Bild, GPX, Strava).
+                        IconButton(onClick = onShare) {
+                            Icon(
+                                Icons.Filled.Share,
+                                contentDescription = stringResource(R.string.rides_detail_share_cd),
+                            )
+                        }
+                        // Das Menue der Tour: die seltenen Handgriffe, Loeschen
+                        // zuletzt und nicht mehr neben „Teilen".
+                        Box {
+                            IconButton(onClick = { menuOpen = true }) {
+                                Icon(
+                                    Icons.Filled.MoreVert,
+                                    contentDescription = stringResource(R.string.rides_detail_menu_cd),
+                                )
+                            }
+                            RideDetailMenu(
+                                expanded = menuOpen,
+                                onDismiss = { menuOpen = false },
+                                planned = ride.planned,
+                                canFlip = canFlip,
+                                onShowOnMap = onShowOnMap,
+                                onRename = onRename,
+                                onFlip = { confirmFlip = true },
+                                onDelete = onDelete,
+                            )
+                        }
+                    },
                 )
 
                 if (ride.points.isNotEmpty()) {
@@ -352,102 +458,11 @@ internal fun RideDetailScreen(
                     impact?.let { RideImpactCard(rideImpactLines(it, LocalCoreTexts.current)) }
                 }
 
-                if (ride.points.size >= 2) {
-                    Button(
-                        onClick = onRideAgain,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(
-                            Icons.Filled.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier.size(ButtonDefaults.IconSize),
-                        )
-                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                        Text(stringResource(R.string.rides_detail_ride_again_action))
-                    }
+                // Idee 7: Der Hinweis, dass diese „Tour" vermutlich eine Route ist,
+                // bleibt im Inhalt; umgewandelt wird im Menue der Tour (⋮).
+                if (canFlip && !ride.planned && looksLikeRoute) {
+                    PlanFlipRouteHint()
                 }
-
-                // Die vier Handgriffe, die frueher hinter ⋮ lagen — jetzt
-                // sichtbar und beschriftet, direkt unter der Hauptaktion und in
-                // derselben Ordnung wie auf dem Karten-Tourblatt
-                // (`ui/map/MapPanels.kt`, [de.trailscape.app.ui.map.RideCard]):
-                // gefuellt die eine Hauptaktion, darunter neutrale Kacheln,
-                // Loeschen mit rotem Wort und ganz aussen. Loeschen fragt nicht
-                // nach, sondern bietet im Verlauf „Rückgängig" an (siehe
-                // [deleteRideWithUndo]). Die Bildschirmlesehilfe hoert bei
-                // Teilen und Loeschen das Objekt mit — ein nacktes „Löschen"
-                // sagt nicht, *was* geloescht wird.
-                ActionTileRow(
-                    actions = listOf(
-                        TileAction(
-                            stringResource(R.string.rides_detail_show_map_action),
-                            Icons.Filled.Map,
-                            onClick = onShowOnMap,
-                        ),
-                        TileAction(
-                            stringResource(R.string.rides_detail_rename_action),
-                            Icons.Filled.Edit,
-                            onClick = onRename,
-                        ),
-                        TileAction(
-                            stringResource(R.string.common_action_share),
-                            Icons.Filled.Share,
-                            contentDescription = stringResource(R.string.rides_detail_share_cd),
-                            onClick = onShare,
-                        ),
-                        TileAction(
-                            stringResource(R.string.common_action_delete),
-                            Icons.Filled.Delete,
-                            destructive = true,
-                            contentDescription = stringResource(R.string.rides_detail_delete_cd),
-                            onClick = onDelete,
-                        ),
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                // Strecke vor der Tour ansehen: 3D-Vorschau ohne Trainer. Nicht fuer
-                // Indoor-Fahrten — ihre Punkte sind die virtuelle Spur einer anderen Strecke.
-                if (onPreview3d != null && !ride.indoor && ride.points.size >= 2) {
-                    NeutralButton(
-                        onClick = onPreview3d,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(
-                            Icons.Filled.ViewInAr,
-                            contentDescription = null,
-                            modifier = Modifier.size(ButtonDefaults.IconSize),
-                        )
-                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                        Text(stringResource(R.string.idee04_detail_preview_action))
-                    }
-                }
-
-                // „Indoor fahren": dieselbe Strecke drinnen, die Aussenfahrt als
-                // Mitfahrer (ui/indoor/IndoorFromRide.kt). Unter den Hauptaktionen,
-                // damit Teilen und Loeschen ohne Scrollen erreichbar bleiben.
-                if (onRideIndoor != null && indoorFromRideOffered(ride)) {
-                    IndoorFromRideAction(planned = ride.planned, onClick = onRideIndoor)
-                }
-
-                // Idee 7: Tour <-> Planung umwandeln (siehe PlanFlip.kt).
-                if (!ride.indoor && ride.points.size >= 2) {
-                    PlanFlipSection(
-                        planned = ride.planned,
-                        looksLikeRoute = remember(ride.id, ride.updatedAt) {
-                            classifyTrackOrigin(ride.points) == TrackOrigin.PLANNED_ROUTE
-                        },
-                        rideName = ride.name,
-                        onFlip = { toPlanned -> appViewModel.setRidePlanned(ride.id, toPlanned) },
-                    )
-                }
-
-                // Optional darunter: Strava (nur mit verbundenem Konto, siehe
-                // StravaRideAction.kt).
-                StravaRideAction(
-                    ride = ride,
-                    onReconnect = { appViewModel.requestMoreSection(MoreSection.STRAVA) },
-                )
 
                 val elevation = curves?.elevation.orEmpty()
                 if (elevation.size >= 2) {
@@ -496,6 +511,101 @@ internal fun RideDetailScreen(
                 Spacer(Modifier.height(ScreenPadding))
             }
         }
+    }
+
+    if (againOpen) {
+        RideAgainSheet(
+            options = againOptions,
+            planned = ride.planned,
+            onPick = pickAgain,
+            onDismiss = { againOpen = false },
+        )
+    }
+
+    if (confirmFlip) {
+        PlanFlipConfirmDialog(
+            toPlanned = !ride.planned,
+            rideName = ride.name,
+            onDismiss = { confirmFlip = false },
+            onConfirm = {
+                confirmFlip = false
+                appViewModel.setRidePlanned(ride.id, !ride.planned)
+            },
+        )
+    }
+}
+
+/**
+ * Das Menue der Tour hinter ⋮ (docs/ux/seitenkarte.md, „Menü der Tour"): die
+ * vier seltenen Handgriffe, jeder ausgeschrieben. „Löschen" steht zuletzt und
+ * in der Fehlerfarbe; es fragt nicht nach, sondern bietet im Verlauf
+ * „Rückgängig" an (siehe [deleteRideWithUndo]).
+ *
+ * @param canFlip ob sich die Tour in eine Planung umwandeln laesst (oder zurueck).
+ */
+@Composable
+private fun RideDetailMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    planned: Boolean,
+    canFlip: Boolean,
+    onShowOnMap: () -> Unit,
+    onRename: () -> Unit,
+    onFlip: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.rides_detail_show_map_action)) },
+            leadingIcon = { Icon(Icons.Filled.Map, contentDescription = null) },
+            onClick = {
+                onDismiss()
+                onShowOnMap()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.rides_detail_rename_action)) },
+            leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+            onClick = {
+                onDismiss()
+                onRename()
+            },
+        )
+        if (canFlip) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(
+                            if (planned) {
+                                R.string.gpxplan_detail_to_ridden_action
+                            } else {
+                                R.string.gpxplan_detail_to_planned_action
+                            },
+                        ),
+                    )
+                },
+                leadingIcon = { Icon(Icons.Filled.Route, contentDescription = null) },
+                onClick = {
+                    onDismiss()
+                    onFlip()
+                },
+            )
+        }
+        DropdownMenuItem(
+            text = {
+                Text(
+                    text = stringResource(R.string.common_action_delete),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            },
+            leadingIcon = {
+                Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            },
+            onClick = {
+                onDismiss()
+                onDelete()
+            },
+        )
     }
 }
 

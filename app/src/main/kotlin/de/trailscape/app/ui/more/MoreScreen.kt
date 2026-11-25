@@ -53,6 +53,7 @@ import de.trailscape.app.record.autoPauseAktiviert
 import de.trailscape.app.record.sprachansagenAktiviert
 import de.trailscape.app.strava.StravaConfig
 import de.trailscape.app.strava.StravaServices
+import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.FileImportNoticeEffect
 import de.trailscape.app.ui.IndoorDestination
@@ -71,8 +72,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Die Einstellungen — die Route „mehr" hinter dem ⚙ in den Kopfzeilen von
- * Heute, Verlauf und Training (`ui/components/SettingsAction.kt`), verlassen
+ * Die Einstellungen — die Route „mehr" hinter dem ⚙ in den Kopfzeilen
+ * aller vier Tabs (`ui/components/SettingsAction.kt`), verlassen
  * ueber den Zurueck-Pfeil oder die Systemzurueckgeste. Urspruenglich ein Port
  * von `lib/screens/more_screen.dart`, seit der Ueberarbeitung „Klartext"
  * (`docs/design/prototyp-klartext.html`, `#s-settings`) aber anders gebaut.
@@ -82,8 +83,8 @@ import kotlinx.coroutines.withContext
  * vier Ebenen (Zahnrad → Liste → Akkordeon → „Erweitert"); zugeklappt zeigte
  * keine Zeile, wie es um sie steht. Jetzt:
  *
- *  * **Liste** — eine flache Karte mit sieben Zeilen und die Gruppe „App" mit
- *    zwei, in Builds mit Strava-Zugangsdaten drei weiteren ([SettingsNavRow]). Jede Zeile nennt ihren Zustand in
+ *  * **Liste** — fuenf benannte Gruppen (Du, Geräte, Fahren, Daten, App) mit
+ *    zusammen zwoelf Zeilen, ohne Strava-Zugangsdaten elf ([SettingsNavRow]). Jede Zeile nennt ihren Zustand in
  *    einer Statuszeile („Auto-Pause an · Ansagen an", „Noch nie gesichert"),
  *    siehe `SettingsStatus.kt`.
  *  * **Seite** — Antippen oeffnet die Seite der Zeile ([SettingsPage]) im
@@ -248,7 +249,9 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
 }
 
 /**
- * Die Seiten der Einstellungen, in der Reihenfolge der Liste. [titleRes]
+ * Die Seiten der Einstellungen. Die Reihenfolge der Liste (fuenf Gruppen)
+ * steht in [SettingsList]; „Indoor" ist keine Seite hier, sondern ein eigenes
+ * Ziel der Huelle ([AppViewModel.requestIndoor]). [titleRes]
  * steht in der Listenzeile und in der Kopfzeile der Seite.
  */
 internal enum class SettingsPage(@param:StringRes val titleRes: Int) {
@@ -269,22 +272,24 @@ internal enum class SettingsPage(@param:StringRes val titleRes: Int) {
 /** Welche Seite ein Sprungziel von aussen meint. */
 private fun MoreSection.toPage(): SettingsPage = when (this) {
     MoreSection.PROFILE -> SettingsPage.PROFILE
-    MoreSection.BACKUP -> SettingsPage.BACKUP
     MoreSection.HEALTH -> SettingsPage.HEALTH
     MoreSection.STRAVA -> SettingsPage.STRAVA
 }
 
 /**
- * Die Liste: Update-Hinweis (falls vorhanden), sieben Zeilen ohne
- * Gruppenlabel, dann die Gruppe „App".
+ * Die Liste: Update-Hinweis (falls vorhanden), dann fuenf benannte Gruppen
+ * (`docs/ux/seitenkarte.md`, Bereich „Einstellungen"):
+ *
+ *  * **Du** — Profil, Uhr & Gesundheitsdaten
+ *  * **Geräte** — Sensoren & Trainer (der eine Ort zum Koppeln)
+ *  * **Fahren** — Aufzeichnung & Ansagen, Indoor, Erinnerungen
+ *  * **Daten** — Backup, Karten offline, Strava (nur in Builds mit
+ *    Zugangsdaten), Sync mit eigenem Server
+ *  * **App** — Sprache, Über Trailscape
  *
  * Die Reihenfolge folgt dem Erstnutzer: erst das Profil (ohne Alter und
- * Gewicht rechnet nichts richtig), dann die Uhr und die Bluetooth-Sensoren
- * als Datenquellen, dann das
- * Verhalten beim Fahren, zuletzt Speicher und Sicherung. Strava, Sync und
- * „Über" betreffen die App selbst und stehen deshalb abgesetzt — Strava und
- * Sync als Verbindungen der App nach aussen, beide freiwillig; Strava gibt es
- * nur in Builds mit Zugangsdaten.
+ * Gewicht rechnet nichts richtig) und die Uhr, dann die Geraete, dann das
+ * Verhalten beim Fahren, zuletzt Daten und die App selbst.
  *
  * Die Zustaende, die nicht als `StateFlow` vorliegen (Einstellungen in den
  * `SharedPreferences`, Offline-Bestand, letzter Import), liest die Liste bei
@@ -356,8 +361,9 @@ private fun SettingsList(
                 )
             }
         }
+        // ---------------------------------------------------------------- Du
         item {
-            MoreGroup(label = null) {
+            MoreGroup(label = stringResource(R.string.more_list_group_you)) {
                 SettingsNavRow(
                     title = stringResource(SettingsPage.PROFILE.titleRes),
                     status = profileStatusText(profile, profileConfirmed, language).asString(),
@@ -369,17 +375,39 @@ private fun SettingsList(
                     status = healthStatusText(health, lastHealthImport, language).asString(),
                     onClick = { onOpen(SettingsPage.HEALTH) },
                 )
-                ListDivider()
+            }
+        }
+        // ------------------------------------------------------------- Geraete
+        item {
+            MoreGroup(label = stringResource(R.string.more_list_group_devices)) {
                 SettingsNavRow(
                     title = stringResource(SettingsPage.SENSORS.titleRes),
                     status = sensorsStatus,
                     onClick = { onOpen(SettingsPage.SENSORS) },
                 )
-                ListDivider()
+            }
+        }
+        // -------------------------------------------------------------- Fahren
+        item {
+            MoreGroup(label = stringResource(R.string.more_list_group_riding)) {
                 SettingsNavRow(
                     title = stringResource(SettingsPage.RECORDING.titleRes),
                     status = recordingStatus.asString(),
                     onClick = { onOpen(SettingsPage.RECORDING) },
+                )
+                ListDivider()
+                // Indoor ist keine Seite dieses Bildschirms, sondern ein
+                // eigenes Ziel im `NavHost` (die Seite haengt am
+                // Indoor-ViewModel): Die Huelle oeffnet es ueber
+                // [AppViewModel.requestIndoor], Zurueck fuehrt wieder hierher.
+                // Fahrgefuehl, Strecken auf dem Geraet, Fahrprotokolle und die
+                // Diagnose liegen dort — die frueheren Sprungzeilen
+                // „Indoor-Training" und „Indoor-Diagnose" sind entfallen
+                // (Indoor ist ein Tab, die Diagnose ein Teil dieser Seite).
+                SettingsNavRow(
+                    title = stringResource(R.string.more_list_indoor_title),
+                    status = stringResource(R.string.more_list_indoor_status),
+                    onClick = { appViewModel.requestIndoor(IndoorDestination.SETTINGS) },
                 )
                 ListDivider()
                 SettingsNavRow(
@@ -387,13 +415,11 @@ private fun SettingsList(
                     status = reminderStatusText(reminders).joinedStatus(),
                     onClick = { onOpen(SettingsPage.REMINDERS) },
                 )
-                ListDivider()
-                SettingsNavRow(
-                    title = stringResource(SettingsPage.OFFLINE.titleRes),
-                    status = offlineStatus.joinedStatus(),
-                    onClick = { onOpen(SettingsPage.OFFLINE) },
-                )
-                ListDivider()
+            }
+        }
+        // --------------------------------------------------------------- Daten
+        item {
+            MoreGroup(label = stringResource(R.string.more_list_group_data)) {
                 val backupStatus = backupStatusText(lastBackupAt, language)
                 SettingsNavRow(
                     title = stringResource(SettingsPage.BACKUP.titleRes),
@@ -408,16 +434,19 @@ private fun SettingsList(
                     },
                     onClick = { onOpen(SettingsPage.BACKUP) },
                 )
-            }
-        }
-        item {
-            MoreGroup(label = stringResource(R.string.more_list_group_app)) {
+                ListDivider()
+                SettingsNavRow(
+                    title = stringResource(SettingsPage.OFFLINE.titleRes),
+                    status = offlineStatus.joinedStatus(),
+                    onClick = { onOpen(SettingsPage.OFFLINE) },
+                )
                 // Strava steht nur da, wenn der Build es kann — sonst gibt es
                 // die Zeile schlicht nicht (siehe StravaConfig).
                 if (StravaConfig.available) {
                     val stravaConnection by StravaServices.connection.collectAsStateWithLifecycle()
                     val stravaAutoUpload by StravaServices.autoUpload.collectAsStateWithLifecycle()
                     val stravaMessage by StravaServices.authMessage.collectAsStateWithLifecycle()
+                    ListDivider()
                     SettingsNavRow(
                         title = stringResource(SettingsPage.STRAVA.titleRes),
                         status = stravaStatusText(stravaConnection, stravaAutoUpload, stravaMessage),
@@ -428,14 +457,18 @@ private fun SettingsList(
                         },
                         onClick = { onOpen(SettingsPage.STRAVA) },
                     )
-                    ListDivider()
                 }
+                ListDivider()
                 SettingsNavRow(
                     title = stringResource(SettingsPage.SYNC.titleRes),
                     status = syncStatusText(syncConfig).asString(),
                     onClick = { onOpen(SettingsPage.SYNC) },
                 )
-                ListDivider()
+            }
+        }
+        // ----------------------------------------------------------------- App
+        item {
+            MoreGroup(label = stringResource(R.string.more_list_group_app)) {
                 SettingsNavRow(
                     title = stringResource(SettingsPage.LANGUAGE.titleRes),
                     status = languageStatusAnnotated(AppLocale.preference(context), LocalAppLanguage.current),
@@ -446,28 +479,6 @@ private fun SettingsList(
                     title = stringResource(SettingsPage.ABOUT.titleRes),
                     status = stringResource(R.string.more_list_about_status, versionName),
                     onClick = { onOpen(SettingsPage.ABOUT) },
-                )
-            }
-        }
-        // Indoor (docs/indoor.md 10.1, 10.4), bewusst unter der Gruppe "App", damit
-        // deren Zeilen (Sprache, Sync) im Bild der Liste oben bleiben: eigene Ziele im `NavHost`, keine
-        // Seiten dieses Bereichs — die Huelle oeffnet sie ueber
-        // [AppViewModel.requestIndoor]. Seit dem neuen Nutzerfluss
-        // (docs/indoor/app.md) fuehrt die erste Zeile in das Indoor-Training
-        // selbst; „Strecken auf dem Geraet" steht dort unter Einstellungen.
-        // Die Diagnose bleibt auch hier, damit sie ohne den Ablauf erreichbar ist.
-        item {
-            MoreGroup(label = stringResource(R.string.indoor_app_more_group)) {
-                SettingsNavRow(
-                    title = stringResource(R.string.indoor_app_more_flow_title),
-                    status = stringResource(R.string.indoor_app_more_flow_status),
-                    onClick = { appViewModel.requestIndoor(IndoorDestination.FLOW) },
-                )
-                ListDivider()
-                SettingsNavRow(
-                    title = stringResource(R.string.indoor_app_more_diagnostics_title),
-                    status = stringResource(R.string.indoor_app_more_diagnostics_status),
-                    onClick = { appViewModel.requestIndoor(IndoorDestination.DIAGNOSTICS) },
                 )
             }
         }
@@ -505,7 +516,10 @@ private fun SettingsPageContent(page: SettingsPage, appViewModel: AppViewModel) 
             // beiden Abschnittstitel sagen den Unterschied.
             SettingsPage.OFFLINE -> {
                 SettingsSection(label = stringResource(R.string.more_offline_section_maps)) {
-                    OfflineMapsCardContent(onMessage = appViewModel::showMessage)
+                    OfflineMapsCardContent(
+                        onMessage = appViewModel::showMessage,
+                        onOpenMap = { appViewModel.requestTab(AppTab.MAP) },
+                    )
                 }
                 SettingsSection(label = stringResource(R.string.more_offline_section_routing)) {
                     OfflineRoutingCardContent(appViewModel)

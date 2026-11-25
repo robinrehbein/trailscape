@@ -13,19 +13,15 @@
     <string name="indoor_app_ride_name_from">Indoor · %1$s (ab km %2$s)</string>
     <string name="indoor_app_route_testworld">Teststrecke</string>
     <string name="indoor_app_trainer_demo_name">Demo-Trainer</string>
-    <string name="indoor_app_ghost_past_label">Fahrt vom %1$s</string>
+    <string name="indoor_app_ghost_past_label">Tour vom %1$s</string>
     <string name="indoor_app_ghost_power_label">Vergleich mit %1$d W</string>
     <!-- TourList.kt -->
     <string name="indoor_app_tourlist_pill">Indoor</string>
     <!-- RideDetailScreen.kt -->
-    <string name="indoor_app_detail_notice">Auf dem Rollentrainer gefahren. Die Karte zeigt die virtuelle Strecke – sie zählt nicht für „Neue Wege“, Entdeckt-Kacheln und den Rundenvergleich.</string>
+    <string name="indoor_app_detail_notice">Auf dem Trainer gefahren. Die Karte zeigt die virtuelle Strecke – sie zählt nicht für „Neue Wege“, Entdeckt-Kacheln und den Rundenvergleich.</string>
     <!-- ShareCard.kt -->
-    <string name="indoor_app_share_date_line">%1$s · Auf dem Rollentrainer</string>
+    <string name="indoor_app_share_date_line">%1$s · Auf dem Trainer</string>
     <!-- Verdrahtung (IndoorFlowScreen.kt, ReadyToRideDialog.kt, MoreScreen.kt) -->
-    <string name="indoor_app_ready_action">Indoor auf dem Rollentrainer fahren</string>
-    <string name="indoor_app_more_group">Indoor</string>
-    <string name="indoor_app_more_diagnostics_title">Indoor-Diagnose</string>
-    <string name="indoor_app_more_diagnostics_status">3D-Darstellung auf diesem Gerät prüfen</string>
     <string name="indoor_app_flow_leave_title">Fahrt angehalten</string>
     <string name="indoor_app_flow_leave_body">Beendest du die Fahrt, siehst du die Auswertung und kannst sie speichern.</string>
     <string name="indoor_app_flow_leave_resume">Weiterfahren</string>
@@ -53,13 +49,13 @@
     <string name="indoor_app_value_kj">%1$d kJ</string>
     <string name="indoor_app_value_percent">%1$d %%</string>
     <!-- IndoorEntryCard.kt -->
-    <string name="indoor_app_entry_title">Indoor-Training</string>
-    <string name="indoor_app_entry_body">Fahre mit deinem Smart-Trainer echte Strecken in 3D.</string>
+    <string name="indoor_app_entry_title">Indoor</string>
+    <string name="indoor_app_entry_body">Fahre mit deinem Trainer echte Strecken in 3D.</string>
     <string name="indoor_app_entry_body_erg">Heute: %1$s</string>
-    <string name="indoor_app_entry_action">Indoor-Training öffnen</string>
+    <string name="indoor_app_entry_action">Indoor öffnen</string>
     <!-- IndoorPairScreen.kt -->
     <string name="indoor_app_pair_title">Trainer koppeln</string>
-    <string name="indoor_app_pair_intro">Wähle deinen Smart-Trainer aus. Ein Schalttaster wie der Zwift Click ist optional. Verbunden wird erst, wenn die Fahrt beginnt.</string>
+    <string name="indoor_app_pair_intro">Wähle deinen Rollentrainer aus. Ein Schalttaster wie der Zwift Click ist optional. Verbunden wird erst, wenn die Fahrt beginnt.</string>
     <string name="indoor_app_pair_demo_title">Ohne Trainer ausprobieren</string>
     <string name="indoor_app_pair_demo_body">Ein gedachter Trainer: Leistung und Trittfrequenz stellst du während der Fahrt mit zwei Reglern selbst ein.</string>
     <string name="indoor_app_pair_chainring_title">Kettenblatt am Trainer</string>
@@ -84,7 +80,10 @@
     <string name="indoor_app_pair_other_riders_title">Andere Radfahrer anzeigen</string>
     <string name="indoor_app_pair_other_riders_body">Ein paar Mitfahrer und Gegenverkehr auf der Strecke – nur zur Kulisse, ohne Einfluss auf Widerstand oder Windschatten.</string>
     <!-- IndoorRouteScreen.kt -->
-    <string name="indoor_app_route_title">Indoor-Training</string>
+    <string name="indoor_app_route_title">Indoor</string>
+    <string name="indoor_app_tab_title">Indoor</string>
+    <string name="indoor_app_tab_segment_routes">Strecken</string>
+    <string name="indoor_app_tab_segment_plan">Plan</string>
     <string name="indoor_app_route_section_mode">Fahrweise</string>
     <string name="indoor_app_route_section_ghost">Mitfahrer</string>
     <string name="indoor_app_route_testworld_title">Teststrecke</string>
@@ -98,9 +97,9 @@
     <string name="indoor_app_mode_sim_body">Der Widerstand folgt den Steigungen der Strecke. Du schaltest selbst.</string>
     <string name="indoor_app_mode_erg_body">%1$s · %2$d min. Der Trainer stellt die Leistung der Einheit ein.</string>
     <string name="indoor_app_mode_erg_body_no_duration">%1$s. Der Trainer stellt die Leistung der Einheit ein.</string>
-    <string name="indoor_app_mode_erg_unavailable">Heute steht keine Einheit für den Rollentrainer im Plan – du fährst frei.</string>
+    <string name="indoor_app_mode_erg_unavailable">Heute steht keine Einheit für den Trainer im Plan – du fährst frei.</string>
     <string name="indoor_app_ghost_none">Keiner</string>
-    <string name="indoor_app_ghost_past">Frühere Fahrt</string>
+    <string name="indoor_app_ghost_past">Frühere Tour</string>
     <string name="indoor_app_ghost_power">Feste Leistung</string>
     <string name="indoor_app_ghost_none_body">Du fährst allein.</string>
     <string name="indoor_app_ghost_past_body">Du fährst gegen dein früheres Ich auf dieser Strecke.</string>
@@ -135,12 +134,12 @@
     <string name="indoor_app_world_cancelling">Wird abgebrochen …</string>
     <string name="indoor_app_world_ready_title">Alles bereit</string>
     <string name="indoor_app_world_ready_body">Die 3D-Ansicht zu „%1$s“ liegt auf deinem Gerät. Du kannst sie auch ohne Netz fahren.</string>
-    <string name="indoor_app_world_ride_action">Losfahren</string>
+    <string name="indoor_app_world_ride_action">Weiter</string>
     <string name="indoor_app_world_failed_title">Die 3D-Ansicht konnte nicht erstellt werden</string>
     <string name="indoor_app_world_failed_hint">Du kannst es noch einmal versuchen oder ohne 3D-Ansicht fahren – dann siehst du das Höhenprofil.</string>
     <string name="indoor_app_world_failed_offline">Kein Netz: Die Höhendaten für diese Strecke liegen noch nicht auf dem Gerät. Verbinde dich mit dem Internet und versuche es erneut.</string>
     <string name="indoor_app_world_failed_source">Eine Datenquelle antwortet gerade nicht richtig. Versuche es später erneut; bereits Geladenes bleibt erhalten.</string>
-    <string name="indoor_app_world_failed_no_space">Auf dem Gerät ist nicht genug Platz für diese Strecke. Gib Speicher frei oder lösche nicht mehr benötigte Strecken unter Indoor-Training → Einstellungen → Strecken auf dem Gerät.</string>
+    <string name="indoor_app_world_failed_no_space">Auf dem Gerät ist nicht genug Platz für diese Strecke. Gib Speicher frei oder lösche nicht mehr benötigte Strecken unter Einstellungen → Indoor → Strecken auf dem Gerät.</string>
     <string name="indoor_app_world_failed_route">Diese Strecke ist für die 3D-Ansicht zu lang (über 150 km) oder zu kurz.</string>
     <string name="indoor_app_world_failed_internal">Beim Vorbereiten der Strecke ist ein unerwarteter Fehler aufgetreten.</string>
     <string name="indoor_app_technical_detail">Technische Einzelheit: %1$s</string>
@@ -197,12 +196,12 @@
     <string name="indoor_app_notice_trainer_unsupported">Dieser Trainer lässt sich nicht steuern. Du kannst fahren, der Widerstand bleibt aber, wie du ihn am Gerät einstellst.</string>
     <string name="indoor_app_notice_shifter_unsupported">Der Schalttaster ist nicht nutzbar. Schalte mit den Knöpfen auf dem Bildschirm.</string>
     <string name="indoor_app_notice_bluetooth_off">Bluetooth ist aus. Schalte es ein, damit der Trainer verbinden kann.</string>
-    <string name="indoor_app_notice_no_permission">Die Bluetooth-Berechtigung fehlt. Erteile sie in den Einstellungen unter Mehr → Sensoren.</string>
+    <string name="indoor_app_notice_no_permission">Die Bluetooth-Berechtigung fehlt. Erteile sie unter Einstellungen → Sensoren &amp; Trainer.</string>
     <string name="indoor_app_notice_tile_failed">Ein Stück der Strecke konnte nicht geladen werden. Dort ist sie lückenhaft.</string>
-    <string name="indoor_app_notice_part_failed">Ein Teil des Indoor-Trainings hat einen Fehler gemeldet. Die Fahrt läuft weiter, so gut es geht.</string>
+    <string name="indoor_app_notice_part_failed">Ein Teil des Indoor-Bereichs hat einen Fehler gemeldet. Die Fahrt läuft weiter, so gut es geht.</string>
     <string name="indoor_app_notice_dismiss_action">Schließen</string>
     <string name="indoor_app_problem_not_ready">Dieser Teil ist in dieser Version noch nicht fertig.</string>
-    <string name="indoor_app_problem_not_ready_hint">Das Indoor-Training lässt sich in dieser Version noch nicht vollständig nutzen.</string>
+    <string name="indoor_app_problem_not_ready_hint">Der Indoor-Bereich lässt sich in dieser Version noch nicht vollständig nutzen.</string>
     <string name="indoor_app_problem_failed_core">In der Trainingslogik ist ein Fehler aufgetreten.</string>
     <string name="indoor_app_problem_failed_world">Beim Vorbereiten der Strecke ist ein Fehler aufgetreten.</string>
     <string name="indoor_app_problem_failed_ble">Bei der Bluetooth-Verbindung ist ein Fehler aufgetreten.</string>
@@ -283,6 +282,7 @@
     <!-- IndoorSummaryScreen.kt -->
     <string name="indoor_app_summary_title">Auswertung</string>
     <string name="indoor_app_summary_saved">Die Fahrt ist als Indoor-Tour gespeichert.</string>
+    <string name="indoor_app_summary_open_tour_action">Tour ansehen</string>
     <string name="indoor_app_summary_record_missing_title">Aufzeichnung nicht verfügbar</string>
     <string name="indoor_app_summary_record_missing_body">Die Fahrt wurde nicht vollständig aufgezeichnet und kann deshalb nicht gespeichert werden.</string>
     <string name="indoor_app_summary_too_short">Fahrten unter %1$d Sekunden werden nicht gespeichert.</string>
@@ -329,7 +329,7 @@
     <string name="indoor_app_worlds_attribution_hide">Quellenangaben ausblenden</string>
     <string name="indoor_app_worlds_delete_action">Löschen</string>
     <string name="indoor_app_worlds_delete_confirm_title">Strecke löschen?</string>
-    <string name="indoor_app_worlds_delete_confirm_body">Die 3D-Ansicht von „%1$s“ (%2$s) wird gelöscht. Du kannst sie später neu laden.</string>
+    <string name="indoor_app_worlds_delete_confirm_body">Die 3D-Ansicht von „%1$s“ (%2$s) wird gelöscht. Du kannst sie später neu herunterladen oder vorbereiten.</string>
     <!-- END Ablauf-Bildschirme -->
 
     <!-- Bekannte Strecken (Katalog, docs/indoor/catalog.md) -->
@@ -359,13 +359,13 @@
     <string name="indoor_app_catalog_update">Aktualisieren (%1$s)</string>
     <string name="indoor_app_catalog_update_unknown">Aktualisieren</string>
     <string name="indoor_app_catalog_progress">%1$d %% · %2$s von %3$s</string>
-    <string name="indoor_app_catalog_progress_unknown">%1$s geladen</string>
+    <string name="indoor_app_catalog_progress_unknown">%1$s heruntergeladen</string>
     <string name="indoor_app_catalog_failed_not_available">Diese Strecke ist noch nicht verfügbar. Sie wird gerade vorbereitet – schau später noch einmal vorbei.</string>
-    <string name="indoor_app_catalog_failed_offline">Keine Verbindung. Der geladene Teil bleibt erhalten, „Fortsetzen“ macht dort weiter.</string>
+    <string name="indoor_app_catalog_failed_offline">Keine Verbindung. Der heruntergeladene Teil bleibt erhalten, „Fortsetzen“ macht dort weiter.</string>
     <string name="indoor_app_catalog_failed_checksum">Der Download war beschädigt und wurde verworfen. Versuche es noch einmal.</string>
     <string name="indoor_app_catalog_failed_space">Auf dem Gerät ist nicht genug Platz für diese Strecke.</string>
     <string name="indoor_app_catalog_failed_other">Die Strecke konnte nicht heruntergeladen werden.</string>
-    <string name="indoor_app_catalog_failed_keeps_old">Die vorher geladene Fassung bleibt fahrbar.</string>
+    <string name="indoor_app_catalog_failed_keeps_old">Die vorher heruntergeladene Fassung bleibt fahrbar.</string>
     <string name="indoor_app_worlds_tag_catalog">Bekannte Strecke</string>
     <!-- Startpunkt und Fortsetzen (docs/indoor/app.md) -->
     <string name="indoor_app_start_title_choose">Wo startest du?</string>
@@ -384,11 +384,11 @@
     <string name="indoor_app_day_eyebrow">Einheit des Tages</string>
     <string name="indoor_app_day_loading">Suche eine passende Strecke …</string>
     <string name="indoor_app_day_rest_title">Heute ist Ruhetag</string>
-    <string name="indoor_app_day_rest_body">Deine Tagesform rät zur Pause – auf der Rolle steht heute nichts an.</string>
-    <string name="indoor_app_day_rest_body_planned">Im Plan stand „%1$s“. Deine Tagesform rät heute zur Pause, deshalb gibt es keine Einheit auf der Rolle.</string>
+    <string name="indoor_app_day_rest_body">Deine Tagesform rät zur Pause – auf dem Trainer steht heute nichts an.</string>
+    <string name="indoor_app_day_rest_body_planned">Im Plan stand „%1$s“. Deine Tagesform rät heute zur Pause, deshalb gibt es keine Einheit auf dem Trainer.</string>
     <string name="indoor_app_day_open_free_action">Trotzdem frei fahren</string>
     <string name="indoor_app_day_event_title">Heute ist dein Event</string>
-    <string name="indoor_app_day_event_body">Das Event hat eine eigene Strecke – dafür gibt es keine Einheit auf der Rolle.</string>
+    <string name="indoor_app_day_event_body">Das Event hat eine eigene Strecke – dafür gibt es keine Einheit auf dem Trainer.</string>
     <string name="indoor_app_day_meta">%1$d min · der Trainer hält die Zielleistung</string>
     <string name="indoor_app_day_reduced_meta">%1$d statt %2$d min · an deine Tagesform angepasst</string>
     <string name="indoor_app_day_easy_meta">Heute steht keine Einheit im Plan – %1$d min locker und flach</string>
@@ -420,11 +420,11 @@
     <string name="indoor_app_day_world_download">Herunterladen: %1$s</string>
     <string name="indoor_app_day_world_download_unknown">Herunterladen</string>
     <string name="indoor_app_day_world_build">Vorbereiten: etwa %1$d min</string>
-    <string name="indoor_app_day_world_plan">Runde planen, dann vorbereiten: etwa %1$d min</string>
+    <string name="indoor_app_day_world_plan">Runde bauen, dann vorbereiten: etwa %1$d min</string>
     <string name="indoor_app_day_ride_action">Fahren</string>
-    <string name="indoor_app_day_download_action">Laden und fahren</string>
+    <string name="indoor_app_day_download_action">Herunterladen und fahren</string>
     <string name="indoor_app_day_build_action">Vorbereiten</string>
-    <string name="indoor_app_day_plan_action">Runde planen</string>
+    <string name="indoor_app_day_plan_action">Runde bauen</string>
     <string name="indoor_app_day_next_action">Andere Strecke (%1$d/%2$d)</string>
     <string name="indoor_app_day_path_real">Echte Strecke</string>
     <string name="indoor_app_day_path_generated">Generierte Strecke</string>
@@ -470,7 +470,7 @@
     <string name="indoor_app_server_incompatible_unknown">Dein Server baut eine andere Strecken-Version (%1$s) als die App.</string>
     <string name="indoor_app_server_failed_title">Server-Bau hat nicht geklappt</string>
     <string name="indoor_app_server_failure_offline">Dein Server ist gerade nicht erreichbar. Ein laufender Auftrag geht dort weiter; versuch es gleich noch einmal.</string>
-    <string name="indoor_app_server_failure_unauthorized">Dein Server hat den Token abgelehnt. Prüf ihn unter Mehr → Sync mit eigenem Server.</string>
+    <string name="indoor_app_server_failure_unauthorized">Dein Server hat den Token abgelehnt. Prüf ihn unter Einstellungen → Sync mit eigenem Server.</string>
     <string name="indoor_app_server_failure_too_long">Die Strecke ist für die Grenzen deines Servers zu lang.</string>
     <string name="indoor_app_server_failure_queue_full">Auf deinem Server warten schon zu viele Aufträge. Versuch es später.</string>
     <string name="indoor_app_server_failure_build_failed">Der Bau auf dem Server ist gescheitert. Einzelheiten stehen dort im Protokoll des Auftrags.</string>
@@ -493,7 +493,7 @@
     <string name="indoor_app_home_trainer_demo_title">Ohne Trainer (Demo)</string>
     <string name="indoor_app_home_trainer_demo_body">Leistung und Trittfrequenz stellst du während der Fahrt selbst ein.</string>
     <string name="indoor_app_home_trainer_missing_title">Kein Trainer gekoppelt</string>
-    <string name="indoor_app_home_trainer_missing_body">Koppele deinen Smart-Trainer – oder probiere alles ohne Gerät aus.</string>
+    <string name="indoor_app_home_trainer_missing_body">Koppele deinen Trainer – oder probiere alles ohne Gerät aus.</string>
     <string name="indoor_app_home_trainer_bt_off_title">Bluetooth ist aus</string>
     <string name="indoor_app_home_trainer_bt_off_body">Schalte Bluetooth ein, damit sich %1$s verbinden kann.</string>
     <string name="indoor_app_home_trainer_permission_title">Bluetooth-Zugriff fehlt</string>
@@ -506,7 +506,7 @@
     <string name="indoor_app_home_status_prepare">Wird einmal vorbereitet</string>
     <string name="indoor_app_home_status_download">Herunterladen · %1$s</string>
     <string name="indoor_app_home_status_download_unknown">Herunterladen</string>
-    <string name="indoor_app_home_status_downloading">Lädt · %1$d %%</string>
+    <string name="indoor_app_home_status_downloading">Lädt herunter · %1$d %%</string>
     <string name="indoor_app_home_status_paused">Angehalten · %1$d %%</string>
     <string name="indoor_app_home_status_installing">Wird entpackt</string>
     <string name="indoor_app_home_status_failed">Fehlgeschlagen</string>
@@ -522,10 +522,10 @@
     <string name="indoor_app_home_installing">„%1$s“ wird geprüft und entpackt …</string>
     <string name="indoor_app_home_ready">Bereit: %1$s</string>
     <string name="indoor_app_home_ready_prepare">„%1$s“: Vor der ersten Fahrt wird die 3D-Ansicht einmal erstellt.</string>
-    <string name="indoor_app_home_update">Für „%1$s“ gibt es eine neue Fassung. Die geladene bleibt fahrbar.</string>
+    <string name="indoor_app_home_update">Für „%1$s“ gibt es eine neue Fassung. Die heruntergeladene bleibt fahrbar.</string>
     <string name="indoor_app_home_download_action">Herunterladen</string>
     <string name="indoor_app_home_ride_action">Fahren</string>
-    <string name="indoor_app_settings_title">Einstellungen</string>
+    <string name="indoor_app_settings_title">Indoor</string>
     <string name="indoor_app_settings_section_ride">Fahrgefühl</string>
     <string name="indoor_app_settings_section_view">3D-Ansicht</string>
     <string name="indoor_app_settings_section_advanced">Erweitert</string>
@@ -537,8 +537,6 @@
     <string name="indoor_app_world_details_hide">Einzelheiten ausblenden</string>
     <string name="indoor_app_world_advanced_show">Weitere Möglichkeit: auf deinem Server bauen</string>
     <string name="indoor_app_start_finish_action">Fahrt beenden</string>
-    <string name="indoor_app_more_flow_title">Indoor-Training</string>
-    <string name="indoor_app_more_flow_status">Auf dem Rollentrainer echte Strecken in 3D fahren</string>
     <string name="indoor_app_settings_refresh_body">Neue Strecken und Vorschaubilder holen</string>
     <plurals name="indoor_app_home_catalog_summary">
         <item quantity="one">%1$d Strecke, fertig vorbereitet zum Herunterladen</item>
