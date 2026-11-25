@@ -67,6 +67,11 @@ internal fun skyExport(
     val sh = SkyIrradiance.sh(l.iblZenith, l.iblHorizon, l.iblGround)
     File(out, "clouds.bin").writeBytes(SkyClouds.cloudTexture())
     File(out, "detail.bin").writeBytes(de.trailscape.core.indoor.sky.GroundDetail.texture())
+    // Spiegelungs-Umgebungslicht (SkyReflections): alle Mip-Stufen hintereinander, RGB-Halbfloats.
+    val refl = de.trailscape.core.indoor.sky.SkyReflections.prefilteredHalf(l)
+    val rb = ByteBuffer.allocate(refl.sumOf { it.size } * 2).order(ByteOrder.LITTLE_ENDIAN)
+    for (lv in refl) for (v in lv) rb.putShort(v)
+    File(out, "reflections.bin").writeBytes(rb.array())
 
     val img = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
     for (y in 0 until h) for (x in 0 until w) {
@@ -91,6 +96,7 @@ internal fun skyExport(
         appendLine("  \"sunDirEnu\": [${String.format(Locale.ROOT, "%.6f, %.6f, %.6f", l.sunEast, l.sunNorth, l.sunUp)}],")
         appendLine("  \"sh\": [${sh.joinToString(", ") { String.format(Locale.ROOT, "%.7g", it) }}],")
         appendLine("  \"cubeSize\": $cubeSize,")
+        appendLine("  \"reflectionsSize\": ${de.trailscape.core.indoor.sky.SkyReflections.BASE_SIZE}, \"reflectionsLevels\": ${refl.size},")
         appendLine("  \"look\": ${lookJson(l)},")
         appendLine("  \"skyWidth\": $w, \"skyHeight\": $h")
         appendLine("}")

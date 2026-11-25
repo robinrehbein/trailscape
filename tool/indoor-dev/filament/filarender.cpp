@@ -248,11 +248,27 @@ int main(int argc, char** argv) {
     const bool post = opt(settings, "postProcessing", true);
     const bool ao = opt(settings, "ambientOcclusion", false);
     const bool bloom = opt(settings, "bloom", false);
+    // Bildentstehung (Branch indoor-renderqualitaet, FilamentCore/RenderQuality.kt): alle
+    // Vorgaben = Stand davor, damit Vorher-Bilder gleich bleiben.
+    const bool reflections = opt(settings, "reflections", false);   // Spiegelungs-IBL aus reflections.bin
+    const bool taa = opt(settings, "taa", false);                   // zeitliche Kantenglaettung statt MSAA
+    const int effectQuality = opt(settings, "effectQuality", 0);    // 0 LOW, 1 MEDIUM, 2 HIGH (SSAO, Bloom)
+    const bool contactShadows = opt(settings, "contactShadows", false);
+    const int cascades = opt(settings, "cascades", 3);
+    const bool stableShadows = opt(settings, "stableShadows", false);
+    // Java-Vorgabe von ShadowOptions.lispsm ist false (C++: true) — die App setzt es nicht.
+    const bool lispsm = opt(settings, "lispsm", false);
+    const bool vignette = opt(settings, "vignette", false);
+    const bool whiteBalance = opt(settings, "whiteBalance", false);
+    const bool terrainShadows = opt(settings, "terrainShadows", false);  // Gelaende wirft Schatten
+    const float shadowFarM = opt(settings, "shadowFarM", 300);
     const int W = S["width"], H = S["height"];
     const double timeS = opt(S, "timeS", 0.0);
 
     auto t0 = std::chrono::steady_clock::now();
-    Engine* engine = Engine::create(Engine::Backend::OPENGL);
+    // FILARENDER_BACKEND=vulkan: lavapipe statt llvmpipe-GL (Schattenvergleich, siehe docs/indoor/render.md)
+    const char* be = getenv("FILARENDER_BACKEND");
+    Engine* engine = Engine::create(be && std::string(be) == "vulkan" ? Engine::Backend::VULKAN : Engine::Backend::OPENGL);
     if (!engine) return 4;
     SwapChain* sc = engine->createSwapChain(W, H, SwapChain::CONFIG_READABLE);
     Renderer* renderer = engine->createRenderer();
@@ -278,13 +294,23 @@ int main(int argc, char** argv) {
     {
         LightManager::ShadowOptions so;
         so.mapSize = 2048;
-        so.shadowCascades = 3;
+        so.shadowCascades = (uint8_t)cascades;
         so.cascadeSplitPositions[0] = 0.05f;
         so.cascadeSplitPositions[1] = 0.2f;
-        so.shadowFar = 300.f;
-        so.shadowFarHint = 300.f;
+        if (cascades >= 4) {
+            // RenderQuality.cascadeSplits: 8 m, 30 m, 100 m (Anteile der Reichweite)
+            so.cascadeSplitPositions[0] = 8.f / shadowFarM;
+            so.cascadeSplitPositions[1] = 30.f / shadowFarM;
+            so.cascadeSplitPositions[2] = 100.f / shadowFarM;
+        }
+        so.shadowFar = shadowFarM;
+        so.shadowFarHint = shadowFarM;
         so.shadowNearHint = 1.f;
-        so.stable = false;
+        so.stable = stableShadows;
+        so.lispsm = lispsm;
+        so.screenSpaceContactShadows = contactShadows;
+        so.stepCount = 8;
+        so.maxShadowDistance = 0.5f;
         const double3 enu = d3(K["sunDirEnu"]);
         const float3 toSun = normalize(float3{ float(enu.x), float(enu.z), float(-enu.y) });
         LightManager::Builder(LightManager::Type::SUN)
@@ -307,7 +333,28 @@ int main(int argc, char** argv) {
     // FilamentCore nutzt radiance(3, sh); in C++ heisst das irradiance(bands, sh) mit Strahldichte-SH
     // (Filament multipliziert intern mit A[i], siehe IndirectLight.cpp).
     {
-        IndirectLight* r = IndirectLight::Builder().radiance(3, sh).intensity(K["ambientLux"].get<float>()).build(*engine);
+        IndirectLight::Builder ib;
+        ib.radiance(3, sh).intensity(K["ambientLux"].get<float>());
+        if (reflections && K.contains("reflectionsSize")) {
+            // Vorgefilterte Mip-Kette aus SkyReflections (wie FilamentCore.buildReflections)
+            const int rs = K["reflectionsSize"], rl = K["reflectionsLevels"];
+            auto raw = readFile(skyDir + "/reflections.bin");
+            Texture* rt = Texture::Builder().width(rs).height(rs).levels(rl).sampler(Texture::Sampler::SAMPLER_CUBEMAP)
+                              .format(Texture::InternalFormat::R11F_G11F_B10F).build(*engine);
+            size_t off = 0;
+            for (int lv = 0; lv < rl; lv++) {
+                const int n = std::max(1, rs >> lv);
+                const size_t bytes = size_t(6) * n * n * 3 * 2;
+                auto* buf = new uint8_t[bytes];
+                memcpy(buf, raw.data() + off, bytes);
+                off += bytes;
+                rt->setImage(*engine, lv, 0, 0, 0, n, n, 6,
+                    Texture::PixelBufferDescriptor(buf, bytes, Texture::Format::RGB, Texture::Type::HALF,
+                        [](void* b, size_t, void*) { delete[] (uint8_t*)b; }));
+            }
+            ib.reflections(rt);
+        }
+        IndirectLight* r = ib.build(*engine);
         engine->destroy(ibl);
         ibl = r;
     }
@@ -406,12 +453,26 @@ int main(int argc, char** argv) {
     view->setPostProcessingEnabled(post);
     {
         View::MultiSampleAntiAliasingOptions m;
-        m.enabled = true;
+        m.enabled = !taa;
         m.sampleCount = 4;
         view->setMultiSampleAntiAliasingOptions(m);
         view->setAntiAliasing(View::AntiAliasing::NONE);
+        View::TemporalAntiAliasingOptions t;
+        t.enabled = taa;
+        // RenderQuality.taa: etwas mehr Rueckfuehrung gegen Laubflimmern, Varianz-Box gegen Schlieren
+        t.feedback = 0.1f;
+        t.boxType = View::TemporalAntiAliasingOptions::BoxType::AABB_VARIANCE;
+        t.sharpness = 0.25f;
+        view->setTemporalAntiAliasingOptions(t);
     }
-    view->setShadowType(shadows ? View::ShadowType::DPCF : View::ShadowType::PCF);
+    const View::QualityLevel fxq = effectQuality >= 2 ? View::QualityLevel::HIGH : effectQuality == 1 ? View::QualityLevel::MEDIUM : View::QualityLevel::LOW;
+    {
+        // Wie FilamentCore: DPCF (in 1.75.1 veraltet, faellt auf PCSS = EVSM zurueck) oder ein anderer Typ.
+        const std::string st = opt<std::string>(settings, "shadowType", "DPCF");
+        View::ShadowType t = st == "PCF" ? View::ShadowType::PCF : st == "PCSS" ? View::ShadowType::PCSS
+            : st == "VSM" ? View::ShadowType::VSM : st == "PCFd" ? View::ShadowType::PCFd : View::ShadowType::DPCF;
+        view->setShadowType(shadows ? t : View::ShadowType::PCF);
+    }
     {
         View::SoftShadowOptions s;
         s.penumbraScale = 1.5f;
@@ -424,11 +485,27 @@ int main(int argc, char** argv) {
         a.enabled = ao;
         a.radius = 0.4f;
         a.intensity = 1.f;
+        if (effectQuality >= 1) {
+            // RenderQuality.ambientOcclusion
+            a.quality = fxq;
+            a.lowPassFilter = fxq;
+            a.upsampling = fxq;
+            a.radius = effectQuality >= 2 ? 0.6f : 0.5f;
+            a.power = 1.2f;
+        }
         view->setAmbientOcclusionOptions(a);
         View::BloomOptions b;
         b.enabled = bloom;
         b.strength = opt(L, "bloomStrength", 0.08f);
+        if (effectQuality >= 1) b.quality = fxq;
         view->setBloomOptions(b);
+        View::VignetteOptions vo;
+        vo.enabled = vignette;
+        vo.midPoint = 0.6f;
+        vo.roundness = 0.4f;
+        vo.feather = 0.6f;
+        vo.color = { 0.f, 0.f, 0.f, 1.f };
+        view->setVignetteOptions(vo);
     }
     // Tonwertabbildung und Farbgebung der Stimmung (fehlt: Filaments Standard ACES_LEGACY)
     ColorGrading* grading = nullptr;
@@ -448,7 +525,8 @@ int main(int argc, char** argv) {
             .contrast(opt(L, "contrast", 1.f))
             .vibrance(opt(L, "vibrance", 1.f))
             .saturation(opt(L, "saturation", 1.f))
-            .whiteBalance(opt(L, "temperature", 0.f), opt(L, "tint", 0.f));
+            .whiteBalance(whiteBalance ? opt(L, "wbTemperature", 0.f) : opt(L, "temperature", 0.f),
+                whiteBalance ? opt(L, "wbTint", 0.f) : opt(L, "tint", 0.f));
         if (L.contains("shadowsTint")) {
             gb.shadowsMidtonesHighlights(float4{ f3(L["shadowsTint"]), 0.f }, float4{ 1, 1, 1, 0 }, float4{ 1, 1, 1, 0 }, float4{ 0.f, 0.333f, 0.55f, 1.f });
         }
@@ -562,7 +640,10 @@ int main(int argc, char** argv) {
         for (auto& [e, cat] : l.category) {
             auto r = rm.getInstance(e);
             std::string base = cat.rfind("terrain_sub_", 0) == 0 ? "terrain" : cat;
-            bool cast = base == "buildings" || base == "trees";
+            bool cast = base == "buildings" || base == "trees" || (terrainShadows && base == "terrain");
+            bool recv0 = !(base == "trees" || base == "props");
+            // EVSM (PCSS, auf das DPCF in 1.75.1 zurueckfaellt) verlangt: wer empfaengt, wirft auch.
+            if (opt(settings, "receiversCast", false) && recv0 && base != "water") cast = true;
             bool recv = !(base == "trees" || base == "props");
             rm.setCastShadows(r, cast && shadows);
             rm.setReceiveShadows(r, recv);
