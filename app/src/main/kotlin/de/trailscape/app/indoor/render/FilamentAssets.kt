@@ -144,6 +144,7 @@ internal class LoadedAsset(private val core: FilamentCore, val asset: FilamentAs
             ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply {
                 put(bytes)
                 flip()
+                GlbPatch.neutralizeSpecular(this)
             }
 
         /**
