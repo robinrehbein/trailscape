@@ -160,6 +160,7 @@ fun buildBackupJson(
     profile: TrainingProfile?,
     exportedAtMs: Long = System.currentTimeMillis(),
     yearGoal: YearGoal? = null,
+    progress: AchievementProgressData? = null,
 ): String {
     val json = buildJsonObject {
         put("app", backupAppName)
@@ -167,6 +168,8 @@ fun buildBackupJson(
         put("exportedAt", formatIso8601Utc(exportedAtMs))
         put("profile", profile?.toJson() ?: JsonNull)
         yearGoal?.let { put("yearGoal", it.toBackupJson()) }
+        // Erfolge (`AchievementProgress.kt`): rein additiv wie `yearGoal`.
+        progress?.let { put("progress", it.toJson()) }
         put("rides", buildJsonArray { rides.forEach { add(it.toJson()) } })
     }
     return prettyJson.encodeToString(JsonObject.serializer(), json)
@@ -193,6 +196,7 @@ fun writeBackupJson(
     profile: TrainingProfile?,
     exportedAtMs: Long = System.currentTimeMillis(),
     yearGoal: YearGoal? = null,
+    progress: AchievementProgressData? = null,
 ) {
     // Kopf als eigenes Objekt serialisieren und die schliessende Klammer
     // abschneiden — so stammen Escaping und Einrueckung aller Kopffelder
@@ -203,6 +207,7 @@ fun writeBackupJson(
         put("exportedAt", formatIso8601Utc(exportedAtMs))
         put("profile", profile?.toJson() ?: JsonNull)
         yearGoal?.let { put("yearGoal", it.toBackupJson()) }
+        progress?.let { put("progress", it.toJson()) }
     }
     val headText = prettyJson.encodeToString(JsonObject.serializer(), head)
     // "…\n}" → "…" (der Kopf ist nie leer, die Klammer steht immer auf
@@ -251,6 +256,12 @@ data class BackupData(
     val profile: TrainingProfile? = null,
     /** Jahresziel aus dem optionalen Feld `yearGoal`; `null`, wenn es fehlt oder unlesbar ist. */
     val yearGoal: YearGoal? = null,
+    /**
+     * Gespeicherter Stand der Erfolge aus dem optionalen Feld `progress`
+     * ([AchievementProgressData]); `null`, wenn es fehlt oder kein Objekt ist.
+     * Tolerant gelesen: ein kaputter Eintrag darin macht nie das Backup ungueltig.
+     */
+    val progress: AchievementProgressData? = null,
 )
 
 /**
@@ -334,5 +345,10 @@ fun parseBackupJson(raw: String, texts: CoreTexts): BackupData {
         }
     }
 
-    return BackupData(rides = rides, profile = profile, yearGoal = parseYearGoal(decoded["yearGoal"]))
+    return BackupData(
+        rides = rides,
+        profile = profile,
+        yearGoal = parseYearGoal(decoded["yearGoal"]),
+        progress = AchievementProgressData.fromJson(decoded["progress"]),
+    )
 }

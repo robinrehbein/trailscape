@@ -66,6 +66,13 @@ sealed interface RideHighlight {
 
     /** Diese Tour hat eine Monats-Challenge geschafft. */
     data class ChallengeReached(val challenge: Challenge) : RideHighlight
+
+    /**
+     * Diese Tour hat Abzeichen gebracht (`Achievements.kt`), in der Reihenfolge
+     * von [AchievementId]; nie leer. Kommt nicht aus [rideHighlights], sondern
+     * aus [withAchievementHighlight].
+     */
+    data class AchievementsUnlocked(val ids: List<AchievementId>) : RideHighlight
 }
 
 /**
