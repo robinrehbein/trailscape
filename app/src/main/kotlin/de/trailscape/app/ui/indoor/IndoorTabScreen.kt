@@ -27,6 +27,7 @@ import de.trailscape.app.ui.IndoorSegment
 import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.SettingsAction
+import de.trailscape.app.ui.garageEntryVisible
 import de.trailscape.app.ui.indoorSegmentUsesFlow
 import de.trailscape.app.ui.indoorSegments
 import de.trailscape.app.ui.shippedIndoorSegments
@@ -56,6 +57,10 @@ import de.trailscape.app.ui.training.PlanScreen
  *  * **Raum** — festgelegter Platz ([IndoorSegment.ROOM]), unsichtbar,
  *    solange der Raum fuer Gruppenfahrten keine Oberflaeche hat.
  *
+ * In der Kopfzeile der Sicht „Strecken" steht neben dem Zahnrad das Symbol
+ * der Garage (Fahrer und Rad anpassen, `docs/indoor/garage.md`) — ihr einziger
+ * Einstieg.
+ *
  * Das Zahnrad oeffnet in jeder Sicht dieselbe Einstellungsseite der App; die
  * Indoor-Einstellungen liegen dort unter „Indoor".
  *
@@ -68,6 +73,7 @@ fun IndoorTabScreen(
     appViewModel: AppViewModel,
     onOpenDiagnostics: () -> Unit,
     onOpenWorlds: () -> Unit,
+    onOpenGarage: () -> Unit,
 ) {
     // Strecken | Plan | Herausforderungen. Der Raum hat noch keine
     // Oberflaeche; sein Platz bleibt unsichtbar (docs/ux/umbau.md).
@@ -139,6 +145,8 @@ fun IndoorTabScreen(
             onOpenWorlds = onOpenWorlds,
             mode = IndoorFlowMode.TAB,
             tabHeader = segmentRow,
+            // Die Garage: Symbol in der Kopfzeile der Sicht „Strecken" (docs/ux/umbau.md).
+            onOpenGarage = onOpenGarage.takeIf { garageEntryVisible(indoorFlowInTab = true) },
             challengesSegment = segment == IndoorSegment.CHALLENGES,
             // „Gegen … fahren": Strecke und Mitfahrer sind gesetzt, „Fahren" steht unter „Strecken".
             onChallengeChosen = { wantedSegment = IndoorSegment.ROUTES },

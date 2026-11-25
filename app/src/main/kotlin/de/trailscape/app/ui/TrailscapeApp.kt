@@ -66,6 +66,7 @@ import de.trailscape.app.ui.indoor.IndoorFlowMode
 import de.trailscape.app.ui.indoor.IndoorFlowScreen
 import de.trailscape.app.ui.indoor.IndoorTabScreen
 import de.trailscape.app.ui.indoor.IndoorWorldsDestination
+import de.trailscape.app.ui.indoor.garage.GarageDestination
 import de.trailscape.app.ui.map.MapScreen
 import de.trailscape.app.ui.more.MoreScreen
 import de.trailscape.app.ui.onboarding.OnboardingScreen
@@ -85,7 +86,7 @@ import de.trailscape.core.i18n.coreTexts
  * ```kotlin
  * TodayScreen(appViewModel)
  * MapScreen(appViewModel)
- * IndoorTabScreen(appViewModel, onOpenDiagnostics = …, onOpenWorlds = …)
+ * IndoorTabScreen(appViewModel, onOpenDiagnostics = …, onOpenWorlds = …, onOpenGarage = …)
  * RidesScreen(appViewModel)
  * MoreScreen(appViewModel, onBack = …)
  * ```
@@ -450,6 +451,9 @@ private fun TrailscapeAppContent() {
                 val openWorlds = {
                     navController.navigate(AppRoutes.INDOOR_WORLDS) { launchSingleTop = true }
                 }
+                val openGarage = {
+                    navController.navigate(AppRoutes.INDOOR_GARAGE) { launchSingleTop = true }
+                }
                 composable(AppRoutes.HOME) { InsetPadded { TodayScreen(appViewModel) } }
                 composable(AppRoutes.MAP) { InsetPadded { MapScreen(appViewModel) } }
                 // Der Indoor-Tab: Strecken (der Indoor-Ablauf, sein ViewModel
@@ -460,6 +464,7 @@ private fun TrailscapeAppContent() {
                         appViewModel = appViewModel,
                         onOpenDiagnostics = openDiagnostics,
                         onOpenWorlds = openWorlds,
+                        onOpenGarage = openGarage,
                     )
                 }
                 composable(AppRoutes.RIDES) { InsetPadded { RidesScreen(appViewModel) } }
@@ -495,6 +500,10 @@ private fun TrailscapeAppContent() {
                         onOpenWorlds = openWorlds,
                         mode = IndoorFlowMode.SETTINGS,
                     )
+                }
+                // Die Garage: gepusht vom Symbol in der Kopfzeile des Indoor-Tabs.
+                composable(AppRoutes.INDOOR_GARAGE) {
+                    InsetPadded { GarageDestination(onBack = { navController.popBackStack() }) }
                 }
                 composable(AppRoutes.INDOOR_WORLDS) {
                     InsetPadded { IndoorWorldsDestination(onBack = { navController.popBackStack() }) }

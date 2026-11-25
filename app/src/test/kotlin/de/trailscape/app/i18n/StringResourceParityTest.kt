@@ -61,6 +61,8 @@ class StringResourceParityTest {
         // Idee 4: Strecke vor der Tour ansehen (docs/indoor/vorschau.md).
         "strings_idee04.xml" to "idee04_",
         "strings_render2.xml" to "render2_",
+        // Garage (Etappe 2, docs/konzept-spiel-community.md).
+        "strings_spiel2.xml" to "garage_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */

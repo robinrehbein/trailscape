@@ -33,6 +33,14 @@ object AppRoutes {
     const val INDOOR_SETTINGS = "indoor/einstellungen"
     const val INDOOR_WORLDS = "indoor/welten"
     const val INDOOR_DIAGNOSTICS = "indoor/diagnose"
+
+    /**
+     * Die Garage (Fahrer und Rad anpassen, `docs/indoor/garage.md`) — gepusht
+     * vom Symbol in der Kopfzeile des Indoor-Tabs, Sicht „Strecken". Kein
+     * [IndoorDestination]: Es gibt genau diesen einen Einstieg, keinen Sprung
+     * von aussen.
+     */
+    const val INDOOR_GARAGE = "indoor/garage"
 }
 
 /** Ein Platz in der Navigationsleiste. */
@@ -162,6 +170,13 @@ fun shownIndoorSegment(wanted: IndoorSegment?, available: List<IndoorSegment>, t
  */
 fun indoorSegmentUsesFlow(segment: IndoorSegment): Boolean =
     segment == IndoorSegment.ROUTES || segment == IndoorSegment.CHALLENGES
+
+/**
+ * Ob die Kopfzeile der Indoor-Startseite das Garage-Symbol traegt: nur im Tab
+ * (Sicht „Strecken"). Der gepushte Ablauf mit vorgewaehlter Strecke fuehrt auf
+ * eine Fahrt zu und bekommt keinen Abzweig; ein Einstieg genuegt.
+ */
+fun garageEntryVisible(indoorFlowInTab: Boolean): Boolean = indoorFlowInTab
 
 /**
  * Das gezeigte Segment, wenn [wanted] (gemerkt oder angefordert) nicht — oder

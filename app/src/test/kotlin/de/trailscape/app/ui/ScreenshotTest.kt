@@ -124,6 +124,15 @@ class ScreenshotTest {
         shot("02c-verlauf-erfolge")
         tab("Indoor")
         shot("03-indoor")
+        segment("Herausforderungen")
+        shot("03c-indoor-herausforderungen")
+        segment("Strecken")
+        // Die Garage: Symbol in der Kopfzeile der Sicht „Strecken", gepushte Seite.
+        compose.onAllNodesWithContentDescription("Garage", substring = true)[0].performClick()
+        settle()
+        shot("03d-indoor-garage")
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        settle()
         segment("Plan")
         shot("03b-indoor-plan")
         tab("Heute")

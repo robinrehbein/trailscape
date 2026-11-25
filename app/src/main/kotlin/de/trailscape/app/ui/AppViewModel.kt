@@ -71,6 +71,8 @@ import de.trailscape.core.encodeRouteConsentRequests
 import de.trailscape.core.explorerTilesCacheGaps
 import de.trailscape.core.explorerTilesNewInRide
 import de.trailscape.core.formatDuration
+import de.trailscape.core.garage.RiderAvatar
+import de.trailscape.core.garage.RiderAvatarStore
 import de.trailscape.core.getSyncConfig
 import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.i18n.coreTexts
@@ -967,6 +969,8 @@ class AppViewModel(
                 climbBests = de.trailscape.app.indoor.ClimbBestStore.read(keyValueStore),
                 // Erfolge (`docs/erfolge.md`): der kleine gespeicherte Stand.
                 progress = de.trailscape.app.data.ErfolgeStore.shared.value,
+                // Garage: nur, wenn je etwas gewaehlt wurde (sonst bleibt das Backup wie bisher).
+                avatar = runCatching { RiderAvatarStore(keyValueStore).takeIf { it.hasSaved() }?.load() }.getOrNull(),
             )
         }
     }
@@ -2224,6 +2228,11 @@ class AppViewModel(
      * behaelt den Tag, ab dem das Soll laeuft ([YearGoal.since]) — sonst
      * liesse sich ein Rueckstand durch erneutes Speichern wegklicken.
      */
+    /** Aussehen aus einem Backup (Garage); ueberschreibt das gespeicherte. */
+    fun restoreAvatar(avatar: RiderAvatar) {
+        viewModelScope.launch { withContext(io) { RiderAvatarStore(keyValueStore).save(avatar) } }
+    }
+
     /**
      * Stellt ein Jahresziel aus einem Backup wieder her — mit [YearGoal.since]
      * wie gesichert (anders als [setYearGoalKm], das den Starttag neu setzt).

@@ -103,6 +103,9 @@ import kotlinx.coroutines.delay
  *   Sicht „Herausforderungen" zeigen (Segment des Tabs, `docs/ux/umbau.md`).
  *   Sie braucht dasselbe [IndoorViewModel] wie die Startseite, deshalb liegt
  *   sie in diesem Ablauf und nicht daneben.
+ * @param onOpenGarage oeffnet `indoor/garage` (Fahrer und Rad anpassen) vom
+ *   Symbol in der Kopfzeile der Startseite. Nur im Tab gesetzt; `null` (der
+ *   gepushte Ablauf) zeichnet kein Symbol.
  * @param onChallengeChosen „Gegen … fahren" oder „Strecke herunterladen" in
  *   dieser Sicht: Der Tab wechselt auf „Strecken", wo „Fahren" startet.
  */
@@ -116,6 +119,7 @@ fun IndoorFlowScreen(
     tabHeader: (@Composable () -> Unit)? = null,
     challengesSegment: Boolean = false,
     onChallengeChosen: () -> Unit = {},
+    onOpenGarage: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val vm: IndoorViewModel = viewModel(
@@ -223,6 +227,7 @@ fun IndoorFlowScreen(
                     onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
                     title = stringResource(R.string.indoor_app_tab_title),
                     tabHeader = tabHeader,
+                    onOpenGarage = onOpenGarage,
                 )
             }
             IndoorFlowMode.PUSHED -> HomeStage(vm = vm, onExit = onExit, onOpenSettings = vm::openSettings)
@@ -429,6 +434,7 @@ private fun HomeStage(
     onOpenSettings: () -> Unit,
     title: String = stringResource(R.string.indoor_app_route_title),
     tabHeader: (@Composable () -> Unit)? = null,
+    onOpenGarage: (() -> Unit)? = null,
 ) {
     val ui by vm.route.collectAsStateWithLifecycle()
     val pair by vm.pair.collectAsStateWithLifecycle()
@@ -462,6 +468,7 @@ private fun HomeStage(
         onCatalogCancel = vm::cancelCatalogDownload,
         onCatalogDiscard = vm::discardCatalogDownload,
         catalogExtras = catalogExtras,
+        onOpenGarage = onOpenGarage,
     )
 }
 

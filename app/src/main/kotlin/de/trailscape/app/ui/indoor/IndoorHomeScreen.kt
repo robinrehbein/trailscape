@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -99,7 +100,8 @@ private const val GHOST_WATTS_MAX = 1000
  * Im Tab „Indoor" (`IndoorTabScreen.kt`) ist diese Seite die Sicht
  * „Strecken": [onBack] ist dann `null` (kein Zurueck-Pfeil), [title] der Name
  * des Tabs, [headerExtra] traegt die Segmente, und das Zahnrad
- * ([onOpenSettings]) oeffnet die eine Einstellungsseite der App.
+ * ([onOpenSettings]) oeffnet die eine Einstellungsseite der App. Daneben
+ * steht dann das Symbol der Garage ([onOpenGarage]).
  */
 @Composable
 fun IndoorHomeScreen(
@@ -129,6 +131,7 @@ fun IndoorHomeScreen(
     initialCatalogDetailId: String? = null,
     title: String = stringResource(R.string.indoor_app_route_title),
     headerExtra: (@Composable () -> Unit)? = null,
+    onOpenGarage: (() -> Unit)? = null,
 ) {
     val lang = LocalAppFormats.current.language.tag
     val readiness = indoorRouteReadiness(
@@ -143,6 +146,13 @@ fun IndoorHomeScreen(
         onBack = onBack,
         headerExtra = headerExtra,
         actions = {
+            // Garage: Fahrer und Rad anpassen (docs/indoor/garage.md) — der eine
+            // Einstieg, nur im Tab; im gepushten Ablauf ist [onOpenGarage] `null`.
+            if (onOpenGarage != null) {
+                IconButton(onClick = onOpenGarage) {
+                    Icon(Icons.Outlined.Palette, contentDescription = stringResource(R.string.garage_home_cd))
+                }
+            }
             IconButton(onClick = onOpenSettings) {
                 Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.indoor_app_home_settings_cd))
             }

@@ -130,6 +130,26 @@ class AppNavigationTest {
     }
 
     @Test
+    fun `die Garage ist eine gepushte Seite ohne Leiste und nur aus dem Tab erreichbar`() {
+        assertTrue(isPushedRoute(AppRoutes.INDOOR_GARAGE))
+        assertFalse(SHELL_TABS.any { it.route == AppRoutes.INDOOR_GARAGE }, "kein fuenfter Platz in der Leiste")
+        assertTrue(
+            navigationBarHidden(AppRoutes.INDOOR_GARAGE, mapTaskActive = false, rideDetailOpen = false, indoorTaskActive = false),
+        )
+        // Kein Sprungziel von aussen: Die Garage hat genau einen Einstieg.
+        assertFalse(IndoorDestination.entries.any { navCommandFor(it).route == AppRoutes.INDOOR_GARAGE })
+        // Die Route ist eindeutig unter allen Indoor-Routen.
+        val indoorRoutes = listOf(
+            AppRoutes.INDOOR, AppRoutes.INDOOR_FLOW, AppRoutes.INDOOR_SETTINGS,
+            AppRoutes.INDOOR_WORLDS, AppRoutes.INDOOR_DIAGNOSTICS, AppRoutes.INDOOR_GARAGE,
+        )
+        assertEquals(indoorRoutes.size, indoorRoutes.toSet().size)
+        // Das Symbol steht im Tab, nicht im gepushten Ablauf mit vorgewaehlter Strecke.
+        assertTrue(garageEntryVisible(indoorFlowInTab = true))
+        assertFalse(garageEntryVisible(indoorFlowInTab = false))
+    }
+
+    @Test
     fun `im Indoor-Tab haengen jetzt die Herausforderungen, der Raum bleibt unsichtbar`() {
         assertEquals(
             listOf(IndoorSegment.ROUTES, IndoorSegment.PLAN, IndoorSegment.CHALLENGES),

@@ -135,6 +135,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                 withContext(Dispatchers.IO) { ClimbBestStore.merge(AppServices.keyValueStore, data.climbBests) }
                 // Erfolge: zusammengefuehrt, nie ueberschrieben (`docs/erfolge.md`).
                 data.progress?.let { de.trailscape.app.data.ErfolgeStore.shared.restore(it) }
+                data.avatar?.let { appViewModel.restoreAvatar(it) }
                 DiagLog.shared.log(DiagEvent.BACKUP_IMPORT_OK, count = newRides.size.toLong())
 
                 appViewModel.showMessage(backupImportMessage(newRides.size, skipped, data.profile != null))

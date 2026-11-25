@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.garage.RiderAvatar
 import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.indoor.climb.ClimbBestBook
 import java.time.LocalDate
@@ -152,6 +153,7 @@ fun buildBackupJson(
     yearGoal: YearGoal? = null,
     climbBests: ClimbBestBook? = null,
     progress: AchievementProgressData? = null,
+    avatar: RiderAvatar? = null,
 ): String {
     val json = buildJsonObject {
         put("app", backupAppName)
@@ -162,6 +164,7 @@ fun buildBackupJson(
         climbBests?.takeUnless { it.isEmpty() }?.let { put("climbBests", it.toJsonObject()) }
         // Erfolge (`AchievementProgress.kt`): rein additiv wie `yearGoal`.
         progress?.let { put("progress", it.toJson()) }
+        avatar?.let { put("avatar", it.toJsonObject()) }
         put("rides", buildJsonArray { rides.forEach { add(it.toJson()) } })
     }
     return prettyJson.encodeToString(JsonObject.serializer(), json)
@@ -190,6 +193,7 @@ fun writeBackupJson(
     yearGoal: YearGoal? = null,
     climbBests: ClimbBestBook? = null,
     progress: AchievementProgressData? = null,
+    avatar: RiderAvatar? = null,
 ) {
     // Kopf als eigenes Objekt serialisieren und die schliessende Klammer
     // abschneiden — so stammen Escaping und Einrueckung aller Kopffelder
@@ -202,6 +206,7 @@ fun writeBackupJson(
         yearGoal?.let { put("yearGoal", it.toBackupJson()) }
         climbBests?.takeUnless { it.isEmpty() }?.let { put("climbBests", it.toJsonObject()) }
         progress?.let { put("progress", it.toJson()) }
+        avatar?.let { put("avatar", it.toJsonObject()) }
     }
     val headText = prettyJson.encodeToString(JsonObject.serializer(), head)
     // "…\n}" → "…" (der Kopf ist nie leer, die Klammer steht immer auf
@@ -261,6 +266,8 @@ data class BackupData(
      * Tolerant gelesen: ein kaputter Eintrag darin macht nie das Backup ungueltig.
      */
     val progress: AchievementProgressData? = null,
+    /** Aussehen von Fahrer und Rad (Garage) aus dem optionalen Feld `avatar`; `null`, wenn es fehlt oder kein Objekt ist. */
+    val avatar: RiderAvatar? = null,
 )
 
 /**
@@ -350,5 +357,6 @@ fun parseBackupJson(raw: String, texts: CoreTexts): BackupData {
         yearGoal = parseYearGoal(decoded["yearGoal"]),
         climbBests = ClimbBestBook.fromJsonObject(decoded["climbBests"] as? JsonObject),
         progress = AchievementProgressData.fromJson(decoded["progress"]),
+        avatar = RiderAvatar.fromJson(decoded["avatar"]),
     )
 }
