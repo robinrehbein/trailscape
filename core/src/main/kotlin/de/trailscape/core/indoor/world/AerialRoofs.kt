@@ -30,7 +30,8 @@ import kotlin.math.sqrt
  * **Doppelte Beleuchtung:** Im Luftbild ist die sonnenzugewandte Dachflaeche heller als die
  * abgewandte; der Renderer beleuchtet sie noch einmal. Je Dachflaeche (Gruppe gleicher Normale) wird
  * deshalb die Vertexfarbe auf das Verhaeltnis zur mittleren Dachhelligkeit gesetzt (nur abdunkeln,
- * hoechstens auf [MIN_SHADE]) — die Sonnenseite wird auf das Mittel gezogen, die Schattenseite bleibt.
+ * hoechstens auf [MIN_SHADE]) — die Sonnenseite wird auf das Mittel gezogen, die Schattenseite bleibt; dazu
+ * ein Grundabschlag [ROOF_GAIN] fuer das schon im Bild enthaltene Sonnenlicht.
  *
  * **Grenze:** Die amtlichen Orthofotos sind (ausser TrueDOP) auf das Gelaendemodell entzerrt; hohe
  * Gebaeude „kippen“ im Bild vom Bildmittelpunkt weg (bei 10 m Hoehe je nach Lage im Bild 0–3 m). Dann
@@ -113,14 +114,14 @@ internal class AerialRoofs private constructor(
         for (g in groupKeys.indices) { tot += lumSum[g]; tc += cnt[g] }
         val mean = tot / max(1, tc)
         val shade = DoubleArray(groupKeys.size) { g ->
-            if (cnt[g] < 3) 1.0 else (mean / max(1e-4, lumSum[g] / cnt[g])).coerceIn(MIN_SHADE, 1.0)
+            ROOF_GAIN * if (cnt[g] < 3) 1.0 else (mean / max(1e-4, lumSum[g] / cnt[g])).coerceIn(MIN_SHADE, 1.0)
         }
         // Netz uebertragen: Eckpunkte je Flaechengruppe einzeln (die Vertexfarbe gilt je Flaeche).
         val m = target()
         val remap = HashMap<Long, Int>()
         for (t in 0 until tris) {
             val g = group[t]
-            val col = if (shade[g] >= 0.999) Argb.WHITE else Argb.ofUnit(shade[g], shade[g], shade[g])
+            val col = Argb.ofUnit(shade[g], shade[g], shade[g])
             val v = IntArray(3)
             for (k in 0..2) {
                 val i = idx[3 * t + k]
@@ -203,6 +204,12 @@ internal class AerialRoofs private constructor(
 
         /** Lineare Helligkeit, unter der eine Probe als Schlagschatten zaehlt. */
         const val DARK_LUM_MIN = 0.006
+
+        /**
+         * Grundabdunklung: Das Luftbild enthaelt das Sonnenlicht des Bildflugs, der Renderer beleuchtet noch
+         * einmal; ohne Abschlag wirkten die Daecher im Betrachter aus Fahrersicht weisslich (Marbach km 0,5).
+         */
+        const val ROOF_GAIN = 0.82
 
         /** Staerkste Abdunklung einer sonnenzugewandten Flaeche. */
         const val MIN_SHADE = 0.6
