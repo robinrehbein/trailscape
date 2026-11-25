@@ -70,7 +70,7 @@ import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
  *   ist wie ueberall.
  */
 @Composable
-fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
+fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}, onOpenMap: (() -> Unit)? = null) {
     val context = LocalContext.current
 
     var loading by remember { mutableStateOf(true) }
@@ -98,6 +98,15 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
 
     val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
     SettingsHint(stringResource(R.string.more_offline_maps_hint))
+    // Laden geht nur auf der Karte (Ebenen-Knopf); der Knopf fuehrt dorthin,
+    // damit die Seite keine halbe Sackgasse ist. Ohne Rueckruf (Vorschau,
+    // Tests der Karte allein) entfaellt er.
+    if (onOpenMap != null) {
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingsSecondaryButton(onClick = onOpenMap) {
+            Text(stringResource(R.string.more_offline_maps_open_map_action))
+        }
+    }
     Spacer(modifier = Modifier.height(12.dp))
 
     when {

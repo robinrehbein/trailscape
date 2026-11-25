@@ -36,6 +36,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
@@ -117,8 +118,23 @@ class ScreenshotTest {
         shot("01-heute")
         tab("Verlauf")
         shot("02-verlauf")
-        tab("Training")
-        shot("03-training")
+        segment("Fortschritt")
+        shot("02b-verlauf-fortschritt")
+        segment("Erfolge")
+        shot("02c-verlauf-erfolge")
+        tab("Indoor")
+        shot("03-indoor")
+        segment("Herausforderungen")
+        shot("03c-indoor-herausforderungen")
+        segment("Strecken")
+        // Die Garage: Symbol in der Kopfzeile der Sicht „Strecken", gepushte Seite.
+        compose.onAllNodesWithContentDescription("Garage", substring = true)[0].performClick()
+        settle()
+        shot("03d-indoor-garage")
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        settle()
+        segment("Plan")
+        shot("03b-indoor-plan")
         tab("Heute")
         compose.onAllNodesWithContentDescription("Einstellungen", substring = true)[0].performClick()
         settle()
@@ -145,12 +161,15 @@ class ScreenshotTest {
     fun tall() {
         start()
         shot("11-heute-lang")
-        tab("Training")
-        shot("13-training-lang")
-        compose.onAllNodesWithText("Plan")[0].performClick()
-        settle()
-        shot("13b-training-plan-lang")
         tab("Verlauf")
+        segment("Fortschritt")
+        shot("13-fortschritt-lang")
+        tab("Indoor")
+        segment("Plan")
+        shot("13b-plan-lang")
+        tab("Verlauf")
+        // Der Verlauf merkt sich die Sicht: zurueck auf die Tourenliste.
+        segment("Touren")
         compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
         settle()
         shot("15-tour-lang")
@@ -185,9 +204,8 @@ class ScreenshotTest {
             generatePlan(goal, assessFitness(sampleRides()), now = NOW - 3 * WEEK_MS, texts = CoreTextsDe),
         )
         start()
-        tab("Training")
-        compose.onAllNodesWithText("Plan")[0].performClick()
-        settle()
+        tab("Indoor")
+        segment("Plan")
         shot("16-training-hinweise")
     }
 
@@ -208,8 +226,8 @@ class ScreenshotTest {
         shot("25-tour-gross")
         compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         settle()
-        tab("Training")
-        shot("24-training-gross")
+        tab("Indoor")
+        shot("24-indoor-gross")
     }
 
     /**
@@ -354,7 +372,7 @@ class ScreenshotTest {
         start()
         tab("Karte")
         shot("07-karte")
-        // Hochgewischt: gespeicherte Routen und Offline-Karten.
+        // Hochgewischt: gespeicherte Routen und zuletzt gesuchte Orte.
         compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.Expand))[0]
             .performSemanticsAction(SemanticsActions.Expand)
         settle()
@@ -569,8 +587,8 @@ class ScreenshotTest {
         shot("56-tour-dunkel")
         compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         settle()
-        tab("Training")
-        shot("53-training-dunkel")
+        tab("Indoor")
+        shot("53-indoor-dunkel")
         tab("Karte")
         shot("54-karte-dunkel")
     }
@@ -651,6 +669,9 @@ class ScreenshotTest {
 
         compose.onAllNodesWithContentDescription(settings)[0].performClick()
         settle()
+        // „Sprache" steht in der letzten Gruppe („App") der Einstellungsliste
+        // und liegt seit den fuenf benannten Gruppen unter dem Rand: hinscrollen.
+        scrollSettingsTo(context.getString(R.string.more_language_title))
         compose.onAllNodesWithText(context.getString(R.string.more_language_title))[0].performClick()
         settle()
         compose.onAllNodesWithText(context.getString(R.string.more_language_hint))[0].assertExists()
@@ -668,6 +689,7 @@ class ScreenshotTest {
         start()
         compose.onAllNodesWithContentDescription("Einstellungen", substring = true)[0].performClick()
         settle()
+        scrollSettingsTo("Sprache")
         compose.onAllNodesWithText("Sprache")[0].performClick()
         settle()
         shot("45-einstellungen-sprache")
@@ -811,7 +833,24 @@ class ScreenshotTest {
         settle()
     }
 
+    /**
+     * Tippt einen Tab der Navigationsleiste an. Sie liegt ueber dem Inhalt,
+     * ist also der letzte Treffer — der erste waere etwa der Seitentitel
+     * „Verlauf" oder ein gleichlautendes Wort im Inhalt.
+     */
     private fun tab(label: String) {
+        compose.onAllNodesWithText(label).onLast().performClick()
+        settle()
+    }
+
+    /** Scrollt die Einstellungsliste, bis die Zeile [label] komponiert und sichtbar ist. */
+    private fun scrollSettingsTo(label: String) {
+        compose.onAllNodes(hasScrollToNodeAction())[0].performScrollToNode(hasText(label))
+        settle()
+    }
+
+    /** Wechselt die Sicht eines Tabs (Segmente unter dem Titel von „Verlauf" und „Indoor"). */
+    private fun segment(label: String) {
         compose.onAllNodesWithText(label)[0].performClick()
         settle()
     }

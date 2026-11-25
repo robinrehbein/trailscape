@@ -19,6 +19,8 @@ import com.github.takahirom.roborazzi.captureScreenRoboImage
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
 import de.trailscape.app.ui.map.ProvideTestLanguage
+import de.trailscape.app.ui.rides.RideAgainSheet
+import de.trailscape.app.ui.rides.rideAgainOptions
 import de.trailscape.app.ui.theme.TrailscapeTheme
 import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.indoor.GhostSection
@@ -35,7 +37,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Bilder zu „Draußen gefahren → drinnen nachfahren" (docs/indoor/app.md,
- * „Drinnen nachfahren"): Einstieg in der Tourdetailansicht, Mitfahrer-Chip mit
+ * „Drinnen nachfahren"): Einstieg im Blatt „Nochmal fahren" des Tourdetails, Mitfahrer-Chip mit
  * Leistung der Außenfahrt, Vergleich in der Auswertung. Nur mit `-Pscreenshots`;
  * Ablage unter `docs/indoor/bilder/nachfahren/`.
  */
@@ -78,11 +80,19 @@ class IndoorOutdoorScreenshotTest {
         tooShort = false, ghostOutdoor = true, ghostSection = section,
     )
 
+    /**
+     * Der Einstieg liegt seit dem Umbau nach der Seitenkarte im Blatt
+     * „Nochmal fahren" des Tourdetails (`ui/rides/RideAgain.kt`), nicht mehr
+     * als eigener Knopf im Inhalt.
+     */
     @Composable
     private fun Detail(planned: Boolean) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            IndoorFromRideAction(planned = planned, onClick = {})
-        }
+        RideAgainSheet(
+            options = rideAgainOptions(indoor = false, pointCount = 2),
+            planned = planned,
+            onPick = {},
+            onDismiss = {},
+        )
     }
 
     @Composable

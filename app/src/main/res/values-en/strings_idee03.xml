@@ -10,5 +10,5 @@
     <string name="idee03_filter_outdoor">Outdoor</string>
     <string name="idee03_filter_indoor">Indoor</string>
     <string name="idee03_filter_empty">No rides in this selection.</string>
-    <string name="idee03_load_scale_twenty_min_measured">All load values use a %1$d W threshold (%2$s W/kg), estimated from your rides. It is based on your best 20-minute stretch of measured power (power meter or smart trainer). An entered FTP would still be more accurate.</string>
+    <string name="idee03_load_scale_twenty_min_measured">All load values use a %1$d W threshold (%2$s W/kg), estimated from your rides. It is based on your best 20-minute stretch of measured power (power meter or trainer). An entered FTP would still be more accurate.</string>
 </resources>

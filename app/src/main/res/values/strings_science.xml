@@ -24,7 +24,7 @@
     <string name="science_hr_load_source">Banister 1991; Morton 1990</string>
 
     <string name="science_power_load_title">Last aus Leistung</string>
-    <string name="science_power_load_body">Mit Leistungsmesser oder geschätzter Leistung wird die Fahrt mit deiner Schwellenleistung (FTP) verglichen. Harte Abschnitte zählen überproportional.</string>
+    <string name="science_power_load_body">Mit Leistungsmesser oder geschätzter Leistung wird die Tour mit deiner Schwellenleistung (FTP) verglichen. Harte Abschnitte zählen überproportional.</string>
     <string name="science_power_load_source">Allen &amp; Coggan 2019</string>
 
     <string name="science_rpe_title">Gefühlte Anstrengung</string>

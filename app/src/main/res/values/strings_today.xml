@@ -11,13 +11,13 @@
     <string name="today_offer_chip_label">Heute %1$d km</string>
     <string name="today_offer_chip_rest_label">Locker · %1$d km</string>
     <string name="today_offer_rest_action">Locker rollen · %1$d km</string>
-    <string name="today_offer_first_round_action">Runde bauen · %1$d km</string>
+    <string name="today_offer_first_round_action">Runde für heute bauen · %1$d km</string>
     <string name="today_offer_action">Runde für heute bauen</string>
     <!-- %1$s = Ruhetag-Schlagzeile (today_rest_headline_*), %2$d = Kilometer -->
     <string name="today_offer_rest_hint">%1$s Wenn du trotzdem fahren magst: %2$d km locker rollen.</string>
     <string name="today_offer_hint">Heute stehen %1$d km an.</string>
     <string name="today_offer_dialog_rest_action">Locker rollen</string>
-    <string name="today_offer_dialog_action">Passende Runde bauen</string>
+    <string name="today_offer_dialog_action">Runde für heute bauen</string>
 
     <!-- TodayWording.kt: Wort unter der Zahl im Ring -->
     <string name="today_readiness_word_hard">erholt</string>
@@ -36,7 +36,7 @@
     <string name="today_rest_headline_plan">Heute ist Ruhetag.</string>
     <string name="today_rest_headline_readiness">Heute lieber ein Ruhetag.</string>
     <string name="today_headline_event">Heute ist dein großer Tag.</string>
-    <string name="today_headline_long">Heute steht die lange Fahrt an.</string>
+    <string name="today_headline_long">Heute steht die lange Tour an.</string>
     <string name="today_headline_hard">Heute darf es hart werden.</string>
     <string name="today_headline_first_round">Für den Anfang: eine ruhige Runde.</string>
     <string name="today_headline_downgraded_easy">Heute weniger als geplant: eine lockere Runde.</string>
@@ -52,7 +52,7 @@
     <string name="today_sentence_moderate">%1$s in gleichmäßigem Tempo, ohne Sprints.</string>
     <string name="today_sentence_hard">%1$s mit ein paar kräftigen Abschnitten, dazwischen locker rollen.</string>
     <string name="today_sentence_long">%1$s in ruhigem Tempo. Iss und trink unterwegs genug.</string>
-    <string name="today_sentence_rest_skipped">Im Plan standen %1$d km. Schieb die Fahrt lieber um einen Tag – oder roll nur kurz und locker.</string>
+    <string name="today_sentence_rest_skipped">Im Plan standen %1$d km. Schieb die Tour lieber um einen Tag – oder roll nur kurz und locker.</string>
     <string name="today_sentence_rest">Kein Training heute. Wenn du trotzdem aufs Rad willst: kurz und locker.</string>
     <string name="today_sentence_event">%1$d km, die Strecke steht schon. Viel Erfolg!</string>
 
@@ -64,7 +64,7 @@
     <string name="today_why_title_easy">Warum eine lockere Runde?</string>
     <string name="today_why_title_moderate">Warum eine normale Runde?</string>
     <string name="today_why_title_hard">Warum eine harte Einheit?</string>
-    <string name="today_why_title_long">Warum die lange Fahrt?</string>
+    <string name="today_why_title_long">Warum die lange Tour?</string>
 
     <!-- TodayWording.kt: Signalzeilen im „Warum?"-Blatt -->
     <string name="today_signal_no_data_word">keine Daten</string>
@@ -106,7 +106,7 @@
     <string name="today_signal_hrv_saturation_body">%1$s, hoch bei zugleich erhöhtem Ruhepuls. Das kommt auch bei starker Müdigkeit vor.</string>
 
     <string name="today_signal_load_label">Belastung</string>
-    <string name="today_signal_load_no_data_body">Noch zu wenige Fahrten, um die Belastung einzuschätzen.</string>
+    <string name="today_signal_load_no_data_body">Noch zu wenige Touren, um die Belastung einzuschätzen.</string>
     <string name="today_signal_load_very_fresh_word">sehr frisch</string>
     <string name="today_signal_load_very_fresh_body">Du bist zuletzt wenig gefahren. Die Beine sind ausgeruht.</string>
     <string name="today_signal_load_fresh_word">frisch</string>
@@ -121,37 +121,37 @@
     <!-- TodayWording.kt: Einordnung unter den Signalen. %1$s = Dauer („1½ h") -->
     <string name="today_why_first_round_hours_body">Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg über etwa %1$s.</string>
     <string name="today_why_first_round_body">Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg.</string>
-    <string name="today_why_first_round_adapts_body">Mit jeder Fahrt richtet sich die Empfehlung mehr nach deinem Tempo und deiner Form.</string>
+    <string name="today_why_first_round_adapts_body">Mit jeder Tour richtet sich die Empfehlung mehr nach deinem Tempo und deiner Form.</string>
     <string name="today_why_plan_rest_day_body">Laut Plan ist heute frei. Erholung gehört zum Training dazu.</string>
     <!-- %1$s = Wochentag („Samstag"), %2$d = Kilometer -->
     <string name="today_why_upcoming_event_body">%1$s steht dein Zielevent mit %2$d km an.</string>
     <string name="today_why_upcoming_hard_body">%1$s steht eine harte Einheit mit %2$d km an.</string>
-    <string name="today_why_upcoming_long_body">%1$s steht die lange Fahrt mit %2$d km an.</string>
-    <string name="today_why_upcoming_longer_body">%1$s steht eine längere Fahrt mit %2$d km an.</string>
+    <string name="today_why_upcoming_long_body">%1$s steht die lange Tour mit %2$d km an.</string>
+    <string name="today_why_upcoming_longer_body">%1$s steht eine längere Tour mit %2$d km an.</string>
     <!-- %1$s = einer der Sätze today_why_upcoming_*_body -->
     <string name="today_why_upcoming_save_energy_body">%1$s Heute nicht überziehen, dann hast du dafür genug Kraft.</string>
     <string name="today_why_deload_body">Deine Werte sprechen dafür, diese Woche etwas kürzer zu treten.</string>
-    <string name="today_why_no_plan_body">Ohne Trainingsziel richtet sich die Empfehlung nach deiner Tagesform und deinen letzten Fahrten.</string>
+    <string name="today_why_no_plan_body">Ohne Trainingsziel richtet sich die Empfehlung nach deiner Tagesform und deinen letzten Touren.</string>
 
     <!-- TodayWording.kt: Wochenstreifen (Vorlesetext). %1$s = Wochentag -->
     <string name="today_strip_today_name">%1$s, heute</string>
     <string name="today_strip_ridden_cd">%1$s: %2$d km gefahren</string>
     <string name="today_strip_planned_cd">%1$s: %2$d km geplant</string>
     <string name="today_strip_rest_day_cd">%1$s: Ruhetag</string>
-    <string name="today_strip_no_ride_cd">%1$s: keine Fahrt</string>
+    <string name="today_strip_no_ride_cd">%1$s: keine Tour</string>
 
     <!-- TodayWording.kt: Kopfzeile der Wochenkarte -->
     <string name="today_week_km_label">%1$d km diese Woche</string>
-    <string name="today_week_rides_none">noch keine Fahrt</string>
+    <string name="today_week_rides_none">noch keine Tour</string>
     <plurals name="today_week_rides_count">
-        <item quantity="one">%1$d Fahrt</item>
-        <item quantity="other">%1$d Fahrten</item>
+        <item quantity="one">%1$d Tour</item>
+        <item quantity="other">%1$d Touren</item>
     </plurals>
     <string name="today_week_progress_label">%1$d von %2$d km</string>
     <string name="today_week_goal_reached_status">Wochenziel geschafft</string>
     <plurals name="today_week_open_rides_count">
-        <item quantity="one">noch %1$d Fahrt</item>
-        <item quantity="other">noch %1$d Fahrten</item>
+        <item quantity="one">noch %1$d Tour</item>
+        <item quantity="other">noch %1$d Touren</item>
     </plurals>
 
     <!-- TodayWording.kt: Zielzeile -->
@@ -183,7 +183,7 @@
     <string name="today_ring_cd">Tagesform %1$d von 100, %2$s</string>
     <string name="today_goal_prompt_title">Ziel festlegen</string>
     <string name="today_goal_prompt_body">Sag Trailscape, worauf du hinfährst. Daraus entsteht dein Wochenplan.</string>
-    <string name="today_goal_open_training_action">Training öffnen</string>
+    <string name="today_goal_open_training_action">Plan öffnen</string>
     <string name="today_why_sheet_dismiss_action">Verstanden</string>
 
     <!-- TodayScreen.kt -->
@@ -222,15 +222,15 @@
     <string name="today_week_plan_reason_hot">sehr heiß</string>
     <!-- %1$s = Grund (today_week_plan_reason_*), %2$d = Höchsttemperatur in °C -->
     <string name="today_week_plan_reason_with_temp">%1$s, %2$d °C</string>
-    <string name="today_week_plan_build_action">Runde planen</string>
+    <string name="today_week_plan_build_action">Runde bauen</string>
     <!-- %1$d = km, %2$s = Wochentag ausgeschrieben oder „Heute" -->
-    <string name="today_week_plan_build_cd">Runde über %1$d km für %2$s planen</string>
+    <string name="today_week_plan_build_cd">Runde über %1$d km für %2$s bauen</string>
     <!-- %1$s = Wochentag ausgeschrieben -->
     <string name="today_week_plan_route_label">Wochen-Fahrplan · %1$s</string>
     <!-- Grund Obergrenze: Tage wären frei. %1$d = Obergrenze je Fahrt in km, %2$d = fehlende km, %3$d = Zahl der Fahrten (immer 5) -->
-    <string name="today_week_plan_tight">Knapp: Selbst mit %3$d Fahrten bräuchte jede mehr als %1$d km – deutlich mehr als deine längste Fahrt der letzten Wochen. Mit diesem Plan fehlen am Ende noch %2$d km.</string>
+    <string name="today_week_plan_tight">Knapp: Selbst mit %3$d Touren bräuchte jede mehr als %1$d km – deutlich mehr als deine längste Tour der letzten Wochen. Mit diesem Plan fehlen am Ende noch %2$d km.</string>
     <!-- Grund zu wenige Tage. %1$d = Obergrenze je Fahrt in km, %2$d = fehlende km -->
-    <string name="today_week_plan_tight_days">Knapp: Diese Woche bleiben zu wenige Tage, und mehr als %1$d km pro Fahrt wären deutlich mehr als deine längste Fahrt der letzten Wochen. Mit diesem Plan fehlen am Ende noch %2$d km.</string>
+    <string name="today_week_plan_tight_days">Knapp: Diese Woche bleiben zu wenige Tage, und mehr als %1$d km pro Tour wären deutlich mehr als deine längste Tour der letzten Wochen. Mit diesem Plan fehlen am Ende noch %2$d km.</string>
     <!-- %1$d = fehlende km -->
     <string name="today_week_plan_no_days">Diese Woche bleibt kein Fahrtag mehr, bis zum Ziel fehlen %1$d km. Nächste Woche geht es weiter.</string>
     <string name="today_week_plan_weather_off">Ohne Wetter geplant.</string>

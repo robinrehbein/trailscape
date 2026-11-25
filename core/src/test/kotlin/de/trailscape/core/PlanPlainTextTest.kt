@@ -16,7 +16,7 @@ class PlanPlainTextTest {
     fun `Titel ohne Fachbegriffe`() {
         assertEquals("Locker 45 km", plainSessionTitle(s("GA1", 45, SessionIntensity.GRUNDLAGE), texts = CoreTextsDe))
         assertEquals("Locker 20 km", plainSessionTitle(s("GA1 kompensatorisch", 20, SessionIntensity.LOCKER), texts = CoreTextsDe))
-        assertEquals("Lange Fahrt 80 km", plainSessionTitle(s("Lange Tour", 80, SessionIntensity.GRUNDLAGE), texts = CoreTextsDe))
+        assertEquals("Lange Tour 80 km", plainSessionTitle(s("Lange Tour", 80, SessionIntensity.GRUNDLAGE), texts = CoreTextsDe))
         assertEquals("Hart 30 km", plainSessionTitle(s("Intervalle", 30, SessionIntensity.HART), texts = CoreTextsDe))
         assertEquals(
             "Rennen 60 km",

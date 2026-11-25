@@ -26,6 +26,37 @@ import kotlin.math.sqrt
  */
 
 /**
+ * Detailstufe beim Erzeugen: Fuer die leichte LOD-Stufe (`rider_lod.glb`)
+ * verfeinern [buildRings], [addSkin] und [addRevolveX] grober, ohne dass jeder
+ * Aufruf eine eigene Zahl braucht. Gilt je Thread und nur innerhalb von [lod].
+ */
+internal object RiderDetail {
+    private val coarse = ThreadLocal.withInitial { false }
+
+    /** Wird gerade die LOD-Stufe erzeugt? */
+    val isLod: Boolean get() = coarse.get()
+
+    /** Anteil der Segmente in der LOD-Stufe. */
+    const val SEGMENT_FACTOR = 0.3
+
+    fun <T> lod(block: () -> T): T {
+        val before = coarse.get()
+        coarse.set(true)
+        try {
+            return block()
+        } finally {
+            coarse.set(before)
+        }
+    }
+
+    /** Segmente um einen Umriss: in der LOD-Stufe etwa ein Drittel, mindestens [min]. */
+    fun seg(n: Int, min: Int = 4): Int = if (isLod) max(min, minOf(n, (n * SEGMENT_FACTOR + 0.5).toInt())) else n
+
+    /** Verfeinerung entlang einer Mittellinie: in der LOD-Stufe keine. */
+    fun sub(n: Int): Int = if (isLod) 1 else n
+}
+
+/**
  * Stuetzquerschnitt: Mitte [c], Halbachsen [ru] (seitlich, entlang der
  * Bezugsrichtung) und [rv] (senkrecht dazu), fuer die Gegenrichtung
  * [ruNeg]/[rvNeg]. [power] = 2 ist eine Ellipse, groesser wird kantiger.
@@ -110,8 +141,9 @@ internal fun smoothPath(pts: List<Vec3>, sub: Int): List<Vec3> {
  * Seitenansicht zeigt `v` beim Rumpf zum Ruecken, bei einem nach vorn
  * laufenden Koerper nach oben.
  */
-internal fun buildRings(keys: List<Key>, sub: Int = 1, ref: Vec3 = Vec3.X): List<Ring> {
+internal fun buildRings(keys: List<Key>, subdivisions: Int = 1, ref: Vec3 = Vec3.X): List<Ring> {
     require(keys.size >= 2) { "Mindestens zwei Querschnitte" }
+    val sub = RiderDetail.sub(subdivisions)
     class Raw(val c: Vec3, val ru: Double, val rv: Double, val ruNeg: Double, val rvNeg: Double, val power: Double, val color: Int, val s: Double)
 
     val raw = ArrayList<Raw>()
@@ -173,11 +205,12 @@ internal fun withDome(rings: List<Ring>, atStart: Boolean, depth: Double, steps:
  */
 internal fun MeshBuilder.addSkin(
     rings: List<Ring>,
-    segments: Int,
+    segmentCount: Int,
     capStart: Boolean = true,
     capEnd: Boolean = true,
     paint: ((ring: Ring, theta: Double) -> Int)? = null,
 ) {
+    val segments = RiderDetail.seg(segmentCount)
     require(rings.size >= 2 && segments >= 3) { "Haut braucht zwei Querschnitte und drei Segmente" }
     val firstTri = triangleCount
     val base = vertexCount
@@ -236,13 +269,14 @@ internal class ProfilePoint(val x: Double, val r: Double, val color: Int = Argb.
  */
 internal fun MeshBuilder.addRevolveX(
     profile: List<ProfilePoint>,
-    segments: Int,
+    segmentCount: Int,
     cy: Double = 0.0,
     cz: Double = 0.0,
     closed: Boolean = false,
     hard: Boolean = false,
     paint: ((point: ProfilePoint, phi: Double) -> Int)? = null,
 ) {
+    val segments = RiderDetail.seg(segmentCount, min = 8)
     require(profile.size >= 2 && segments >= 3) { "Drehkoerper braucht zwei Profilpunkte und drei Segmente" }
     val firstTri = triangleCount
     fun row(p: ProfilePoint): Int {

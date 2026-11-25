@@ -23,7 +23,7 @@
     <string name="idee02_place_reason_none">Nothing speaks against riding outdoors</string>
     <string name="idee02_place_route_outdoor">Loop: %1$s · about %2$d min</string>
     <string name="idee02_place_route_indoor">The matching route for the trainer is in the card below.</string>
-    <string name="idee02_place_plan_action">Plan loop</string>
+    <string name="idee02_place_plan_action">Build a loop</string>
     <string name="idee02_place_flip_to_indoor_action">Rather indoors</string>
     <string name="idee02_place_flip_to_outdoor_action">Rather outdoors</string>
     <string name="idee02_place_done_title">Session done</string>

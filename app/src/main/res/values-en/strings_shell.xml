@@ -14,12 +14,12 @@
     <string name="shell_onboarding_skip_action">Skip</string>
     <string name="shell_onboarding_back_action">Back</string>
     <string name="shell_onboarding_next_action">Next</string>
-    <string name="shell_onboarding_build_loop_action">Build loop</string>
+    <string name="shell_onboarding_build_loop_action">Build a loop</string>
     <string name="shell_onboarding_finish_action">Let’s go</string>
     <string name="shell_onboarding_welcome_eyebrow">Welcome</string>
     <string name="shell_onboarding_step_eyebrow">Step %1$d of %2$d</string>
     <string name="shell_onboarding_welcome_body_1">Trailscape tells you what to ride today — and builds you a matching loop over gravel and quiet lanes that ends where it starts.</string>
-    <string name="shell_onboarding_welcome_body_2">In a moment you’ll find Today, Map, History and Training at the bottom, next to the round Ride button. Everything else is behind the gear.</string>
+    <string name="shell_onboarding_welcome_body_2">In a moment you’ll find Today, Map, Indoor and History at the bottom, next to the round Ride button. Everything else is behind the gear.</string>
     <string name="shell_onboarding_welcome_body_3">Your data stays on your device. No account, no telemetry.</string>
     <string name="shell_onboarding_data_title">Bring your rides along</string>
     <string name="shell_onboarding_data_body_1">With your past rides, the analysis is meaningful straight away — without them it takes about two weeks.</string>
@@ -56,15 +56,15 @@
     <!-- TrailscapeApp.kt -->
     <string name="shell_nav_today_label">Today</string>
     <string name="shell_nav_map_label">Map</string>
+    <string name="shell_nav_indoor_label">Indoor</string>
     <string name="shell_nav_history_label">History</string>
-    <string name="shell_nav_training_label">Training</string>
 
     <!-- components/RecCapsuleButton.kt -->
     <string name="shell_rec_idle_label">Ride</string>
     <string name="shell_rec_start_cd">Start recording</string>
-    <string name="shell_rec_route_cd">Start planned route</string>
-    <string name="shell_rec_paused_cd">Recording paused — open cockpit</string>
-    <string name="shell_rec_running_cd">Recording — open cockpit</string>
+    <string name="shell_rec_route_cd">Route ready — open Start riding</string>
+    <string name="shell_rec_paused_cd">Recording paused — open ride mode</string>
+    <string name="shell_rec_running_cd">Recording — open ride mode</string>
 
     <!-- components/HoldToEndButton.kt -->
     <string name="shell_hold_to_end_label">Hold to stop</string>

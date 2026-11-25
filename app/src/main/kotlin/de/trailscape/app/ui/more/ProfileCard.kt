@@ -88,7 +88,6 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
     var form by remember { mutableStateOf(ProfileForm()) }
     var edited by remember { mutableStateOf(false) }
     var focused by remember { mutableStateOf<ProfileField?>(null) }
-    var advancedOpen by rememberSaveable { mutableStateOf(false) }
     var appliedSignature by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(profile, confirmed) {
@@ -204,49 +203,34 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
     SettingsHint(stringResource(R.string.more_profile_weekly_hours_hint))
     Spacer(modifier = Modifier.height(8.dp))
 
-    // Der Text „Erweitert" bleibt in beiden Zustaenden gleich und das Icon
-    // traegt keinen Alternativtext — deshalb meldet die Semantik den Zustand
-    // eigens.
-    val expandedState = stringResource(R.string.more_learn_more_expanded_state)
-    val collapsedState = stringResource(R.string.more_learn_more_collapsed_state)
-    TextButton(
-        onClick = { advancedOpen = !advancedOpen },
-        modifier = Modifier.semantics {
-            stateDescription = if (advancedOpen) expandedState else collapsedState
-        },
-    ) {
-        Icon(
-            imageVector = if (advancedOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-            contentDescription = null,
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(stringResource(R.string.more_profile_advanced_action), style = MaterialTheme.typography.titleSmall)
-    }
+    // Puls und FTP stehen sichtbar auf der Seite, nicht mehr hinter
+    // „Erweitert" (`docs/ux/seitenkarte.md`, Befund 13): Training und Indoor
+    // rechnen damit und verweisen hierher. Alle Felder bleiben freiwillig.
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(stringResource(R.string.more_profile_values_title), style = MaterialTheme.typography.titleSmall)
+    Spacer(modifier = Modifier.height(4.dp))
+    SettingsHint(stringResource(R.string.more_profile_advanced_hint))
+    LearnMore(stringResource(R.string.more_profile_hr_max_learn_more))
+    Spacer(modifier = Modifier.height(8.dp))
+    NumberField(ProfileField.HR_MAX, stringResource(R.string.more_profile_hr_max_label), Modifier.fillMaxWidth())
+    Spacer(modifier = Modifier.height(12.dp))
+    NumberField(ProfileField.LTHR, stringResource(R.string.more_profile_lthr_label), Modifier.fillMaxWidth())
+    Spacer(modifier = Modifier.height(12.dp))
+    NumberField(
+        ProfileField.RESTING_HR,
+        stringResource(R.string.more_profile_resting_hr_label),
+        Modifier.fillMaxWidth(),
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    SettingsHint(stringResource(R.string.more_profile_resting_hr_hint))
 
-    if (advancedOpen) {
-        SettingsHint(stringResource(R.string.more_profile_advanced_hint))
-        LearnMore(stringResource(R.string.more_profile_hr_max_learn_more))
-        Spacer(modifier = Modifier.height(8.dp))
-        NumberField(ProfileField.HR_MAX, stringResource(R.string.more_profile_hr_max_label), Modifier.fillMaxWidth())
-        Spacer(modifier = Modifier.height(12.dp))
-        NumberField(ProfileField.LTHR, stringResource(R.string.more_profile_lthr_label), Modifier.fillMaxWidth())
-        Spacer(modifier = Modifier.height(12.dp))
-        NumberField(
-            ProfileField.RESTING_HR,
-            stringResource(R.string.more_profile_resting_hr_label),
-            Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        SettingsHint(stringResource(R.string.more_profile_resting_hr_hint))
-
-        Spacer(modifier = Modifier.height(12.dp))
-        NumberField(ProfileField.FTP, stringResource(R.string.more_profile_ftp_label), Modifier.fillMaxWidth())
-        Spacer(modifier = Modifier.height(4.dp))
-        SettingsHint(stringResource(R.string.more_profile_ftp_hint))
-        LearnMore(
-            stringResource(R.string.more_profile_ftp_learn_more, formats.decimal(defaultEftpWPerKg, 1)),
-        )
-    }
+    Spacer(modifier = Modifier.height(12.dp))
+    NumberField(ProfileField.FTP, stringResource(R.string.more_profile_ftp_label), Modifier.fillMaxWidth())
+    Spacer(modifier = Modifier.height(4.dp))
+    SettingsHint(stringResource(R.string.more_profile_ftp_hint))
+    LearnMore(
+        stringResource(R.string.more_profile_ftp_learn_more, formats.decimal(defaultEftpWPerKg, 1)),
+    )
 }
 
 /** Ein Zahlenfeld mit Fehlerzeile darunter. */

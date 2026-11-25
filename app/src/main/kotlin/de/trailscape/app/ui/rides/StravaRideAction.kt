@@ -45,7 +45,7 @@ import de.trailscape.core.isStravaUploadable
 import de.trailscape.core.stravaActivityUrl
 
 /**
- * Was die Strava-Zeile der Tour-Detailansicht zeigt — abgeleitet aus dem
+ * Was die Strava-Zeile im Blatt „Teilen" der Tour zeigt — abgeleitet aus dem
  * Upload-Vermerk der Tour ([stravaRideActionState]).
  */
 internal sealed interface StravaRideActionState {
@@ -84,10 +84,10 @@ internal fun stravaRideActionState(record: StravaUploadRecord?, nowMs: Long): St
 }
 
 /**
- * Ob die Strava-Zeile ueberhaupt erscheint — verbunden immer; ohne
+ * Ob es zur Tour einen Strava-Stand zu zeigen gibt — verbunden immer; ohne
  * Verbindung nur mit Link auf die Aktivitaet oder wenn Strava den Zugang
- * abgewiesen hat. Getrennt von Hand heisst dagegen: keine Zeile (die
- * Fehlschlaege raeumt das Trennen ab).
+ * abgewiesen hat. Sonst zeigt das Blatt „Teilen" stattdessen „Mit Strava
+ * verbinden" ([stravaShareRowKind]).
  */
 internal fun stravaRideActionVisible(state: StravaRideActionState, connected: Boolean): Boolean = when {
     connected -> true
@@ -97,41 +97,92 @@ internal fun stravaRideActionVisible(state: StravaRideActionState, connected: Bo
     else -> false
 }
 
+/** Was das Blatt „Teilen" zu Strava zeigt ([stravaShareRowKind]). */
+internal enum class StravaShareRowKind {
+    /** Nichts: Der Build kann kein Strava, oder die Tour eignet sich nicht (Planung, keine Zeitstempel). */
+    NONE,
+
+    /** Die Zeile der Tour wie bisher: hochladen, Stand, „Auf Strava ansehen", Fehler. */
+    STATUS,
+
+    /** Nicht verbunden und nichts zu zeigen: „Mit Strava verbinden". */
+    CONNECT,
+}
+
 /**
- * Die Strava-Zeile unter den Aktionskacheln der Tour-Detailansicht.
+ * Strava im Blatt „Teilen" (docs/ux/seitenkarte.md, Befund 14): fuer jede
+ * hochladbare Tour **immer** eine Zeile — frueher war Strava im Tourdetail
+ * ohne Verbindung unsichtbar, und wer die Funktion nicht kannte, fand sie nie.
+ * Reine Ableitung, getestet in `StravaShareRowTest`.
  *
- * Eine eigene Zeile statt einer fuenften Kachel: Die Reihe
- * (`ActionTileRow`) ist fuer vier Kacheln ausgelegt und bricht sonst um.
+ * @param available der Build kann Strava ([StravaConfig.available]).
+ * @param uploadable die Tour eignet sich (`isStravaUploadable`).
+ */
+internal fun stravaShareRowKind(
+    available: Boolean,
+    uploadable: Boolean,
+    state: StravaRideActionState,
+    connected: Boolean,
+): StravaShareRowKind = when {
+    !available || !uploadable -> StravaShareRowKind.NONE
+    stravaRideActionVisible(state, connected) -> StravaShareRowKind.STATUS
+    else -> StravaShareRowKind.CONNECT
+}
+
+/**
+ * Die Strava-Zeile des Blatts „Teilen" (`ShareRideDialog.kt`).
  *
- * Sichtbar nur, wenn der Build Strava kann, die Tour sich eignet (gefahren,
- * mit Zeitstempeln) und ein Konto verbunden ist — ohne Verbindung sieht die
- * Tour aus wie immer. Zwei Ausnahmen:
- *  * Eine schon hochgeladene Tour zeigt „Auf Strava ansehen" auch nach dem
- *    Trennen weiter.
- *  * Hat Strava den Zugang beim Hochladen abgewiesen (entzogen, abgelaufen),
- *    ist die App danach nicht mehr verbunden — die Tour sagt trotzdem, dass
- *    sie nicht angekommen ist und warum, statt die Zeile still verschwinden
- *    zu lassen ([stravaRideActionVisible]).
+ * Verbunden zeigt sie dasselbe wie frueher die Zeile im Tourdetail
+ * ([StravaRideActionContent]). Ohne Verbindung steht ein Satz, was Strava hier
+ * taete, und der Knopf „Mit Strava verbinden" ([onConnect] fuehrt auf
+ * Einstellungen → Strava).
  */
 @Composable
-internal fun StravaRideAction(ride: Ride, onReconnect: () -> Unit, modifier: Modifier = Modifier) {
+internal fun StravaShareRow(ride: Ride, onConnect: () -> Unit, modifier: Modifier = Modifier) {
+    // Erst pruefen, dann die Dienste anfassen: Ohne Strava-Schluessel im Build
+    // oder bei einer nicht hochladbaren Tour gibt es keine Zeile — und
+    // [StravaServices] wird gar nicht erst gelesen (es setzt `init()` voraus;
+    // dieselbe Vorab-Pruefung stand frueher an der Zeile im Tourdetail).
     if (!StravaConfig.available || !isStravaUploadable(ride)) return
     val connection by StravaServices.connection.collectAsStateWithLifecycle()
     val records by StravaServices.records.collectAsStateWithLifecycle()
     val state = stravaRideActionState(records[ride.id], System.currentTimeMillis())
     val connected = connection is StravaConnection.Connected
-    if (!stravaRideActionVisible(state, connected)) return
-
-    val uriHandler = LocalUriHandler.current
-    StravaRideActionContent(
+    val kind = stravaShareRowKind(
+        available = StravaConfig.available,
+        uploadable = isStravaUploadable(ride),
         state = state,
-        onUpload = { StravaServices.requestUpload(ride.id, replace = true) },
-        onOpen = { url -> runCatching { uriHandler.openUri(url) } },
-        onRetry = { StravaServices.requestUpload(ride.id, replace = true) },
-        canUpload = connected,
-        onReconnect = onReconnect,
-        modifier = modifier,
+        connected = connected,
     )
+    val uriHandler = LocalUriHandler.current
+    when (kind) {
+        StravaShareRowKind.NONE -> Unit
+        StravaShareRowKind.STATUS -> StravaRideActionContent(
+            state = state,
+            onUpload = { StravaServices.requestUpload(ride.id, replace = true) },
+            onOpen = { url -> runCatching { uriHandler.openUri(url) } },
+            onRetry = { StravaServices.requestUpload(ride.id, replace = true) },
+            canUpload = connected,
+            onReconnect = onConnect,
+            modifier = modifier,
+        )
+        StravaShareRowKind.CONNECT -> StravaConnectRow(onConnect = onConnect, modifier = modifier)
+    }
+}
+
+/** „Mit Strava verbinden" samt einem Satz dazu — zustandslos, fuer den Screenshot-Test. */
+@Composable
+internal fun StravaConnectRow(onConnect: () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.strava_share_connect_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        NeutralButton(onClick = onConnect, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.strava_connect))
+        }
+    }
 }
 
 /**

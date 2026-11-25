@@ -64,7 +64,7 @@
     <string name="recipe_problem_not_text">The file is not a readable text file.</string>
     <string name="recipe_problem_not_json">The file is not valid JSON.</string>
     <string name="recipe_problem_too_deep">The file is nested too deeply.</string>
-    <string name="recipe_problem_not_recipe">This is not a plan recipe. You open a backup under Settings → Import &amp; backup.</string>
+    <string name="recipe_problem_not_recipe">This is not a plan recipe. You open a backup under Settings → Backup.</string>
     <string name="recipe_problem_newer">This recipe comes from a newer version of Trailscape (format %1$d). Please update the app.</string>
     <string name="recipe_problem_invalid">Something is wrong in the recipe, at “%1$s”.</string>
     <string name="recipe_problem_invalid_nopath">Something is wrong in the recipe.</string>

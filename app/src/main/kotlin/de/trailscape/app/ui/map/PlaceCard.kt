@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
@@ -16,8 +15,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -69,15 +66,12 @@ internal fun placeTitleAndArea(displayName: String): Pair<String, String> {
  * Wegpunkt der laufenden Route. Zwei verschiedene Knopfsaetze fuer denselben
  * Zustand haetten dieselbe Frage zweimal beantworten muessen.
  *
- * ## „+ Als Wegpunkt" verkettet mehrere Orte zu einer Route
- * Anders als [onRouteHere] und [onRoundTripHere] fuehrt [onAddAsWaypoint]
- * nicht sofort zu einer eigenen Fahrt: Der Ort wird als weiterer Punkt in
- * eine Route eingereiht, die so mehrere Orte verketten kann. Ob dafuer eine
- * neue Planung beginnt oder ein laufender Plan fortgesetzt wird, entscheidet
- * allein der Aufrufer (`MapScreen.kt`) — die Ortskarte kennt nur den einen
- * angetippten Ort, keinen Planungszustand. Zielbild ist die dritte Aktion
- * neben „Route hierher" und „Runde ab hier" in
- * docs/design/prototyp-eine-leiste.html.
+ * ## Zwei Aktionen beim Erkunden, eine in der Planung
+ * Beim Erkunden gibt es „Route hierher" und „Runde ab hier"; in der Planung
+ * nur „Als Wegpunkt" ([onAddWaypoint]). Die fruehere dritte Aktion
+ * „+ Als Wegpunkt" im Erkunden-Zustand war dieselbe Funktion unter zweitem
+ * Namen (docs/ux/seitenkarte.md, Ortskarte) und ist entfallen: Eine Route aus
+ * mehreren Orten beginnt jetzt sichtbar mit „Route planen" im Blatt „Wohin?".
  *
  * ## Keine Aktion waehrend [MapMode.NAVIGIEREN]
  * `MapMode.kt` beschreibt genau eine Ausnahme von den dokumentierten
@@ -94,10 +88,7 @@ internal fun placeTitleAndArea(displayName: String): Pair<String, String> {
  *   Aufrufer (`MapScreen.kt`) synchron aus `MapController.lastKnownLocation()`
  *   — ein zweiter GPS-Abonnent nur fuer diese eine Zahl waere unnoetig, der
  *   Standortpunkt der Karte ist ohnehin schon aktiv.
- * @param onAddAsWaypoint Reiht [place] als weiteren Punkt in eine Route ein,
- *   die so mehrere Orte verketten kann — ob damit eine neue Planung beginnt
- *   oder eine laufende fortgesetzt wird, entscheidet der Aufrufer. Siehe
- *   „+ Als Wegpunkt" in docs/design/prototyp-eine-leiste.html.
+ * @param onAddWaypoint Haengt [place] in der Planung als naechsten Wegpunkt an.
  */
 @Composable
 internal fun PlaceCard(
@@ -107,7 +98,6 @@ internal fun PlaceCard(
     onRouteHere: () -> Unit,
     onRoundTripHere: () -> Unit,
     onAddWaypoint: () -> Unit,
-    onAddAsWaypoint: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp,
@@ -160,11 +150,7 @@ internal fun PlaceCard(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                // Primaerknopf ueber einer Sekundaerzeile statt drei
-                // Pillen nebeneinander: Bei drei Aktionen quetscht eine
-                // einzige Reihe "Route hierher" auf 360 dp unlesbar zusammen
-                // (siehe Klassen-KDoc). Entspricht dem Zielbild in
-                // docs/design/prototyp-eine-leiste.html (dort .placesecond).
+                // Primaerknopf ueber einem Sekundaerknopf in voller Breite.
                 MapMode.ERKUNDEN -> Column {
                     PrimaryButton(
                         text = stringResource(R.string.map_place_route_here_action),
@@ -172,33 +158,15 @@ internal fun PlaceCard(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(8.dp))
-                    Row {
-                        NeutralButton(
-                            onClick = onRoundTripHere,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.map_place_round_trip_action),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        val addWaypointCd = stringResource(R.string.map_place_add_waypoint_cd)
-                        NeutralButton(
-                            onClick = onAddAsWaypoint,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clearAndSetSemantics {
-                                    contentDescription = addWaypointCd
-                                },
-                        ) {
-                            Text(
-                                text = stringResource(R.string.map_place_add_waypoint_action),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
+                    NeutralButton(
+                        onClick = onRoundTripHere,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.map_place_round_trip_action),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
 

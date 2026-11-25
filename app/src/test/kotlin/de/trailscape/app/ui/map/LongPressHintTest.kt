@@ -150,7 +150,7 @@ class LongPressHintTest {
 
     @Test
     fun `tipp beschreibt die tatsaechliche Wirkung`() {
-        // Beim Erkunden setzt der lange Druck einen Punkt und oeffnet die
+        // Beim Erkunden setzt ein Tipp auf die Karte einen Punkt und oeffnet die
         // Ortskarte mit „Route hierher" (Ziel) und „Runde ab hier" (Start) —
         // genau das muss der Tipp versprechen, nicht etwa einen Wegpunkt.
         val text = MapTestStrings.de(UiText.Res(R.string.map_long_press_hint_snackbar))

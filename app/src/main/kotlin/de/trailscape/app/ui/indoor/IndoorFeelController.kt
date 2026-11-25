@@ -66,6 +66,11 @@ class IndoorFeelController(
 
     // -- Fahrgefühl --------------------------------------------------------
 
+    /** Liest das gespeicherte Fahrgefühl neu — ein anderer Ablauf (Einstellungen → Indoor) kann es geändert haben. */
+    fun reload() {
+        _feel.value = read()
+    }
+
     fun setResistance(value: Double) = write(_feel.value.copy(resistance = snap(value)))
 
     fun setSurfaceStrength(value: Double) = write(_feel.value.copy(surfaceStrength = snap(value)))

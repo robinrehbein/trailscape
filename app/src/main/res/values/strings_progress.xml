@@ -31,7 +31,7 @@
     <!-- %1$s = bisherige Weite in km, %2$d = Kilometer mehr -->
     <string name="progress_challenge_body">Deine weiteste Tour der letzten Wochen: %1$s km. %2$d km mehr sind drin.</string>
     <string name="progress_challenge_all_time_body">Deine weiteste Tour der letzten Wochen: %1$s km. Mit %2$d km mehr fährst du weiter als je zuvor.</string>
-    <string name="progress_challenge_action">Runde mit %1$d km bauen</string>
+    <string name="progress_challenge_action">Runde bauen · %1$d km</string>
     <string name="progress_challenge_route_label">Nächste Bestweite</string>
 
     <!-- Jahresziel. %1$d = Jahr -->
@@ -84,8 +84,6 @@
     <string name="progress_milestone_all_done">Alle Stufen erreicht</string>
 
     <!-- Fortschritt im Training-Tab -->
-    <string name="progress_segment_progress">Fortschritt</string>
-    <string name="progress_segment_plan">Plan</string>
     <string name="progress_trend_eyebrow">Letzte 12 Wochen</string>
     <!-- %1$s = Kilometer der letzten vier Wochen -->
     <string name="progress_trend_headline">%1$s km in 4 Wochen</string>
@@ -103,8 +101,8 @@
     <string name="progress_fitness_headline_fitter">Du wirst fitter</string>
     <string name="progress_fitness_headline_stable">Deine Form hält</string>
     <string name="progress_fitness_headline_declining">Gerade etwas schwächer</string>
-    <string name="progress_fitness_headline_unknown">Noch zu wenig vergleichbare Fahrten</string>
-    <string name="progress_fitness_unknown_hint">Dafür brauche ich je drei flachere Fahrten über 40 Minuten in den letzten sechs Wochen und in den sechs davor.</string>
+    <string name="progress_fitness_headline_unknown">Noch zu wenig vergleichbare Touren</string>
+    <string name="progress_fitness_unknown_hint">Dafür brauche ich je drei flachere Touren über 40 Minuten in den letzten sechs Wochen und in den sechs davor.</string>
     <!-- %1$d = Wochen je Zeitraum -->
     <string name="progress_fitness_window">Letzte %1$d Wochen gegenüber den %1$d davor</string>
     <string name="progress_fitness_efficiency_label">Puls und Tempo</string>

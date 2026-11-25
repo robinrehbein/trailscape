@@ -19,10 +19,10 @@
     <string name="shell_onboarding_welcome_eyebrow">Willkommen</string>
     <string name="shell_onboarding_step_eyebrow">Schritt %1$d von %2$d</string>
     <string name="shell_onboarding_welcome_body_1">Trailscape sagt dir, was du heute fahren solltest — und baut dir die passende Runde dazu, über Schotter und Nebenwege, die dort endet, wo sie beginnt.</string>
-    <string name="shell_onboarding_welcome_body_2">Gleich findest du unten Heute, Karte, Verlauf und Training, daneben den runden Fahren-Knopf. Alles Weitere liegt hinter dem Zahnrad.</string>
+    <string name="shell_onboarding_welcome_body_2">Gleich findest du unten Heute, Karte, Indoor und Verlauf, daneben den runden Fahren-Knopf. Alles Weitere liegt hinter dem Zahnrad.</string>
     <string name="shell_onboarding_welcome_body_3">Deine Daten liegen auf deinem Gerät. Kein Konto, keine Telemetrie.</string>
     <string name="shell_onboarding_data_title">Bring deine Touren mit</string>
-    <string name="shell_onboarding_data_body_1">Mit deinen bisherigen Fahrten ist die Auswertung sofort aussagekräftig — ohne dauert es rund zwei Wochen.</string>
+    <string name="shell_onboarding_data_body_1">Mit deinen bisherigen Touren ist die Auswertung sofort aussagekräftig — ohne dauert es rund zwei Wochen.</string>
     <string name="shell_onboarding_data_body_2">GPX, FIT oder komplette Exporte aus Strava, Garmin und Wahoo als ZIP. Duplikate erkennt Trailscape selbst.</string>
     <string name="shell_onboarding_data_body_3">Import über das + oben rechts im Verlauf — oder teil eine Datei direkt an Trailscape.</string>
     <string name="shell_onboarding_profile_title">Ein paar Angaben für die Auswertung</string>
@@ -56,15 +56,15 @@
     <!-- TrailscapeApp.kt -->
     <string name="shell_nav_today_label">Heute</string>
     <string name="shell_nav_map_label">Karte</string>
+    <string name="shell_nav_indoor_label">Indoor</string>
     <string name="shell_nav_history_label">Verlauf</string>
-    <string name="shell_nav_training_label">Training</string>
 
     <!-- components/RecCapsuleButton.kt -->
     <string name="shell_rec_idle_label">Fahren</string>
     <string name="shell_rec_start_cd">Aufzeichnung starten</string>
-    <string name="shell_rec_route_cd">Geplante Tour starten</string>
-    <string name="shell_rec_paused_cd">Aufzeichnung pausiert — Cockpit öffnen</string>
-    <string name="shell_rec_running_cd">Aufzeichnung läuft — Cockpit öffnen</string>
+    <string name="shell_rec_route_cd">Route bereit — Losfahren öffnen</string>
+    <string name="shell_rec_paused_cd">Aufzeichnung pausiert — Fahrmodus öffnen</string>
+    <string name="shell_rec_running_cd">Aufzeichnung läuft — Fahrmodus öffnen</string>
 
     <!-- components/HoldToEndButton.kt -->
     <string name="shell_hold_to_end_label">Halten zum Beenden</string>

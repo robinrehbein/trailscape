@@ -8,9 +8,11 @@ package de.trailscape.core.indoor.world
  *    ([RenderSettings.forQuality]); **Vorgabe**, bis Hoch/Ultra auf dem Geraet
  *    geprueft sind.
  *  * [HIGH]: Umgebungsverdeckung, Bloom, Spiegelungs-Umgebungslicht,
- *    Weissabgleich je Tageszeit.
+ *    Weissabgleich je Tageszeit, nah an der Strecke Baeume mit echter
+ *    Astgeometrie aus der Bibliothek (docs/indoor/baeume.md).
  *  * [ULTRA]: dazu zeitliche Kantenglaettung, hoehere Effektguete, Gelaende wirft
- *    Schatten (4 Kaskaden bis 800 m), dezente Vignette — fuer starke Geraete.
+ *    Schatten (4 Kaskaden bis 800 m), dezente Vignette, mehr und weiter
+ *    reichende Bibliotheksbaeume — fuer starke Geraete.
  */
 enum class IndoorGraphics {
     STANDARD,
@@ -38,6 +40,7 @@ object RenderTiers {
         effectQuality = 1,
         whiteBalance = true,
         dynamicResolutionMinScale = HIGH_DYNRES_MIN_SCALE,
+        treeDetail = 1,
     )
 
     /**
@@ -59,6 +62,7 @@ object RenderTiers {
         // Nicht `stableShadows`: zusammen mit 800 m verschwanden im Referenzrenderer alle Schatten.
         terrainShadows = true,
         vignette = true,
+        treeDetail = 2,
     )
 
     /** Schattenreichweite der Stufe Ultra (Gelaendeschatten brauchen mehr als 300 m). */
@@ -91,5 +95,6 @@ object RenderTiers {
         whiteBalance = false,
         vignette = false,
         dynamicResolutionMinScale = 0.6,
+        treeDetail = 0,
     )
 }

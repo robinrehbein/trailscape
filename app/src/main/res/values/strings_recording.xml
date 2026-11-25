@@ -18,7 +18,7 @@
     <string name="recording_notification_no_gps">Kein GPS-Signal seit %1$d min</string>
 
     <string name="recording_action_pause">Pause</string>
-    <string name="recording_action_resume">Fortsetzen</string>
+    <string name="recording_action_resume">Weiter</string>
     <string name="recording_action_stop">Beenden</string>
 
     <string name="recording_error_channel_name">Aufzeichnung: Probleme</string>

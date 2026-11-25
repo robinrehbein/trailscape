@@ -63,8 +63,8 @@ class WeekPlanWordingTest {
     fun `knapp nennt den Grund`() {
         val days = plan(WeekPlanStatus.KNAPP).copy(tightCause = WeekPlanTightCause.ZU_WENIGE_TAGE)
         assertEquals(
-            "Knapp: Diese Woche bleiben zu wenige Tage, und mehr als 60 km pro Fahrt wären deutlich mehr als " +
-                "deine längste Fahrt der letzten Wochen. Mit diesem Plan fehlen am Ende noch 20 km.",
+            "Knapp: Diese Woche bleiben zu wenige Tage, und mehr als 60 km pro Tour wären deutlich mehr als " +
+                "deine längste Tour der letzten Wochen. Mit diesem Plan fehlen am Ende noch 20 km.",
             TodayStrings.de(weekPlanTightNote(days)!!),
         )
         assertTrue(TodayStrings.en(weekPlanTightNote(days)!!).startsWith("Tight: too few days are left this week"))
@@ -72,7 +72,7 @@ class WeekPlanWordingTest {
         val rides = (0 until 5).map { PlannedRide(wednesday.plusDays(it.toLong()), 60, WeekPlanReason.FREIER_TAG) }
         val cap = plan(WeekPlanStatus.KNAPP).copy(rides = rides, tightCause = WeekPlanTightCause.OBERGRENZE)
         assertEquals(
-            "Knapp: Selbst mit 5 Fahrten bräuchte jede mehr als 60 km – deutlich mehr als deine längste Fahrt " +
+            "Knapp: Selbst mit 5 Touren bräuchte jede mehr als 60 km – deutlich mehr als deine längste Tour " +
                 "der letzten Wochen. Mit diesem Plan fehlen am Ende noch 20 km.",
             TodayStrings.de(weekPlanTightNote(cap)!!),
         )

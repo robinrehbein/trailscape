@@ -1,0 +1,427 @@
+<title>Trailscape Seitenkarte</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: Arbeitsblatt mit vier Ansichten (Karte, Prototyp, Befund, Entscheidungen); Farben aus dem App-Thema. */
+:root{
+  --bg:#F4F4F6; --surface:#FFFFFF; --surface2:#EFEFF2; --line:#DDDEE3; --fg:#1A1B1E; --muted:#545B63;
+  --accent:#0D7A42; --on-accent:#FFFFFF; --accent-soft:#C3F0D4; --on-accent-soft:#002411;
+  --teal:#2A6474; --teal-soft:#C4EAF8; --warn:#9A5B00; --warn-soft:#FFE8C2; --bad:#BB2016; --bad-soft:#FFDAD4;
+  --mapland:#E4EBDD; --mapline:#C9D3C1; --shadow:0 1px 2px rgba(20,25,30,.08),0 6px 20px rgba(20,25,30,.06);
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0A0A0C; --surface:#17181B; --surface2:#202226; --line:#33363C; --fg:#E6E7EA; --muted:#A3A9B2;
+  --accent:#6BD69C; --on-accent:#00391D; --accent-soft:#155F38; --on-accent-soft:#A7F2C6;
+  --teal:#92CEDD; --teal-soft:#104B56; --warn:#F2BC62; --warn-soft:#4A3608; --bad:#FFB4A9; --bad-soft:#5C1410;
+  --mapland:#1B211C; --mapline:#2C352D; --shadow:0 1px 2px rgba(0,0,0,.5),0 6px 20px rgba(0,0,0,.35); color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0A0A0C; --surface:#17181B; --surface2:#202226; --line:#33363C; --fg:#E6E7EA; --muted:#A3A9B2;
+  --accent:#6BD69C; --on-accent:#00391D; --accent-soft:#155F38; --on-accent-soft:#A7F2C6;
+  --teal:#92CEDD; --teal-soft:#104B56; --warn:#F2BC62; --warn-soft:#4A3608; --bad:#FFB4A9; --bad-soft:#5C1410;
+  --mapland:#1B211C; --mapline:#2C352D; --shadow:0 1px 2px rgba(0,0,0,.5),0 6px 20px rgba(0,0,0,.35); color-scheme:dark }
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--sans);margin:0}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:1440px;margin:0 auto;padding-block:20px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-size:26px;line-height:1.15;margin:0;letter-spacing:-.01em;text-wrap:balance}
+h2{font-size:19px;margin:0 0 4px;text-wrap:balance}
+h3{font-size:15px;margin:0}
+p{margin:0}
+.lead{color:var(--muted);max-width:68ch;margin-top:6px}
+.eyebrow{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.head{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between}
+.viewbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--bg);padding-block:12px;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--line)}
+.seg{display:inline-flex;background:var(--surface2);border-radius:999px;padding:3px;gap:2px;max-width:100%;overflow-x:auto}
+.seg button{border:0;background:transparent;border-radius:999px;padding:7px 14px;font-weight:600;font-size:14px;color:var(--muted);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+.ghost{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600}
+.spacer{flex:1}
+section.view{margin-top:22px}
+.stats{display:flex;flex-wrap:wrap;gap:8px 22px;margin:14px 0 0;font-size:13.5px;color:var(--muted)}
+.stats b{color:var(--fg);font-variant-numeric:tabular-nums;font-size:17px;margin-right:5px}
+.mapgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;margin-top:14px;align-items:start}
+@media (max-width:920px){.mapgrid{grid-template-columns:minmax(0,1fr)}}
+.mapbox{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow-x:auto;min-width:0}
+.mapbox svg{display:block}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted);margin-top:10px;align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:22px;height:13px;border-radius:4px;border:1.5px solid var(--muted);background:var(--surface)}
+.detail{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 70px);max-height:calc(100vh - 90px);overflow:auto;min-width:0}
+@media (max-width:920px){.detail{position:static;max-height:none}}
+.detail h3{font-size:17px;margin-top:2px}
+.detail dl{margin:12px 0 0;display:grid;gap:10px}
+.detail dt{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.detail dd{margin:2px 0 0}
+.detail ul{margin:2px 0 0;padding-left:18px}
+.detail li{margin:2px 0}
+.tag{display:inline-block;font-size:11.5px;font-weight:600;border-radius:999px;padding:2px 9px;background:var(--surface2);color:var(--muted);margin-right:4px}
+.tag.neu{background:var(--teal-soft);color:var(--fg)} .tag.bad{background:var(--bad-soft);color:var(--fg)}
+.jump{border:0;background:none;padding:0;color:var(--accent);font-weight:600;text-align:left;text-decoration:underline;text-underline-offset:2px}
+.src{font:12px var(--mono);color:var(--muted);overflow-wrap:anywhere}
+/* SVG-Karte */
+.n rect{fill:var(--surface);stroke:var(--muted);stroke-width:1.2}
+.n text{fill:var(--fg);font:600 11px var(--sans)}
+.n{cursor:pointer}
+.n.tab rect{fill:var(--accent);stroke:var(--accent)} .n.tab text{fill:var(--on-accent)}
+.n.dialog rect{stroke-dasharray:4 3}
+.n.blatt rect{fill:var(--surface2)}
+.n.zustand rect{fill:var(--warn-soft);stroke:var(--warn)}
+.n.extern rect{fill:var(--teal-soft);stroke:var(--teal)}
+.n.teil rect{stroke:var(--line);stroke-width:1.5} .n.teil text{font-weight:500}
+.n.neu rect{stroke:var(--teal);stroke-width:2.2}
+.n.sel rect{stroke:var(--accent);stroke-width:3}
+.n.dim{opacity:.28}
+.n .dot{fill:var(--bad);stroke:none}
+.e{fill:none;stroke:var(--muted);stroke-width:1;opacity:.3}
+.e.hi{stroke:var(--accent);stroke-width:2;opacity:1}
+.e.dim{opacity:.06}
+.gbg{fill:var(--surface2);opacity:.55}
+.glabel{fill:var(--fg);font:700 13px var(--sans)}
+.band{stroke:var(--line);stroke-width:1;stroke-dasharray:2 4}
+.blabel{fill:var(--muted);font:600 11px var(--sans)}
+/* Vergleich */
+.moves{display:grid;gap:10px;margin-top:14px}
+.move{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;grid-template-columns:minmax(0,1fr) 22px minmax(0,1fr);gap:4px 10px;align-items:start}
+.move .why{grid-column:1/-1;color:var(--muted);font-size:13.5px;margin-top:2px}
+.move .arr{color:var(--muted);text-align:center}
+.move b{display:block}
+@media (max-width:640px){.move{grid-template-columns:1fr}.move .arr{text-align:left}}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.tscroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.bar{display:inline-block;height:9px;border-radius:5px;background:var(--muted);vertical-align:middle;margin-right:7px;opacity:.55}
+.bar.neu{background:var(--accent);opacity:1}
+/* Befund */
+.finds{display:grid;gap:10px;margin-top:14px}
+.find{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px 15px;display:grid;grid-template-columns:34px minmax(0,1fr);gap:4px 12px}
+.find .nr{font:700 15px var(--mono);color:var(--muted);padding-top:1px}
+.find .sev{font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;margin-right:8px;white-space:nowrap}
+.sev.s1{background:var(--bad-soft)} .sev.s2{background:var(--warn-soft)} .sev.s3{background:var(--surface2);color:var(--muted)}
+.find p{margin-top:4px}
+.find .fix{color:var(--muted);font-size:13.5px}
+.q{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:12px}
+.q .rec{background:var(--accent-soft);color:var(--on-accent-soft);border-radius:10px;padding:9px 12px;margin-top:10px}
+.q ul{margin:8px 0 0;padding-left:18px}
+.note{background:var(--surface2);border-radius:12px;padding:12px 14px;margin-top:14px;font-size:13.5px;color:var(--muted)}
+.note ul{margin:6px 0 0;padding-left:18px}
+/* Prototyp */
+.p-sw{width:40px;height:24px;border-radius:12px;background:var(--line);position:relative;flex:none}
+.p-sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--surface)}
+.p-sw.on{background:var(--accent)} .p-sw.on::after{left:19px}
+.p-sticky{position:sticky;bottom:0;padding:8px 0 4px;background:linear-gradient(transparent,var(--bg) 30%);margin-top:auto}
+.p-dots{display:flex;gap:10px} .p-dots i{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:14px;background:var(--surface2);border:2px solid transparent}
+.p-dots i.on{border-color:var(--fg);box-shadow:0 0 0 2px var(--surface) inset}
+.p-bars{display:flex;align-items:flex-end;gap:5px;height:70px} .p-bars i{flex:1;background:var(--accent);border-radius:3px 3px 0 0;opacity:.85}
+.p-btn:disabled{opacity:.7;cursor:default}
+.protogrid{display:grid;grid-template-columns:auto minmax(0,1fr);gap:28px;margin-top:16px;align-items:start}
+@media (max-width:820px){.protogrid{grid-template-columns:minmax(0,1fr);justify-items:center}.protoside{width:100%}}
+.phone{scroll-margin-top:calc(env(safe-area-inset-top,0px) + 76px);width:372px;max-width:100%;height:760px;max-height:calc(100vh - 110px);min-height:560px;border-radius:38px;border:9px solid #1d1f22;background:var(--bg);position:relative;overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column}
+.p-screen{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
+.p-top{display:flex;align-items:center;gap:6px;padding:14px 12px 8px 16px;min-height:54px}
+.p-top h4{margin:0;font-size:20px;flex:1;line-height:1.2;min-width:0}
+.p-top .sub{display:block;font-size:12px;color:var(--muted);font-weight:500}
+.ib{width:40px;height:40px;border-radius:50%;border:0;background:transparent;display:grid;place-items:center;font-size:18px;flex:none}
+.ib:hover{background:var(--surface2)}
+.p-body{flex:1;min-height:0;overflow-y:auto;padding:4px 14px 96px;display:flex;flex-direction:column;gap:12px}
+.p-body.nonav{padding-bottom:20px}
+.p-card{background:var(--surface);border-radius:20px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.p-card h5{margin:0;font-size:16px}
+.p-card small,.p-muted{color:var(--muted);font-size:12.5px}
+.p-eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.p-btn{border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font-weight:700;padding:12px 16px;width:100%;font-size:15px}
+.p-btn.tonal{background:var(--accent-soft);color:var(--on-accent-soft)}
+.p-btn.plain{background:transparent;color:var(--accent);padding:8px}
+.p-btn.outline{background:transparent;color:var(--fg);border:1.5px solid var(--line)}
+.p-btn.danger{background:var(--bad-soft);color:var(--fg)}
+.p-btns{display:flex;gap:8px}
+.p-list{background:var(--surface);border-radius:20px;overflow:hidden;display:flex;flex-direction:column}
+.p-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border:0;background:transparent;text-align:left;width:100%;border-bottom:1px solid var(--line)}
+.p-row:last-child{border-bottom:0}
+.p-row .ic{width:34px;height:34px;border-radius:10px;background:var(--surface2);display:grid;place-items:center;flex:none;font-size:16px}
+.p-row .tx{flex:1;min-width:0}
+.p-row .tx b{display:block;font-size:14.5px}
+.p-row .tx span{display:block;font-size:12.5px;color:var(--muted)}
+.p-row .ch{color:var(--muted)}
+.p-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;flex:none}
+.p-chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;white-space:nowrap}
+.p-chip.on{background:var(--accent-soft);color:var(--on-accent-soft);border-color:transparent}
+.p-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.p-stats div{background:var(--surface2);border-radius:12px;padding:8px 10px}
+.p-stats b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.p-stats span{font-size:11.5px;color:var(--muted)}
+.p-h{font-size:13px;font-weight:700;color:var(--muted);margin:4px 4px -4px}
+.p-nav{position:absolute;left:10px;right:10px;bottom:12px;display:flex;gap:8px;align-items:center;z-index:3}
+.p-caps{flex:1;display:flex;background:var(--surface);border-radius:999px;padding:5px;box-shadow:var(--shadow);border:1px solid var(--line);min-width:0}
+.p-caps button{flex:1;border:0;background:transparent;border-radius:999px;padding:6px 2px;font-size:11px;font-weight:600;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
+.p-caps button i{font-style:normal;font-size:17px;line-height:1.1}
+.p-caps button.on{background:var(--accent-soft);color:var(--on-accent-soft)}
+.p-rec{width:58px;height:58px;border-radius:50%;border:0;background:var(--accent);color:var(--on-accent);font-weight:800;font-size:11.5px;box-shadow:var(--shadow);flex:none}
+.p-map{flex:1;min-height:160px;border-radius:20px;position:relative;overflow:hidden;background:
+  linear-gradient(115deg,transparent 46%,var(--mapline) 46%,var(--mapline) 47.2%,transparent 47.2%),
+  linear-gradient(28deg,transparent 60%,var(--mapline) 60%,var(--mapline) 61%,transparent 61%),
+  linear-gradient(160deg,transparent 30%,var(--mapline) 30%,var(--mapline) 30.8%,transparent 30.8%),var(--mapland)}
+.p-map.full{border-radius:0;margin:0 -14px}
+.p-map svg{position:absolute;inset:0;width:100%;height:100%}
+.p-map .route{fill:none;stroke:var(--accent);stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.p-float{position:absolute;display:flex;flex-direction:column;gap:8px}
+.p-fab{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow);font-size:17px}
+.p-search{background:var(--surface);border-radius:999px;border:1px solid var(--line);padding:11px 16px;color:var(--muted);box-shadow:var(--shadow);text-align:left;width:100%}
+.p-sheetwrap{position:absolute;inset:0;background:rgba(0,0,0,.38);z-index:5;display:flex;align-items:flex-end}
+.p-sheet{background:var(--surface);border-radius:26px 26px 0 0;padding:10px 16px 20px;width:100%;max-height:82%;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.p-sheet::before{content:"";width:36px;height:4px;border-radius:2px;background:var(--line);align-self:center}
+.p-sheet h5{margin:2px 0 0;font-size:18px}
+.p-toast{position:absolute;left:16px;right:16px;bottom:88px;background:var(--fg);color:var(--bg);border-radius:12px;padding:10px 14px;font-size:13.5px;z-index:6;text-align:center}
+.p-hud{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.p-hud div{background:var(--surface);border-radius:16px;padding:10px 12px}
+.p-hud b{display:block;font-size:26px;font-variant-numeric:tabular-nums;line-height:1.1}
+.p-hud span{font-size:11.5px;color:var(--muted)}
+.p-3d{flex:1;min-height:230px;border-radius:0;margin:0 -14px;position:relative;overflow:hidden;background:linear-gradient(var(--teal-soft) 0 46%,var(--mapland) 46%)}
+.p-3d svg{position:absolute;inset:0;width:100%;height:100%}
+.p-badge{display:inline-block;border-radius:999px;background:var(--teal-soft);font-size:11px;font-weight:700;padding:2px 8px}
+.p-prog{height:8px;border-radius:4px;background:var(--surface2);overflow:hidden}
+.p-prog i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.p-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.p-tile{background:var(--surface);border-radius:18px;padding:12px;border:0;text-align:left;display:flex;flex-direction:column;gap:4px}
+.p-tile b{font-size:14.5px}.p-tile span{font-size:12px;color:var(--muted)}
+.p-tile .em{font-size:22px}
+.p-week{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:11px;color:var(--muted)}
+.p-week i{display:block;height:34px;border-radius:9px;background:var(--surface2);margin-bottom:3px;font-style:normal;line-height:34px;font-weight:700;color:var(--fg)}
+.p-week .on i{background:var(--accent-soft);color:var(--on-accent-soft)} .p-week .now i{outline:2px solid var(--accent)}
+.protoside{min-width:0;display:flex;flex-direction:column;gap:14px}
+.here{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.here .crumb{font:12.5px var(--mono);color:var(--muted);overflow-wrap:anywhere}
+.paths{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.path{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 12px;text-align:left}
+.path b{display:block}.path span{font-size:12.5px;color:var(--muted)}
+.path.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+@media (prefers-reduced-motion:no-preference){.p-sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <div>
+      <div class="eyebrow">Trailscape · Bedienung überarbeiten · Entwurf</div>
+      <h1>Seitenkarte und Prototyp</h1>
+      <p class="lead">Alle Seiten der App, wie sie heute zusammenhängen, daneben ein Vorschlag mit weniger Wegen und festen Plätzen. Der Prototyp zeigt den Vorschlag zum Durchklicken. Stand der Bestandsaufnahme: Code auf <code>main</code> plus die elf Branches, die als Nächstes gemergt werden.</p>
+    </div>
+    <button class="ghost" id="themeBtn" type="button">Hell / Dunkel</button>
+  </header>
+
+  <nav class="viewbar" aria-label="Ansicht">
+    <div class="seg" id="viewSeg">
+      <button type="button" data-view="karte">Seitenkarte</button>
+      <button type="button" data-view="prototyp">Prototyp</button>
+      <button type="button" data-view="befund">Befund</button>
+      <button type="button" data-view="entscheidungen">Entscheidungen</button>
+    </div>
+  </nav>
+
+  <section class="view" id="v-karte">
+    <div class="head">
+      <div><h2 id="mapTitle"></h2><p class="lead" id="mapLead"></p></div>
+      <div class="seg" id="mapSeg">
+        <button type="button" data-map="heute">Heute</button>
+        <button type="button" data-map="neu">Vorschlag</button>
+        <button type="button" data-map="diff">Was sich verschiebt</button>
+      </div>
+    </div>
+    <div class="stats" id="mapStats"></div>
+    <div id="mapPane">
+      <div class="mapgrid">
+        <div>
+          <figure style="margin:0">
+            <div style="margin-bottom:8px"><button class="ghost" id="fitBtn" type="button">Ganze Karte zeigen</button></div>
+            <div class="mapbox" id="mapBox"></div>
+            <figcaption class="legend" id="mapLegend"></figcaption>
+          </figure>
+        </div>
+        <aside class="detail" id="detail" aria-live="polite"></aside>
+      </div>
+    </div>
+    <div id="diffPane" hidden></div>
+  </section>
+
+  <section class="view" id="v-prototyp" hidden>
+    <h2>Prototyp des Vorschlags</h2>
+    <p class="lead">Ein Entwurf der Struktur und der Wege, keine fertige Gestaltung. Beschriftungen stammen aus der App, wo es sie schon gibt. Beispielinhalte sind erfunden.</p>
+    <div class="protogrid">
+      <div class="phone" id="phone" aria-label="Prototyp im Handy-Rahmen"></div>
+      <div class="protoside">
+        <div class="here" id="here"></div>
+        <div>
+          <div class="eyebrow" style="margin-bottom:8px">Wege zum Ausprobieren</div>
+          <div class="paths" id="paths"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="v-befund" hidden>
+    <h2>Wo die Bedienung heute schwer ist</h2>
+    <p class="lead">Nach Schwere geordnet. Jeder Punkt nennt die Stelle im Code und was der Vorschlag daran ändert.</p>
+    <div class="finds" id="finds"></div>
+    <h2 style="margin-top:30px">Häufige Aufgaben in Tipps</h2>
+    <p class="lead">Gezählt ab geöffneter App auf „Heute“, ohne Systemdialoge für Berechtigungen. Ein Tipp ist eine Berührung, die etwas auswählt oder öffnet.</p>
+    <div class="tscroll" style="margin-top:12px"><table id="tasks"></table></div>
+    <div class="note" id="taskNote"></div>
+  </section>
+
+  <section class="view" id="v-entscheidungen" hidden>
+    <h2>Was du entscheiden musst</h2>
+    <p class="lead">Fünf Fragen, die der Vorschlag nicht allein beantworten kann, jeweils mit Empfehlung.</p>
+    <div id="questions"></div>
+    <h2 style="margin-top:30px">Was unsicher ist</h2>
+    <div class="note" id="unsure"></div>
+  </section>
+</div>
+
+<script src="daten-heute.js"></script>
+<script src="daten-neu.js"></script>
+<script src="befund.js"></script>
+<script src="prototyp.js"></script>
+<script>
+(function(){
+const $=s=>document.querySelector(s), esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* ---------- Thema ---------- */
+$('#themeBtn').addEventListener('click',()=>{
+  const r=document.documentElement, cur=r.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  r.dataset.theme=cur==='dark'?'light':'dark';
+});
+/* ---------- Ansichten (Hash) ---------- */
+const VIEWS=['karte','prototyp','befund','entscheidungen'];
+function showView(){
+  let v=(location.hash||'').slice(1); if(!VIEWS.includes(v)) v='karte';
+  VIEWS.forEach(x=>{$('#v-'+x).hidden=x!==v});
+  document.querySelectorAll('#viewSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===v));
+}
+$('#viewSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;location.hash=b.dataset.view;showView();window.scrollTo(0,0)});
+addEventListener('hashchange',showView);
+
+/* ---------- Seitenkarte ---------- */
+const TYPES={tab:'Hauptbereich',seite:'Seite',blatt:'Blatt',dialog:'Dialog',zustand:'Zustand / Vollbild',teil:'Abschnitt mit eigenen Aktionen',extern:'Einstieg von außen'};
+const BANDS=['x',0,1,2,3,4]; const BLABEL={x:'von außen',0:'Start',1:'1 Tipp',2:'2 Tipps',3:'3 Tipps',4:'4 und mehr'};
+const NW=132,NH=30,GX=8,GY=8,PADX=10,HEADH=34,LEFT=64,BANDPAD=14;
+let curMap='heute', sel=null, fit=false;
+function layout(M){
+  const pos={}; let x=LEFT; const gx={};
+  M.groups.forEach(g=>{const c=g.cols||1; gx[g.id]={x,w:c*NW+(c-1)*GX+2*PADX,c}; x+=gx[g.id].w+10});
+  const W=x+6; let y=HEADH+8; const by={};
+  BANDS.forEach(b=>{
+    let rows=0;
+    M.groups.forEach(g=>{const n=M.nodes.filter(n=>n.g===g.id&&band(n)===b).length; rows=Math.max(rows,Math.ceil(n/gx[g.id].c))});
+    if(!rows){by[b]=null;return}
+    by[b]={y,h:rows*(NH+GY)-GY+2*BANDPAD};
+    M.groups.forEach(g=>{M.nodes.filter(n=>n.g===g.id&&band(n)===b).forEach((n,i)=>{
+      const c=gx[g.id].c; pos[n.id]={x:gx[g.id].x+PADX+(i%c)*(NW+GX),y:y+BANDPAD+Math.floor(i/c)*(NH+GY)}})});
+    y+=by[b].h;
+  });
+  return {pos,gx,by,W,H:y+10};
+}
+function band(n){return n.d==='x'?'x':Math.min(4,n.d)}
+function short(s){return s.length>21?s.slice(0,20)+'…':s}
+function drawMap(){
+  const M=window.MAPS[curMap], L=layout(M); M._L=L;
+  const byId=Object.fromEntries(M.nodes.map(n=>[n.id,n]));
+  let s=`<svg viewBox="0 0 ${L.W} ${L.H}" ${fit?'style="width:100%;height:auto"':`width="${L.W}" height="${L.H}"`} role="img" aria-label="${esc(M.aria)}"><defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="currentColor"/></marker></defs>`;
+  M.groups.forEach(g=>{const G=L.gx[g.id]; s+=`<rect class="gbg" x="${G.x}" y="4" width="${G.w}" height="${L.H-8}" rx="12"/><text class="glabel" x="${G.x+PADX}" y="25">${esc(g.label)}</text>`});
+  BANDS.forEach(b=>{const B=L.by[b]; if(!B)return; s+=`<line class="band" x1="0" x2="${L.W}" y1="${B.y}" y2="${B.y}"/><text class="blabel" x="6" y="${B.y+BANDPAD+12}">${BLABEL[b]}</text>`});
+  M.edges.forEach((e,i)=>{const a=L.pos[e[0]],b=L.pos[e[1]]; if(!a||!b)return;
+    let d; const ax=a.x+NW/2, bx=b.x+NW/2;
+    if(Math.abs(a.y-b.y)<4){const x1=a.x<b.x?a.x+NW:a.x, x2=a.x<b.x?b.x:b.x+NW, m=a.y-14; d=`M${x1} ${a.y+NH/2}C${x1+(a.x<b.x?16:-16)} ${m},${x2+(a.x<b.x?-16:16)} ${m},${x2} ${b.y+NH/2}`}
+    else if(b.y>a.y){const k=Math.max(18,(b.y-a.y-NH)/2); d=`M${ax} ${a.y+NH}C${ax} ${a.y+NH+k},${bx} ${b.y-k},${bx} ${b.y}`}
+    else{const k=Math.max(18,(a.y-b.y-NH)/2); d=`M${ax} ${a.y}C${ax} ${a.y-k},${bx} ${b.y+NH+k},${bx} ${b.y+NH}`}
+    s+=`<path class="e" data-a="${e[0]}" data-b="${e[1]}" d="${d}" marker-end="url(#ah)" style="color:var(--muted)"/>`});
+  M.nodes.forEach(n=>{const p=L.pos[n.id]; const rx=n.t==='extern'||n.t==='tab'?15:n.t==='blatt'?3:7;
+    s+=`<g class="n ${n.t}${n.neu?' neu':''}" data-id="${n.id}" tabindex="0" role="button" aria-label="${esc(n.label)}"><rect x="${p.x}" y="${p.y}" width="${NW}" height="${NH}" rx="${rx}"/><text x="${p.x+NW/2}" y="${p.y+19.5}" text-anchor="middle">${esc(short(n.label))}</text>${n.probleme&&n.probleme.length?`<circle class="dot" cx="${p.x+NW-5}" cy="${p.y+5}" r="4.5"/>`:''}</g>`});
+  s+='</svg>';
+  $('#mapBox').innerHTML=s;
+  $('#mapTitle').textContent=M.title; $('#mapLead').textContent=M.lead;
+  $('#mapStats').innerHTML=M.stats.map(x=>`<span><b>${esc(x[0])}</b>${esc(x[1])}</span>`).join('');
+  $('#mapLegend').innerHTML=Object.entries(TYPES).map(([k,v])=>`<span><i style="${{tab:'background:var(--accent);border-color:var(--accent);border-radius:8px',blatt:'background:var(--surface2);border-radius:2px',dialog:'border-style:dashed',zustand:'background:var(--warn-soft);border-color:var(--warn)',extern:'background:var(--teal-soft);border-color:var(--teal);border-radius:8px',teil:'border-color:var(--line)',seite:''}[k]}"></i>${v}</span>`).join('')
+    +`<span><i style="border-color:var(--teal);border-width:2.5px"></i>kommt mit den Branches</span><span><i style="border:0;background:var(--bad);width:9px;height:9px;border-radius:50%"></i>hat ein Bedienproblem</span><span>Zeilen: Tipps ab App-Start</span>`;
+  select(sel&&byId[sel]?sel:M.first);
+}
+function select(id){
+  sel=id; const M=window.MAPS[curMap], n=M.nodes.find(n=>n.id===id); if(!n)return;
+  const ins=M.edges.filter(e=>e[1]===id), outs=M.edges.filter(e=>e[0]===id), near=new Set([id,...ins.map(e=>e[0]),...outs.map(e=>e[1])]);
+  document.querySelectorAll('#mapBox .n').forEach(g=>{g.classList.toggle('sel',g.dataset.id===id);g.classList.toggle('dim',!near.has(g.dataset.id))});
+  document.querySelectorAll('#mapBox .e').forEach(p=>{const hi=p.dataset.a===id||p.dataset.b===id;p.classList.toggle('hi',hi);p.classList.toggle('dim',!hi);p.style.color=hi?'var(--accent)':'var(--muted)'});
+  const nm=i=>{const x=M.nodes.find(n=>n.id===i);return x?x.label:i};
+  const li=(arr,k)=>arr.length?'<ul>'+arr.map(e=>`<li><button class="jump" data-jump="${e[k]}">${esc(nm(e[k]))}</button>${e[2]?' · '+esc(e[2]):''}</li>`).join('')+'</ul>':'<span class="src">keine</span>';
+  $('#detail').innerHTML=`<span class="tag">${TYPES[n.t]}</span><span class="tag">${n.d==='x'?'von außen':n.d===0?'Start':n.d+(n.d===1?' Tipp':' Tipps')}</span>${n.neu?'<span class="tag neu">kommt neu</span>':''}
+    <h3>${esc(n.label)}</h3>
+    <dl><div><dt>Zweck</dt><dd>${esc(n.zweck||'')}</dd></div>
+    <div><dt>Hauptaktion</dt><dd>${esc(n.haupt||'keine klare Hauptaktion')}</dd></div>
+    <div><dt>Wege hin</dt><dd>${li(ins,0)}</dd></div>
+    <div><dt>Wege weg</dt><dd>${li(outs,1)}</dd></div>
+    ${n.probleme&&n.probleme.length?`<div><dt>${curMap==='heute'?'Probleme':'Offen'}</dt><dd><ul>${n.probleme.map(p=>`<li>${esc(p)}</li>`).join('')}</ul></dd></div>`:''}
+    ${n.aend?`<div><dt>Änderung gegenüber heute</dt><dd>${esc(n.aend)}</dd></div>`:''}
+    ${n.src?`<div><dt>Im Code</dt><dd class="src">${esc(n.src)}</dd></div>`:''}</dl>`;
+}
+$('#mapBox').addEventListener('click',e=>{const g=e.target.closest('.n');if(g)select(g.dataset.id)});
+$('#mapBox').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){const g=e.target.closest('.n');if(g){e.preventDefault();select(g.dataset.id)}}});
+$('#detail').addEventListener('click',e=>{const b=e.target.closest('[data-jump]');if(!b)return;select(b.dataset.jump);
+  const p=window.MAPS[curMap]._L.pos[b.dataset.jump], box=$('#mapBox'); if(p) box.scrollLeft=Math.max(0,p.x-box.clientWidth/2)});
+function setMap(m){
+  document.querySelectorAll('#mapSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.map===m));
+  const diff=m==='diff'; $('#mapPane').hidden=diff; $('#diffPane').hidden=!diff; $('#mapStats').hidden=diff;
+  if(diff){$('#mapTitle').textContent='Was sich verschiebt und warum';$('#mapLead').textContent='Die Navigation vorher und nachher, darunter jede Verschiebung mit Begründung.';return}
+  curMap=m; sel=null; drawMap();
+}
+$('#fitBtn').addEventListener('click',()=>{fit=!fit;$('#fitBtn').textContent=fit?'Lesbare Größe':'Ganze Karte zeigen';drawMap()});
+$('#mapSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(b)setMap(b.dataset.map)});
+function drawDiff(){
+  const D=window.DIFF;
+  $('#diffPane').innerHTML=`<div class="tscroll" style="margin-top:14px"><table><tr><th>Ebene</th><th>Heute</th><th>Vorschlag</th></tr>${D.nav.map(r=>`<tr><td><b>${esc(r[0])}</b></td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</table></div>
+  <div class="moves">${D.moves.map(m=>`<div class="move"><div><span class="eyebrow">Heute</span><b>${esc(m[0])}</b></div><div class="arr">→</div><div><span class="eyebrow">Vorschlag</span><b>${esc(m[1])}</b></div><div class="why">${esc(m[2])}</div></div>`).join('')}</div>`;
+}
+/* ---------- Befund ---------- */
+function drawBefund(){
+  const B=window.BEFUND, SEV={1:'schwer',2:'mittel',3:'leicht'};
+  $('#finds').innerHTML=B.finds.map((f,i)=>`<div class="find"><div class="nr">${String(i+1).padStart(2,'0')}</div><div><span class="sev s${f.s}">${SEV[f.s]}</span><b>${esc(f.t)}</b><p>${esc(f.d)}</p><p class="src">${esc(f.src)}</p><p class="fix">Im Vorschlag: ${esc(f.fix)}</p></div></div>`).join('');
+  const mx=Math.max(...B.tasks.map(t=>Math.max(t[1],t[2])));
+  $('#tasks').innerHTML='<tr><th>Aufgabe</th><th>Heute</th><th>Vorschlag</th><th>Weg im Vorschlag</th></tr>'+B.tasks.map(t=>`<tr><td><b>${esc(t[0])}</b>${t[4]?`<div class="src">${esc(t[4])}</div>`:''}</td><td class="num"><span class="bar" style="width:${t[1]/mx*70}px"></span>${t[1]}</td><td class="num"><span class="bar neu" style="width:${t[2]/mx*70}px"></span>${t[2]}</td><td>${esc(t[3])}</td></tr>`).join('');
+  $('#taskNote').innerHTML=B.taskNote;
+  $('#questions').innerHTML=B.questions.map((q,i)=>`<div class="q"><div class="eyebrow">Frage ${i+1}</div><h3 style="font-size:17px;margin-top:2px">${esc(q.q)}</h3><p style="margin-top:6px">${esc(q.ctx)}</p><ul>${q.opts.map(o=>`<li>${esc(o)}</li>`).join('')}</ul><div class="rec"><b>Empfehlung:</b> ${esc(q.rec)}</div></div>`).join('');
+  $('#unsure').innerHTML='<ul>'+B.unsure.map(u=>`<li>${esc(u)}</li>`).join('')+'</ul>';
+}
+/* ---------- Prototyp ---------- */
+const P=window.PROTO; let stack=[P.start], sheet=null, toastT=null, curPath=null;
+const TABS=P.tabs;
+function renderPhone(){
+  const id=stack[stack.length-1], S=P.screens[id];
+  const nav=S.nav==='tabs'?`<div class="p-nav"><div class="p-caps">${TABS.map(t=>`<button type="button" class="${S.tab===t.id?'on':''}" data-tab="${t.id}"><i>${t.ic}</i>${t.label}</button>`).join('')}</div><button type="button" class="p-rec" data-sheet="losfahren">Fahren</button></div>`:'';
+  const top=S.top===false?'':`<div class="p-top">${S.nav!=='tabs'&&S.back!==false?'<button type="button" class="ib" data-back aria-label="Zurück">←</button>':''}<h4>${S.title}${S.sub?`<span class="sub">${S.sub}</span>`:''}</h4>${S.actions||''}</div>`;
+  const sh=sheet?`<div class="p-sheetwrap" data-closesheet><div class="p-sheet">${P.sheets[sheet].html}</div></div>`:'';
+  $('#phone').innerHTML=`<div class="p-screen">${top}<div class="p-body${S.nav==='tabs'?'':' nonav'}"${S.bodyStyle?` style="${S.bodyStyle}"`:''}>${S.html}</div>${nav}${sh}</div>`;
+  const crumb=stack.map(i=>P.screens[i].name||P.screens[i].title).join(' › ')+(sheet?' › '+P.sheets[sheet].name:'');
+  const cur=sheet?P.sheets[sheet]:S;
+  $('#here').innerHTML=`<div class="eyebrow">Du bist hier</div><div class="crumb">${esc(crumb)}</div><h3 style="margin-top:8px">${esc(cur.name||cur.title)}</h3><p style="margin-top:4px">${cur.note||''}</p>${cur.neu?`<p style="margin-top:8px"><span class="tag neu">kommt neu</span>${esc(cur.neu)}</p>`:''}`;
+}
+function go(id){ if(!P.screens[id])return; sheet=null; const S=P.screens[id]; if(S.nav==='tabs') stack=[id]; else stack.push(id); renderPhone(); }
+function toast(t){ const ph=$('#phone .p-screen'); const d=document.createElement('div'); d.className='p-toast'; d.textContent=t; ph.appendChild(d); clearTimeout(toastT); toastT=setTimeout(()=>d.remove(),2200); }
+$('#phone').addEventListener('click',e=>{
+  const t=e.target.closest('[data-go],[data-back],[data-tab],[data-sheet],[data-toast],[data-closesheet],[data-home]'); if(!t)return;
+  if(t.dataset.closesheet!==undefined&&e.target!==t&&!e.target.closest('[data-go],[data-sheet],[data-toast],[data-home],[data-x]'))return;
+  if(t.dataset.go) return go(t.dataset.go);
+  if(t.dataset.tab) return go(TABS.find(x=>x.id===t.dataset.tab).screen);
+  if(t.dataset.sheet){sheet=t.dataset.sheet;return renderPhone()}
+  if(t.dataset.back!==undefined){sheet=null; if(stack.length>1)stack.pop(); return renderPhone()}
+  if(t.dataset.home!==undefined){sheet=null;stack=[P.start];return renderPhone()}
+  if(t.dataset.toast){const m=t.dataset.toast; if(sheet){sheet=null;renderPhone()} return toast(m)}
+  if(t.dataset.closesheet!==undefined){sheet=null;return renderPhone()}
+});
+function drawPaths(){
+  $('#paths').innerHTML=P.paths.map((p,i)=>`<button type="button" class="path${curPath===i?' on':''}" data-p="${i}"><b>${esc(p.t)}</b><span>${esc(p.s)}</span></button>`).join('');
+}
+$('#paths').addEventListener('click',e=>{const b=e.target.closest('[data-p]');if(!b)return;curPath=+b.dataset.p;const p=P.paths[curPath];sheet=null;stack=p.stack.slice();if(p.sheet)sheet=p.sheet;renderPhone();drawPaths();
+  if(innerWidth<820) $('#phone').scrollIntoView({block:'start',behavior:'smooth'})});
+/* ---------- Start ---------- */
+showView(); setMap('heute'); drawDiff(); drawBefund(); renderPhone(); drawPaths();
+})();
+</script>

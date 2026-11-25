@@ -3,6 +3,10 @@ package de.trailscape.app.ui.indoor
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -36,6 +40,7 @@ import de.trailscape.app.sensors.bluetoothEnabled
 import de.trailscape.app.sensors.hasBluetoothPermissions
 import de.trailscape.app.sensors.indoor.IndoorDevicesSection
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.decideToday
 import de.trailscape.app.ui.components.OneUiDialog
@@ -47,15 +52,30 @@ import de.trailscape.core.indoor.ShifterEvent
 import kotlinx.coroutines.delay
 
 /**
- * # Verdrahtung des Indoor-Ablaufs (Ziel `indoor` im `NavHost`)
+ * # Verdrahtung des Indoor-Ablaufs
  *
  * Bindet das [IndoorViewModel] an die zustandslosen Bildschirme je
- * [IndoorStage]. Das ViewModel haengt am Backstack-Eintrag `indoor` (der
- * `viewModel()`-Aufruf hier nimmt den Eintrag als Owner): Es ueberlebt die
- * Drehung und endet mit dem Verlassen des Ablaufs.
+ * [IndoorStage]. Das ViewModel haengt am Backstack-Eintrag, in dem der Ablauf
+ * steht (der `viewModel()`-Aufruf hier nimmt den Eintrag als Owner): Es
+ * ueberlebt die Drehung und endet mit dem Verlassen des Eintrags.
+ *
+ * ## Drei Arten, den Ablauf zu zeigen ([IndoorFlowMode])
+ *  * [IndoorFlowMode.TAB] — die Sicht „Strecken" des Tabs „Indoor"
+ *    (`IndoorTabScreen.kt`). Die Startseite traegt den Kopf des Tabs
+ *    ([tabHeader]) und hat keinen Zurueck-Pfeil; die Navigationsleiste steht
+ *    nur auf der Startseite ([AppViewModel.setIndoorTaskActive]). Nach der
+ *    Auswertung geht es zurueck auf die Startseite
+ *    ([IndoorViewModel.startOver]) statt aus dem Ablauf heraus.
+ *  * [IndoorFlowMode.PUSHED] — gepushte Seite mit vorgewaehlter Strecke
+ *    (Einheit des Tages von „Heute", „Indoor fahren" und „In 3D ansehen" aus
+ *    dem Tourdetail). [onExit] fuehrt dorthin zurueck, woher man kam.
+ *  * [IndoorFlowMode.SETTINGS] — „Einstellungen → Indoor": oeffnet direkt die
+ *    Einstellungsseite; ist sie geschlossen, verlaesst [onExit] die Seite.
+ *    Der Abgleich „Fahrgefühl einstellen" laeuft darin wie bisher.
  *
  * ## Zurueck
- *  * Startseite: verlaesst den Ablauf ([onExit]).
+ *  * Startseite: verlaesst den Ablauf ([onExit]); im Tab uebernimmt die
+ *    Huelle (zurueck auf „Heute").
  *  * Koppeln, Einstellungen: zurueck zur Startseite.
  *  * Strecke vorbereiten: zurueck zur Startseite ([IndoorViewModel.back]);
  *    ein laufender Weltbau wird dabei abgebrochen.
@@ -63,6 +83,8 @@ import kotlinx.coroutines.delay
  *    fragt: weiterfahren oder beenden (dann folgt die Auswertung, dort wird
  *    gespeichert). Ist der Start gescheitert, geht es zurueck zu „Welt laden".
  *  * Auswertung: ungespeicherte Fahrt → Rueckfrage „Verwerfen?"; sonst raus.
+ *    Nach dem Speichern fuehrt „Tour ansehen" ins Tourdetail der neuen Tour
+ *    ([AppViewModel.requestRideDetail]).
  *
  * ## Lebenszyklus
  * `ON_STOP` → [IndoorViewModel.onAppBackground] (die Fahrt pausiert, es gibt
@@ -70,9 +92,22 @@ import kotlinx.coroutines.delay
  * [IndoorViewModel.onAppForeground]. Der Bildschirm bleibt waehrend der Fahrt
  * an (`KeepScreenOn` in [IndoorRideScreen]).
  *
- * @param onExit verlaesst den Ablauf (Backstack-Eintrag entfernen).
+ * @param onExit verlaesst den Ablauf (Backstack-Eintrag entfernen); im Tab
+ *   ohne Wirkung.
  * @param onOpenDiagnostics oeffnet `indoor/diagnose`.
  * @param onOpenWorlds oeffnet `indoor/welten` (Strecken auf dem Geraet).
+ * @param mode siehe oben.
+ * @param tabHeader nur [IndoorFlowMode.TAB]: die Segmente des Tabs, direkt
+ *   unter der Kopfzeile der Startseite.
+ * @param challengesSegment nur [IndoorFlowMode.TAB]: statt der Startseite die
+ *   Sicht „Herausforderungen" zeigen (Segment des Tabs, `docs/ux/umbau.md`).
+ *   Sie braucht dasselbe [IndoorViewModel] wie die Startseite, deshalb liegt
+ *   sie in diesem Ablauf und nicht daneben.
+ * @param onOpenGarage oeffnet `indoor/garage` (Fahrer und Rad anpassen) vom
+ *   Symbol in der Kopfzeile der Startseite. Nur im Tab gesetzt; `null` (der
+ *   gepushte Ablauf) zeichnet kein Symbol.
+ * @param onChallengeChosen „Gegen … fahren" oder „Strecke herunterladen" in
+ *   dieser Sicht: Der Tab wechselt auf „Strecken", wo „Fahren" startet.
  */
 @Composable
 fun IndoorFlowScreen(
@@ -80,6 +115,11 @@ fun IndoorFlowScreen(
     onExit: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenWorlds: () -> Unit = {},
+    mode: IndoorFlowMode = IndoorFlowMode.PUSHED,
+    tabHeader: (@Composable () -> Unit)? = null,
+    challengesSegment: Boolean = false,
+    onChallengeChosen: () -> Unit = {},
+    onOpenGarage: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val vm: IndoorViewModel = viewModel(
@@ -115,15 +155,31 @@ fun IndoorFlowScreen(
             appViewModel.requestRouteGeneration(target)
         }
     }
-    // Von „Heute" gewaehlter Vorschlag der Einheit des Tages.
-    LaunchedEffect(vm) { appViewModel.consumeIndoorDayPick()?.let(vm::preferDaySuggestion) }
-    // „Indoor fahren" aus der Tourdetailansicht: diese Strecke vorauswaehlen.
-    LaunchedEffect(vm) { appViewModel.consumeIndoorRidePick()?.let(vm::preferRide) }
-    // „In 3D ansehen" im Tourdetail: direkt in die Vorschau (Idee 4, docs/indoor/vorschau.md).
-    LaunchedEffect(vm) { appViewModel.consumeIndoorPreviewPick()?.let(vm::openPreview) }
+    // Die Vorwahlen gelten nur dem gepushten Ablauf: Der Tab und die
+    // Einstellungsseite duerfen sie nicht wegnehmen.
+    if (mode == IndoorFlowMode.PUSHED) {
+        // Von „Heute" gewaehlter Vorschlag der Einheit des Tages.
+        LaunchedEffect(vm) { appViewModel.consumeIndoorDayPick()?.let(vm::preferDaySuggestion) }
+        // „Indoor fahren" aus der Tourdetailansicht: diese Strecke vorauswaehlen.
+        LaunchedEffect(vm) { appViewModel.consumeIndoorRidePick()?.let(vm::preferRide) }
+        // „In 3D ansehen" im Tourdetail: direkt in die Vorschau (Idee 4, docs/indoor/vorschau.md).
+        LaunchedEffect(vm) { appViewModel.consumeIndoorPreviewPick()?.let(vm::openPreview) }
+    }
+    // „Einstellungen → Indoor": gleich die Einstellungsseite, noch bevor die
+    // Stufe unten zum ersten Mal gelesen wird (sonst blitzte die Startseite
+    // auf). Nach einer Drehung steht die Stufe schon richtig.
+    remember(vm) {
+        if (mode == IndoorFlowMode.SETTINGS && vm.stage.value == IndoorStage.ROUTE) vm.openSettings()
+        true
+    }
     // Die Startseite ist der Anfang: Strecken einmal lesen (nach einer Drehung nicht erneut).
     // Zum Ansehen geoeffnet (Vorschau): keine Startseite, also auch keine Streckenliste und kein Katalogabruf.
-    LaunchedEffect(vm) { if (!vm.previewMode) vm.ensureRouteOptions() }
+    // Im Tab lebt das ViewModel ueber Tab-Wechsel hinweg: bei jedem Wiedereintritt
+    // Einstellungen und Strecken neu lesen ([IndoorViewModel.refreshHome]).
+    LaunchedEffect(vm) {
+        if (vm.previewMode) return@LaunchedEffect
+        if (mode == IndoorFlowMode.TAB) vm.refreshHome() else vm.ensureRouteOptions()
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, vm) {
@@ -139,15 +195,75 @@ fun IndoorFlowScreen(
     }
 
     val stage by vm.stage.collectAsStateWithLifecycle()
+    // Im Tab steht die Navigationsleiste nur auf der Startseite; jede andere
+    // Stufe braucht den ganzen Bildschirm.
+    if (mode == IndoorFlowMode.TAB) {
+        val taskActive = stage != IndoorStage.ROUTE
+        DisposableEffect(taskActive) {
+            appViewModel.setIndoorTaskActive(taskActive)
+            onDispose { appViewModel.setIndoorTaskActive(false) }
+        }
+    }
+    // Nach der Auswertung: im Tab zurueck auf die Startseite, sonst raus.
+    val leaveSummary: () -> Unit = if (mode == IndoorFlowMode.TAB) {
+        { vm.startOver() }
+    } else {
+        onExit
+    }
     when (stage) {
-        IndoorStage.ROUTE -> HomeStage(vm, onExit)
+        IndoorStage.ROUTE -> when (mode) {
+            IndoorFlowMode.TAB -> if (challengesSegment) {
+                ChallengesStage(
+                    vm = vm,
+                    onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
+                    title = stringResource(R.string.indoor_app_tab_title),
+                    tabHeader = tabHeader,
+                    onChosen = onChallengeChosen,
+                )
+            } else {
+                HomeStage(
+                    vm = vm,
+                    onExit = null,
+                    onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
+                    title = stringResource(R.string.indoor_app_tab_title),
+                    tabHeader = tabHeader,
+                    onOpenGarage = onOpenGarage,
+                )
+            }
+            IndoorFlowMode.PUSHED -> HomeStage(vm = vm, onExit = onExit, onOpenSettings = vm::openSettings)
+            // Die Einstellungsseite ist geschlossen: zurueck in die Einstellungen der App.
+            IndoorFlowMode.SETTINGS -> {
+                // Leere Flaeche in Hintergrundfarbe, solange die Seite hinausfaehrt.
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {}
+                LaunchedEffect(Unit) { onExit() }
+            }
+        }
         IndoorStage.PAIR -> PairStage(vm)
         IndoorStage.SETTINGS -> SettingsStage(vm, onOpenWorlds, onOpenDiagnostics)
         IndoorStage.WORLD -> if (vm.previewMode) PreviewWorldStage(vm, onExit) else WorldStage(vm)
         IndoorStage.RIDE -> RideStage(vm)
-        IndoorStage.SUMMARY -> SummaryStage(vm, onExit)
+        IndoorStage.SUMMARY -> SummaryStage(
+            vm = vm,
+            onExit = leaveSummary,
+            onOpenTour = { rideId ->
+                leaveSummary()
+                appViewModel.requestRideDetail(rideId)
+            },
+        )
         IndoorStage.PREVIEW -> PreviewStage(vm, onExit)
     }
+}
+
+/** Wie der Indoor-Ablauf gezeigt wird (siehe [IndoorFlowScreen]). */
+enum class IndoorFlowMode {
+    /** Sicht „Strecken" des Tabs „Indoor". */
+    TAB,
+
+    /** Gepushte Seite mit vorgewaehlter Strecke; Zurueck fuehrt zum Ausgangspunkt. */
+    PUSHED,
+
+    /** „Einstellungen → Indoor". */
+    SETTINGS,
 }
 
 /**
@@ -307,15 +423,28 @@ private fun rememberBluetoothState(): Pair<Boolean, Boolean> {
     return on to granted
 }
 
+/**
+ * @param onExit `null` im Tab: kein Zurueck-Pfeil, und die Zurueck-Taste
+ *   gehoert der Huelle.
+ */
 @Composable
-private fun HomeStage(vm: IndoorViewModel, onExit: () -> Unit) {
+private fun HomeStage(
+    vm: IndoorViewModel,
+    onExit: (() -> Unit)?,
+    onOpenSettings: () -> Unit,
+    title: String = stringResource(R.string.indoor_app_route_title),
+    tabHeader: (@Composable () -> Unit)? = null,
+    onOpenGarage: (() -> Unit)? = null,
+) {
     val ui by vm.route.collectAsStateWithLifecycle()
     val pair by vm.pair.collectAsStateWithLifecycle()
     val catalog by vm.catalog.collectAsStateWithLifecycle()
     val catalogExtras by vm.catalogExtras.collectAsStateWithLifecycle()
     val day by vm.day.collectAsStateWithLifecycle()
     val (bluetoothOn, permissionGranted) = rememberBluetoothState()
-    BackHandler { onExit() }
+    BackHandler(enabled = onExit != null) { onExit?.invoke() }
+    // Eine geladene Strecke ändert, ob eine Herausforderung fahrbar ist (Mitfahrer-Pille).
+    LaunchedEffect(catalog) { vm.refreshChallenges() }
     IndoorHomeScreen(
         route = ui,
         pair = pair,
@@ -331,13 +460,72 @@ private fun HomeStage(vm: IndoorViewModel, onExit: () -> Unit) {
         onRide = vm::continueFromRoute,
         onBack = onExit,
         onOpenPair = vm::openPair,
-        onOpenSettings = vm::openSettings,
+        onOpenSettings = onOpenSettings,
+        title = title,
+        headerExtra = tabHeader,
         catalog = catalog,
         onCatalogDownload = vm::downloadCatalog,
         onCatalogCancel = vm::cancelCatalogDownload,
         onCatalogDiscard = vm::discardCatalogDownload,
         catalogExtras = catalogExtras,
+        onOpenGarage = onOpenGarage,
     )
+}
+
+/**
+ * Die Sicht „Herausforderungen" des Indoor-Tabs (`docs/ux/umbau.md`,
+ * `docs/herausforderung.md`): gespeicherte Herausforderungen und „Datei
+ * wählen", unter derselben Kopfzeile und denselben Segmenten wie „Strecken".
+ * „Gegen … fahren" setzt Strecke und Mitfahrer im [IndoorViewModel] und
+ * wechselt auf „Strecken"; ebenso „Strecke herunterladen", weil Voranschlag
+ * und Fortschritt des Downloads dort stehen.
+ */
+@Composable
+private fun ChallengesStage(
+    vm: IndoorViewModel,
+    onOpenSettings: () -> Unit,
+    title: String,
+    tabHeader: (@Composable () -> Unit)?,
+    onChosen: () -> Unit,
+) {
+    val ui by vm.route.collectAsStateWithLifecycle()
+    val catalog by vm.catalog.collectAsStateWithLifecycle()
+    val challenges by vm.challenges.collectAsStateWithLifecycle()
+    val challengeImport by vm.challengeImport.collectAsStateWithLifecycle()
+    // Eine geladene Strecke ändert, ob eine Herausforderung fahrbar ist.
+    LaunchedEffect(catalog) { vm.refreshChallenges() }
+    ChallengeImportDialog(
+        ui = challengeImport,
+        onSave = vm::confirmChallengeImport,
+        onDismiss = vm::dismissChallengeImport,
+    )
+    IndoorPage(
+        title = title,
+        onBack = null,
+        headerExtra = tabHeader,
+        actions = {
+            IconButton(onClick = onOpenSettings) {
+                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.indoor_app_home_settings_cd))
+            }
+        },
+    ) {
+        IndoorChallengeSection(
+            ui = IndoorChallengesUi(
+                items = challenges,
+                selectedId = (ui.ghost as? IndoorGhostOption.Challenge)?.challengeId,
+            ),
+            onRide = { id, routeName ->
+                vm.useChallenge(id, routeName)
+                onChosen()
+            },
+            onDownload = { id ->
+                vm.downloadCatalog(id)
+                onChosen()
+            },
+            onDelete = vm::deleteChallenge,
+            onImport = vm::importChallengeFile,
+        )
+    }
 }
 
 @Composable
@@ -463,7 +651,7 @@ private fun RideStage(vm: IndoorViewModel) {
 }
 
 @Composable
-private fun SummaryStage(vm: IndoorViewModel, onExit: () -> Unit) {
+private fun SummaryStage(vm: IndoorViewModel, onExit: () -> Unit, onOpenTour: (String) -> Unit) {
     val summary by vm.summary.collectAsStateWithLifecycle()
     var askDiscard by rememberSaveable { mutableStateOf(false) }
     val ui = summary
@@ -487,6 +675,7 @@ private fun SummaryStage(vm: IndoorViewModel, onExit: () -> Unit) {
             onExit()
         },
         onDone = onExit,
+        onOpenTour = ui.savedRideId?.let { rideId -> { onOpenTour(rideId) } },
     )
     if (askDiscard) {
         OneUiDialog(

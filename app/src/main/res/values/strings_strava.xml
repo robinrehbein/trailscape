@@ -34,6 +34,7 @@
     <string name="strava_error_connect_failed">Die Verbindung mit Strava ist fehlgeschlagen. Prüfe deine Internetverbindung und versuche es erneut.</string>
     <string name="strava_error_no_browser">Kein Browser gefunden, um die Anmeldung bei Strava zu öffnen.</string>
     <string name="strava_error_keystore">Der sichere Speicher des Geräts ist nicht verfügbar. Trailscape kann den Strava-Zugang nicht ablegen.</string>
+    <string name="strava_share_connect_hint">Lädt diese Tour in dein eigenes Strava-Konto hoch. Dafür verbindest du Strava einmal in den Einstellungen.</string>
     <string name="strava_upload_action">Zu Strava hochladen</string>
     <string name="strava_upload_action_cd">Tour zu Strava hochladen</string>
     <string name="strava_uploading">Wird zu Strava hochgeladen …</string>

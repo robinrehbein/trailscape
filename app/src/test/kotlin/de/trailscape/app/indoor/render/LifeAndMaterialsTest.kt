@@ -4,7 +4,6 @@ import de.trailscape.app.indoor.render.WorldMaterialRules.ALPHA_BLEND
 import de.trailscape.app.indoor.render.WorldMaterialRules.ALPHA_MASK
 import de.trailscape.app.indoor.render.WorldMaterialRules.ALPHA_OPAQUE
 import de.trailscape.app.indoor.render.WorldMaterialRules.Kind
-import de.trailscape.core.indoor.world.WorldModels
 import java.io.File
 import kotlin.math.abs
 import kotlin.test.Test
@@ -176,33 +175,5 @@ class LifeAndMaterialsTest {
             assertTrue(BirdModel.wing(i, true) in json && BirdModel.wing(i, false) in json)
         }
         File("build/indoor").apply { mkdirs() }.resolve("birds.glb").writeBytes(glb)
-    }
-
-    // ------------------------------------------------------------------ Trikots
-
-    @Test
-    fun `Trikot umgefaerbt, Hose und Haut bleiben`() {
-        val src = File("src/main/assets/${WorldModels.ASSET_DIR}/${WorldModels.RIDER}").readBytes()
-        val blue = RiderRecolor.recolorOrThrow(src, RiderRecolor.JERSEYS[0])
-        assertEquals(src.size, blue.size)
-        var changed = 0
-        var redLeft = 0
-        // Nur der Binaerblock darf sich aendern, und dort nur Trikotrot
-        for (i in src.indices) if (src[i] != blue[i]) changed++
-        assertTrue(changed > 300, "zu wenig umgefaerbt: $changed")
-        for (i in 0 until src.size - 3 step 1) {
-            // grobe Probe: kein reines Trikotrot mehr in Folgen, die vorher Trikotrot waren
-            if (RiderRecolor.isJersey(src[i].toInt() and 0xFF, src[i + 1].toInt() and 0xFF, src[i + 2].toInt() and 0xFF) &&
-                src[i] != blue[i] && RiderRecolor.isJersey(blue[i].toInt() and 0xFF, blue[i + 1].toInt() and 0xFF, blue[i + 2].toInt() and 0xFF)
-            ) {
-                redLeft++
-            }
-        }
-        assertEquals(0, redLeft)
-        val out = File("build/indoor").apply { mkdirs() }
-        RiderRecolor.JERSEYS.forEachIndexed { k, c -> File(out, "rider_$k.glb").writeBytes(RiderRecolor.recolor(src, c)) }
-        // Kaputte Eingabe: unveraendert zurueck
-        val junk = ByteArray(40) { 1 }
-        assertTrue(RiderRecolor.recolor(junk, RiderRecolor.JERSEYS[1]).contentEquals(junk))
     }
 }

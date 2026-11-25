@@ -290,7 +290,7 @@ class RideListLogicTest {
             en.resolve(rideDetailDateLine(at.withYear(2024), today, planned = true, fromHealthConnect = false, AppLanguage.EN)),
         )
         assertEquals(
-            "Dienstag, 22. September · 18:12 · geplante Route · aus Health Connect",
+            "Dienstag, 22. September · 18:12 · Planung · aus Health Connect",
             de.resolve(rideDetailDateLine(at, today, planned = true, fromHealthConnect = true, AppLanguage.DE)),
         )
     }

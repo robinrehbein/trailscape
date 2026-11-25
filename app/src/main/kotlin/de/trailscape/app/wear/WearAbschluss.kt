@@ -3,6 +3,7 @@ package de.trailscape.app.wear
 import android.content.Context
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.record.RecordingRepository
+import de.trailscape.app.ui.erfolge.withErfolgeOutsideUi
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.map.rideHighlightTexts
 import de.trailscape.app.ui.weekTargetKmOutsideUi
@@ -93,6 +94,8 @@ object WearAbschluss {
             routeComparison = null,
             max = AbschlussInfo.MAX_ZEILEN,
         )
-        return rideHighlightTexts(context, highlights)
+        // Neue Abzeichen als eine der Zeilen (docs/erfolge.md) — das Protokoll bleibt, wie es ist.
+        val mitErfolgen = withErfolgeOutsideUi(context, summaries, rideId, now, highlights, AbschlussInfo.MAX_ZEILEN)
+        return rideHighlightTexts(context, mitErfolgen)
     }
 }
