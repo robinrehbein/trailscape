@@ -190,8 +190,7 @@ class CatalogBrowseTest {
             CatalogRideRecord("Sa Calobra", 10.2, 100), // keine Indoor-Fahrt
             CatalogRideRecord("Indoor · Enztal", 24.0, null), // ohne Zeit
         )
-        val best = catalogBestTimes(e, rides)
+        val best = catalogBestTimes(e.map { it.routeRef() }, rides)
         assertEquals(mapOf("a" to 2300), best)
-        assertEquals(setOf("a"), catalogRiddenIds(e, rides))
     }
 }

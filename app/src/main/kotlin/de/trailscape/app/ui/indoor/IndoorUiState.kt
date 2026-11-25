@@ -249,6 +249,10 @@ data class IndoorCatalogItemUi(
     val profile: de.trailscape.core.indoor.catalog.CatalogProfile? = null,
     val previewPath: String? = null,
     val isNew: Boolean = false,
+    /** Platz des entpackten Pakets (Katalog), 0 = unbekannt. */
+    val diskBytes: Long = 0L,
+    /** Quelle des Luftbilds (Katalog), `null` = keine. */
+    val aerialSource: String? = null,
 ) {
     /** Eine Welt liegt bereit (auch wenn es eine neuere gibt). */
     val ready: Boolean

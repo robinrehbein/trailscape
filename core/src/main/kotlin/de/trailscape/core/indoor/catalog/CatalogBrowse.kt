@@ -284,6 +284,15 @@ fun <T> CatalogFilter.apply(items: List<T>, facts: (T) -> CatalogFacts): List<T>
 /** Eine gespeicherte Indoor-Fahrt in der Form, die die Zuordnung braucht. */
 data class CatalogRideRecord(val name: String, val distanceKm: Double, val seconds: Int?)
 
+/** Das, was die Zuordnung einer Fahrt von einer Katalogstrecke braucht. */
+data class CatalogRouteRef(val id: String, val names: Set<String>, val lengthM: Double)
+
+fun CatalogEntry.routeRef(): CatalogRouteRef =
+    CatalogRouteRef(id, setOf(name.de, name.en).filter { it.isNotBlank() }.toSet(), lengthM)
+
+/** Name, den die App einer Indoor-Fahrt beim Speichern gibt: „Indoor · <Streckenname>". */
+const val INDOOR_RIDE_NAME_PREFIX: String = "Indoor · "
+
 /**
  * Bestzeit je Katalogstrecke aus den Indoor-Fahrten. Eine Fahrt zaehlt zu einer
  * Strecke, wenn ihr Name „Indoor · <Streckenname>" lautet (deutsch oder englisch,
@@ -291,19 +300,17 @@ data class CatalogRideRecord(val name: String, val distanceKm: Double, val secon
  * fuhr (mindestens [MIN_COMPLETION] der Laenge — Fahrten „ab km x" oder
  * abgebrochene Fahrten zaehlen nicht). Die Bestzeit ist die kuerzeste Dauer
  * (bewegte Zeit, sonst Gesamtzeit). Schluessel: Katalogkennung.
+ *
+ * Grenze: Eine Tour kennt ihre Strecke nur ueber den Namen. Wer eine
+ * gespeicherte Indoor-Fahrt umbenennt, verliert die Zuordnung.
  */
-fun catalogBestTimes(
-    entries: List<CatalogEntry>,
-    rides: List<CatalogRideRecord>,
-    prefixes: Collection<String> = listOf("Indoor · "),
-): Map<String, Int> {
+fun catalogBestTimes(refs: List<CatalogRouteRef>, rides: List<CatalogRideRecord>): Map<String, Int> {
     val out = HashMap<String, Int>()
-    for (e in entries) {
-        val names = setOf(e.name.de, e.name.en).filter { it.isNotBlank() }
+    for (e in refs) {
         val best = rides.asSequence()
             .filter { r -> r.seconds != null && r.seconds > 0 }
             .filter { r -> r.distanceKm * 1000.0 >= e.lengthM * MIN_COMPLETION }
-            .filter { r -> prefixes.any { p -> names.any { n -> r.name == p + n } } }
+            .filter { r -> r.name.startsWith(INDOOR_RIDE_NAME_PREFIX) && r.name.removePrefix(INDOOR_RIDE_NAME_PREFIX) in e.names }
             .minOfOrNull { it.seconds!! }
         if (best != null) out[e.id] = best
     }
@@ -312,7 +319,3 @@ fun catalogBestTimes(
 
 /** Anteil der Streckenlaenge, den eine Fahrt mindestens haben muss, um als „gefahren" zu gelten. */
 const val MIN_COMPLETION: Double = 0.95
-
-/** Kennungen aller Strecken mit mindestens einer vollen Fahrt (Filter „noch nicht gefahren"). */
-fun catalogRiddenIds(entries: List<CatalogEntry>, rides: List<CatalogRideRecord>, prefixes: Collection<String> = listOf("Indoor · ")): Set<String> =
-    catalogBestTimes(entries, rides, prefixes).keys

@@ -204,6 +204,7 @@ private fun HomeStage(vm: IndoorViewModel, onExit: () -> Unit) {
     val ui by vm.route.collectAsStateWithLifecycle()
     val pair by vm.pair.collectAsStateWithLifecycle()
     val catalog by vm.catalog.collectAsStateWithLifecycle()
+    val catalogExtras by vm.catalogExtras.collectAsStateWithLifecycle()
     val day by vm.day.collectAsStateWithLifecycle()
     val (bluetoothOn, permissionGranted) = rememberBluetoothState()
     BackHandler { onExit() }
@@ -227,6 +228,7 @@ private fun HomeStage(vm: IndoorViewModel, onExit: () -> Unit) {
         onCatalogDownload = vm::downloadCatalog,
         onCatalogCancel = vm::cancelCatalogDownload,
         onCatalogDiscard = vm::discardCatalogDownload,
+        catalogExtras = catalogExtras,
     )
 }
 
