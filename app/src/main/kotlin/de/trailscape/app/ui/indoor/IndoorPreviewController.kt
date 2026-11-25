@@ -93,6 +93,8 @@ class IndoorPreviewController(
     val rendererListener: WorldRendererListener = object : WorldRendererListener {
         override fun onReady(info: RenderDeviceInfo) {
             if (!renderEnabled || closed) return
+            // Die Stelle steht auf Gelaende: nicht laenger auf den Start warten.
+            player.setTilesMissing(false)
             _ui.update { if (it.render is IndoorRenderUi.Failed) it else it.copy(render = IndoorRenderUi.Ready) }
         }
 

@@ -940,3 +940,10 @@ vorbereitet, `-09` Einstellungen, `-10`/`-11` englisch, `-12` Pause mit
 - Das Wort „Welt“ kommt in sichtbaren Texten nicht mehr vor: „Strecke“, wo das
   Ganze gemeint ist, „3D-Ansicht“, wo es um die Darstellung geht; „Testwelt“
   heißt „Teststrecke“. Bezeichner im Code bleiben (`World…`).
+
+## Strecke vor der Tour ansehen (25.11.2026)
+
+Neue Stufe `IndoorStage.PREVIEW`: Eine Planung oder gefahrene Tour lässt sich
+aus dem Tourdetail („In 3D ansehen“) ohne Trainer in 3D abfliegen — über
+denselben Weg „Strecke vorbereiten“ und dieselbe Darstellung. Ablauf,
+Abspieler, Tests, Bilder und offene Punkte: [`vorschau.md`](vorschau.md).

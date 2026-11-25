@@ -119,7 +119,8 @@ fun IndoorFlowScreen(
     // „In 3D ansehen" im Tourdetail: direkt in die Vorschau (Idee 4, docs/indoor/vorschau.md).
     LaunchedEffect(vm) { appViewModel.consumeIndoorPreviewPick()?.let(vm::openPreview) }
     // Die Startseite ist der Anfang: Strecken einmal lesen (nach einer Drehung nicht erneut).
-    LaunchedEffect(vm) { vm.ensureRouteOptions() }
+    // Zum Ansehen geoeffnet (Vorschau): keine Startseite, also auch keine Streckenliste und kein Katalogabruf.
+    LaunchedEffect(vm) { if (!vm.previewMode) vm.ensureRouteOptions() }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, vm) {
