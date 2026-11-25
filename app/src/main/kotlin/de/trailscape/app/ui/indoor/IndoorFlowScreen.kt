@@ -117,6 +117,8 @@ fun IndoorFlowScreen(
     }
     // Von „Heute" gewaehlter Vorschlag der Einheit des Tages.
     LaunchedEffect(vm) { appViewModel.consumeIndoorDayPick()?.let(vm::preferDaySuggestion) }
+    // „Indoor fahren" aus der Tourdetailansicht: diese Strecke vorauswaehlen.
+    LaunchedEffect(vm) { appViewModel.consumeIndoorRidePick()?.let(vm::preferRide) }
     // Die Startseite ist der Anfang: Strecken einmal lesen (nach einer Drehung nicht erneut).
     LaunchedEffect(vm) { vm.ensureRouteOptions() }
 

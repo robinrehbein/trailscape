@@ -600,7 +600,7 @@ private fun TopExtras(ui: IndoorRideUi, session: IndoorSessionState, chromeHidde
     val ghost = session.ghost
     if (ghost != null) {
         ChromeVisibility(visible = !chromeHidden) {
-            HudGhostChip(ghost = ghost, label = ui.ghostLabel, modifier = Modifier.padding(top = 4.dp))
+            HudGhostChip(ghost = ghost, label = ui.ghostLabel, modifier = Modifier.padding(top = 4.dp), showPower = ui.ghostOutdoor)
         }
     }
     (ui.render as? IndoorRenderUi.Loading)?.let { loading ->

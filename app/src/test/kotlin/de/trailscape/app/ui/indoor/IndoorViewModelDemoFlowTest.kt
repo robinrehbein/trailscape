@@ -25,6 +25,7 @@ import de.trailscape.core.RouteWaySection
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.i18n.CoreTextsDe
+import de.trailscape.core.indoor.IndoorMode
 import de.trailscape.core.indoor.IndoorRouteSource
 import de.trailscape.core.indoor.sky.IndoorDaylight
 import de.trailscape.core.indoor.sky.IndoorTimeOfDay
@@ -653,6 +654,55 @@ class IndoorViewModelDemoFlowTest {
         vm.saveRide()
         assertNull(vm.summary.value?.savedRideId)
         assertTrue(rideStorage.listSummaries().summaries.isEmpty())
+    }
+
+    /**
+     * „Indoor fahren" aus der Tourdetailansicht (docs/indoor/app.md, „Drinnen
+     * nachfahren"): Die Tour ist vorausgewaehlt, die Aussenfahrt faehrt als
+     * Mitfahrer mit, eine Planung ohne Mitfahrer; eine unbekannte ID waehlt
+     * nichts. Danach laeuft alles ueber die Startseite.
+     */
+    @Test
+    fun indoorFahrenAusDerTourWaehltStreckeUndAussenfahrtVor() {
+        rideStorage.saveRide(testSavedRide(id = "draussen"))
+        rideStorage.saveRide(testSavedRide(id = "geplant", name = "Planung", planned = true))
+        val vm = viewModel(FakeIndoorParts())
+        // Die Erlaubnis kommt vor dem Lesen der Strecken (wie beim Oeffnen aus dem Detail).
+        vm.preferRide("draussen")
+        vm.pairWithDemo()
+        val selected = assertIs<IndoorRouteOption.Saved>(vm.route.value.selected)
+        assertEquals("draussen", selected.rideId)
+        assertEquals(IndoorMode.SIM, vm.route.value.mode)
+        val ghost = assertIs<IndoorGhostOption.PastRide>(vm.route.value.ghost)
+        assertEquals("draussen", ghost.rideId)
+        assertTrue(ghost.label.startsWith("Außenfahrt vom"), ghost.label)
+
+        // Planung: gewaehlt, aber ohne Mitfahrer.
+        vm.preferRide("geplant")
+        assertEquals("geplant", assertIs<IndoorRouteOption.Saved>(vm.route.value.selected).rideId)
+        assertEquals(IndoorGhostOption.None, vm.route.value.ghost)
+
+        // Unbekannte Tour: die Wahl bleibt, wie sie war.
+        vm.preferRide("gibt-es-nicht")
+        assertEquals("geplant", assertIs<IndoorRouteOption.Saved>(vm.route.value.selected).rideId)
+        assertEquals(IndoorStage.ROUTE, vm.stage.value, "kein zweiter Weg: es bleibt die Startseite")
+    }
+
+    @Test
+    fun aussenfahrtAlsMitfahrerZeigtVergleichInDerAuswertung() {
+        rideStorage.saveRide(testSavedRide(id = "draussen"))
+        val vm = viewModel(FakeIndoorParts())
+        vm.preferRide("draussen")
+        vm.pairWithDemo()
+        vm.continueFromRoute()
+        vm.startRide(withWorld = false)
+        val ride = assertNotNull(vm.ride.value)
+        assertTrue(ride.ghostOutdoor, "das HUD weiss, dass die Aussenfahrt mitfaehrt")
+        vm.rideFor(70)
+        vm.finishRide()
+        val summary = assertNotNull(vm.summary.value)
+        assertTrue(summary.ghostOutdoor)
+        assertTrue(summary.ghostLabel!!.startsWith("Außenfahrt vom"))
     }
 
     @Test

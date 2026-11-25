@@ -388,6 +388,22 @@ class AppViewModel(
     /** Holt den Vorschlag ab (einmal; der Indoor-Ablauf ruft es beim Anlegen). */
     fun consumeIndoorDayPick(): String? = indoorDayPick.also { indoorDayPick = null }
 
+    /** In der Tourdetailansicht gewaehlte Tour oder Planung fuer „Indoor fahren". */
+    private var indoorRidePick: String? = null
+
+    /**
+     * „Indoor fahren" in der Tourdetailansicht: oeffnet den Indoor-Ablauf mit
+     * genau dieser Strecke vorausgewaehlt; bei einer gefahrenen Tour faehrt die
+     * Aussenfahrt als Mitfahrer mit (docs/indoor/app.md, „Drinnen nachfahren").
+     */
+    fun requestIndoorRide(rideId: String) {
+        indoorRidePick = rideId
+        requestIndoor(IndoorDestination.FLOW)
+    }
+
+    /** Holt die Tour ab (einmal; der Indoor-Ablauf ruft es beim Anlegen). */
+    fun consumeIndoorRidePick(): String? = indoorRidePick.also { indoorRidePick = null }
+
     // -------------------------------------------------------------------------
     // Trainingsempfehlung → Routenziel
     // -------------------------------------------------------------------------

@@ -68,7 +68,7 @@ class ContextIndoorTexts(
 
     override fun ghostPastRideLabel(createdAtMs: Long): String {
         val date = Instant.ofEpochMilli(createdAtMs).atZone(ZoneId.systemDefault()).toLocalDate()
-        return context().getString(R.string.indoor_app_ghost_past_label, formatDateShort(date, language()))
+        return context().getString(R.string.idee01_ghost_outdoor_label, formatDateShort(date, language()))
     }
 
     override fun ghostConstantPowerLabel(watts: Int): String =

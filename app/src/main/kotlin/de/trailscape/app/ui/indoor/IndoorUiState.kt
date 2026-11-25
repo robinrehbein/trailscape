@@ -1,6 +1,7 @@
 package de.trailscape.app.ui.indoor
 
 import de.trailscape.app.indoor.IndoorProblem
+import de.trailscape.core.indoor.GhostSection
 import de.trailscape.core.indoor.IndoorMode
 import de.trailscape.core.indoor.IndoorRouteSource
 import de.trailscape.core.indoor.IndoorSessionState
@@ -452,6 +453,8 @@ data class IndoorRideUi(
     val start: IndoorStartUi? = null,
     /** Einheit oder Strecke ist zu Ende, die andere nicht ([IndoorDayEndUi]); `null` = nichts. */
     val dayEnd: IndoorDayEndUi? = null,
+    /** Der Mitfahrer ist die eigene Aussenfahrt: das HUD zeigt auch ihre Leistung an ihrer Stelle. */
+    val ghostOutdoor: Boolean = false,
 )
 
 // ---------------------------------------------------------------------------
@@ -489,6 +492,10 @@ data class IndoorSummaryUi(
     val savedRideId: String? = null,
     val saveFailed: Boolean = false,
     val startKm: Double? = null,
+    /** Der Mitfahrer war die eigene Aussenfahrt („x s vor/hinter deiner Außenfahrt"). */
+    val ghostOutdoor: Boolean = false,
+    /** Vergleich mit der Aussenfahrt auf demselben Abschnitt; `null` ohne Aussenfahrt. */
+    val ghostSection: GhostSection? = null,
 )
 
 // ---------------------------------------------------------------------------

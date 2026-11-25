@@ -212,8 +212,12 @@ const val VIRTUAL_GEAR_COUNT: Int = 24
  * @property gapM Vorsprung des Geists in Metern (positiv = Geist ist vorn).
  * @property gapS derselbe Abstand in Sekunden beim aktuellen Tempo des
  *   Hinteren; `null`, solange der steht.
+ * @property powerW Leistung des Geists jetzt (fruehere Fahrt: gleitendes
+ *   10-s-Mittel ihres Leistungsverlaufs, konstante Leistung: deren Wert);
+ *   `null`, wenn unbekannt oder er im Ziel steht. Ergaenzt fuer
+ *   „Draussen gefahren → drinnen nachfahren" (docs/indoor/app.md).
  */
-data class GhostState(val distM: Double, val speedMps: Double, val gapM: Double, val gapS: Double?)
+data class GhostState(val distM: Double, val speedMps: Double, val gapM: Double, val gapS: Double?, val powerW: Double? = null)
 
 /**
  * Stand der ERG-Einheit.
@@ -327,6 +331,9 @@ interface IndoorSession {
  * @property stats Kennzahlen aus genau diesen Punkten (`computeStats`), damit
  *   Liste und Detail dieselben Zahlen zeigen wie bei jeder Tour.
  * @property ghostFinalGapS Abstand zum Geist am Ende (positiv = Geist vorn); `null` ohne Geist.
+ * @property ghostSection der mit dem Geist verglichene Abschnitt (Zeit und
+ *   Leistung beider, [GhostSection]); `null` ohne Geist oder ohne gefahrene
+ *   Meter. Ergaenzt fuer den Vergleich mit der Aussenfahrt.
  */
 data class IndoorRideRecord(
     val startedAtEpochMs: Long,
@@ -338,4 +345,5 @@ data class IndoorRideRecord(
     val totals: IndoorTotals,
     val laps: Int,
     val ghostFinalGapS: Double?,
+    val ghostSection: GhostSection? = null,
 )
