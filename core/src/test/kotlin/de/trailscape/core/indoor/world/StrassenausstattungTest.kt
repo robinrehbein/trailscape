@@ -221,7 +221,13 @@ class StrassenausstattungTest {
         val t = track(400.0, 50.0, 120.0, 400.0, onHills = true)
         val scene = RouteTestScene(t, listOf(RouteTestScene.Zone(0.0, LandClass.MEADOW, LandClass.MEADOW)), emptyList(), emptyList())
         val posts = HashSet<Long>()
-        for (spec in scene.tiles()) {
+        // Die Gerade laeuft genau auf der Kachelgrenze e = 0: Die Pfosten der linken Seite gehoeren der westlichen
+        // Nachbarkachel, die scene.tiles() (nur Kacheln mit Proben der Strecke) nicht enthaelt. Darum alle Kacheln
+        // im Umkreis von 8 m um die Strecke bauen, wie es der Weltbau tut.
+        val tiles = (0 until t.sampleCount).flatMap { i ->
+            listOf(-8.0, 8.0).flatMap { de -> listOf(-8.0, 8.0).map { dn -> TileSpec.at(0, t.e[i] + de, t.n[i] + dn) } }
+        }.distinct()
+        for (spec in tiles) {
             val ctx = scene.context(spec)
             val out = TileOutput(spec)
             PropsLayer().build(ctx, out)
