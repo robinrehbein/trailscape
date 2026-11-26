@@ -1,11 +1,13 @@
 # Indoor — Bäume aus der Nähe
 
-Stand: 25.11.2026, Branch `claude/grafik-baeume-einbau`. Teil des Grafik-Schwarms
+Stand: 25.11.2026, Branch `claude/grafik-baumwechsel` (Wechselring; der Einbau
+selbst: `claude/grafik-baeume-einbau`). Teil des Grafik-Schwarms
 (Auftrag: „deutlicher Schritt nach vorn, quasi fotorealistisch“); dieser Teil
 behandelt **nur Bäume in der Nahzone**.
 
-Das Dokument hat zwei Teile: den **Einbau** (was jetzt in Weltbau, App und
-Werkzeug steckt — der folgende Abschnitt) und darunter unverändert den
+Das Dokument hat drei Teile: den **Einbau** (was jetzt in Weltbau, App und
+Werkzeug steckt — der folgende Abschnitt), darin den **Wechselring** (wie
+gebackene Bäume und Instanzen ohne Sprung ineinander übergehen) und darunter unverändert den
 **Prototyp** (Generator, Budget, Messung, Bilder alt/neu, Einbauplan), auf dem
 der Einbau beruht.
 
@@ -34,8 +36,15 @@ der Einbau beruht.
   gebackenen Abschnitt aus. Jede Vorlage liegt einmal im Grafikspeicher; alle
   Bäume derselben Vorlage teilen Vertexpuffer, Indexpuffer und Materialinstanzen
   und werden über Filaments automatische Instanzierung gezeichnet.
-- **Standard** (Vorgabe) und der sichere Modus zeigen **genau die bisherige
-  Darstellung**: dieselben gebackenen Bäume, dieselben Dreiecke.
+- **Wechsel ohne Sprung:** Instanzen und gebackene Bäume wechseln in einem
+  **Ring um die Kamera** (10 m breit, außen bei 45/60 m oder näher, wenn die
+  Obergrenze greift): das Laubmaterial rastert dort beide ineinander und tönt
+  die gebackenen Bäume bis zum Ring auf den Ton der Bibliothek. Siehe
+  „Wechselring“. Der Weltbau ist dafür **nicht** geändert (`indoor-world/15`).
+- **Standard** (Vorgabe) und der sichere Modus zeigen dieselben gebackenen
+  Bäume, dieselben Dreiecke. Zwei Dinge ändern sich auch dort, siehe
+  „Wechselring → Nebenwirkungen“: Rinde läuft über das Laubmaterial (im Bild
+  gleich), und Laubkarten werfen jetzt bestimmt Schatten.
 - **Wind und Schatten** wie bei den gebackenen Bäumen: Laub läuft über
   dasselbe `foliage.mat` (Wind, Atlas-Modus 1), Bäume werfen Schatten und
   empfangen keine.
@@ -49,7 +58,7 @@ der Einbau beruht.
 | gebackene Bandbäume | nur die Fernstufe (134–150 Dreiecke) | **unverändert** die bisherigen Stufen (nah/mittel/fern nach Budget), nur nach Abschnitten gruppiert | Die niedrigste Grafikstufe und ältere App-Versionen sehen exakt das alte Bild; das Kachelbudget ändert sich nicht. Preis: keine Ersparnis auf der Platte |
 | Kennung der Bibliothek | Feld im Manifest | steckt im **Präfix** `x_treei_` (Bibliothek `trees/1`) | Kein neues Manifestfeld, das Manifestformat bleibt. Eine unverträgliche Bibliothek bekäme ein neues Präfix — ältere Apps zeigen dann die gebackenen Bäume |
 | Instanzierung | `AssetLoader.createInstancedAsset` mit festem Vorrat | **eigene Vertex-/Indexpuffer je Vorlage**, ein Renderable je Baum, `Engine.setAutomaticInstancingEnabled(true)` | gltfio instanziert nur ganze Assets (alle 72 Vorlagen auf einmal, Materialinstanzen je Instanz — keine gemeinsamen Zeichenaufrufe). Die Java-API 1.75.1 hat keinen `InstanceBuffer`; die automatische Instanzierung fasst Renderables mit gleicher Geometrie und gleicher Materialinstanz zusammen und lässt jedem Baum seinen eigenen Umriss (Sichtkegel) |
-| Abschnitt ausblenden | „solange einer seiner Bäume als Instanz steht“ | Abschnitt wird **als Ganzes** umgeschaltet: alle seine Bäume Instanz (nah oder mittel) oder alle gebacken | So fehlt nie ein Baum und keiner steht doppelt |
+| Abschnitt ausblenden | „solange einer seiner Bäume als Instanz steht“ | **Wechselring** (siehe unten): das Material blendet nach Abstand zur Kamera; ein Abschnitt wird nur noch abgeschaltet, wenn er ganz innerhalb des Rings liegt. Rückfall ohne blendfähiges Material: Abschnitt **als Ganzes** | Der Sprung je Abschnitt war sichtbar; so fehlt weiterhin nie ein Baum |
 | Ton je Baum | im Instanzknoten | **entfällt** | Alle Instanzen teilen eine Materialinstanz (Voraussetzung der Instanzierung); Vielfalt kommt aus 4 Varianten, Drehung und Maßstab |
 | Betrachter (three.js) | zeigt Instanzen | zeigt weiter die **gebackenen** Bäume | Die Abschnitte liegen unter `trees`; die Instanzknoten sind leer und stören nicht. Maßgeblich für die Instanzen ist filarender |
 
@@ -81,13 +90,105 @@ der Einbau beruht.
 | 1 | Hoch | 18 m | 45 m | 10 | 40 |
 | 2 | Ultra | 25 m | 60 m | 16 | 56 |
 
-Abstand zur **Kamera** (waagrecht). Abschnitte kommen von der Kamera nach
-außen dran, solange einer ihrer Bäume in Reichweite ist und die Obergrenze
-reicht (der nächste Abschnitt immer). In den aktiven Abschnitten bekommen die
-nächsten Bäume bis zur Nahgrenze die Nahstufe, alle anderen die mittlere.
-Hysterese 3 m an beiden Grenzen; neu gewählt wird erst nach 0,5 m
-Kamerabewegung. Der Schalter `RenderSettings.trees` schaltet auch die Instanzen
-ab.
+Abstand zur **Kamera** (waagrecht). „Instanziert bis“ ist der äußere Rand des
+Wechselrings (`midM`); eine Instanz bekommt jeder Baum, dessen Krone in diesen
+Abstand ragt, die nächsten zuerst. Reicht „höchstens insgesamt“ nicht, rückt
+der Ring näher (siehe „Wechselring“). Die nächsten Bäume bis zur Nahgrenze
+bekommen die Nahstufe, alle anderen die mittlere. Hysterese 3 m; neu gewählt
+wird nach 0,5 m Kamerabewegung. Der Schalter `RenderSettings.trees` schaltet
+auch die Instanzen ab.
+
+### Wechselring: gebackener Baum ↔ Instanz ohne Sprung
+
+**Vorher:** Ein Abschnitt (32 m Strecke, bis 26 Bäume) schaltete als Ganzes
+zwischen gebackenen Bäumen und Instanzen um — in einem Bild, mit anderem
+Umriss, hellerem Laub und dunklerer Rinde.
+
+**Jetzt** drei Mittel, alle in Material und Darstellung, **nichts im Weltbau**:
+
+1. **Ring statt Abschnitt.** `foliage.mat` kennt `fadeMode` und `fadeRange`:
+   bis `fadeRange.x` zeichnet nur die nahe Darstellung (Bibliothek,
+   `fadeMode` +1), ab `fadeRange.y` nur die ferne (gebacken, −1); dazwischen
+   entscheidet ein festes Bildschirmraster (interleaved gradient noise) je
+   Bildpunkt für genau eine von beiden. Maßgeblich ist der waagrechte Abstand
+   des Bildpunkts zur Kamera — ein Baum löst sich beim Heranfahren über 10 m
+   Weg von vorn nach hinten auf, während der andere erscheint. Im
+   Schattendurchgang gilt derselbe Abstand (zur Kamera des Bilds, nicht des
+   Lichts), also wechseln auch die Schatten mit.
+2. **Rinde blendet mit.** `mat_tree_trunk` läuft über dasselbe Material
+   (`atlasMode` 2: kein Wind, Rückseiten weg) statt über den Ubershader — nur
+   so können Stämme überblenden.
+3. **Ton angleichen, die fernen an die nahen.** Die gebackenen Abschnitte
+   nehmen bis zum Ring den Ton der Bibliothek an und hinter dem Ring über 30 m
+   wieder ihren eigenen (`fadeTintDark/Light/Luma`, Werte in `TreeFadeLook`).
+   Ein Abschnitt hat für alle Arten **ein** Material, deshalb je zwei
+   Faktoren, gewählt nach der Helligkeit der Vertexfarbe (Fichtenkegel gegen
+   Laubkrone, gewöhnlicher Stamm gegen Birke) und nach dem Feld im Laubatlas
+   (Nadelzweige). Die Bibliothek selbst ist **unverändert** (Datei
+   byteweise gleich) — aus der Nähe sieht kein Baum anders aus als vorher.
+
+**Wie es zusammenhängt** (`TreeInstancePlanner.selectFading`, `:core`, getestet;
+`TreeInstancer` in der App; `filarender.cpp` spiegelt beides):
+
+- Die gebackenen Abschnitte einer Kachel bekommen **Kopien** ihrer zwei
+  Materialinstanzen (`MaterialInstance.duplicate`), solange der Ring an ist.
+  Die übrigen Bäume und das Gras der Kachel teilen die Originale und blenden
+  nicht. Auf Standard tragen die Abschnitte ihre Originale.
+- **Obergrenze:** Reicht „höchstens insgesamt“ nicht für alle Kronen bis
+  `midM`, liegt der äußere Rand dort, wo die Krone des ersten Baums **ohne**
+  Instanz beginnt (Abstand minus Ausladung der Vorlage × Maßstab,
+  `TreeLibraryFile.reachM`). Der Rand hängt damit stetig an der Kamera — er
+  springt nicht, wenn ein Abschnitt in Reichweite kommt (Test: je 0,5 m Weg
+  höchstens 0,5 m). In der Testwelt: Ortsdurchfahrt 60 m, Fichtenwald 52 m,
+  Mischwald 41 m, dichter Laubwald 38 m (Ultra); Fichtenwald auf Hoch 31 m.
+- **Nie ein Loch:** Jeder Baum, dessen Krone in den Ring ragt, hat eine
+  Instanz (Test). Ein gebackener Abschnitt wird nur abgeschaltet, wenn er mit
+  3 m Zuschlag ganz innerhalb des Rings liegt — dort zeichnete sein Material
+  ohnehin nichts.
+- **Laden und Stufenwechsel:** Der Ring wächst mit 20 m/s auf, statt
+  aufzuspringen; kleiner wird er sofort (sonst fehlten Instanzen).
+- **Rückfall:** Kennt das Laubmaterial `fadeMode` nicht (älteres Paket,
+  Ubershader nach einem Ladefehler), gilt der alte Wechsel je Abschnitt
+  (`TreeInstancePlanner.select`, unverändert und getestet).
+
+**Tonwerte** (`TreeFadeLook`), gemessen an der Testwelt:
+
+| | gebacken → Bibliothek (linear, R G B) | gewählt für |
+|---|---|---|
+| Laub, Laubbäume und Sträucher | × 1,9 / 1,35 / 2,0 | Vertexfarbe heller als 0,045 |
+| Laub, Nadelbäume | × 0,7 / 0,96 / 0,8 | dunkler als 0,022, Nadelfelder im Atlas |
+| Rinde, gewöhnlich | × 0,44 / 0,47 / 0,56 | dunkler als 0,45 |
+| Rinde, Birke | × 1,67 / 1,69 / 2,0 | heller als 0,60 |
+
+Kontrolle im Bild (Kronenpixel, Schatten aus, Verhältnis Bibliothek zu
+gebacken, linear): Ortsdurchfahrt R 2,41 / G 1,31 ohne Tönung → **1,03 / 1,01**
+mit; Laubwald 2,03 / 1,26 → **0,95 / 0,99**. Im Mischwald (1,50 / 1,48 →
+0,66 / 1,14) passt ein einziger Faktor je Kachel schlechter: dort stehen
+Kiefern, deren gebackene Krone teils Laubkarten trägt.
+
+**Nebenwirkungen, auch auf Standard:**
+
+- **Rinde über `foliage.mat`** statt Ubershader, auf allen Stufen (die
+  Entscheidung fällt beim Laden der Kachel). Gleiche Rechnung (Grundfarbe ×
+  Textur × Vertexfarbe, Rauheit 0,95, kein Spiegelanteil). Im Referenzrenderer
+  (Bild auf 1/8 verkleinert, Unterschied 0–255): Wald 0,26 im Mittel gegen
+  0,24 zwischen zwei gleichen Läufen; Ortsdurchfahrt 0,09 gegen 0,05, einzelne
+  Felder an Stammkanten bis 14 (gegen 8) — Kanten glättet „masked“ anders als
+  deckend.
+- **Laubkarten werfen jetzt bestimmt Schatten.** Das Material las im
+  Schatten-/Tiefendurchgang `getWorldPosition()`; dort ist der Wert
+  **unbestimmt** (Filament ruft `material()` ohne die Schattierungsgrößen
+  auf). Die Stelle kam mit dem Ausblenden der Karten auf Kante („feineres
+  Laub“); seither warfen Laubkarten im Referenzrenderer (llvmpipe) gar keinen
+  Schatten — alle bisherigen Bilder dieses Dokuments zeigen nur Stamm- und
+  Astschatten —, und was ein Gerät daraus machte, hing am Treiber. Jede
+  Änderung am Shader würfelte das Ergebnis neu. Jetzt kommt die Weltlage als
+  eigene Größe aus dem Vertex-Shader: Karten werfen Schatten, außer sie stehen
+  auf Kante zur Sonne. Das ist die ältere, beabsichtigte Wirkung („Waldweg
+  unter dem Kronendach“, `render.md`), macht Waldwege im Referenzrenderer aber
+  **deutlich dunkler** als in den Bildern davor. Ob das Gerät bisher schon so
+  aussah, ist offen (siehe „Offen“). Ein Test hält fest, dass der
+  Fragment-Shader `getWorldPosition()` nicht mehr benutzt.
 
 ### App (`app/…/indoor/render/TreeInstancer.kt`)
 
@@ -101,8 +202,14 @@ ab.
   Farbe).
 - **Sichtbarkeit:** Baumabschnitte sind eine eigene Knotenart
   (`nodeCategory`), Grundart `trees`. `TileStreamer` blendet die Abschnitte aus,
-  die `TreeInstancer.hiddenBins` nennt — im selben Bild, in dem die Instanzen
-  erscheinen.
+  die `TreeInstancer.hiddenBins` nennt — mit Wechselring die, die ganz
+  innerhalb des Rings liegen.
+- **Wechselring:** `TreeInstancer` setzt je Wahl (0,5 m Weg, oder jedes Bild,
+  solange der Ring wächst) `fadeRange` auf den zwei Materialien der Bibliothek
+  und den Kopien je Kachel; `WorldMaterialProvider.copyOf/dropCopy` legt die
+  Kopien an und gibt sie frei (sie folgen dem Windschalter wie die Originale).
+  Vor dem Entladen einer Kachel hängen die Originale wieder an ihren
+  Abschnitten.
 - **Rückfall:** Fehlt die Bibliothek, ist sie unvollständig oder lässt sich ein
   Puffer nicht anlegen, bleibt es für die Sitzung bei den gebackenen Bäumen;
   kein Fehler nach außen.
@@ -113,41 +220,85 @@ ab.
 
 Gemessen im Referenzrenderer an der Testwelt (`indoor-dev testworld --quality
 HIGH`, 3 km, 568 Instanzknoten in 46 Abschnitten, im Mittel 12, höchstens 26
-Bäume je Abschnitt), Kamera auf der Strecke in Fahrtrichtung:
+Bäume je Abschnitt), Kamera auf der Strecke in Fahrtrichtung. In Klammern der
+Stand vor dem Wechselring (Abschnitt schaltet als Ganzes):
 
-| Stelle | Stufe | Instanzen nah / mittel | Dreiecke der Instanzen | Vorlagen im Speicher | Abschnitte ausgeblendet |
-|---|---|---|---|---|---|
-| Ortsdurchfahrt (780 m) | Ultra | 2 / 3 | 8 456 | 5 | 3 |
-| Mischwald, Schotterweg (1740 m) | Ultra | 16 / 31 | 67 172 | 25 | 5 |
-| Wald (2080 m) | Ultra | 16 / 28 | 98 166 | 21 | 3 |
-| Fichtenwald (2440 m) | Ultra | 16 / 34 | 81 906 | 21 | 3 |
-| Fichtenwald (2440 m) | Hoch | 10 / 23 | 54 814 | 13 | 2 |
+| Stelle | Stufe | Instanzen nah / mittel | Dreiecke der Instanzen | Vorlagen im Speicher | Ring (m) | Abschnitte ganz aus |
+|---|---|---|---|---|---|---|
+| Ortsdurchfahrt (780 m) | Ultra | 2 / 3 (2 / 3) | 8 456 (8 456) | 5 (5) | 50–60 | 1 (3) |
+| Mischwald, Schotterweg (1740 m) | Ultra | 16 / 40 (16 / 31) | 75 750 (67 172) | 27 (25) | 31–41 | 1 (5) |
+| Wald (2080 m) | Ultra | 16 / 40 (16 / 28) | 107 966 (98 166) | 23 (21) | 28–38 | 0 (3) |
+| Fichtenwald (2440 m) | Ultra | 16 / 40 (16 / 34) | 86 272 (81 906) | 20 (21) | 42–52 | 2 (3) |
+| Fichtenwald (2440 m) | Hoch | 10 / 30 (10 / 23) | 60 070 (54 814) | 14 (13) | 21–31 | 0 (2) |
 
-- **Dreiecke:** bis ~100 000 zusätzlich (Obergrenze rechnerisch 16 × 6 000 +
-  40 × 1 500 = 156 000) gegenüber 460 000–530 000, die eine Welt gleichzeitig
-  zeigt; dafür entfallen die gebackenen Bäume der ausgeblendeten Abschnitte.
-- **Zeichenaufrufe:** ohne Instanzierung 2 je Baum (Rinde, Laub), also bis
-  112, im Schattendurchgang je Kaskade noch einmal. Mit automatischer
-  Instanzierung höchstens 2 je **Vorlage im Bild** (oben 5–25 Vorlagen → 10–50).
-  Wie viele Aufrufe Filament wirklich zusammenfasst, zeigt die Engine nicht an
-  — **nicht gemessen**.
+- **Dreiecke:** bis ~108 000 zusätzlich (Obergrenze rechnerisch unverändert
+  16 × 6 000 + 40 × 1 500 = 156 000). Der Wechselring kostet im Wald 5–13 %
+  mehr Instanzdreiecke als vorher, weil die Obergrenze jetzt ausgeschöpft wird
+  (nächste Bäume statt ganzer Abschnitte), und **die gebackenen Bäume im Ring
+  und dahinter bleiben an**: vorher waren 2–5 Abschnitte ausgeblendet, jetzt
+  0–2 (je Abschnitt einige Tausend Dreiecke und 2 Zeichenaufrufe, im
+  Schattendurchgang je Kaskade noch einmal).
+- **Zeichenaufrufe:** Instanzen wie vorher (höchstens 2 je Vorlage im Bild,
+  wenn die automatische Instanzierung greift — **nicht gemessen**); dazu die
+  nicht mehr ausgeblendeten Abschnitte: +4 bis +8 gegenüber vorher (im
+  Referenzrenderer 681 statt 573 Primitive im Mischwald, davon 112 Instanzen).
+  Die Kopien der Materialinstanzen ändern die Zahl der Aufrufe nicht (ein
+  Abschnitt war schon ein eigenes Renderable): +2 Materialinstanzen je Kachel
+  mit Abschnitten (6–8 im Bild).
+- **Füllrate:** Im Ring werden beide Darstellungen gerechnet und je Bildpunkt
+  eine verworfen; Rinde ist jetzt „masked“ statt deckend (kein früher
+  Tiefentest für Stämme). **Nicht gemessen**, nur am Gerät zu klären.
 - **Grafikspeicher:** Atlanten 2,8 MB mit Mip-Stufen; Netze ~36 B je Dreieck,
-  bei 25 Vorlagen rund 2–3 MB; alle 72 Vorlagen wären 6,2 MB.
+  bei 25 Vorlagen rund 2–3 MB; alle 72 Vorlagen wären 6,2 MB. Unverändert.
 - **Arbeitsspeicher:** die gelesene Bibliothek (6,5 MB) bleibt geladen,
   solange die Welt läuft (Vorlagen entstehen bei Bedarf).
-- **APK:** +4,4 MB.
-- **Platte je Welt:** +0,4 % in Stufe 0 (Testwelt: 151 kB von 38,6 MB für
-  Instanzknoten und die Aufteilung in Abschnitte). Gebackene Dreiecke
-  unverändert.
+- **APK:** Bibliothek unverändert 6,47 MB (gzip 4,38 MB);
+  `foliage.filamat` 226 kB statt 210 kB (+16 kB).
+- **Platte je Welt:** unverändert (kein neuer Weltbau).
 - **Laden:** Vorlagen entstehen beim ersten Baum auf dem Hauptthread
   (einige Millisekunden je Vorlage) — beim ersten Einfahren in einen Wald
-  können mehrere in einem Bild zusammenkommen. Nicht gemessen.
+  können mehrere in einem Bild zusammenkommen. Nicht gemessen. Die Ausladung
+  aller 36 Vorlagen liest der E/A-Thread mit der Bibliothek (nur die Lagen).
 
-### Belegbilder (`docs/indoor/bilder/baeume/einbau-*.jpg`)
+### Belegbilder (`docs/indoor/bilder/baeume/`)
 
 Dieselbe gebaute Welt (Testwelt, `indoor-world/15`), dieselbe Kamera, derselbe
-Himmel (`indoor-dev sky --time NOON`); links die gebackenen Bäume (Standard),
-rechts mit Instanzen. Gerendert mit filarender, 960 × 600 je Hälfte.
+Himmel (`indoor-dev sky --time NOON`). Gerendert mit filarender, 960 × 600 je
+Hälfte.
+
+**Wechsel vorher / nachher** (`wechsel-*.jpg`, beide Hälften mit Instanzen,
+Ultra): links der Stand vor dem Wechselring (zweiter Bau des Renderers aus dem
+Commit davor mit dessen Materialien), rechts jetzt.
+
+| Datei | Stelle | Ring rechts |
+|---|---|---|
+| `wechsel-0780m.jpg` | Ortsdurchfahrt, zwei Laubbäume | 50–60 m |
+| `wechsel-1740m.jpg` | Schotterweg im Mischwald | 31–41 m |
+| `wechsel-2080m.jpg` | Wald | 28–38 m |
+| `wechsel-2440m.jpg` | Fichtenwald | 42–52 m |
+| `wechsel-folge-0700m.jpg` | **Anfahrt** auf die zwei Laubbäume der Ortsdurchfahrt, Kamera an den Laufmetern 700 … 770 (alle 10 m), Bildwinkel 26°; oben vorher, unten nachher | 50–60 m |
+
+Was die Folge zeigt: **Vorher** stehen bei 730 m beide Bäume gebacken da
+(dunkel, dicht), bei 740 m beide als Instanz (hell, licht, anderer Umriss) —
+der ganze Abschnitt in einem Schritt. **Nachher** ist der vordere Baum bei
+740 m halb aufgelöst und bei 750 m Instanz; der hintere folgt erst bei 770 m,
+wenn er selbst im Ring steht. Die gebackenen Bäume sind vor dem Ring schon
+heller getönt.
+
+Dieselbe Anfahrt in Schritten von 0,5 m (725 … 775 m, 100 Schritte),
+mittlerer Unterschied zweier aufeinanderfolgender Bilder (0–255, auf 1/8
+verkleinert): Median vorher 4,25, nachher 4,26 (die Fahrt selbst); **größter
+Schritt vorher 8,68** (bei 759 m, der Abschnitt schaltet um; ein zweiter mit
+6,06 bei 733,5 m), **nachher 5,07**. Die beiden Ausreißer sind weg.
+
+Im Standbild bleibt der Ring erkennbar: als feines Punktraster, wo eine
+gebackene Krone über die schmalere Krone der Instanz hinausragt (rechts oben in
+`wechsel-2080m.jpg`, bei 740/770 m in der Folge), und als doppelter Stamm, wo
+beide Stämme nicht deckungsgleich stehen. Siehe „Bekannte Schwächen“.
+
+**Einbau** (`einbau-*.jpg`, neu gerendert): links die gebackenen Bäume
+(Standard), rechts mit Instanzen. Gegenüber dem Stand davor sind beide Hälften
+im Wald dunkler, weil Laubkarten jetzt Schatten werfen (siehe „Nebenwirkungen“).
 
 | Datei | Stelle | rechts |
 |---|---|---|
@@ -157,19 +308,36 @@ rechts mit Instanzen. Gerendert mit filarender, 960 × 600 je Hälfte.
 | `einbau-2440m.jpg` | Fichtenwald | Ultra |
 | `einbau-hoch-2440m.jpg` | Fichtenwald | Hoch |
 
-Geprüft an diesen Bildern: Die Instanzen stehen an den Stellen der gebackenen
-Bäume, kein Baum doppelt, keiner fehlt; sie werfen Schatten auf Weg und Boden.
-**Wind:** dieselbe Szene zu zwei Zeitpunkten (0 s / 1,7 s) gerendert — mit Wind
-ändern sich mit Instanzen 2 742 Bildpunkte (640 × 400), ohne Wind 224
-(Wolkenzug); bei den gebackenen Bäumen 2 195 bzw. 314.
+Geprüft: Die Instanzen stehen an den Stellen der gebackenen Bäume, keiner
+fehlt; sie werfen Schatten auf Weg und Boden. Ein Ring mit Radius 2 m ergab
+(vor dem Einbau der Tönung geprüft) das gebackene Bild samt Schatten bis auf
+die 2 m um die Kamera — die Schatten wechseln also mit. **Wind**
+(Messung des Einbaus, nicht wiederholt): dieselbe Szene zu zwei Zeitpunkten
+(0 s / 1,7 s) — mit Wind ändern sich mit Instanzen 2 742 Bildpunkte
+(640 × 400), ohne Wind 224 (Wolkenzug); bei den gebackenen Bäumen 2 195 bzw.
+314.
 
 ### Bekannte Schwächen des Einbaus
 
-- **Sprung beim Umschalten:** Ein Abschnitt wechselt als Ganzes zwischen
-  gebackenen Bäumen und Instanzen — Umriss, Laubfarbe und Rinde unterscheiden
-  sich sichtbar (die Bibliothek ist heller und lichter, siehe Bilder). Kein
-  Überblenden. Bei 45–60 m ist der Wechsel klein im Bild, aber nicht
-  unsichtbar.
+- **Wechselring, Rest:** Der Sprung je Abschnitt ist weg, die beiden Modelle
+  sind aber verschieden. (a) **Umriss:** Die gebackene Krone ist dichter und
+  ragt über die der Instanz hinaus; im Ring sieht man dort ein Punktraster
+  vor dem Himmel. (b) **Raster:** ein Bildpunkt breit, im Referenzbild
+  (960 × 600) erkennbar; auf dem Gerät feiner, mit zeitlicher Kantenglättung
+  (Ultra) verrechnet — **nicht am Gerät gesehen**. Alpha-to-Coverage hilft
+  nicht: beide Darstellungen träfen dieselben Abtastpunkte, dazwischen schiene
+  der Hintergrund durch. (c) **Stämme** stehen nicht deckungsgleich (Neigung,
+  Dicke): im Ring kurz doppelt. (d) **Ton:** ein Faktor je Kachel und
+  Helligkeitsklasse; Kiefern im Mischwald treffen ihn schlechter (Messung
+  oben). (e) Bäume **hinter dem Band** (über 20 m neben der Strecke) bleiben
+  gebacken und ungetönt — neben getönten Bandbäumen im selben Abstand etwas
+  dunkler. **Was den Rest beseitigen würde, geht nur im Weltbau** (nicht
+  gebaut, neue Builder-Kennung nötig): die Fernstufe der Bandbäume aus der
+  Vorlage ableiten (Kreuzbild oder grobe Hülle der Bibliothekskrone, gleiche
+  Farben), dazu Art und Fußpunkt je Ecke, damit das Material je Baum statt je
+  Bildpunkt blenden und je Art tönen kann.
+- **Nahstufe ↔ mittlere Stufe** (18/25 m) schaltet weiter hart um (gleiche
+  Vorlage, gleiche Farben; nicht Teil dieses Auftrags).
 - **Kein Ton je Baum** (siehe Entscheidungen); gleiche Vorlagen nebeneinander
   unterscheiden sich nur in Drehung und Größe.
 - **Fichten am Weg:** Der Weltbau stutzt gebackene Fichten nah am Weg in der
@@ -192,8 +360,14 @@ Bäume, kein Baum doppelt, keiner fehlt; sie werfen Schatten auf Weg und Boden.
 3. Alpha-Maske nah (Laub mit `discard`, mehrere Lagen im Bild) — der
    erwartete Engpass, siehe Hochrechnung unten.
 4. Ruckeln beim ersten Anlegen der Vorlagen.
-5. Sichtbarkeit des Sprungs beim Umschalten in Fahrt; Hysterese und Radien.
-6. Speicher auf kleinen Geräten (Bibliothek im Arbeitsspeicher, Vorlagen im
+5. Wechselring in Fahrt: Ist das Raster zu sehen (Hoch mit MSAA, Ultra mit
+   zeitlicher Glättung)? Ringbreite `TreeInstanceBudget.FADE_BAND_M` (10 m),
+   Tönung `TreeFadeLook`. Kosten der doppelt gerechneten Bäume im Ring.
+6. **Schatten der Laubkarten:** Sah das Gerät vor dieser Änderung Kronenschatten
+   auf dem Weg? Jetzt wirft jede Laubkarte bestimmt Schatten; wirkt der Wald
+   zu dunkel, ist das eine Entscheidung über Licht, nicht über den Wechsel.
+7. Rinde über `foliage.mat`: gleiche Farbe wie vorher auch auf dem Gerät?
+8. Speicher auf kleinen Geräten (Bibliothek im Arbeitsspeicher, Vorlagen im
    Grafikspeicher).
 
 ---
@@ -473,13 +647,31 @@ danach festlegen.
 tool/indoor-dev/filament/build.sh
 python3 tool/indoor-dev/baeume/einbau.py tool/indoor-dev/out/testwelt --sky tool/indoor-dev/out/sky \
         --out tool/indoor-dev/out/baeume-einbau --at 780,1740,2080,2440 --jpeg-out docs/indoor/bilder/baeume
+# Laubmaterial nach Aenderungen an foliage.mat neu uebersetzen (matc 1.75.1)
+tool/indoor-dev/filament/materials.sh
+# Wechsel vorher/nachher, Anfahrt und Feinfolge; <alt> = Arbeitsbaum des Commits davor, dort build.sh
+python3 tool/indoor-dev/baeume/wechsel.py tool/indoor-dev/out/testwelt --sky tool/indoor-dev/out/sky \
+        --out tool/indoor-dev/out/baeume-wechsel --alt-filarender <alt>/tool/indoor-dev/filament/build/filarender \
+        --alt-materials <alt>/app/src/main/assets/indoor/materials --alt-library <alt>/app/src/main/assets/indoor/models/trees.glb \
+        --at 780,1740,2080,2440 --folge 700:770:10 --fein 725:775:0.5 --tele 26 --jpeg-out docs/indoor/bilder/baeume
 # Bilder des Prototyps (alt/neu, gebacken)
 ./gradlew :indoor-dev:run --args="tree-proto --out tool/indoor-dev/out/baeume"
 python3 tool/indoor-dev/baeume/render.py tool/indoor-dev/out/baeume --sky tool/indoor-dev/out/sky \
         --renderer both --jpeg-out docs/indoor/bilder/baeume
 ```
 
-**In dieser Sitzung über Gradle UNGEBAUT:** Maven Central lieferte HTTP 429,
+**Stand Wechselring:** `./gradlew -Ptrailscape.toolOnly=true :core:test
+:indoor-dev:test` gebaut und grün (darunter `TreeFadeTest`, 12 Tests, und die
+unveränderten `TreeInstancesTest`). **`:app` UNGEBAUT:** Maven Central lieferte
+für das Compose-Compiler-Plugin HTTP 429; `TreeInstancer.kt`,
+`WorldMaterialProvider.kt`, `WorldMaterialRules.kt` und
+`LifeAndMaterialsTest.kt` sind nicht übersetzt, die benutzten Filament-Methoden
+(`MaterialInstance.duplicate`, `setCullingMode`, `setParameter` mit vier
+Zahlen, `RenderableManager.get/setMaterialInstanceAt`) nur gegen die Klassen
+von filament-android 1.75.1 nachgeschlagen. filarender (C++) und
+`foliage.filamat` gebaut und für alle Bilder oben benutzt.
+
+**Beim Einbau (Sitzung davor) über Gradle UNGEBAUT:** Maven Central lieferte HTTP 429,
 ein Android-SDK gibt es im Container nicht. Stattdessen:
 
 - `:core` (Haupt- und Testquellen) und `:indoor-dev` mit eigenständigem
