@@ -128,48 +128,86 @@ fun historySegments(achievementsVisible: Boolean): List<HistorySegment> = buildL
 }
 
 /**
- * Die Segmente des Tabs „Indoor": Strecken | Plan [| Herausforderungen] [| Raum].
+ * Die Segmente des Tabs „Indoor": Strecken | Plan [| Herausforderungen] [| Raum]
+ * — oder, mit [together], Strecken | Plan | Gemeinsam.
  *
  * @param challengesAvailable ob es die Herausforderungen gibt.
  * @param roomAvailable ob es den Raum fuer Gruppenfahrten gibt.
+ * @param together fasst Herausforderungen und Raum zu **einem** Segment
+ *   „Gemeinsam" mit zwei Abschnitten zusammen, sobald es beide gibt. Gibt es
+ *   nur eines von beiden, behaelt es sein eigenes Segment.
  */
-fun indoorSegments(challengesAvailable: Boolean, roomAvailable: Boolean): List<IndoorSegment> = buildList {
+fun indoorSegments(
+    challengesAvailable: Boolean,
+    roomAvailable: Boolean,
+    together: Boolean = false,
+): List<IndoorSegment> = buildList {
     add(IndoorSegment.ROUTES)
     add(IndoorSegment.PLAN)
-    if (challengesAvailable) add(IndoorSegment.CHALLENGES)
-    if (roomAvailable) add(IndoorSegment.ROOM)
+    if (together && challengesAvailable && roomAvailable) {
+        add(IndoorSegment.TOGETHER)
+    } else {
+        if (challengesAvailable) add(IndoorSegment.CHALLENGES)
+        if (roomAvailable) add(IndoorSegment.ROOM)
+    }
 }
 
 /**
  * Welche der festgelegten Plaetze im Indoor-Tab eine Funktion haben
- * (`docs/ux/umbau.md`, „Was jetzt wo haengt"): Die Herausforderungen sind da;
- * der Raum fuer Gruppenfahrten hat noch keine Oberflaeche (nur Protokoll,
- * Client und Server), sein Platz bleibt unsichtbar.
+ * (`docs/ux/umbau.md`, „Was jetzt wo haengt"): Herausforderungen und der Raum
+ * fuer Gruppenfahrten sind beide da.
  */
 const val INDOOR_CHALLENGES_AVAILABLE: Boolean = true
-const val INDOOR_ROOM_AVAILABLE: Boolean = false
+const val INDOOR_ROOM_AVAILABLE: Boolean = true
 
-/** Die Segmente des Indoor-Tabs, wie die App sie heute zeigt. */
-fun shippedIndoorSegments(): List<IndoorSegment> =
-    indoorSegments(challengesAvailable = INDOOR_CHALLENGES_AVAILABLE, roomAvailable = INDOOR_ROOM_AVAILABLE)
+/**
+ * Die Platzfrage (`docs/ux/umbau.md`): Vier Segmente passen nicht in die Zeile.
+ * Die Segmente sind gleich breit; auf 360 dp bleiben bei vieren je rund 66 dp
+ * Text, „Herausforderungen" braucht bei 14 sp rund 125 dp — es war schon bei
+ * dreien abgeschnitten. Deshalb teilen sich Herausforderungen und Raum das
+ * Segment „Gemeinsam" (der dort festgelegte Ausweg).
+ */
+const val INDOOR_TOGETHER_MERGED: Boolean = true
+
+/** Die Segmente des Indoor-Tabs, wie die App sie heute zeigt: Strecken | Plan | Gemeinsam. */
+fun shippedIndoorSegments(): List<IndoorSegment> = indoorSegments(
+    challengesAvailable = INDOOR_CHALLENGES_AVAILABLE,
+    roomAvailable = INDOOR_ROOM_AVAILABLE,
+    together = INDOOR_TOGETHER_MERGED,
+)
+
+/**
+ * Wohin ein Wunsch nach [wanted] fuehrt: Gibt es „Gemeinsam", landen
+ * [IndoorSegment.ROOM] und [IndoorSegment.CHALLENGES] dort (ihre Abschnitte);
+ * alles andere bleibt, was es ist.
+ */
+fun indoorSegmentTarget(wanted: IndoorSegment?, available: List<IndoorSegment>): IndoorSegment? = when {
+    wanted == null || wanted in available -> wanted
+    (wanted == IndoorSegment.ROOM || wanted == IndoorSegment.CHALLENGES) && IndoorSegment.TOGETHER in available ->
+        IndoorSegment.TOGETHER
+    else -> wanted
+}
 
 /**
  * Das im Indoor-Tab gezeigte Segment. Laeuft im Tab eine Aufgabe (Koppeln,
  * Vorbereiten, Fahrt, Auswertung — [taskActive]), bleibt „Strecken" stehen:
  * Der Ablauf lebt in dieser Sicht, und ein Sprungwunsch von aussen (ein
- * geoeffnetes Plan-Rezept, eine gespeicherte Herausforderung) darf eine Fahrt
- * nicht aus der Komposition nehmen.
+ * geoeffnetes Plan-Rezept, eine gespeicherte Herausforderung, ein
+ * Einladungslink) darf eine Fahrt nicht aus der Komposition nehmen.
  */
 fun shownIndoorSegment(wanted: IndoorSegment?, available: List<IndoorSegment>, taskActive: Boolean): IndoorSegment =
-    if (taskActive) IndoorSegment.ROUTES else resolveSegment(wanted, available)
+    if (taskActive) IndoorSegment.ROUTES else resolveSegment(indoorSegmentTarget(wanted, available), available)
 
 /**
  * Ob [segment] im Indoor-Ablauf lebt (derselbe `IndoorViewModel` wie die
- * Startseite): „Strecken" und „Herausforderungen". „Plan" ist eine eigene
- * Sicht daneben.
+ * Startseite): „Strecken", „Herausforderungen", „Raum" und „Gemeinsam" — der
+ * Raum setzt wie eine Herausforderung Strecke und Fahrt im selben ViewModel.
+ * „Plan" ist eine eigene Sicht daneben.
  */
-fun indoorSegmentUsesFlow(segment: IndoorSegment): Boolean =
-    segment == IndoorSegment.ROUTES || segment == IndoorSegment.CHALLENGES
+fun indoorSegmentUsesFlow(segment: IndoorSegment): Boolean = when (segment) {
+    IndoorSegment.ROUTES, IndoorSegment.CHALLENGES, IndoorSegment.ROOM, IndoorSegment.TOGETHER -> true
+    IndoorSegment.PLAN -> false
+}
 
 /**
  * Ob die Kopfzeile der Indoor-Startseite das Garage-Symbol traegt: nur im Tab

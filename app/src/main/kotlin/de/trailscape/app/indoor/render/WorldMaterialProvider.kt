@@ -107,6 +107,9 @@ internal class WorldMaterialProvider(
                     config.constrainMaterial(uvmap)
                     val mi = m.createInstance(label ?: kind.name)
                     if (kind == WorldMaterialRules.Kind.FOLIAGE && !config.doubleSided) mi.setDoubleSided(false)
+                    if (kind == WorldMaterialRules.Kind.FOLIAGE && WorldMaterialRules.cullsBackFaces(label)) {
+                        mi.setCullingMode(Material.CullingMode.BACK)
+                    }
                     setup(mi, kind, label)
                     live[mi.nativeObject] = mi to (kind to label)
                     created[kind] = (created[kind] ?: 0) + 1
@@ -153,6 +156,26 @@ internal class WorldMaterialProvider(
         this.aniso = aniso
         this.pbr = pbr
         for ((mi, info) in live.values) runCatching { setSwitches(mi, info.first, info.second) }
+    }
+
+    /**
+     * Eine Kopie von [mi] (Parameter und Texturen) fuer Renderables, die eigene Werte brauchen — die
+     * gebackenen Baumabschnitte beim Ueberblenden ([TreeInstancer]). Sie folgt den Schaltern ([apply])
+     * wie das Original; [dropCopy] gibt sie frei. `null`, wenn [mi] keine eigene Instanz von hier ist
+     * oder ihr Material [parameter] nicht kennt.
+     */
+    fun copyOf(mi: MaterialInstance, parameter: String): MaterialInstance? {
+        val info = live[mi.nativeObject]?.second ?: return null
+        if (!mi.material.hasParameter(parameter)) return null
+        val copy = MaterialInstance.duplicate(mi, mi.name)
+        live[copy.nativeObject] = copy to info
+        return copy
+    }
+
+    /** Gibt eine Kopie aus [copyOf] frei (erst, wenn kein Renderable sie mehr benutzt). */
+    fun dropCopy(copy: MaterialInstance) {
+        live.remove(copy.nativeObject)
+        runCatching { engine.destroyMaterialInstance(copy) }
     }
 
     /** Vergisst die Instanzen, die mit einem Asset verschwinden (vor dessen Zerstoerung rufen). */

@@ -28,7 +28,8 @@ import java.util.concurrent.Executor
  *     und sichtbar ist; wird sie entladen, kommt die Teilflaeche im selben
  *     Bild zurueck — nie ein Loch.
  *  6. **Baumabschnitte** (`x_trees_bin_<k>`) aus, solange [TreeInstancer] an
- *     ihrer Stelle Baeume der Bibliothek zeigt.
+ *     ihrer Stelle Baeume der Bibliothek zeigt — mit Wechselring nur die, die
+ *     ganz innerhalb des Rings liegen (den Rest blendet ihr Material).
  *
  * Eine Kachel, die sich nicht laden laesst, meldet [Callbacks.onTileFailed]
  * und bleibt fuer diesen Durchgang aussen vor; die Fahrt geht weiter.

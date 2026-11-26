@@ -16,7 +16,11 @@ internal object WorldMaterialRules {
         /** Gelaende (`mat_terrain`): Luftbild + Boden-Detail, waermerer Waldboden. */
         TERRAIN("terrain"),
 
-        /** Laub, Nadeln, Grasbueschel mit Wind. */
+        /**
+         * Laub, Nadeln, Grasbueschel mit Wind — und die Rinde der Baeume (ohne Wind, [atlasMode] 2):
+         * nur dieses Material kann gebackene Baeume und Bibliotheksbaeume ineinander blenden
+         * (`fadeMode`, [TreeInstancer]).
+         */
         FOLIAGE("foliage"),
 
         /** Deckende Belaege und Randstreifen: Software-Anisotropie, Detail auf Randstreifen. */
@@ -33,11 +37,15 @@ internal object WorldMaterialRules {
 
     const val MAT_TREE_CARDS = "x_mat_tree_cards"
 
+    /** `atlasMode` der Rinde: kein Wind, keine Kartenkante. */
+    const val ATLAS_BARK = 2f
+
     fun kindFor(label: String?, alphaMode: Int, hasBaseColorTexture: Boolean, unlit: Boolean): Kind {
         val l = label ?: return Kind.UBER
         if (!hasBaseColorTexture || unlit) return Kind.UBER
         if (l == WorldNames.MAT_TERRAIN) return if (alphaMode == ALPHA_OPAQUE) Kind.TERRAIN else Kind.UBER
         if (l == MAT_TREE_CARDS || l == WorldNames.MAT_TREE_LEAVES) return if (alphaMode == ALPHA_MASK) Kind.FOLIAGE else Kind.UBER
+        if (l == WorldNames.MAT_TREE_TRUNK) return if (alphaMode == ALPHA_OPAQUE) Kind.FOLIAGE else Kind.UBER
         if (alphaMode == ALPHA_OPAQUE && (
                 l.startsWith(WorldNames.MAT_ROUTE_PREFIX) ||
                     (l.startsWith("x_mat_road_") && !l.endsWith("_edge")) ||
@@ -65,6 +73,13 @@ internal object WorldMaterialRules {
         }
     }
 
-    /** `atlasMode` des Laubs: 1 = Atlas von FoliageAtlas (Gewicht aus der Lage), 0 = Kronendach. */
-    fun atlasMode(label: String?): Float = if (label == MAT_TREE_CARDS) 1f else 0f
+    /** `atlasMode` des Laubs: 1 = Atlas von FoliageAtlas (Gewicht aus der Lage), 0 = Kronendach, 2 = Rinde. */
+    fun atlasMode(label: String?): Float = when (label) {
+        MAT_TREE_CARDS -> 1f
+        WorldNames.MAT_TREE_TRUNK -> ATLAS_BARK
+        else -> 0f
+    }
+
+    /** Rinde ist geschlossen und einseitig wie beim Ubershader (Rueckseiten weg), Laub nicht. */
+    fun cullsBackFaces(label: String?): Boolean = label == WorldNames.MAT_TREE_TRUNK
 }

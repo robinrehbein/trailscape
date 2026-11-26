@@ -59,6 +59,7 @@ import de.trailscape.core.indoor.GhostOutcome
 import de.trailscape.core.indoor.ghostResultOf
 import de.trailscape.core.indoor.ErgWorkout
 import de.trailscape.core.indoor.GhostSpec
+import de.trailscape.core.room.RoomRoute
 import de.trailscape.core.indoor.IndoorDeviceRole
 import de.trailscape.core.indoor.IndoorMode
 import de.trailscape.core.indoor.IndoorPhase
@@ -200,6 +201,7 @@ class IndoorViewModel(
     var onRideSaved: (String) -> Unit = {},
     var onPlanRoute: (RouteTarget) -> Unit = {},
     protocolStore: IndoorProtocolStore? = null,
+    roomDeps: IndoorRoomDeps? = null,
 ) : ViewModel() {
 
     private val scope: CoroutineScope = scope ?: viewModelScope
@@ -255,6 +257,39 @@ class IndoorViewModel(
 
     /** Vorschau beim Teilen der eigenen Fahrt; `null` = keine. */
     val challengeShare: StateFlow<ChallengeShareUi?> = challengeController.share
+
+    /**
+     * Raum für Gruppenfahrten (docs/raum-protokoll.md, docs/ux/umbau.md); `null`
+     * ohne [IndoorRoomDeps] (Tests, alte Einbindung) — dann bleibt der Abschnitt
+     * „Raum" geschlossen und nichts verbindet sich.
+     */
+    private val roomController: IndoorRoomController? = roomDeps?.let { deps ->
+        IndoorRoomController(
+            newClient = { deps.newClient(clock) },
+            createRoom = deps.createRoom,
+            syncConfig = deps.syncConfig,
+            routeInfo = { ref ->
+                challengeRouteInfo(
+                    ref,
+                    entry = { catalogController.entry(it) },
+                    installedVersion = { catalogController.installedWorld(it)?.version },
+                )
+            },
+            scope = this.scope,
+            io = io,
+            kv = store,
+            clientClock = clock,
+            self = ::roomSelfState,
+            onStart = { activeRuntime?.releaseStart() },
+            autoTick = deps.autoTick,
+        )
+    }
+
+    /** Der Abschnitt „Raum" in Indoor → Gemeinsam. */
+    val room: StateFlow<IndoorRoomUi> = roomController?.ui ?: MutableStateFlow(IndoorRoomUi.Closed())
+
+    /** Der eigene Server aus Einstellungen → Sync mit eigenem Server (nur der Rechnername). */
+    val roomServer: StateFlow<RoomServerUi> = roomController?.server ?: MutableStateFlow(RoomServerUi(null))
 
     /** Bau auf dem eigenen Server (docs/indoor/serverbau.md). */
     private val serverController = IndoorServerBuildController(serverDeps, this.scope, io) { rideId, dir, manifest, laser, replaced ->
@@ -447,6 +482,8 @@ class IndoorViewModel(
         val routeIsLoop: Boolean = false,
         /** Der Mitfahrer ist die eigene Aussenfahrt ([IndoorGhostOption.PastRide]). */
         val ghostOutdoor: Boolean = false,
+        /** Die Fahrt gehoert zum offenen Raum: Start bei 0, gehalten bis zum gemeinsamen Start. */
+        val roomRide: Boolean = false,
     )
 
     init {
@@ -1109,6 +1146,119 @@ class IndoorViewModel(
 
     fun closeChallengeShare() = challengeController.closeShare()
 
+    // -----------------------------------------------------------------------
+    // Raum für Gruppenfahrten (docs/raum-protokoll.md)
+    // -----------------------------------------------------------------------
+
+    /** Liest die Sync-Einstellung neu (beim Öffnen der Sicht „Gemeinsam"); ohne Netz. */
+    fun refreshRoomServer() {
+        roomController?.refreshServer()
+    }
+
+    /** Der zuletzt benutzte Anzeigename für den Raum. */
+    fun roomSavedName(): String = roomController?.savedName().orEmpty()
+
+    /** Die zuletzt gewählte Einstellung „Leistung zeigen". */
+    fun roomSavedSharePower(): Boolean = roomController?.savedSharePower() == true
+
+    /**
+     * Die unter „Strecken" gewählte Strecke als Strecke eines neuen Raums;
+     * `null` = keine gewählt oder nicht teilbar (nur bekannte Strecken, die auf
+     * dem Gerät liegen, und die Teststrecke — eigene Touren kennt nur dieses Gerät).
+     */
+    fun roomRouteOfSelection(): RoomRoute? {
+        val selected = _route.value.selected ?: return null
+        val ref = challengeRefOf(selected) ?: return null
+        return when (selected) {
+            IndoorRouteOption.TestWorld ->
+                IndoorRoomController.roomRouteOf(ref, ROOM_TEST_WORLD_LENGTH_M, texts.testWorldName())
+            is IndoorRouteOption.Catalog -> IndoorRoomController.roomRouteOf(
+                ref,
+                catalogController.entry(selected.catalogId)?.lengthM ?: (selected.distanceKm * 1000.0),
+                selected.name,
+            )
+            else -> null
+        }
+    }
+
+    /** „Raum anlegen" mit der unter „Strecken" gewählten Strecke. */
+    fun createRoom(name: String, sharePower: Boolean) {
+        val route = roomRouteOfSelection() ?: return
+        roomController?.create(route, name, sharePower)
+    }
+
+    /** „Raum beitreten"; `false` = kein gültiger Einladungslink. */
+    fun joinRoom(link: String, name: String, sharePower: Boolean): Boolean =
+        roomController?.join(link, name, sharePower) == true
+
+    fun leaveRoom() {
+        roomController?.leave()
+    }
+
+    fun endRoom() {
+        roomController?.endRoom()
+    }
+
+    fun startRoomCountdown() {
+        roomController?.startCountdown()
+    }
+
+    fun setRoomSharePower(enabled: Boolean) {
+        roomController?.setSharePower(enabled)
+    }
+
+    fun dismissRoomNotice() {
+        roomController?.dismissNotice()
+    }
+
+    /**
+     * „Zum Start": wählt die Strecke des Raums (ohne Mitfahrer, freie Fahrt)
+     * und geht weiter zur Fahrt. `false` = es ging nicht weiter (kein Trainer
+     * gekoppelt, Strecke nicht bereit) — die Sicht „Strecken" zeigt dann, was fehlt.
+     *
+     * @param routeName Anzeigename der Strecke in der Sprache der Oberfläche.
+     */
+    fun rideRoomRoute(routeName: String): Boolean {
+        val open = roomController?.ui?.value as? IndoorRoomUi.Open ?: return false
+        if (open.route.availability != de.trailscape.app.challenge.ChallengeAvailability.READY) return false
+        val key = open.route.key
+        val option: IndoorRouteOption = _route.value.options.firstOrNull { it.key == key } ?: when {
+            key == IndoorRouteOption.TestWorld.key -> IndoorRouteOption.TestWorld
+            else -> {
+                val id = open.route.catalogId ?: return false
+                val e = catalogController.entry(id) ?: return false
+                IndoorRouteOption.Catalog(id, routeName.ifBlank { e.name.de }, e.lengthM / 1000.0, e.ascentM)
+            }
+        }
+        selectRoute(option)
+        setGhost(IndoorGhostOption.None)
+        setMode(IndoorMode.SIM)
+        if (_stage.value != IndoorStage.ROUTE) return false
+        continueFromRoute()
+        return _stage.value != IndoorStage.ROUTE
+    }
+
+    /** Ein Takt des Raums — nur für Tests, die den Takt selbst treiben ([IndoorRoomDeps.autoTick] aus). */
+    internal fun tickRoom() {
+        roomController?.tick()
+        republishRide()
+    }
+
+    /** Die eigene Stelle für den Raum: nur während einer Fahrt, die zum Raum gehört. */
+    private fun roomSelfState(): RoomSelfState? {
+        if (rideStatic?.roomRide != true) return null
+        val rs = activeRuntime?.state?.value ?: return null
+        // Noch kein erster Takt: schon „am Start", damit ein Raumende die gehaltene Fahrt freigibt.
+        val s = rs.session ?: return RoomSelfState(0.0, 0.0, null, held = rs.startHeld)
+        if (rs.finished || s.phase == IndoorPhase.FINISHED) return null
+        return RoomSelfState(
+            distM = s.totals.distanceM,
+            speedMps = s.speedMps,
+            powerW = s.powerW,
+            held = rs.startHeld,
+        )
+    }
+
     /** Nutzeraktion „Laden"/„Fortsetzen"/„Aktualisieren" einer bekannten Strecke. */
     fun downloadCatalog(id: String) = catalogController.download(id)
 
@@ -1563,19 +1713,24 @@ class IndoorViewModel(
             return
         }
         val routeUi = _route.value
+        // Fahrt im offenen Raum (docs/raum-protokoll.md): dieselbe Strecke wie der Raum.
+        // Alle starten bei 0 und gemeinsam; Mitfahrer sind die anderen im Raum.
+        val selectedKey = routeUi.selected?.key
+        val roomRide = !calibrationRequested && selectedKey != null && roomController?.rideableRouteKey() == selectedKey
         shareRoute = route
         shareRef = routeUi.selected?.let { challengeRefOf(it) }
-        challengeOpponent = (routeUi.ghost as? IndoorGhostOption.Challenge)?.label
+        challengeOpponent = (routeUi.ghost as? IndoorGhostOption.Challenge)?.label?.takeIf { !roomRide }
         val demo = _pair.value.demoTrainer
-        val mode = if (routeUi.mode == IndoorMode.ERG && ergWorkout != null && !calibrationRequested) IndoorMode.ERG else IndoorMode.SIM
+        val mode = if (!roomRide && routeUi.mode == IndoorMode.ERG && ergWorkout != null && !calibrationRequested) IndoorMode.ERG else IndoorMode.SIM
 
         finishing = false
         pendingRide = null
         rideStartRouteM = null
         _summary.value = null
-        val ghostLabel = ghostLabelOf(routeUi.ghost)
+        val ghostLabel = if (roomRide) null else ghostLabelOf(routeUi.ghost)
         // Fortsetzen: die gemerkte Stelle dieser Strecke ist die Vorauswahl.
-        val resumeKey = if (calibrationRequested) null else routeUi.selected?.let { resumeKeyOf(it) }
+        // Im Raum nicht: Dort starten alle am Anfang, und die Stelle wird nicht gemerkt.
+        val resumeKey = if (calibrationRequested || roomRide) null else routeUi.selected?.let { resumeKeyOf(it) }
         val resumeM = resumeKey?.let { key ->
             runCatching { IndoorStartPoints.offer(readResume(key), route.lengthM, route.isLoop) }.getOrNull()
         }
@@ -1596,7 +1751,8 @@ class IndoorViewModel(
             demoPowerW = if (demo) DEMO_DEFAULT_POWER_W else null,
             demoCadenceRpm = if (demo) DEMO_DEFAULT_CADENCE_RPM else null,
             ghostLabel = ghostLabel,
-            ghostOutdoor = routeUi.ghost is IndoorGhostOption.PastRide,
+            ghostOutdoor = !roomRide && routeUi.ghost is IndoorGhostOption.PastRide,
+            roomRide = roomRide,
             ergTitle = if (mode == IndoorMode.ERG) ergWorkout?.title else null,
             attribution = if (useWorld) manifest.attribution else emptyList(),
             mode = mode,
@@ -1669,7 +1825,7 @@ class IndoorViewModel(
             mode = mode,
             rider = rider,
             workout = if (mode == IndoorMode.ERG) ergWorkout else null,
-            ghost = ghostSpecOf(routeUi.ghost),
+            ghost = if (roomRide) GhostSpec.None else ghostSpecOf(routeUi.ghost),
             // Die Faehigkeiten eines Trainers kennt erst die Verbindung; bis
             // dahin gilt die Annahme „SIM und ERG" (Abschnitt 5.2). Meldet der
             // Trainer sie vor dem ersten Tritt, tauscht die Laufzeit die
@@ -1733,8 +1889,10 @@ class IndoorViewModel(
             // echtem Trainer gilt auch der erste Tritt, solange der Startpunkt
             // nicht angefasst wurde (wer einfach lostritt, will an der Vorauswahl
             // starten); der Demo-Trainer „tritt" sofort und wartet deshalb immer.
+            // Im Raum loest nur der gemeinsame Start (oder das Ende des Raums) die Fahrt
+            // ([IndoorRoomController.tick]); der erste Tritt zaehlt dort nicht.
             holdStart = true,
-            releaseOnFirstStroke = !demo,
+            releaseOnFirstStroke = !demo && !roomRide,
             onStep = feelController::onStep,
         )
         activeRuntime = runtime
@@ -1821,6 +1979,7 @@ class IndoorViewModel(
             start = startUiOf(rs, st),
             dayEnd = dayEndOf(rs, st),
             trail = trailLive,
+            room = if (st.roomRide) roomController?.ride?.value else null,
         )
     }
 
@@ -1843,6 +2002,8 @@ class IndoorViewModel(
     /** Startpunkt-Wahl fuer das HUD, solange sich der Fahrer versetzen laesst. */
     private fun startUiOf(rs: IndoorRuntimeState, st: RideStatic): IndoorStartUi? {
         val s = rs.session ?: return null
+        // Im Raum gibt es keine Startpunkt-Wahl: Alle stehen am Anfang.
+        if (st.roomRide) return null
         if (!rs.canMoveStart || rs.finished || st.profile == null) return null
         if (s.phase != IndoorPhase.READY && s.phase != IndoorPhase.PAUSED) return null
         return IndoorStartUi(
@@ -1927,6 +2088,8 @@ class IndoorViewModel(
 
     /** „Losfahren": Die Fahrt beginnt mit dem ersten Tritt an der gewaehlten Stelle. */
     fun releaseStart() {
+        // Im offenen Raum loest nur der gemeinsame Start die Fahrt (IndoorRoomController.tick).
+        if (rideStatic?.roomRide == true && roomController?.openRouteKey() != null) return
         activeRuntime?.releaseStart()
     }
 
@@ -2012,6 +2175,7 @@ class IndoorViewModel(
             destroyRenderer()
             _summary.value = summaryOf(record, runtime.state.value)
             activeRuntime = null
+            roomController?.onRideEnded()
             _stage.value = IndoorStage.SUMMARY
         }
     }
@@ -2103,6 +2267,7 @@ class IndoorViewModel(
         _summary.value = null
         _ride.value = null
         rideStatic = null
+        roomController?.onRideEnded()
         _stage.value = IndoorStage.ROUTE
         loadRouteOptions()
     }
@@ -2166,6 +2331,7 @@ class IndoorViewModel(
         destroyRenderer()
         _ride.value = null
         rideStatic = null
+        roomController?.onRideEnded()
         _stage.value = IndoorStage.WORLD
     }
 
@@ -2181,6 +2347,8 @@ class IndoorViewModel(
 
     /** Gibt alles frei; eine laufende Fahrt wird ohne Aufzeichnung verworfen. */
     fun release() {
+        // Der Raum endet mit dem Ablauf: Platz freigeben, Verbindung schliessen.
+        roomController?.close()
         feelController.endRide()
         cancelRunningWorldJob()
         serverController.close()
@@ -2363,6 +2531,12 @@ class IndoorViewModel(
 
         private const val DEFAULT_GHOST_WATTS = 150
 
+        /**
+         * Laenge der eingebauten Teststrecke fuer einen Raum (Meter, etwa 3 km).
+         * Der Server prueft nur „groesser 0"; gefahren wird die Strecke des Geraets.
+         */
+        private const val ROOM_TEST_WORLD_LENGTH_M = 3000.0
+
         /** Vergleichsleistung des Geists als Anteil der FTP (lockere Grundlage). */
         private const val GHOST_FTP_FRACTION = 0.75
 
@@ -2422,6 +2596,10 @@ class IndoorViewModel(
                     challengeDrafts = AppServices.challengeDraftStore,
                     onRideSaved = onRideSaved,
                     protocolStore = IndoorProtocolStore(java.io.File(app.filesDir, "diag/fahrprotokolle")),
+                    roomDeps = IndoorRoomDeps.of(
+                        http = { AppServices.httpClient },
+                        syncConfig = { de.trailscape.core.getSyncConfig(AppServices.keyValueStore) },
+                    ),
                 ) as T
             }
         }

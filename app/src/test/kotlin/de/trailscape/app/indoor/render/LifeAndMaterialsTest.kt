@@ -24,7 +24,14 @@ class LifeAndMaterialsTest {
         assertEquals(Kind.UBER, WorldMaterialRules.kindFor("mat_terrain", ALPHA_OPAQUE, false, false))
         assertEquals(Kind.FOLIAGE, WorldMaterialRules.kindFor("x_mat_tree_cards", ALPHA_MASK, true, false))
         assertEquals(Kind.FOLIAGE, WorldMaterialRules.kindFor("mat_tree_leaves", ALPHA_MASK, true, false))
-        assertEquals(Kind.UBER, WorldMaterialRules.kindFor("mat_tree_trunk", ALPHA_OPAQUE, true, false))
+        // Rinde laeuft ueber das Laubmaterial (ohne Wind), damit Staemme mit ueberblenden koennen
+        // (TreeInstancer, Wechselring) — nur deckend und mit Textur, sonst wie bisher der Ubershader.
+        assertEquals(Kind.FOLIAGE, WorldMaterialRules.kindFor("mat_tree_trunk", ALPHA_OPAQUE, true, false))
+        assertEquals(Kind.UBER, WorldMaterialRules.kindFor("mat_tree_trunk", ALPHA_OPAQUE, false, false))
+        assertEquals(Kind.UBER, WorldMaterialRules.kindFor("mat_tree_trunk", ALPHA_MASK, true, false))
+        assertEquals(Kind.UBER, WorldMaterialRules.kindFor("mat_tree_trunk", ALPHA_BLEND, true, false))
+        assertEquals(Kind.UBER, WorldMaterialRules.kindFor("mat_tree_trunk", ALPHA_OPAQUE, true, true))
+        assertEquals(Kind.UBER, WorldMaterialRules.kindFor("x_mat_tree_trunk_far", ALPHA_OPAQUE, true, false))
         assertEquals(Kind.SURFACE, WorldMaterialRules.kindFor("mat_route_asphalt", ALPHA_OPAQUE, true, false))
         assertEquals(Kind.SURFACE, WorldMaterialRules.kindFor("x_mat_road_gravel", ALPHA_OPAQUE, true, false))
         assertEquals(Kind.UBER, WorldMaterialRules.kindFor("x_mat_road_gravel_edge", ALPHA_BLEND, true, false))
@@ -46,6 +53,30 @@ class LifeAndMaterialsTest {
         assertEquals(1f, WorldMaterialRules.detailClass("x_mat_route_shoulder").sum(), 1e-6f)
         assertEquals(1f, WorldMaterialRules.atlasMode("x_mat_tree_cards"))
         assertEquals(0f, WorldMaterialRules.atlasMode("mat_tree_leaves"))
+        assertEquals(WorldMaterialRules.ATLAS_BARK, WorldMaterialRules.atlasMode("mat_tree_trunk"))
+        assertEquals(0f, WorldMaterialRules.atlasMode(null))
+        // Rinde einseitig wie beim Ubershader, Laub und Gras nicht
+        assertTrue(WorldMaterialRules.cullsBackFaces("mat_tree_trunk"))
+        assertTrue(!WorldMaterialRules.cullsBackFaces("x_mat_tree_cards") && !WorldMaterialRules.cullsBackFaces("mat_tree_leaves") && !WorldMaterialRules.cullsBackFaces(null))
+    }
+
+    @Test
+    fun `das Laubmaterial kennt den Wechselring und fasst die Weltlage im Schattendurchgang nicht an`() {
+        val src = File("src/main/materials/foliage.mat").readText()
+        // Parameter, die TreeInstancer setzt (das Paket wird aus dieser Quelle gebaut, materials.sh)
+        for (p in listOf("fadeMode", "fadeRange", "fadeTintDark", "fadeTintLight", "fadeTintLuma", "atlasMode")) {
+            assertTrue(Regex("name\\s*:\\s*$p\\b").containsMatchIn(src), "Parameter $p fehlt in foliage.mat")
+        }
+        // `getWorldPosition()` ist im Schatten-/Tiefendurchgang unbestimmt (dort laeuft `material()` ohne
+        // Schattierungsgroessen): die Weltlage kommt als eigene Groesse aus dem Vertex-Shader.
+        val fragment = src.substringAfter("fragment {")
+        assertTrue("getWorldPosition" !in fragment, "foliage.mat: getWorldPosition() im Fragment-Shader")
+        assertTrue("variable_worldRel" in fragment && Regex("variables\\s*:\\s*\\[\\s*worldRel").containsMatchIn(src))
+        // Das eingecheckte Paket ist aus dieser Quelle: es nennt die Parameter (Namen stehen im Klartext im Paket)
+        val pkg = String(File("src/main/assets/indoor/materials/foliage.filamat").readBytes(), Charsets.ISO_8859_1)
+        for (p in listOf("fadeMode", "fadeRange", "fadeTintDark", "fadeTintLight", "fadeTintLuma")) {
+            assertTrue(p in pkg, "foliage.filamat ist aelter als foliage.mat: $p fehlt (tool/indoor-dev/filament/materials.sh)")
+        }
     }
 
     @Test

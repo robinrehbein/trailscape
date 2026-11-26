@@ -29,7 +29,6 @@ import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.garageEntryVisible
 import de.trailscape.app.ui.indoorSegmentUsesFlow
-import de.trailscape.app.ui.indoorSegments
 import de.trailscape.app.ui.shippedIndoorSegments
 import de.trailscape.app.ui.shownIndoorSegment
 import de.trailscape.app.ui.training.PlanScreen
@@ -41,7 +40,7 @@ import de.trailscape.app.ui.training.PlanScreen
  * ersetzt den frueheren Tab „Training" (Seitenkarte `docs/ux/seitenkarte.md`,
  * Entscheidung 1 des Eigentuemers; Umsetzung `docs/ux/umbau.md`).
  *
- * ## Segmente ([indoorSegments])
+ * ## Segmente ([shippedIndoorSegments]): Strecken | Plan | Gemeinsam
  *  * **Strecken** — die Indoor-Startseite ([IndoorFlowScreen] als
  *    [IndoorFlowMode.TAB]): Trainer-Status, Einheit des Tages, eigene und
  *    bekannte Strecken, „Fahren". Koppeln, Strecke vorbereiten, Fahrt und
@@ -49,13 +48,16 @@ import de.trailscape.app.ui.training.PlanScreen
  *    dafuer zurueck ([AppViewModel.indoorTaskActive]).
  *  * **Plan** — der Trainingsplan ([PlanScreen]), frueher das zweite Segment
  *    von „Training". [AppViewModel.requestPlan] springt direkt hierher.
- *  * **Herausforderungen** — gespeicherte Herausforderungen anderer und
- *    „Datei wählen" (`docs/herausforderung.md`). Die Sicht lebt im selben
- *    Ablauf wie „Strecken" ([indoorSegmentUsesFlow]), weil „Gegen … fahren"
- *    dort Strecke und Mitfahrer setzt; danach wechselt der Tab auf
- *    „Strecken". [AppViewModel.requestChallenges] springt direkt hierher.
- *  * **Raum** — festgelegter Platz ([IndoorSegment.ROOM]), unsichtbar,
- *    solange der Raum fuer Gruppenfahrten keine Oberflaeche hat.
+ *  * **Gemeinsam** — zwei Abschnitte in einer Sicht ([IndoorSegment.TOGETHER];
+ *    vier Segmente passen nicht in die Zeile, `docs/ux/umbau.md`):
+ *    **Raum** (Gruppenfahrt in Echtzeit auf eigenem Server: „Raum anlegen",
+ *    „Raum beitreten", Teilnehmer, gemeinsamer Start; `docs/raum-protokoll.md`)
+ *    und **Herausforderungen** (gespeicherte Herausforderungen anderer und
+ *    „Datei wählen", `docs/herausforderung.md`). Die Sicht lebt im selben
+ *    Ablauf wie „Strecken" ([indoorSegmentUsesFlow]), weil „Zum Start" und
+ *    „Gegen … fahren" dort Strecke und Mitfahrer setzen.
+ *    [AppViewModel.requestChallenges] und [AppViewModel.requestRoom] springen
+ *    hierher.
  *
  * In der Kopfzeile der Sicht „Strecken" steht neben dem Zahnrad das Symbol
  * der Garage (Fahrer und Rad anpassen, `docs/indoor/garage.md`) — ihr einziger
@@ -75,9 +77,10 @@ fun IndoorTabScreen(
     onOpenWorlds: () -> Unit,
     onOpenGarage: () -> Unit,
 ) {
-    // Strecken | Plan | Herausforderungen. Der Raum hat noch keine
-    // Oberflaeche; sein Platz bleibt unsichtbar (docs/ux/umbau.md).
+    // Strecken | Plan | Gemeinsam (Raum und Herausforderungen, docs/ux/umbau.md).
     val segments = shippedIndoorSegments()
+    // Ein von aussen geoeffneter Einladungslink; der Abschnitt „Raum" uebernimmt ihn.
+    val roomInvite by appViewModel.pendingRoomInvite.collectAsStateWithLifecycle()
     var wantedSegment by rememberSaveable { mutableStateOf(IndoorSegment.ROUTES) }
 
     // Laeuft im Tab eine Aufgabe (Koppeln, Fahrt, Auswertung), bleibt die
@@ -130,13 +133,15 @@ fun IndoorTabScreen(
             )
         }
 
-        // Strecken und Herausforderungen leben im selben Ablauf (ein
-        // `IndoorViewModel`, eine Stelle in der Komposition — ein Wechsel
-        // zwischen beiden baut nichts neu). ROOM liefert [indoorSegments] erst
-        // mit seiner Funktion; bis dahin wird dieser Zweig nie erreicht.
+        // Strecken und „Gemeinsam" leben im selben Ablauf (ein `IndoorViewModel`,
+        // eine Stelle in der Komposition — ein Wechsel zwischen beiden baut
+        // nichts neu, und ein offener Raum bleibt offen). CHALLENGES und ROOM
+        // als eigene Segmente liefert [shippedIndoorSegments] nicht mehr; kaemen
+        // sie zurueck, zeigten sie dieselbe Sicht.
         IndoorSegment.ROUTES,
         IndoorSegment.CHALLENGES,
         IndoorSegment.ROOM,
+        IndoorSegment.TOGETHER,
         -> IndoorFlowScreen(
             appViewModel = appViewModel,
             // Im Tab gibt es nichts zu verlassen: Zurueck gehoert der Huelle.
@@ -147,9 +152,12 @@ fun IndoorTabScreen(
             tabHeader = segmentRow,
             // Die Garage: Symbol in der Kopfzeile der Sicht „Strecken" (docs/ux/umbau.md).
             onOpenGarage = onOpenGarage.takeIf { garageEntryVisible(indoorFlowInTab = true) },
-            challengesSegment = segment == IndoorSegment.CHALLENGES,
-            // „Gegen … fahren": Strecke und Mitfahrer sind gesetzt, „Fahren" steht unter „Strecken".
-            onChallengeChosen = { wantedSegment = IndoorSegment.ROUTES },
+            togetherSegment = segment != IndoorSegment.ROUTES,
+            // „Gegen … fahren", „Strecke herunterladen", „Zu den Strecken":
+            // weiter geht es unter „Strecken".
+            onShowRoutes = { wantedSegment = IndoorSegment.ROUTES },
+            roomInvite = roomInvite,
+            onRoomInviteConsumed = appViewModel::consumeRoomInvite,
         )
     }
 }
@@ -161,7 +169,7 @@ private fun indoorSegmentLabel(segment: IndoorSegment): String = stringResource(
         IndoorSegment.ROUTES -> R.string.indoor_app_tab_segment_routes
         IndoorSegment.PLAN -> R.string.indoor_app_tab_segment_plan
         IndoorSegment.CHALLENGES -> R.string.indoor_app_tab_segment_challenges
-        // Kommt mit dem Raum fuer Gruppenfahrten; bis dahin ist das Segment nie sichtbar.
-        IndoorSegment.ROOM -> R.string.indoor_app_tab_segment_routes
+        IndoorSegment.ROOM -> R.string.raum_section_title
+        IndoorSegment.TOGETHER -> R.string.indoor_app_tab_segment_together
     },
 )

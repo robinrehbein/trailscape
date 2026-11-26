@@ -13,11 +13,14 @@ import kotlin.math.sqrt
  * Hochachse und gleichmaessigem Massstab (Baumhoehe / Hoehe der Vorlage) — reines
  * glTF, keine Erweiterung.
  *
- * Die Darstellung zeigt fuer einen Abschnitt entweder die gebackenen Baeume
- * oder — nah an der Kamera und nur auf den hoeheren Grafikstufen — Instanzen
- * der Bibliothek ([TreeLibrary]) an genau diesen Stellen; welche, entscheidet
- * [TreeInstancePlanner]. Eine App, die die Knoten nicht kennt, zeigt die
- * gebackenen Baeume (die Abschnitte liegen unter `trees`).
+ * Die Darstellung zeigt nah an der Kamera — nur auf den hoeheren Grafikstufen —
+ * Instanzen der Bibliothek ([TreeLibrary]) an genau diesen Stellen und weiter
+ * weg die gebackenen Baeume; welche, entscheidet [TreeInstancePlanner]. Der
+ * Wechsel ist ein Ring um die Kamera, in dem das Material beide Darstellungen
+ * ineinander rastert ([TreeInstancePlanner.selectFading]); kann das Material
+ * das nicht, schaltet ein Abschnitt als Ganzes um ([TreeInstancePlanner.select]).
+ * Eine App, die die Knoten nicht kennt, zeigt die gebackenen Baeume (die
+ * Abschnitte liegen unter `trees`).
  *
  * Die Kennung der Bibliothek steckt im Praefix: aendern sich die Vorlagen so,
  * dass alte Welten nicht mehr passen, bekommt der Instanzknoten ein neues
@@ -73,6 +76,15 @@ class TreeInstanceBudget(val nearM: Double, val midM: Double, val maxNear: Int, 
         /** Abstand, um den eine Grenze ueberschritten sein muss, bevor zurueckgeschaltet wird (gegen Flackern). */
         const val HYSTERESIS_M = 3.0
 
+        /** Breite des Rings (m), in dem gebackene Baeume und Instanzen ineinander gerastert werden. */
+        const val FADE_BAND_M = 10.0
+
+        /** Der Ring ist hoechstens dieser Anteil des Wechselabstands breit (enger Wald: kleiner Abstand, schmaler Ring). */
+        const val FADE_BAND_SHARE = 0.5
+
+        /** Zuschlag (m) auf die Ausladung, bevor ein gebackener Abschnitt ganz abgeschaltet wird (die gebackene Krone kann breiter sein). */
+        const val BAKED_EXTRA_M = 3.0
+
         /**
          * Budget zur Stufe [treeDetail]: 0 = keine Instanzen (gebackene Baeume wie bisher),
          * 1 = Hoch, 2 = Ultra (die Werte des Einbauplans: 25 m / 60 m, 16 nah, 56 insgesamt).
@@ -83,6 +95,41 @@ class TreeInstanceBudget(val nearM: Double, val midM: Double, val maxNear: Int, 
             else -> TreeInstanceBudget(nearM = 25.0, midM = 60.0, maxNear = 16, maxTotal = 56)
         }
     }
+}
+
+/**
+ * Wie die Darstellung den Wechsel zeichnet (`foliage.mat`, Parameter `fade…`): Im Ring rastert das
+ * Material beide Darstellungen ineinander, und die gebackenen Baeume nehmen bis zum Ring den Ton der
+ * Bibliothek an — die Welt bleibt, wie sie gebaut ist, nur ihr Material wird nah am Wechsel getoent.
+ * Ein Abschnitt hat fuer alle Arten **ein** Material, deshalb je zwei Faktoren nach der Helligkeit
+ * der Vertexfarbe (linear, Rec. 709): „dunkel" fuer Nadelbaeume bzw. gewoehnliche Staemme, „hell"
+ * fuer Laubbaeume bzw. Birkenstaemme; Nadelzweige und Nadelbaum-Kreuzbilder erkennt das Material
+ * zusaetzlich an ihren Feldern im Laubatlas der Welt. Gemessen an der Testwelt (mittlere Kronenfarbe im Bild und mittlere Stammfarbe je Art,
+ * gebacken gegen Bibliothek — docs/indoor/baeume.md). `filarender.cpp` spiegelt die Werte.
+ */
+object TreeFadeLook {
+    /** Hinter dem Ring laeuft die Toenung der gebackenen Baeume ueber diese Strecke (m) aus. */
+    const val TINT_FALLOFF_M = 30.0
+
+    /** Laub: Faktor fuer Nadelbaeume (Fichte, Kiefer: die Bibliothek ist etwas dunkler und blauer). */
+    val LEAF_DARK = floatArrayOf(0.7f, 0.96f, 0.8f)
+
+    /** Laub: Faktor fuer Laubbaeume und Straeucher (die Bibliothek ist heller und gelber). */
+    val LEAF_LIGHT = floatArrayOf(1.9f, 1.35f, 2.0f)
+
+    /** Laub: Helligkeit der Vertexfarbe, zwischen der von „dunkel" (Fichtenkegel) nach „hell" (Laub) geblendet wird. */
+    val LEAF_LUMA = floatArrayOf(0.022f, 0.045f)
+
+    /** Rinde: Faktor fuer gewoehnliche Staemme (gebacken hell-beige, Bibliothek dunkle Borke). */
+    val BARK_DARK = floatArrayOf(0.44f, 0.47f, 0.56f)
+
+    /** Rinde: Faktor fuer helle Staemme (Birke: die Bibliothek ist weisser). */
+    val BARK_LIGHT = floatArrayOf(1.67f, 1.69f, 2.0f)
+
+    val BARK_LUMA = floatArrayOf(0.45f, 0.60f)
+
+    /** So schnell (m/s) waechst der Ring nach dem Laden oder einem Stufenwechsel, statt aufzuspringen. */
+    const val GROW_M_PER_S = 20.0
 }
 
 /** Ein Baum eines Abschnitts in Weltkoordinaten der Darstellung (x Ost, y hoch, z −Nord). */
@@ -99,7 +146,33 @@ class TreePlace(
     var lod: TreeLod? = null
         internal set
 
+    /**
+     * Waagrechte Ausladung (m) des Baums um seinen Fusspunkt — Umriss der Vorlage × [scale]; die
+     * Darstellung setzt sie, sobald sie die Bibliothek kennt. Nur [TreeInstancePlanner.selectFading]
+     * braucht sie: ein Baum bekommt seine Instanz, bevor seine Krone in den Wechselring ragt.
+     */
+    var reachM: Double = DEFAULT_REACH_M
+
     internal var dist = 0.0
+    internal var edge = 0.0
+
+    companion object {
+        /**
+         * Ausladung, solange die Vorlage nicht bekannt ist: die breiteste Krone der Bibliothek (Eiche,
+         * 24 m hoch: 14,2 m) im groessten Massstab (der Weltbau waehlt die Variante bis Faktor 1,3).
+         */
+        const val DEFAULT_REACH_M = 19.0
+    }
+}
+
+/**
+ * Der Wechselring eines Bilds ([TreeInstancePlanner.selectFading]), waagrecht um die Kamera:
+ * bis [startM] nur Instanzen, ab [endM] nur gebackene Baeume, dazwischen beide gerastert.
+ *
+ * @property targetEndM wohin [endM] will; groesser als [endM], solange der Ring noch waechst
+ */
+class TreeFade(val startM: Double, val endM: Double, val targetEndM: Double) {
+    val growing: Boolean get() = targetEndM > endM + 1e-6
 }
 
 /** Alle Instanzbaeume eines Abschnitts einer Kachel. */
@@ -170,6 +243,74 @@ object TreeInstancePlanner {
                 t.lod = TreeLod.MID
             }
         }
+    }
+
+    /**
+     * Wie [select], aber fuer ein Material, das beide Darstellungen **nach dem Abstand zur Kamera**
+     * ineinander rastert (`foliage.mat`, `fadeMode`): der Wechsel ist ein Ring um die Kamera statt
+     * eines Sprungs je Abschnitt.
+     *
+     *  * Der Wechselabstand `endM` ist `midM` — oder kleiner, wenn `maxTotal` nicht reicht: dann der
+     *    Abstand, in dem der erste Baum **ohne** Instanz in den Ring ragen wuerde (Abstand minus
+     *    [TreePlace.reachM]). Er haengt stetig an der Kamera; nichts springt.
+     *  * Eine Instanz bekommt jeder Baum, dessen Krone in den Wechselabstand ragt — die naechsten
+     *    zuerst, hoechstens `maxTotal`; wer eine hat, behaelt sie bis [TreeInstanceBudget.HYSTERESIS_M]
+     *    dahinter (dort ist sie unsichtbar, das Halten spart nur Anlegen und Abraeumen).
+     *  * Nahstufe wie bei [select].
+     *  * [TreeBin.active] heisst hier: der gebackene Abschnitt liegt **ganz** innerhalb des Rings und
+     *    kann abgeschaltet werden (reine Ersparnis — sein Material zeichnete dort ohnehin nichts).
+     *
+     * [limitEndM] deckelt `endM` (die Darstellung laesst den Ring nach dem Laden wachsen statt
+     * aufzuspringen). `null`, wenn [budget] `null` ist — dann ist alles gebacken.
+     */
+    fun selectFading(
+        bins: Collection<TreeBin>,
+        camX: Double,
+        camZ: Double,
+        budget: TreeInstanceBudget?,
+        limitEndM: Double = Double.MAX_VALUE,
+    ): TreeFade? {
+        if (budget == null) {
+            for (b in bins) deactivate(b)
+            return null
+        }
+        val h = TreeInstanceBudget.HYSTERESIS_M
+        val all = ArrayList<TreePlace>()
+        for (b in bins) {
+            for (t in b.trees) {
+                val dx = t.x - camX
+                val dz = t.z - camZ
+                t.dist = sqrt(dx * dx + dz * dz)
+                t.edge = (t.dist - t.reachM).coerceAtLeast(0.0)
+                all += t
+            }
+        }
+        all.sortBy { it.edge }
+        var target = budget.midM
+        if (all.size > budget.maxTotal) target = minOf(target, all[budget.maxTotal].edge)
+        val end = minOf(target, limitEndM).coerceAtLeast(0.0)
+        val start = end - minOf(TreeInstanceBudget.FADE_BAND_M, end * TreeInstanceBudget.FADE_BAND_SHARE)
+        val shown = ArrayList<TreePlace>()
+        for ((i, t) in all.withIndex()) {
+            val limit = if (t.lod != null) end + h else end
+            if (i < budget.maxTotal && t.edge <= limit) shown += t else t.lod = null
+        }
+        shown.sortBy { if (it.lod == TreeLod.NEAR) it.dist - h else it.dist }
+        var near = 0
+        for (t in shown) {
+            val limit = if (t.lod == TreeLod.NEAR) budget.nearM + h else budget.nearM
+            if (near < budget.maxNear && t.dist <= limit) {
+                t.lod = TreeLod.NEAR
+                near++
+            } else {
+                t.lod = TreeLod.MID
+            }
+        }
+        for (b in bins) {
+            b.active = b.trees.isNotEmpty() &&
+                b.trees.all { it.lod != null && it.dist + it.reachM + TreeInstanceBudget.BAKED_EXTRA_M <= start }
+        }
+        return TreeFade(start, end, target)
     }
 
     private fun deactivate(b: TreeBin) {

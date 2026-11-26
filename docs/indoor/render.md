@@ -502,6 +502,7 @@ eigene Filament-Materialien ersetzt — alles andere bleibt Ubershader:
 |---|---|---|
 | `mat_terrain` (deckend) | `terrain.mat` | Luftbild + Boden-Detail nah, wärmerer Waldboden |
 | `x_mat_tree_cards`, `mat_tree_leaves` (Maske) | `foliage.mat` | Aussehen wie Ubershader, Wind im Vertex-Shader |
+| `mat_tree_trunk` (deckend, mit Textur) | `foliage.mat`, `atlasMode` 2 | Aussehen wie Ubershader, kein Wind; nur dieses Material kann gebackene Bäume und Bibliotheksbäume überblenden (`fadeMode`, `docs/indoor/baeume.md` „Wechselring“) |
 | `mat_route_*`, `x_mat_road_*`, `x_mat_route_verge_*`, Bankett, Gehweg (deckend) | `surface.mat` | Software-Anisotropie, Detail auf Randstreifen, Nahdetail der Fahrbahn ([nahdetail.md](nahdetail.md)) |
 | `x_mat_route_*_fade`, `x_mat_route_fringe` (durchsichtig) | `surface_blend.mat` | dasselbe, vormultipliziertes Alpha |
 

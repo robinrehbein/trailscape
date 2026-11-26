@@ -470,6 +470,8 @@ data class IndoorRideUi(
     val ghostOutdoor: Boolean = false,
     /** Bergwertung und Kilometermarken (`IndoorTrail.kt`); `null` = nichts zu zeigen oder abgeschaltet. */
     val trail: de.trailscape.core.indoor.climb.TrailLive? = null,
+    /** Die Fahrt gehoert zu einem Raum fuer Gruppenfahrten ([RoomRideUi]); `null` = nicht. */
+    val room: RoomRideUi? = null,
 )
 
 // ---------------------------------------------------------------------------

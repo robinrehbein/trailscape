@@ -202,6 +202,7 @@ Das Indoor-Training hat je Slice eine eigene Liste. Die Punkte aus
 - [indoor/world.md](indoor/world.md): Weltbau und Geodaten.
 - [indoor/render.md](indoor/render.md): Darstellung mit Filament.
 - [indoor/app.md](indoor/app.md): Ablauf, Speicherung, Export.
+- [raum-pruefliste.md](raum-pruefliste.md): Raum für Gruppenfahrten – zwei Geräte, ein Server.
 
 ## Bekannte offene Punkte
 

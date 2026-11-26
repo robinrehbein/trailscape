@@ -85,6 +85,7 @@
     <string name="indoor_app_tab_segment_routes">Strecken</string>
     <string name="indoor_app_tab_segment_plan">Plan</string>
     <string name="indoor_app_tab_segment_challenges">Herausforderungen</string>
+    <string name="indoor_app_tab_segment_together">Gemeinsam</string>
     <string name="indoor_app_route_section_mode">Fahrweise</string>
     <string name="indoor_app_route_section_ghost">Mitfahrer</string>
     <string name="indoor_app_route_testworld_title">Teststrecke</string>
