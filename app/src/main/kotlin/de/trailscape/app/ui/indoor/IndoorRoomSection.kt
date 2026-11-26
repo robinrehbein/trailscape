@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -144,18 +145,20 @@ fun IndoorRoomSection(
             onDismissRequest = { showCreate = false },
             title = { Text(stringResource(R.string.raum_create)) },
             text = {
-                RoomCreateForm(
-                    serverHost = server.host.orEmpty(),
-                    route = createRoute,
-                    name = name,
-                    onNameChange = { name = it },
-                    sharePower = sharePower,
-                    onSharePowerChange = { sharePower = it },
-                    onChooseRoute = {
-                        showCreate = false
-                        onChooseRoute()
-                    },
-                )
+                RoomDialogScroll {
+                    RoomCreateForm(
+                        serverHost = server.host.orEmpty(),
+                        route = createRoute,
+                        name = name,
+                        onNameChange = { name = it },
+                        sharePower = sharePower,
+                        onSharePowerChange = { sharePower = it },
+                        onChooseRoute = {
+                            showCreate = false
+                            onChooseRoute()
+                        },
+                    )
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showCreate = false }) { Text(stringResource(R.string.common_action_cancel)) }
@@ -180,15 +183,17 @@ fun IndoorRoomSection(
             onDismissRequest = { showJoin = false },
             title = { Text(stringResource(R.string.raum_join)) },
             text = {
-                RoomJoinForm(
-                    link = joinLink,
-                    onLinkChange = { joinLink = it },
-                    serverHost = invite?.let { IndoorRoomController.hostOf(it.serverUrl) },
-                    name = name,
-                    onNameChange = { name = it },
-                    sharePower = sharePower,
-                    onSharePowerChange = { sharePower = it },
-                )
+                RoomDialogScroll {
+                    RoomJoinForm(
+                        link = joinLink,
+                        onLinkChange = { joinLink = it },
+                        serverHost = invite?.let { IndoorRoomController.hostOf(it.serverUrl) },
+                        name = name,
+                        onNameChange = { name = it },
+                        sharePower = sharePower,
+                        onSharePowerChange = { sharePower = it },
+                    )
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showJoin = false }) { Text(stringResource(R.string.common_action_cancel)) }
@@ -335,6 +340,22 @@ private fun SharePowerRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit, 
     }
 }
 
+/**
+ * Die eine Scroll-Ebene der beiden Dialoge: Der Inhalt (Felder, Schalter, der
+ * Satz zum Datenschutz) ist höher als ein kleiner Bildschirm mit offener
+ * Tastatur. Die Höhe ist begrenzt, damit die Knöpfe darunter sichtbar bleiben
+ * und der scrollende Teil nie eine unbegrenzte Höhe gemessen bekommt. Die
+ * Inhalte selbst ([RoomCreateForm], [RoomJoinForm]) scrollen nicht.
+ */
+@Composable
+private fun RoomDialogScroll(content: @Composable () -> Unit) {
+    Column(modifier = Modifier.heightIn(max = ROOM_DIALOG_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
+        content()
+    }
+}
+
+private val ROOM_DIALOG_MAX_HEIGHT = 420.dp
+
 /** Inhalt des Dialogs „Raum anlegen". */
 @Composable
 internal fun RoomCreateForm(
@@ -347,10 +368,7 @@ internal fun RoomCreateForm(
     onChooseRoute: () -> Unit,
 ) {
     val formats = LocalAppFormats.current
-    Column(
-        modifier = Modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (route == null) {
             NoticeBox(
                 icon = Icons.Filled.Warning,
@@ -391,10 +409,7 @@ internal fun RoomJoinForm(
     sharePower: Boolean,
     onSharePowerChange: (Boolean) -> Unit,
 ) {
-    Column(
-        modifier = Modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         OutlinedTextField(
             value = link,
             onValueChange = { onLinkChange(it.take(INVITE_INPUT_MAX_CHARS)) },
