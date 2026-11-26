@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -201,7 +202,8 @@ internal fun IndoorCalibrationScreen(
                         ),
                         style = MaterialTheme.typography.headlineSmall,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // FlowRow: passt der zweite Knopf nicht mehr daneben, rutscht er in die naechste Zeile.
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = onGearLess) { Text(stringResource(R.string.indoor_feel_cal_gear_less)) }
                         OutlinedButton(onClick = onGearMore) { Text(stringResource(R.string.indoor_feel_cal_gear_more)) }
                     }
@@ -297,7 +299,7 @@ internal fun IndoorProtocolScreen(
         if (openedId != null && openedText != null) {
             val lines = openedText.lines()
             val preview = lines.take(PROTOCOL_PREVIEW_LINES).joinToString("\n")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { onShare(openedId) }) { Text(stringResource(R.string.indoor_feel_log_share)) }
                 OutlinedButton(onClick = { onDelete(openedId) }) { Text(stringResource(R.string.indoor_feel_log_delete)) }
             }

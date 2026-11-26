@@ -64,6 +64,8 @@ Wo die Regeln stehen:
 - „Plan“ ist der Trainingsplan (früher Training → Plan), unverändert im Inhalt.
 - Die Indoor-Einstellungen liegen unter Einstellungen → Indoor (gepushte Seite), samt Fahrgefühl einstellen, Fahrprotokolle, Strecken auf dem Gerät, Liste aktualisieren und Diagnose. Die Sprungzeilen „Indoor-Training“ und „Indoor-Diagnose“ in den Einstellungen sind entfallen.
 - Nach „Speichern“ in der Auswertung führt der Hauptknopf „Tour ansehen“ ins Tourdetail der neuen Tour.
+- Sicht „Strecken“, Karte „Einheit des Tages“ (nach dem Gerätetest auf 360 dp, 26.11.2026): Der Hauptknopf („Fahren“, „Herunterladen und fahren“ …) steht über die volle Breite, „Andere Strecke (4/6)“ als Textknopf in eigener Zeile darunter. Solange die Karte etwas zum Losfahren vorschlägt und in der Liste nichts gewählt ist, entfallen unten der Satz „Wähle oben eine Strecke.“ und der ausgegraute Knopf „Fahren“ – es gibt genau eine Hauptaktion. Ist eine Strecke gewählt, steht unten „Fahren“ für sie, und der Knopf der Karte ist getönt. „Profil geschätzt“ heißt „Höhenprofil geschätzt“.
+- Zwei Knöpfe nebeneinander brechen im Indoor-Teil in eine zweite Zeile um, statt den zweiten zu quetschen (`FlowRow`): „Verwerfen“/„Fortsetzen“ und „Aktualisieren (…)“ über „Fahren“, „Raum verlassen“/„Raum für alle beenden“, „Quellenangaben ausblenden“/„Löschen“ in der Weltverwaltung, „Leichter schalten“/„Schwerer schalten“ im Abgleich, „Fahrt beenden“/„Weiter“ und „Ausfahren“/„Beenden“ in der Fahransicht.
 - Einstiege mit Vorwahl (Einheit des Tages von „Heute“, „Indoor fahren“ und „In 3D ansehen“ aus dem Tourdetail) öffnen den Ablauf als gepushte Seite; „Zurück“ führt zum Ausgangspunkt.
 
 **Verlauf**
@@ -328,6 +330,8 @@ Die Screenshot-Tests laufen nur mit `-Pscreenshots` und schreiben nach `build/ou
 | `TrainingScreenshotTest` (alle) | Weg: Verlauf → Fortschritt bzw. Indoor → Plan; Bildnamen bleiben. |
 | `RidesScreenshotTest` | `tourKopfEnglisch` wartet auf den festen Knopf; neu `73a-tour-menue-en`, `73b-tour-nochmal-en`. Verlaufsbilder zeigen die Segmente. |
 | `MoreScreenshotTest` | Gruppen und Titel der Einstellungen; Profil ohne Aufklappen; Backup-Seite ohne Tour-Import. |
+| `IndoorScreenshotTest.schmal…`, `RoomScreenshotTest.imRaumAlsGastgeberSchmal`, `IndoorFeelScreenshotTest.abgleichMessenSchmal` (neu) | `schmal-01` bis `-12`: 360 dp breit, Systemschrift 130 %, dunkel. `-01` bis `-03` Sicht „Strecken“ des Tabs mit der Karte „Einheit des Tages“ (Vorschlag 4/6 zum Herunterladen; Strecke gewählt; Trainer fehlt), `-04` alle Fassungen der Karte, `-05`/`-06` „Angehalten“ und „Neue Fassung“ über „Fahren“, `-07` Weltverwaltung, `-08`/`-09` Pause und „Einheit geschafft“ in der Fahrt, `-10` Englisch, `-11` Raum als Gastgeber, `-12` Abgleich. Die Bilder `tageseinheit-01` bis `-03` und `-07` bis `-09` zeigen die Knöpfe der Karte untereinander. |
+| `IndoorHomeMainActionTest` (neu, läuft immer mit) | Prüft bei 360 dp und Schrift 130 %: mit Vorschlag der Tageskarte unten weder „Wähle oben eine Strecke.“ noch ein zweiter Knopf „Fahren“; die Knopftexte der Karte bleiben einzeilig. |
 | `IndoorOutdoorScreenshotTest` | `01-detail-gefahren`, `02-detail-geplant` zeigen das Blatt „Nochmal fahren“ statt des früheren Knopfs. |
 
 ## Nicht geprüft

@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -40,6 +41,7 @@ import de.trailscape.app.sensors.indoor.IndoorDevicesUiState
 import de.trailscape.app.sensors.indoor.IndoorFund
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
+import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.map.ProvideTestLanguage
 import de.trailscape.app.ui.theme.TrailscapeTheme
 import de.trailscape.core.indoor.catalog.CatalogRideKind
@@ -1068,6 +1070,181 @@ class IndoorScreenshotTest {
             }
         }
         compose.onAllNodesWithText("Generated route").onFirst().assertExists()
+    }
+
+    // ------------------------------------------------------------------ Schmales Handy, grosse Schrift, dunkel
+    // Der Stand des Geraetetests: 360 dp breit, Systemschrift 130 %, dunkles
+    // Design. Kein Knopftext darf Buchstabe fuer Buchstabe umbrechen.
+
+    private val narrowFile = "schmal"
+
+    /** Systemschrift 130 %. */
+    @Composable
+    private fun LargeFont(content: @Composable () -> Unit) {
+        val density = LocalDensity.current
+        CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1.3f), content = content)
+    }
+
+    /** Sechs Vorschlaege, gezeigt wird der vierte: eine Katalogstrecke zum Herunterladen („Andere Strecke (4/6)"). */
+    private val dayOfferSix get() = dayOffer.copy(
+        suggestions = listOf(
+            dayOffer.suggestions[0],
+            dayOffer.suggestions[1],
+            dayOffer.suggestions[1].copy(key = "catalog:alpe-dhuez", name = "Alpe d'Huez"),
+            dayOffer.suggestions[2],
+            dayOffer.suggestions[2].copy(key = "catalog:kahler-asten", name = "Waldwege am Kahlen Asten", estimated = false),
+            dayOffer.suggestions[3],
+        ),
+        index = 3,
+    )
+
+    private val routeNoneErg get() = routeSim.copy(
+        selected = null, ghost = IndoorGhostOption.None, ghostPastRideAvailable = false,
+        ergTitle = "Schwelle 3 x 8 Min", ergMinutes = 52,
+    )
+
+    /** Die Sicht „Strecken" des Indoor-Tabs: ohne Zurueck-Pfeil, mit Segmenten und Garage-Symbol. */
+    @Composable
+    private fun TabHome(
+        route: IndoorRouteUi,
+        day: IndoorDayUi?,
+        pair: IndoorPairUi = pairKickr,
+        issue: IndoorTrainerIssue? = null,
+        segments: List<String> = listOf("Strecken", "Plan", "Gemeinsam"),
+    ) = LargeFont {
+        IndoorHomeScreen(
+            route = route, pair = pair, trainerIssue = issue,
+            onSelect = {}, onModeChange = {}, onGhostChange = {}, onRide = {}, onBack = null, onOpenPair = {}, onOpenSettings = {},
+            catalog = catalogUi, day = day,
+            title = "Indoor",
+            headerExtra = { PillSegments(options = segments, selectedIndex = 0, onSelect = {}) },
+            onOpenGarage = {},
+        )
+    }
+
+    /** Der gemeldete Zustand: Tageskarte mit Download-Vorschlag 4/6, in der Liste nichts gewaehlt. */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h1400dp-night-xxhdpi")
+    fun schmalTabTageseinheit() {
+        shot("$narrowFile-01-tab-tageseinheit") { TabHome(route = routeNoneErg, day = dayOfferSix) }
+        compose.onNodeWithText("Herunterladen und fahren").assertExists()
+        compose.onNodeWithText("Andere Strecke (4/6)").assertExists()
+        // Die Karte traegt die Hauptaktion: unten weder Hinweis noch zweiter Knopf.
+        compose.onAllNodesWithText("Wähle oben eine Strecke.").assertCountEquals(0)
+        compose.onAllNodesWithText("Fahren").assertCountEquals(0)
+    }
+
+    /** Eine Strecke ist gewaehlt: unten „Fahren" als Hauptknopf, der Knopf der Karte getoent. */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h1400dp-night-xxhdpi")
+    fun schmalTabStreckeGewaehlt() = shot("$narrowFile-02-tab-strecke-gewaehlt") {
+        TabHome(route = routeNoneErg.copy(selected = saved), day = dayOfferSix.copy(index = 1))
+    }
+
+    /** Ohne Trainer: unten bleibt nur, was am Trainer fehlt. */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h1400dp-night-xxhdpi")
+    fun schmalTabTrainerFehlt() = shot("$narrowFile-03-tab-trainer-fehlt") {
+        TabHome(route = routeNoneErg, day = dayOfferSix, pair = pairNone, issue = IndoorTrainerIssue.NOT_PAIRED)
+    }
+
+    /** Alle Fassungen der Karte untereinander. */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h2600dp-night-xxhdpi")
+    fun schmalKarten() = shot("$narrowFile-04-karten") {
+        LargeFont {
+            Column(modifier = Modifier.padding(16.dp)) {
+                for (i in 0..3) {
+                    IndoorDayCard(ui = dayOffer.copy(index = i), onRide = {}, onNext = {})
+                    Box(modifier = Modifier.padding(6.dp))
+                }
+                IndoorDayCard(ui = dayOffer.copy(generated = dayGenerated, path = IndoorDayPath.GENERATED), onRide = {}, onNext = {})
+                Box(modifier = Modifier.padding(6.dp))
+                IndoorDayCard(ui = dayOffer.copy(index = 1), onRide = {}, onNext = {}, primary = false)
+            }
+        }
+    }
+
+    /** Download angehalten: zwei Knoepfe („Verwerfen", „Fortsetzen") unter dem Satz. */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h1100dp-night-xxhdpi")
+    fun schmalAngehalten() = shot("$narrowFile-05-angehalten") {
+        TabHome(route = routeCatalog.copy(selected = IndoorRouteOption.Catalog("kahler-asten", "Waldwege am Kahlen Asten", 13.2, 250.0)), day = null)
+    }
+
+    /** Neue Fassung: der lange Knopf „Aktualisieren (82 MB)" unter dem Satz. */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h1100dp-night-xxhdpi")
+    fun schmalAktualisieren() = shot("$narrowFile-06-aktualisieren") {
+        TabHome(route = routeCatalog.copy(selected = IndoorRouteOption.Catalog("arenberg", "Wald von Arenberg", 10.0, 45.0)), day = null)
+    }
+
+    /** Weltverwaltung: „Quellenangaben ausblenden" und „Löschen". */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h1700dp-night-xxhdpi")
+    fun schmalWeltverwaltung() {
+        compose.setContent {
+            TrailscapeTheme {
+                ProvideTestLanguage {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        LargeFont {
+                            IndoorWorldsScreen(
+                                IndoorWorldsUi(
+                                    worlds = listOf(
+                                        IndoorWorldEntryUi("w1", "Hausrunde Ammersee", IndoorQuality.MEDIUM, 238L * 1024 * 1024, 1_760_000_000_000, attribution, false, true),
+                                        IndoorWorldEntryUi("testwelt", "Testwelt", IndoorQuality.LOW, 12L * 1024 * 1024, null, emptyList(), false, true),
+                                    ),
+                                    totalBytes = 250L * 1024 * 1024,
+                                    cacheBytes = 85L * 1024 * 1024,
+                                ),
+                                {}, {}, {},
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("Quellenangaben zeigen").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Quellenangaben ausblenden").assertExists()
+        captureScreenRoboImage("build/outputs/roborazzi/$narrowFile-07-weltverwaltung.png")
+    }
+
+    /** Pause in der Fahrt: „Fahrt beenden" und „Weiter". */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h740dp-night-xxhdpi")
+    fun schmalPause() = shot("$narrowFile-08-fahren-pause") {
+        LargeFont {
+            RideScreen(
+                ride(session = session(phase = IndoorPhase.PAUSED, ghost = null), ghostLabel = null).copy(
+                    start = IndoorStartUi(selectedM = 4_260.0, maxM = 11_900.0, resumeM = null, held = false),
+                ),
+            )
+        }
+    }
+
+    /** Einheit geschafft: „Ausfahren" und „Beenden". */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h740dp-night-xxhdpi")
+    fun schmalEinheitGeschafft() = shot("$narrowFile-09-fahren-einheit-geschafft") {
+        LargeFont { RideScreen(dayEndRide(IndoorDayEndUi(de.trailscape.core.indoor.DayRideEnd.WORKOUT_DONE), IndoorPhase.RUNNING)) }
+    }
+
+    /** Dasselbe auf Englisch. */
+    @Test
+    @Config(qualifiers = "${TestLocales.EN}-w360dp-h1400dp-night-xxhdpi")
+    fun schmalTabEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        shot("$narrowFile-10-tab-tageseinheit-en") {
+            TabHome(
+                route = routeNoneErg.copy(ergTitle = "Threshold 3 x 8 min"),
+                day = dayOfferSix.copy(title = "Threshold 3 x 8 min"),
+                segments = listOf("Routes", "Plan", "Together"),
+            )
+        }
+        compose.onNodeWithText("Download and ride").assertExists()
+        compose.onNodeWithText("Other route (4/6)").assertExists()
+        compose.onAllNodesWithText("elevation profile estimated", substring = true).onFirst().assertExists()
     }
 
     // ------------------------------------------------------------------ Server-Bau (docs/indoor/serverbau.md)

@@ -414,7 +414,7 @@
     </plurals>
     <string name="indoor_app_day_reason_start">Start bei km %1$s</string>
     <string name="indoor_app_day_reason_ends_early">Strecke endet %1$d min vor der Einheit</string>
-    <string name="indoor_app_day_reason_estimated">Profil geschätzt</string>
+    <string name="indoor_app_day_reason_estimated">Höhenprofil geschätzt</string>
     <string name="indoor_app_day_plan_climbs">neue Runde mit Anstiegen</string>
     <string name="indoor_app_day_plan_rolling">neue Runde, flach bis wellig</string>
     <string name="indoor_app_day_plan_flat">neue flache Runde</string>

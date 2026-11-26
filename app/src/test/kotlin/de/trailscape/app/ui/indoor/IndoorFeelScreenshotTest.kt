@@ -85,6 +85,16 @@ class IndoorFeelScreenshotTest {
     @Test
     fun abgleichMessen() = shot("feel-abgleich-messen") { Calibration(cal(FeelPhase.MEASURING, 70)) }
 
+    /** Schmales Handy, Systemschrift 130 %, dunkel: „Leichter schalten" und „Schwerer schalten" untereinander statt gequetscht. */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h1300dp-night-xxhdpi")
+    fun abgleichMessenSchmal() = shot("schmal-12-abgleich-messen") {
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, fontScale = 1.3f),
+        ) { Calibration(cal(FeelPhase.MEASURING, 70)) }
+    }
+
     @Test
     fun abgleichEinlaufen() = shot("feel-abgleich-einlaufen") { Calibration(cal(FeelPhase.WARMUP, 12)) }
 
