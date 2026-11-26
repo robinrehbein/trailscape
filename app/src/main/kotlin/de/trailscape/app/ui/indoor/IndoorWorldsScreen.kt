@@ -3,8 +3,8 @@ package de.trailscape.app.ui.indoor
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -206,7 +206,13 @@ private fun WorldCard(world: IndoorWorldEntryUi, onDelete: () -> Unit) {
                     text = stringResource(R.string.indoor_app_worlds_orphaned),
                 )
             }
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // FlowRow: „Löschen" rutscht in die naechste Zeile, wenn es neben
+            // „Quellenangaben ausblenden" nicht mehr passt.
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = if (world.attribution.isNotEmpty()) Arrangement.SpaceBetween else Arrangement.End,
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
                 if (world.attribution.isNotEmpty()) {
                     TextButton(onClick = { showAttribution = !showAttribution }, modifier = Modifier.offset(x = (-12).dp)) {
                         Text(
@@ -216,7 +222,6 @@ private fun WorldCard(world: IndoorWorldEntryUi, onDelete: () -> Unit) {
                         )
                     }
                 }
-                Spacer(modifier = Modifier.weight(1f))
                 TextButton(onClick = onDelete, modifier = Modifier.offset(x = 12.dp)) {
                     Text(
                         text = stringResource(R.string.indoor_app_worlds_delete_action),

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -17,9 +18,9 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.AppFormats
@@ -126,6 +128,8 @@ sealed interface IndoorDayUi {
      *   die Tagesform gekuerzt hat (sonst `null`).
      * @property suggestions beste zuerst; leer = keine Strecke gefunden.
      * @property index der gerade gezeigte Vorschlag („Andere Strecke" blaettert).
+     * @property startable die Karte zeigt gerade etwas zum Losfahren (einen
+     *   Vorschlag oder die generierte Welt) und traegt damit selbst einen Knopf.
      */
     data class Offer(
         val kind: DaySessionKind,
@@ -139,6 +143,9 @@ sealed interface IndoorDayUi {
         val path: IndoorDayPath = IndoorDayPath.REAL,
     ) : IndoorDayUi {
         val current: IndoorDaySuggestionUi? get() = suggestions.getOrNull(index)
+
+        val startable: Boolean
+            get() = if (path == IndoorDayPath.GENERATED && generated != null) true else current != null
 
         /** Der naechste Vorschlag, nach dem letzten wieder der erste. */
         fun next(): Offer = if (suggestions.isEmpty()) this else copy(index = (index + 1) % suggestions.size)
@@ -320,6 +327,9 @@ private fun rideActionLabel(s: IndoorDaySuggestionUi): String = stringResource(
  * @param onRide fahren bzw. laden/bauen/planen fuer den gezeigten Vorschlag.
  * @param onOpenIndoor nur am Ruhetag: das Indoor-Training trotzdem oeffnen
  *   (freie Fahrt); `null` = kein Knopf.
+ * @param primary der Knopf der Karte ist die Hauptaktion des Bildschirms
+ *   (gefuellt). `false`, wenn daneben schon ein anderer Hauptknopf steht (die
+ *   Startseite mit gewaehlter Strecke) — dann getoent, damit es nur einen gibt.
  */
 @Composable
 fun IndoorDayCard(
@@ -330,6 +340,7 @@ fun IndoorDayCard(
     onOpenIndoor: (() -> Unit)? = null,
     onRideGenerated: () -> Unit = {},
     onPathChange: (IndoorDayPath) -> Unit = {},
+    primary: Boolean = true,
 ) {
     val formats = LocalAppFormats.current
     Card(modifier = modifier.fillMaxWidth()) {
@@ -370,7 +381,7 @@ fun IndoorDayCard(
                     Text(stringResource(R.string.indoor_app_day_event_title), style = MaterialTheme.typography.titleMedium)
                     MutedText(stringResource(R.string.indoor_app_day_event_body))
                 }
-                is IndoorDayUi.Offer -> OfferBody(ui, formats, onRide, onNext, onRideGenerated, onPathChange)
+                is IndoorDayUi.Offer -> OfferBody(ui, formats, onRide, onNext, onRideGenerated, onPathChange, primary)
             }
         }
     }
@@ -384,6 +395,7 @@ private fun OfferBody(
     onNext: () -> Unit,
     onRideGenerated: () -> Unit,
     onPathChange: (IndoorDayPath) -> Unit,
+    primary: Boolean,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(text = ui.title, style = MaterialTheme.typography.titleMedium)
@@ -406,7 +418,7 @@ private fun OfferBody(
             onSelect = { onPathChange(if (it == 0) IndoorDayPath.REAL else IndoorDayPath.GENERATED) },
         )
         if (ui.path == IndoorDayPath.GENERATED) {
-            GeneratedBody(generated, ui.terrain, formats, onRideGenerated)
+            GeneratedBody(generated, ui.terrain, formats, primary, onRideGenerated)
             return
         }
     }
@@ -429,18 +441,34 @@ private fun OfferBody(
             Text(line, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Button(onClick = { onRide(s) }) { Text(rideActionLabel(s)) }
+    // Untereinander, nie nebeneinander: Auf einem schmalen Geraet bliebe dem
+    // zweiten Knopf sonst kaum Breite, und sein Text braeche Buchstabe fuer Buchstabe um.
+    Column(modifier = Modifier.fillMaxWidth()) {
+        DayMainButton(text = rideActionLabel(s), primary = primary, onClick = { onRide(s) })
         if (ui.suggestions.size > 1) {
-            OutlinedButton(onClick = onNext) {
-                Text(stringResource(R.string.indoor_app_day_next_action, ui.index + 1, ui.suggestions.size))
+            TextButton(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = stringResource(R.string.indoor_app_day_next_action, ui.index + 1, ui.suggestions.size),
+                    textAlign = TextAlign.Center,
+                )
             }
         }
     }
 }
 
+/** Der eine Knopf der Karte ueber die volle Breite; gefuellt nur als Hauptaktion des Bildschirms. */
 @Composable
-private fun GeneratedBody(g: IndoorDayGeneratedUi, terrain: DayTerrain, formats: AppFormats, onRide: () -> Unit) {
+private fun DayMainButton(text: String, primary: Boolean, onClick: () -> Unit) {
+    val modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+    if (primary) {
+        Button(onClick = onClick, modifier = modifier) { Text(text, textAlign = TextAlign.Center) }
+    } else {
+        FilledTonalButton(onClick = onClick, modifier = modifier) { Text(text, textAlign = TextAlign.Center) }
+    }
+}
+
+@Composable
+private fun GeneratedBody(g: IndoorDayGeneratedUi, terrain: DayTerrain, formats: AppFormats, primary: Boolean, onRide: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(text = stringResource(R.string.indoor_app_day_generated_title), style = MaterialTheme.typography.titleSmall)
         val shape = when {
@@ -476,7 +504,9 @@ private fun GeneratedBody(g: IndoorDayGeneratedUi, terrain: DayTerrain, formats:
             )
         }
     }
-    Button(onClick = onRide) {
-        Text(stringResource(if (g.ready) R.string.indoor_app_day_ride_action else R.string.indoor_app_day_build_action))
-    }
+    DayMainButton(
+        text = stringResource(if (g.ready) R.string.indoor_app_day_ride_action else R.string.indoor_app_day_build_action),
+        primary = primary,
+        onClick = onRide,
+    )
 }

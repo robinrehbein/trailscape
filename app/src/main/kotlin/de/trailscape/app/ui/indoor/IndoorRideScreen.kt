@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -798,7 +799,11 @@ private fun PhaseCard(
             )
             if (session.phase == IndoorPhase.PAUSED) {
                 Spacer(modifier = Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                // FlowRow: bei grosser Schrift stehen die Knoepfe untereinander statt gequetscht.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                ) {
                     // In der Pause ein einfacher Tipp zum Beenden (danach: speichern oder verwerfen).
                     if (onFinish != null) {
                         TextButton(onClick = onFinish) {
@@ -849,7 +854,7 @@ private fun DayEndCard(dayEnd: IndoorDayEndUi, actions: HudActions, modifier: Mo
                 textAlign = TextAlign.Center,
             )
             Spacer(modifier = Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
                 if (done) {
                     Button(
                         onClick = actions.onDismissDayEnd,

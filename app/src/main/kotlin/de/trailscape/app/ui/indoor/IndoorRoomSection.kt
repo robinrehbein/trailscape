@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -556,7 +557,8 @@ private fun RoomOpenContent(
             Text(text = stringResource(R.string.raum_share_invite), modifier = Modifier.padding(start = 8.dp))
         }
         MutedText(stringResource(R.string.raum_share_invite_hint))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // FlowRow: „Raum für alle beenden" rutscht auf schmalen Geraeten in die naechste Zeile.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = onLeave) { Text(stringResource(R.string.raum_leave)) }
             if (ui.host) {
                 TextButton(onClick = onEnd, enabled = online) { Text(stringResource(R.string.raum_end)) }

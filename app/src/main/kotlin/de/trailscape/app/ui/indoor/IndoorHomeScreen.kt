@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -89,6 +90,14 @@ private const val GHOST_WATTS_MAX = 1000
  *     (Koppeln, Herunterladen, Fortsetzen, Abbrechen), und der grosse Knopf
  *     **„Fahren"** — nur aktiv, wenn alles bereit ist ([indoorCanRide]).
  *
+ * ## Genau eine Hauptaktion
+ * Schlaegt die Karte „Einheit des Tages" etwas zum Losfahren vor und ist in
+ * der Liste noch nichts gewaehlt, ist ihr Knopf die Hauptaktion: Unten
+ * entfallen dann der (sonst ausgegraute) Knopf „Fahren" und der Satz „Wähle
+ * oben eine Strecke." — er widerspraeche der Karte. Sobald eine Strecke
+ * gewaehlt ist, steht unten wieder „Fahren" fuer diese Strecke, und der Knopf
+ * der Karte tritt getoent zurueck.
+ *
  * Technisches (Fahrgefuehl, Tageszeit, Diagnose, Strecken auf dem Geraet,
  * Liste aktualisieren) liegt hinter dem Zahnrad ([onOpenSettings]).
  * Zustandslos: jede Wahl geht als Rueckruf nach oben.
@@ -141,6 +150,8 @@ fun IndoorHomeScreen(
         nameOf = { it.name.pick(lang) },
     )
     val canRide = indoorCanRide(trainerIssue, route, readiness)
+    // Die Tageskarte traegt die Hauptaktion, solange unten nichts gewaehlt ist.
+    val dayLeads = readiness == IndoorRouteReadiness.NoRoute && (day as? IndoorDayUi.Offer)?.startable == true
     IndoorPage(
         title = title,
         onBack = onBack,
@@ -157,16 +168,19 @@ fun IndoorHomeScreen(
                 Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.indoor_app_home_settings_cd))
             }
         },
-        bottomBar = {
+        // Mit der Tageskarte als Hauptaktion bleibt unten nur, was am Trainer fehlt.
+        bottomBar = if (dayLeads && trainerIssue == null) null else {
+            {
             ReadinessLines(
                 trainerIssue = trainerIssue,
                 readiness = readiness,
+                showNoRoute = !dayLeads,
                 onOpenPair = onOpenPair,
                 onDownload = onCatalogDownload,
                 onCancel = onCatalogCancel,
                 onDiscard = onCatalogDiscard,
             )
-            Button(
+            if (!dayLeads) Button(
                 onClick = onRide,
                 enabled = canRide,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
@@ -174,6 +188,7 @@ fun IndoorHomeScreen(
                 Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(22.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(stringResource(R.string.indoor_app_home_ride_action), style = MaterialTheme.typography.titleMedium)
+            }
             }
         },
     ) {
@@ -184,6 +199,7 @@ fun IndoorHomeScreen(
             IndoorDayCard(
                 ui = it, onRide = { onDayRide() }, onNext = onDayNext,
                 onRideGenerated = onDayGenerated, onPathChange = onDayPath,
+                primary = dayLeads,
             )
         }
 
@@ -345,6 +361,7 @@ private fun TrainerCard(pair: IndoorPairUi, issue: IndoorTrainerIssue?, onOpenPa
 private fun ReadinessLines(
     trainerIssue: IndoorTrainerIssue?,
     readiness: IndoorRouteReadiness,
+    showNoRoute: Boolean,
     onOpenPair: () -> Unit,
     onDownload: (String) -> Unit,
     onCancel: (String) -> Unit,
@@ -376,13 +393,13 @@ private fun ReadinessLines(
         }
     }
     when (readiness) {
-        IndoorRouteReadiness.NoRoute -> StatusLine(stringResource(R.string.indoor_app_home_need_route))
+        IndoorRouteReadiness.NoRoute -> if (showNoRoute) StatusLine(stringResource(R.string.indoor_app_home_need_route))
         is IndoorRouteReadiness.Ready -> {
             val update = readiness.update
             if (update == null) {
                 if (trainerIssue == null) StatusLine(stringResource(R.string.indoor_app_home_ready, readiness.name), good = true)
             } else {
-                StatusLine(stringResource(R.string.indoor_app_home_update, readiness.name)) {
+                StatusLine(stringResource(R.string.indoor_app_home_update, readiness.name), stacked = true) {
                     OutlinedButton(onClick = { onDownload(update.id) }) {
                         Text(
                             if (update.packageBytes > 0) {
@@ -421,7 +438,7 @@ private fun CatalogLines(
             FilledTonalButton(onClick = { onDownload(item.id) }) { Text(stringResource(R.string.indoor_app_home_download_action)) }
         }
         is IndoorCatalogState.Paused -> {
-            StatusLine(stringResource(R.string.indoor_app_home_paused, name)) {
+            StatusLine(stringResource(R.string.indoor_app_home_paused, name), stacked = true) {
                 TextButton(onClick = { onDiscard(item.id) }) { Text(stringResource(R.string.indoor_app_catalog_discard)) }
                 FilledTonalButton(onClick = { onDownload(item.id) }) { Text(stringResource(R.string.indoor_app_catalog_resume)) }
             }
@@ -465,14 +482,32 @@ private fun CatalogLines(
     }
 }
 
-/** Ein Satz ueber „Fahren", rechts optional der Knopf, der ihn behebt. */
+/**
+ * Ein Satz ueber „Fahren", rechts optional der Knopf, der ihn behebt.
+ *
+ * @param stacked die Knoepfe stehen in einer eigenen Zeile unter dem Satz —
+ *   fuer zwei Knoepfe oder einen langen („Aktualisieren (114 MB)"), neben denen
+ *   dem Satz auf einem schmalen Geraet nur ein Streifen bliebe.
+ */
 @Composable
 private fun StatusLine(
     text: String,
     warning: Boolean = false,
     good: Boolean = false,
+    stacked: Boolean = false,
     actions: (@Composable () -> Unit)? = null,
 ) {
+    if (stacked && actions != null) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            StatusLine(text = text, warning = warning, good = good)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) { actions() }
+        }
+        return
+    }
     val signals = LocalSignalColors.current
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         when {
