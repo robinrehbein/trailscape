@@ -414,7 +414,7 @@
     </plurals>
     <string name="indoor_app_day_reason_start">start at km %1$s</string>
     <string name="indoor_app_day_reason_ends_early">route ends %1$d min before the session</string>
-    <string name="indoor_app_day_reason_estimated">profile estimated</string>
+    <string name="indoor_app_day_reason_estimated">elevation profile estimated</string>
     <string name="indoor_app_day_plan_climbs">new loop with climbs</string>
     <string name="indoor_app_day_plan_rolling">new loop, flat to rolling</string>
     <string name="indoor_app_day_plan_flat">new flat loop</string>

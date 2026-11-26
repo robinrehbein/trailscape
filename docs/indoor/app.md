@@ -529,10 +529,14 @@ passt, und fährt sie im ERG-Modus.
 Einheit im Plan – 45 min locker und flach“), die vorgeschlagene Strecke, ein
 Satz Begründung („24,6 km · 3 Anstiege von 6–8 min für deine 3 × 8 min · Start
 bei km 12,4“; bei Runden „7 Runden“; „Strecke endet 9 min vor der Einheit“;
-„Profil geschätzt“ bei Katalogstrecken vor dem Laden), ob die Welt bereitliegt
+„Höhenprofil geschätzt“ bei Katalogstrecken vor dem Laden), ob die Welt bereitliegt
 („Welt liegt bereit“, „Welt laden: 114 MB“, „Welt bauen: etwa 14 min“,
 „Runde planen, dann Welt bauen: etwa 8 min“) und „Andere Strecke (1/4)“ zum
-Durchblättern der nächsten Kandidaten (höchstens sechs).
+Durchblättern der nächsten Kandidaten (höchstens sechs). Die Knöpfe stehen
+untereinander: der Hauptknopf („Fahren“, „Herunterladen und fahren“,
+„Vorbereiten“, „Runde bauen“) über die volle Breite, darunter „Andere Strecke“
+als Textknopf in eigener Zeile – nebeneinander bliebe dem zweiten auf einem
+360 dp breiten Gerät mit großer Schrift kaum Breite.
 
 **Welche Einheit** (`daySessionFor` in `core/…/indoor/DayRoute.kt`): aus der
 Tagesentscheidung `decideTodayRoute` — dieselbe, die „Heute“ und die Karte
@@ -707,7 +711,7 @@ Abschnitte je Art, Fahrzeit = Einheitsdauer für vier Einheiten, stabiler Seed).
 
 **Bilder** (`docs/indoor/bilder/tageseinheit/`, aus `IndoorScreenshotTest.tageseinheit*`):
 01 Schritt Strecke mit der Karte (Intervalle, Welt bauen, Start bei km 12,4),
-02 die Karte mit fertiger Welt, Download (Profil geschätzt) und neuer Runde,
+02 die Karte mit fertiger Welt, Download (Höhenprofil geschätzt) und neuer Runde,
 03 gekürzt durch die Tagesform, lockere Runde ohne Plan, Ruhetag, Suche läuft,
 04 und 06 „Einheit geschafft“ hoch und quer, 05 „Strecke zu Ende“,
 07 Schritt Strecke englisch, 08 beide Wege (generierte Welt gewählt, echte
@@ -818,6 +822,15 @@ Doku und Bildern selbst zusammengetragen. Vorher/Nachher-Bilder:
    „Bereit: …“), darunter der große Knopf **„Fahren“** (56 dp), nur aktiv,
    wenn Trainer und Strecke bereit sind (`IndoorReadiness.kt`,
    `indoorCanRide`).
+   **Genau eine Hauptaktion:** Schlägt die Karte „Einheit des Tages“ etwas zum
+   Losfahren vor und ist in der Liste noch nichts gewählt, trägt die Karte den
+   Hauptknopf; unten entfallen dann „Wähle oben eine Strecke.“ und der sonst
+   ausgegraute Knopf „Fahren“ (es bleibt nur, was am Trainer fehlt). Sobald
+   eine Strecke gewählt ist, steht unten wieder „Fahren“ für diese Strecke, und
+   der Knopf der Karte ist nur noch getönt (`IndoorHomeScreen.kt`, `dayLeads`;
+   geprüft in `IndoorHomeMainActionTest`). Sätze mit zwei Knöpfen oder einem
+   langen („Angehalten“ mit [Verwerfen]/[Fortsetzen], „Neue Fassung“ mit
+   [Aktualisieren (82 MB)]) setzen die Knöpfe in eine eigene Zeile darunter.
 7. „Fahren“ = bisher „Weiter“ (`continueFromRoute`, unverändert bis auf die
    zusätzliche Prüfung auf einen Trainer): bereite bekannte Strecke bzw.
    generierte Welt → direkt in die Fahrt; Testwelt und eigene Strecke mit Welt

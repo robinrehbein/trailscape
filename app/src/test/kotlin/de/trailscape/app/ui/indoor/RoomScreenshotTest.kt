@@ -260,6 +260,16 @@ class RoomScreenshotTest {
         Section(lobby(host = true))
     }
 
+    /** Schmales Handy, Systemschrift 130 %, dunkel: „Raum verlassen" und „Raum für alle beenden" brechen in Zeilen, nicht in Buchstaben. */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h1500dp-night-xxhdpi")
+    fun imRaumAlsGastgeberSchmal() = shot("schmal-11-raum-gastgeber") {
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, fontScale = 1.3f),
+        ) { Section(lobby(host = true)) }
+    }
+
     @Test
     fun imRaumStreckeFehlt() = shot("spiel5-09-raum-strecke-fehlt") {
         Section(lobby(route = alpe.copy(availability = ChallengeAvailability.DOWNLOAD)))
