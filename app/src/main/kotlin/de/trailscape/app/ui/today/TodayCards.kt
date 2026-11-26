@@ -6,7 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,15 +26,12 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.rounded.Spa
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -59,21 +56,32 @@ import androidx.compose.ui.semantics.collectionInfo
 import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.UiText
 import de.trailscape.app.i18n.asString
-import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.app.ui.components.AtlasCard
+import de.trailscape.app.ui.components.MetricBlock
 import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.progress.WeeklyGoalBar
 import de.trailscape.app.ui.theme.CardPadding
-import de.trailscape.app.ui.training.SessionTargetLines
-import de.trailscape.core.SessionPersonalTargets
 import de.trailscape.app.ui.theme.LocalSignalColors
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
+import de.trailscape.app.ui.theme.WindowLayoutClass
+import de.trailscape.app.ui.theme.tabular
+import de.trailscape.app.ui.training.SessionTargetLines
+import de.trailscape.core.AscentPreference
 import de.trailscape.core.ReadinessBand
+import de.trailscape.core.SessionPersonalTargets
+import kotlin.math.roundToInt
 
 /**
  * Die Bausteine der Startseite „Heute" nach `docs/design/prototyp-klartext.html`
@@ -152,12 +160,46 @@ internal fun HeroCard(
     healthHint: HealthHint,
     onOpenHealth: () -> Unit,
     sessionTargets: SessionPersonalTargets? = null,
+    goalDistanceKm: Double? = null,
+    goalAscentM: Int? = null,
+    goalDurationMin: Int? = null,
 ) {
     val theme = MaterialTheme.colorScheme
-    Card(modifier = Modifier.fillMaxWidth()) {
+    val layoutClass = LocalWindowLayoutClass.current
+    val expanded = layoutClass == WindowLayoutClass.Expanded
+    val validGoalDistanceKm = goalDistanceKm?.takeIf { it.isFinite() && it > 0.0 }
+    val routeMetrics = when {
+        offer != null -> {
+            val ascentM = estimatedAscentM(offer.target.distanceKm, offer.target.ascentPreference)
+            rememberTodayRouteMetrics(
+                distanceKm = offer.target.distanceKm,
+                ascentM = ascentM,
+                exactAscent = false,
+                durationMin = routeDurationMinutes(offer.target),
+                ascentPreference = offer.target.ascentPreference,
+                restDay = offer.restDay,
+            )
+        }
+        validGoalDistanceKm != null -> {
+            val ascentM = goalAscentM ?: estimatedAscentM(validGoalDistanceKm, AscentPreference.MODERAT)
+            val durationMin = goalDurationMin ?: ((validGoalDistanceKm / 22.0) * 60.0).roundToInt().coerceAtLeast(1)
+            rememberTodayRouteMetrics(
+                distanceKm = validGoalDistanceKm,
+                ascentM = ascentM,
+                exactAscent = goalAscentM != null,
+                durationMin = durationMin,
+                ascentPreference = AscentPreference.MODERAT,
+                isEvent = true,
+            )
+        }
+        else -> null
+    }
+    val previewAscent = offer?.target?.ascentPreference ?: AscentPreference.MODERAT
+
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(CardPadding),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (score != null && band != null) {
@@ -202,34 +244,99 @@ internal fun HeroCard(
                 )
             }
 
-            if (offer != null && !offer.restDay) {
-                Button(
-                    onClick = onBuildRoute,
+            if (routeMetrics != null) {
+                TodayRoutePreview(
+                    ascentPreference = previewAscent,
+                    restDay = offer?.restDay == true,
+                    isEvent = offer == null && validGoalDistanceKm != null,
+                    statusLabel = routeMetrics.statusLabel,
+                    spokenSummary = "${routeMetrics.distanceText}, ${routeMetrics.ascentText}, ${routeMetrics.durationText}",
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 48.dp),
-                    contentPadding = PaddingValues(horizontal = 20.dp),
+                        .height(if (expanded) 144.dp else 88.dp),
+                )
+                if (expanded) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics(mergeDescendants = true) {},
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        MetricBlock(
+                            value = routeMetrics.distanceValue,
+                            unit = routeMetrics.distanceUnit,
+                            label = stringResource(R.string.today_route_metric_distance_label),
+                            modifier = Modifier.weight(1f),
+                        )
+                        MetricBlock(
+                            value = routeMetrics.ascentValue,
+                            unit = routeMetrics.ascentUnit,
+                            label = stringResource(R.string.today_route_metric_ascent_label),
+                            modifier = Modifier.weight(1f),
+                        )
+                        MetricBlock(
+                            value = routeMetrics.durationValue,
+                            unit = routeMetrics.durationUnit,
+                            label = stringResource(R.string.today_route_metric_duration_label),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                } else {
+                    FlowRow(
+                        modifier = Modifier.semantics(mergeDescendants = true) {},
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = routeMetrics.distanceText,
+                            style = MaterialTheme.typography.labelLarge.tabular(),
+                            color = theme.onSurface,
+                        )
+                        Text(
+                            text = routeMetrics.ascentText,
+                            style = MaterialTheme.typography.labelLarge.tabular(),
+                            color = theme.onSurface,
+                        )
+                        Text(
+                            text = routeMetrics.durationText,
+                            style = MaterialTheme.typography.labelLarge.tabular(),
+                            color = theme.onSurface,
+                        )
+                    }
+                }
+            }
+
+            if (offer != null && !offer.restDay) {
+                TrailscapePrimaryButton(
+                    onClick = onBuildRoute,
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Icon(Icons.Filled.Route, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = offerButtonLabel(offer).asString(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        text = offerButtonLabel(offer).asString(),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                    )
                 }
             } else if (offer != null) {
                 // Am Ruhetag: dasselbe Angebot wie auf der Karte, aber ruhig
-                // (Umriss statt Akzentflaeche) — die Seite raet zur Pause und
-                // soll nicht mit dem lautesten Knopf das Gegenteil sagen. Kein
-                // NeutralButton: dessen Flaeche verschwindet auf der Karte.
-                OutlinedButton(
+                // (Nebenknopf im Atlas-Stil) — die Seite raet zur Pause und
+                // soll nicht mit dem einen orangefarbenen Knopf das Gegenteil sagen.
+                TrailscapeSecondaryButton(
                     onClick = onBuildRoute,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp),
-                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     // Dasselbe Spa-Symbol wie der Ruhetag-Knopf auf der Karte.
                     Icon(Icons.Rounded.Spa, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = offerButtonLabel(offer).asString(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        text = offerButtonLabel(offer).asString(),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                    )
                 }
             }
 
@@ -323,7 +430,7 @@ private fun ReadinessRing(score: Int, word: String, color: Color) {
                     style = Stroke(width = stroke, cap = StrokeCap.Round),
                 )
             }
-            Text(text = score.toString(), style = MaterialTheme.typography.headlineSmall)
+            Text(text = score.toString(), style = MaterialTheme.typography.headlineSmall.tabular())
         }
         Spacer(modifier = Modifier.height(2.dp))
         Text(
@@ -376,7 +483,7 @@ internal fun WeekCard(
     val first = summary.first.asString()
     val second = summary.second?.asString()
     val summarySpoken = second?.let { "$first, $it" } ?: first
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(CardPadding)) {
             Row(
                 verticalAlignment = Alignment.Bottom,
@@ -385,11 +492,11 @@ internal fun WeekCard(
                     contentDescription = summarySpoken
                 },
             ) {
-                Text(text = first, style = MaterialTheme.typography.titleMedium)
+                Text(text = first, style = MaterialTheme.typography.titleMedium.tabular())
                 second?.let {
                     Text(
                         text = " · $it",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodySmall.tabular(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 1.dp),
                     )
@@ -454,7 +561,7 @@ private fun StripDayCell(day: StripDay, index: Int, modifier: Modifier = Modifie
 private fun StripDot(day: StripDay) {
     val theme = MaterialTheme.colorScheme
     val text = day.km?.toString() ?: "–"
-    val labelStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+    val labelStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold).tabular()
     when (day.state) {
         StripState.DONE -> Box(
             modifier = Modifier
@@ -515,6 +622,10 @@ internal fun GoalCard(title: String, line: String, progress: Float, onOpenTraini
         Spacer(modifier = Modifier.height(10.dp))
         LinearProgressIndicator(
             progress = { progress },
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            gapSize = 0.dp,
+            drawStopIndicator = {},
             modifier = Modifier
                 .fillMaxWidth()
                 .height(6.dp)
@@ -539,14 +650,13 @@ internal fun GoalPromptCard(onOpenTraining: () -> Unit) {
 /** Karte als Zeile mit Chevron rechts — der Chevron sagt „fuehrt woandershin". */
 @Composable
 private fun ChevronCard(onClick: () -> Unit, content: @Composable () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(
-                onClickLabel = stringResource(R.string.today_goal_open_training_action),
-                role = Role.Button,
-                onClick = onClick,
-            ),
+    val openLabel = stringResource(R.string.today_goal_open_training_action)
+    AtlasCard(
+        onClick = onClick,
+        modifier = Modifier.semantics {
+            role = Role.Button
+            onClick(label = openLabel, action = null)
+        },
     ) {
         Row(
             modifier = Modifier.padding(CardPadding),
@@ -569,7 +679,7 @@ private fun ChevronCard(onClick: () -> Unit, content: @Composable () -> Unit) {
  *
  * Es ersetzt die fruehere Coach-Karte der Startseite: Die Gruende sind da, wer
  * sie sucht, aber sie stehen nicht mehr zwischen der Empfehlung und dem Knopf.
- * „Verstanden" ist bewusst ein [NeutralButton] — der eine volle Knopf dieser
+ * „Verstanden" ist bewusst ein [TrailscapeSecondaryButton] — der eine volle Knopf dieser
  * Seite bleibt „Runde für heute bauen".
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -619,7 +729,7 @@ internal fun WhySheet(
                     }
                 }
             }
-            NeutralButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+            TrailscapeSecondaryButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.today_why_sheet_dismiss_action))
             }
         }

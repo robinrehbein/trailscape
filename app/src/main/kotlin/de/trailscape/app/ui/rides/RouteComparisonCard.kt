@@ -18,7 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Timer
-import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,8 +38,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
+import de.trailscape.app.ui.theme.tabular
 import de.trailscape.core.RouteComparison
 import de.trailscape.core.RouteEffort
 import de.trailscape.core.formatDuration
@@ -89,7 +90,7 @@ internal fun RouteComparisonCard(
     // zwar (noch) die schnellste, aber nie eine neue Bestzeit gewesen.
     val newBest = isBest && comparison.previous != null
 
-    Card(modifier = modifier.fillMaxWidth()) {
+    AtlasCard(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(start = CardPadding, end = CardPadding, top = CardPadding, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -234,7 +235,7 @@ private fun RouteIconBubble(icon: ImageVector, tint: Color) {
 private fun RouteEffortRow(effort: RouteEffort, isCurrent: Boolean, onClick: (() -> Unit)?) {
     val formats = LocalAppFormats.current
     val date = formats.dateShort(effort.createdAt)
-    val numberStyle = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum")
+    val numberStyle = MaterialTheme.typography.bodyMedium.tabular()
     val weight = if (isCurrent) FontWeight.SemiBold else null
     Row(
         modifier = Modifier

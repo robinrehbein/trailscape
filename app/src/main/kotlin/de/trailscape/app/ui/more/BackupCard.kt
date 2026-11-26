@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -37,6 +36,8 @@ import de.trailscape.app.i18n.UiText
 import de.trailscape.app.indoor.ClimbBestStore
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.UNREADABLE_FILE_MESSAGE
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.withCause
 import de.trailscape.core.DiagEvent
 import de.trailscape.core.DiagLog
@@ -169,7 +170,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Button(
+        TrailscapePrimaryButton(
             onClick = { exportLauncher.launch(backupFileName(LocalDate.now())) },
             enabled = !busy,
         ) {
@@ -181,7 +182,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
             Spacer(Modifier.size(ButtonDefaults.IconSpacing))
             Text(stringResource(R.string.more_backup_export_action))
         }
-        SettingsSecondaryButton(
+        TrailscapeSecondaryButton(
             onClick = { importBackupLauncher.launch(arrayOf("application/json", "*/*")) },
             enabled = !busy,
         ) {
@@ -246,7 +247,7 @@ private suspend fun writeBackupFile(
 }
 
 /** Schluessel des Zeitpunkts der letzten erfolgreichen Sicherung (Long, Epoch-ms). */
-private const val PREF_LAST_BACKUP_AT = "trailscape.backup.lastExportAtMs"
+internal const val PREF_LAST_BACKUP_AT = "trailscape.backup.lastExportAtMs"
 
 /** Wann zuletzt erfolgreich ein Backup exportiert wurde, oder `null` = noch nie. */
 internal fun lastBackupAt(context: Context): LocalDateTime? {

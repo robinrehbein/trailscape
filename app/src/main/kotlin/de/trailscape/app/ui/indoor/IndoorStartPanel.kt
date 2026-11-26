@@ -6,13 +6,16 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PlayArrow
@@ -24,6 +27,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,8 +51,10 @@ import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.ui.theme.LocalCockpitColors
 import de.trailscape.core.indoor.IndoorPhase
 import de.trailscape.core.indoor.IndoorStartPoints
 import kotlin.math.abs
@@ -110,7 +116,13 @@ internal fun IndoorStartPanel(
         formats.decimal(profileEleAt(profile, shownM).toDouble(), 0),
     )
 
-    Surface(color = HudColors.panelStrong, shape = RoundedCornerShape(24.dp), modifier = modifier.fillMaxWidth()) {
+    val cockpit = LocalCockpitColors.current
+    Surface(
+        color = cockpit.panel,
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(1.dp, cockpit.border),
+        modifier = modifier.fillMaxWidth(),
+    ) {
         Column(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = if (compact) 8.dp else 12.dp),
             verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp),
@@ -288,49 +300,80 @@ private fun StartProfile(
 
 @Composable
 private fun StartChip(text: String, selected: Boolean, onClick: () -> Unit) {
+    val cockpit = LocalCockpitColors.current
     FilterChip(
         selected = selected,
         onClick = onClick,
+        shape = MaterialTheme.shapes.small,
         label = { Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         colors = FilterChipDefaults.filterChipColors(
             containerColor = Color.Transparent,
-            labelColor = HudColors.ink,
-            selectedContainerColor = HudColors.accent,
+            labelColor = cockpit.ink,
+            selectedContainerColor = cockpit.good,
             selectedLabelColor = Color.Black,
         ),
         border = FilterChipDefaults.filterChipBorder(
             enabled = true,
             selected = selected,
-            borderColor = HudColors.outline,
-            selectedBorderColor = HudColors.accent,
+            borderColor = cockpit.border,
+            selectedBorderColor = cockpit.good,
         ),
     )
 }
 
 @Composable
 private fun StartAction(text: String, onClick: () -> Unit, modifier: Modifier) {
+    val cockpit = LocalCockpitColors.current
+    val labelStyle = MaterialTheme.typography.labelLarge
     Button(
         onClick = onClick,
-        modifier = modifier,
-        colors = ButtonDefaults.buttonColors(containerColor = HudColors.ink, contentColor = Color.Black),
+        modifier = modifier.heightIn(min = 44.dp),
+        shape = MaterialTheme.shapes.small,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = cockpit.action, contentColor = cockpit.onAction),
     ) {
         Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(modifier = Modifier.width(6.dp))
-        Text(text)
+        BasicText(
+            text = text,
+            style = labelStyle.copy(color = LocalContentColor.current),
+            maxLines = 1,
+            softWrap = false,
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = 11.sp,
+                maxFontSize = labelStyle.fontSize,
+                stepSize = 0.5.sp,
+            ),
+        )
     }
 }
 
 /** „Fahrt beenden" in der Pause: hell umrandet, damit „Weiter" der Hauptknopf bleibt. */
 @Composable
 private fun FinishAction(onClick: () -> Unit) {
+    val cockpit = LocalCockpitColors.current
+    val labelStyle = MaterialTheme.typography.labelLarge
     OutlinedButton(
         onClick = onClick,
-        border = BorderStroke(1.dp, HudColors.ink.copy(alpha = 0.7f)),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = HudColors.ink),
+        modifier = Modifier.heightIn(min = 44.dp),
+        shape = MaterialTheme.shapes.small,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+        border = BorderStroke(1.dp, cockpit.border),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = cockpit.ink),
     ) {
         Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(modifier = Modifier.width(6.dp))
-        Text(stringResource(R.string.indoor_app_start_finish_action))
+        BasicText(
+            text = stringResource(R.string.indoor_app_start_finish_action),
+            style = labelStyle.copy(color = LocalContentColor.current),
+            maxLines = 1,
+            softWrap = false,
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = 11.sp,
+                maxFontSize = labelStyle.fontSize,
+                stepSize = 0.5.sp,
+            ),
+        )
     }
 }
 

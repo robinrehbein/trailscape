@@ -104,6 +104,7 @@ fun TrailscapeTheme(
         LocalSignalColors provides if (darkTheme) DarkSignalColors else LightSignalColors,
         LocalNavigationBarColors provides
             if (darkTheme) DarkNavigationBarColors else LightNavigationBarColors,
+        LocalAtlasColors provides if (darkTheme) DarkAtlasColors else LightAtlasColors,
     ) {
         MaterialTheme(
             colorScheme = if (darkTheme) DarkColors else LightColors,

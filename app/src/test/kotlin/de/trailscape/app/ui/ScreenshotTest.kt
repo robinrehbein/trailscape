@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.SemanticsMatcher
@@ -665,8 +666,15 @@ class ScreenshotTest {
         assertEquals("Today", context.getString(R.string.today_screen_title))
         compose.onAllNodesWithText(context.getString(R.string.today_screen_title))[0].assertExists()
         compose.onAllNodesWithText(context.getString(R.string.today_hero_why_action))[0].assertIsDisplayed()
-        compose.onAllNodesWithText(context.getString(R.string.today_week_eyebrow))[0].assertExists()
         shot("01-heute-en")
+
+        val weekEyebrow = context.getString(R.string.today_week_eyebrow)
+        val scrollable = compose.onAllNodes(hasScrollToNodeAction())[0]
+        scrollable.performScrollToNode(hasText(weekEyebrow))
+        settle()
+        compose.onAllNodesWithText(weekEyebrow)[0].assertExists()
+        scrollable.performScrollToNode(hasContentDescription(settings))
+        settle()
 
         compose.onAllNodesWithContentDescription(settings)[0].performClick()
         settle()
@@ -791,8 +799,18 @@ class ScreenshotTest {
         // `seed()` muss ausdruecklich weg.
         savePlan(AppServices.trainingPlanStore, null)
         start()
+        val viewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
+        compose.waitUntil(timeoutMillis = 10_000) {
+            !viewModel.ridesLoading.value &&
+                viewModel.insights.value.recommendation.title ==
+                CoreTextsEn.readiness.recommendationTitle(viewModel.insights.value.recommendation.kind)
+        }
+        settle()
         val context = compose.activity
-        compose.onAllNodesWithText(context.getString(R.string.today_week_eyebrow))[0].assertExists()
+        val weekEyebrow = context.getString(R.string.today_week_eyebrow)
+        compose.onAllNodes(hasScrollToNodeAction())[0].performScrollToKey("sec-woche")
+        settle()
+        compose.onAllNodesWithText(weekEyebrow)[0].assertExists()
         compose.onAllNodesWithContentDescription("Weekly goal:", substring = true)[0].assertExists()
         // Der Satz hangt von der Woche ab; eine der beiden Formen muss da sein.
         val caption = compose.onAllNodesWithText("to go", substring = true).fetchSemanticsNodes().size

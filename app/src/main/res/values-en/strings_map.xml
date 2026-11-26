@@ -33,6 +33,10 @@
     <string name="map_explore_build_loop_action">Build a loop</string>
     <string name="map_explore_saved_routes_label">Saved routes</string>
     <string name="map_explore_recent_label">Recent searches</string>
+    <string name="map_route_distance_value">%1$s km</string>
+    <string name="map_route_ascent_value">%1$d m ↑</string>
+    <string name="map_route_duration_approx">approx. %1$s</string>
+    <string name="map_search_close_cd">Close search</string>
 
     <!-- LongPressHint.kt -->
     <string name="map_long_press_hint_snackbar">Tip: Tap the map to drop a pin – as a destination or the start of a loop.</string>
@@ -100,9 +104,10 @@
     <string name="map_generation_research_action">Search again</string>
     <string name="map_generation_intro_body">Trailscape looks for %1$d loops from your current location – without a location, from the centre of the map. This takes about half a minute; feel free to switch tabs in the meantime.</string>
     <string name="map_generation_running_status">Searching …</string>
+    <string name="map_generation_auto_starting_status">Searching – ride will start automatically …</string>
     <string name="map_generation_progress_status">Candidate %1$d of %2$d …</string>
     <string name="map_generation_cancel_action">Cancel</string>
-    <string name="map_generation_candidate_headline">%1$s km · %2$d m ↑</string>
+    <string name="map_generation_candidate_headline">%1$s km · %2$d m&#160;↑</string>
     <string name="map_generation_best_label">Best</string>
     <string name="map_generation_candidate_detail">%1$s · %2$d m/km · %3$s vs. target</string>
     <!-- %1$d = doppelt befahrener Anteil in Prozent -->

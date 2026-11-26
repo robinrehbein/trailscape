@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppLanguage
+import de.trailscape.app.ui.theme.LocalAtlasColors
 import de.trailscape.core.formatDuration
 import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.i18n.formatDistanceKm
@@ -103,8 +104,9 @@ fun RecCapsuleButton(
     val isRecording = state is RecButtonState.Recording
     val paused = (state as? RecButtonState.Recording)?.paused == true
 
-    val containerColor = if (isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-    val dotColor = if (isRecording) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary
+    val atlas = LocalAtlasColors.current
+    val containerColor = if (isRecording) MaterialTheme.colorScheme.error else atlas.action
+    val dotColor = if (isRecording) MaterialTheme.colorScheme.onError else atlas.onAction
     val ringColor = MaterialTheme.colorScheme.error
 
     val label = when (state) {

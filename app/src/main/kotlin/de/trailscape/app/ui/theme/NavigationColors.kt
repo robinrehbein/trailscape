@@ -59,8 +59,8 @@ data class NavigationBarColors(
  * wirken.
  */
 internal val LightNavigationBarColors = NavigationBarColors(
-    container = Color(0xFFECEEF2),
-    indicator = Color(0xFFDBDEE5),
+    container = Color(0xFFF0EDE6),
+    indicator = Color(0xFFDFDBD0),
     selectedContent = LightOnSurface,
     unselectedContent = LightOnSurfaceVariant,
     // 8 % Schwarz: gerade genug, dass die Kante steht, ohne dass die Kapsel
@@ -69,19 +69,19 @@ internal val LightNavigationBarColors = NavigationBarColors(
 )
 
 /**
- * Dunkel: eine Stufe ueber der Karte (#17181B), damit die Kapsel vor dem
+ * Dunkel: eine Stufe ueber der Karte (#1B1E23), damit die Kapsel vor dem
  * fast schwarzen Grund schwebt statt in ihm zu versinken — Schatten traegt im
  * Dunkelmodus nichts, die Helligkeit muss die Arbeit tun.
  */
 internal val DarkNavigationBarColors = NavigationBarColors(
-    container = Color(0xFF26272C),
-    indicator = Color(0xFF3A3C43),
-    selectedContent = Color(0xFFF2F2F5),
-    unselectedContent = Color(0xFF9CA2AA),
+    container = Color(0xFF20232A),
+    indicator = Color(0xFF323742),
+    selectedContent = Color(0xFFF2F3F6),
+    unselectedContent = Color(0xFF9EA5B0),
     // Im Dunkeln muss das Randlicht heller sein als der Grund, nicht dunkler —
     // deshalb Weiss und etwas kraeftiger, weil ein Schatten hier ohnehin
     // nichts traegt.
-    rim = Color(0xFFF2F2F5).copy(alpha = 0.12f),
+    rim = Color(0xFFF2F3F6).copy(alpha = 0.12f),
 )
 
 /**

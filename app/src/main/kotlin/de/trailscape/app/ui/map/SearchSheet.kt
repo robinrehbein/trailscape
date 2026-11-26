@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
@@ -135,49 +136,121 @@ internal fun SearchSheet(
         sheetState = sheetState,
         modifier = modifier,
     ) {
-        Column(
+        SearchPickerContent(
+            query = query,
+            onQueryChange = onQueryChange,
+            onSearch = onSearch,
+            busy = busy,
+            error = error,
+            results = results,
+            history = history,
+            onSelect = onSelect,
+            focusRequester = focusRequester,
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = maxHeight)
                 .padding(horizontal = CardPadding)
                 .padding(bottom = CardPadding),
+        )
+    }
+
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+}
+
+@Composable
+internal fun SearchPickerPanel(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    busy: Boolean,
+    error: String?,
+    results: List<GeoResult>,
+    history: List<Place>,
+    onSelect: (Place) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusRequester = remember { FocusRequester() }
+    StaticSheet(modifier = modifier, inSidePanel = true) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = CardPadding, end = CardPadding, bottom = CardPadding),
         ) {
-            OneUiTextField(
-                label = stringResource(R.string.map_search_label),
-                value = query,
-                onValueChange = onQueryChange,
-                placeholder = stringResource(R.string.map_search_placeholder),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-                trailingIcon = {
-                    when {
-                        busy -> CircularProgressIndicator(
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(18.dp),
-                        )
-
-                        query.isNotEmpty() -> IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Filled.Clear, contentDescription = stringResource(R.string.map_search_clear_cd))
-                        }
-                    }
-                },
-                fieldModifier = Modifier.focusRequester(focusRequester),
-            )
-
-            PlaceResults(
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.map_search_label),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.map_search_close_cd))
+                }
+            }
+            SearchPickerContent(
                 query = query,
+                onQueryChange = onQueryChange,
+                onSearch = onSearch,
                 busy = busy,
                 error = error,
                 results = results,
                 history = history,
                 onSelect = onSelect,
-                onSearch = onSearch,
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+                focusRequester = focusRequester,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
-
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+}
+
+@Composable
+private fun SearchPickerContent(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    busy: Boolean,
+    error: String?,
+    results: List<GeoResult>,
+    history: List<Place>,
+    onSelect: (Place) -> Unit,
+    focusRequester: FocusRequester,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        OneUiTextField(
+            label = stringResource(R.string.map_search_label),
+            value = query,
+            onValueChange = onQueryChange,
+            placeholder = stringResource(R.string.map_search_placeholder),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+            trailingIcon = {
+                when {
+                    busy -> CircularProgressIndicator(
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp),
+                    )
+
+                    query.isNotEmpty() -> IconButton(onClick = { onQueryChange("") }) {
+                        Icon(Icons.Filled.Clear, contentDescription = stringResource(R.string.map_search_clear_cd))
+                    }
+                }
+            },
+            fieldModifier = Modifier.focusRequester(focusRequester),
+        )
+
+        PlaceResults(
+            query = query,
+            busy = busy,
+            error = error,
+            results = results,
+            history = history,
+            onSelect = onSelect,
+            onSearch = onSearch,
+            modifier = Modifier.verticalScroll(rememberScrollState()),
+        )
+    }
 }
 
 /**

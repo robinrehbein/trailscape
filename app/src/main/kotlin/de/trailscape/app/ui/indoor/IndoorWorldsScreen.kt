@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.components.NoticeBox
@@ -68,7 +68,7 @@ fun IndoorWorldsScreen(
                 CircularProgressIndicator(modifier = Modifier.size(28.dp))
             }
         } else {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            AtlasCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     LabelValueRow(
                         label = stringResource(R.string.indoor_app_worlds_total),
@@ -162,7 +162,7 @@ fun IndoorWorldsScreen(
 private fun WorldCard(world: IndoorWorldEntryUi, onDelete: () -> Unit) {
     val formats = LocalAppFormats.current
     var showAttribution by rememberSaveable(world.worldId) { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(

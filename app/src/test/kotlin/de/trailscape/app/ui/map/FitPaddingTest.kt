@@ -119,4 +119,46 @@ class FitPaddingTest {
         assertEquals(0.0 to 0.0, navCameraPadding(0, 100, 100, versatz = true))
         assertEquals(0.0 to 0.0, navCameraPadding(300, 200, 100, versatz = true))
     }
+
+    // ------------------------------------------ 380-dp-Seitenpanel links
+
+    @Test
+    fun seitenpanelLinksVerschiebtFitPaddingNachRechts() {
+        // 1280x800 dp @ xhdpi -> 2560x1600 px; 396 dp links -> 792 px
+        val p = fitPaddingPx(2560, 1600, base, obscuredBottomPx = 0, obscuredLeftPx = 792)
+        assertArrayEquals(intArrayOf(792 + 48, 120, 48, 220), p)
+        assertTrue("links+rechts ${p[0]}+${p[2]}", p[0] + p[2] <= 2560 - 96)
+    }
+
+    @Test
+    fun seitenpanelLinksAufKleinerKarteLaesstFreieBreite() {
+        val p = fitPaddingPx(600, 1000, base, obscuredBottomPx = 0, obscuredLeftPx = 2000)
+        assertTrue("links+rechts ${p[0]}+${p[2]}", p[0] + p[2] <= 600 - 96)
+        assertTrue(p.all { it >= 0 })
+    }
+
+    @Test
+    fun seitenpanelLinksHoechstensSechzigProzent() {
+        assertEquals(1200, clampObscuredLeft(3000, 2000))
+        assertEquals(792, clampObscuredLeft(792, 2376))
+        assertEquals(0, clampObscuredLeft(792, 0))
+    }
+
+    @Test
+    fun gespeicherterLinkerRandWirdAufSchmalerKarteBegrenzt() {
+        val p = reclampedCameraPadding(doubleArrayOf(900.0, 0.0, 48.0, 0.0), mapHeightPx = 1600, mapWidthPx = 1000)!!
+        assertEquals(600.0, p[0], 0.0)
+        assertTrue("links+rechts ${p[0]}+${p[2]}", p[0] + p[2] <= 1000 - 96)
+    }
+
+    @Test
+    fun nichtEndlicheKameraRaenderWerdenAbgefangen() {
+        val p = reclampedCameraPadding(
+            doubleArrayOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NaN),
+            mapHeightPx = 1600,
+            mapWidthPx = 1000,
+        )!!
+        assertTrue(p.all { it.isFinite() && it >= 0.0 })
+        assertArrayEquals(doubleArrayOf(0.0, 0.0, 0.0, 0.0), p, 0.0)
+    }
 }

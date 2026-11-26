@@ -133,3 +133,9 @@ private val OneUiTypography = Typography(
 
 /** Das vom Theme gestellte Schriftsystem (siehe [OneUiTypography]). */
 val TrailscapeTypography = OneUiTypography
+
+/**
+ * Stellt gleich breite Ziffern (`tnum`) ein, damit sich Werte bei laufender
+ * Aktualisierung (Leistung, Tempo, Zeit, Distanz) nicht seitlich verschieben.
+ */
+fun TextStyle.tabular(): TextStyle = copy(fontFeatureSettings = "tnum")

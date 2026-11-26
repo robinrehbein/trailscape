@@ -6,7 +6,10 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
 import de.trailscape.app.ui.theme.ScreenPadding
+import de.trailscape.app.ui.theme.TabletScreenPadding
+import de.trailscape.app.ui.theme.WindowLayoutClass
 
 /**
  * # Bodenfreiheit fuer die schwebende Navigationskapsel
@@ -42,9 +45,16 @@ val LocalFloatingNavigationBarSpace = compositionLocalOf { 0.dp }
  */
 @Composable
 @ReadOnlyComposable
-fun screenContentPadding(extraBottom: Dp = 0.dp): PaddingValues = PaddingValues(
-    start = ScreenPadding,
-    top = ScreenPadding,
-    end = ScreenPadding,
-    bottom = ScreenPadding + extraBottom + LocalFloatingNavigationBarSpace.current,
-)
+fun screenContentPadding(extraBottom: Dp = 0.dp): PaddingValues {
+    val padding = if (LocalWindowLayoutClass.current == WindowLayoutClass.Compact) {
+        ScreenPadding
+    } else {
+        TabletScreenPadding
+    }
+    return PaddingValues(
+        start = padding,
+        top = padding,
+        end = padding,
+        bottom = padding + extraBottom + LocalFloatingNavigationBarSpace.current,
+    )
+}

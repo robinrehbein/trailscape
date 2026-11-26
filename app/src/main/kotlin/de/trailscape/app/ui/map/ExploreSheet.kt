@@ -1,13 +1,13 @@
 package de.trailscape.app.ui.map
 
-import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.text.TextAutoSize
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -15,14 +15,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Loop
 import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,18 +32,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.LocalAppLanguage
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.components.OneUiSearchField
+import de.trailscape.app.ui.components.RouteCard
 import de.trailscape.app.ui.components.SettingsAction
-import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.rides.plannedRouteMeta
+import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.LocalAtlasColors
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
+import de.trailscape.app.ui.theme.PrimaryButtonMinHeight
+import de.trailscape.app.ui.theme.useNavigationRail
 import de.trailscape.core.GeoResult
+import de.trailscape.core.Ride
 import de.trailscape.core.RideSummary
+import kotlin.math.roundToInt
 
 /**
  * Das „Wohin?"-Blatt der Karte (Fuehrung „Klartext",
@@ -97,7 +109,11 @@ internal fun ExploreSheet(
     bottomInset: Dp,
     modifier: Modifier = Modifier,
     onRevealFraction: ((Float) -> Unit)? = null,
+    loadRide: suspend (String) -> Ride? = { null },
+    inSidePanel: Boolean = false,
 ) {
+    val atlas = LocalAtlasColors.current
+    val hideSettingsAction = useNavigationRail(LocalWindowLayoutClass.current)
     SwipeableSheet(
         // Waehrend der Suche gehoert der Platz den Treffern.
         expanded = expanded && !searching,
@@ -111,6 +127,7 @@ internal fun ExploreSheet(
         // gespeicherte Routen und Orte, ohne einen eigenen Bildschirm.
         expandedHeight = expandedHeight,
         onRevealFraction = onRevealFraction,
+        inSidePanel = inSidePanel,
         peek = {
             Column(
                 modifier = Modifier.padding(
@@ -130,10 +147,9 @@ internal fun ExploreSheet(
                         onFocusChange = onSearchingChange,
                         onSearch = onSubmitSearch,
                     )
-                    // Das Zahnrad steht auf allen vier Tabs; auf der Karte
-                    // sitzt es im Blatt, damit die Kartenflaeche frei bleibt.
-                    // Waehrend der Suche gehoert die Zeile dem Feld.
-                    if (!searching) SettingsAction(onClick = onOpenSettings)
+                    // Auf Telefonen steht das Zahnrad hier; bei aktiver Rail
+                    // traegt bereits die Rail den Einstieg.
+                    if (!searching && !hideSettingsAction) SettingsAction(onClick = onOpenSettings)
                 }
 
                 if (searching) {
@@ -146,9 +162,13 @@ internal fun ExploreSheet(
                         history = searchHistory,
                         onSelect = onSelectPlace,
                         onSearch = onSubmitSearch,
-                        modifier = Modifier
-                            .heightIn(max = searchMaxHeight)
-                            .verticalScroll(rememberScrollState()),
+                        modifier = if (inSidePanel) {
+                            Modifier
+                        } else {
+                            Modifier
+                                .heightIn(max = searchMaxHeight)
+                                .verticalScroll(rememberScrollState())
+                        },
                     )
                 } else {
                     Spacer(Modifier.height(12.dp))
@@ -156,26 +176,32 @@ internal fun ExploreSheet(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        // Die zweitwichtigste Aufgabe der Karte bekommt einen
-                        // sichtbaren Einstieg: Die Planung beginnt hier, auch
-                        // ohne vorher gewaehlten Ort.
-                        FilledTonalButton(
+                        Button(
                             onClick = onPlanRoute,
-                            modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = PrimaryButtonMinHeight),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = atlas.action,
+                                contentColor = atlas.onAction,
+                            ),
                             contentPadding = ChipPadding,
                         ) {
                             ChipContent(icon = Icons.Rounded.Route, label = stringResource(R.string.map_explore_plan_route_action))
                         }
-                        // Grau statt NeutralButton: dessen Flaeche hat die
-                        // Farbe der Karte und waere auf diesem Blatt unsichtbar.
-                        FilledTonalButton(
+                        Button(
                             onClick = onRoundTripHere,
-                            modifier = Modifier.weight(1f).heightIn(min = 44.dp),
-                            contentPadding = ChipPadding,
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = PrimaryButtonMinHeight),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, atlas.cardBorder),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                 contentColor = MaterialTheme.colorScheme.onSurface,
                             ),
+                            contentPadding = ChipPadding,
                         ) {
                             ChipContent(icon = Icons.Rounded.Loop, label = stringResource(R.string.map_explore_build_loop_action))
                         }
@@ -184,15 +210,22 @@ internal fun ExploreSheet(
             }
         },
         body = {
-            ExploreSheetBody(
-                savedRoutes = savedRoutes,
-                recentPlaces = searchHistory,
-                onSelectRoute = onSelectRoute,
-                onSelectPlace = onSelectPlace,
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .verticalScroll(rememberScrollState()),
-            )
+            if (!inSidePanel || !searching) {
+                ExploreSheetBody(
+                    savedRoutes = savedRoutes,
+                    recentPlaces = searchHistory,
+                    loadRide = loadRide,
+                    onSelectRoute = onSelectRoute,
+                    onSelectPlace = onSelectPlace,
+                    modifier = if (inSidePanel) {
+                        Modifier
+                    } else {
+                        Modifier
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState())
+                    },
+                )
+            }
         },
     )
 }
@@ -201,23 +234,45 @@ internal fun ExploreSheet(
 private fun ExploreSheetBody(
     savedRoutes: List<RideSummary>,
     recentPlaces: List<Place>,
+    loadRide: suspend (String) -> Ride?,
     onSelectRoute: (RideSummary) -> Unit,
     onSelectPlace: (Place) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val formats = LocalAppFormats.current
+    val language = LocalAppLanguage.current
     Column(modifier = modifier.padding(start = CardPadding, end = CardPadding, bottom = 12.dp)) {
         LongPressHintLine()
         if (savedRoutes.isNotEmpty()) {
             SectionLabel(stringResource(R.string.map_explore_saved_routes_label))
-            savedRoutes.take(MAX_ROWS).forEach { ride ->
-                SheetRow(
-                    title = ride.name,
-                    // Dieselbe Zeile wie im Abschnitt „Geplant" des Verlaufs —
-                    // mit „erstellt", damit das Datum nicht als Fahrtag gilt.
-                    subtitle = plannedRouteMeta(localOfEpochMs(ride.createdAt), ride.stats),
-                    icon = Icons.Rounded.Route,
-                    onClick = { onSelectRoute(ride) },
-                )
+            Spacer(Modifier.height(6.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                savedRoutes.take(MAX_ROWS).forEach { ride ->
+                    val stats = ride.stats
+                    val durationMinutes = stats.durationS
+                        ?.takeIf { it > 0 }
+                        ?.let { (it / 60.0).roundToInt().coerceAtLeast(1) }
+                    val durationText = if (durationMinutes != null) {
+                        restzeitDauer(durationMinutes).asString()
+                    } else {
+                        formatRouteDurationApprox(estimatedDurationMinutes(stats.distanceKm)).asString()
+                    }
+                    RouteCard(
+                        title = ride.name,
+                        subtitle = plannedRouteMeta(localOfEpochMs(ride.createdAt), stats, language).asString(),
+                        distanceText = stringResource(R.string.map_route_distance_value, formats.km(stats.distanceKm)),
+                        ascentText = stringResource(R.string.map_route_ascent_value, stats.ascentM.roundToInt()),
+                        durationText = durationText,
+                        media = {
+                            SavedRoutePreview(
+                                ride = ride,
+                                loadRide = loadRide,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        },
+                        onClick = { onSelectRoute(ride) },
+                    )
+                }
             }
         }
         if (recentPlaces.isNotEmpty()) {

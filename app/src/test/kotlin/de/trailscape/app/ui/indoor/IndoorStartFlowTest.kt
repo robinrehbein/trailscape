@@ -89,9 +89,13 @@ class IndoorStartFlowTest {
         setDemoTrainer(true)
         continueFromPair()
         selectRoute(IndoorRouteOption.TestWorld)
-        continueFromRoute()
-        assertTrue(world.value is IndoorWorldUi.Ready)
-        startRide(withWorld = withWorld)
+        if (withWorld) {
+            continueFromRoute()
+        } else {
+            prepareWorld(autoStart = false)
+            assertTrue(world.value is IndoorWorldUi.Ready)
+            startRide(withWorld = false)
+        }
         assertEquals(IndoorStage.RIDE, stage.value)
     }
 

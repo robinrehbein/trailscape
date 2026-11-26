@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +36,7 @@ import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.reminder.ReminderScheduler
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
 import de.trailscape.app.ui.map.hasNotificationPermission
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.ReminderSettings
@@ -165,7 +165,7 @@ fun ReminderCardContent(appViewModel: AppViewModel) {
             text = stringResource(R.string.more_reminder_permission_notice),
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Button(
+        TrailscapePrimaryButton(
             onClick = {
                 // Ab Android 13 gibt es die Laufzeit-Berechtigung; darunter
                 // sind Benachrichtigungen ohne Nachfrage erlaubt und der

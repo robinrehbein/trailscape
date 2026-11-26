@@ -1,16 +1,24 @@
 package de.trailscape.app.ui.indoor
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
@@ -19,7 +27,10 @@ import com.github.takahirom.roborazzi.captureScreenRoboImage
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
 import de.trailscape.app.ui.map.ProvideTestLanguage
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
+import de.trailscape.app.ui.theme.TabletCardGap
 import de.trailscape.app.ui.theme.TrailscapeTheme
+import de.trailscape.app.ui.theme.windowLayoutClassFor
 import de.trailscape.core.indoor.SurfaceKind
 import de.trailscape.core.indoor.catalog.CatalogClimbClass
 import de.trailscape.core.indoor.catalog.CatalogFilter
@@ -60,9 +71,13 @@ class IndoorCatalogBrowseScreenshotTest {
 
     private fun shot(name: String, fontScale: Float = 1f, content: @Composable () -> Unit) {
         compose.setContent {
+            val widthDp = LocalConfiguration.current.screenWidthDp
             TrailscapeTheme {
                 ProvideTestLanguage {
-                    CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
+                    CompositionLocalProvider(
+                        LocalDensity provides Density(LocalDensity.current.density, fontScale),
+                        LocalWindowLayoutClass provides windowLayoutClassFor(widthDp),
+                    ) {
                         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { content() }
                     }
                 }
@@ -151,4 +166,30 @@ class IndoorCatalogBrowseScreenshotTest {
 
     @Test
     fun listeGrosseSchrift() = shot("idee10-08-liste-grosse-schrift", fontScale = 2f) { ListScreen(filterOpen = true) }
+
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_LANDSCAPE_DE)
+    fun listeTabS11Quer() = shot("idee10-09-liste-tab-s11-quer") {
+        val filter by CatalogBrowseSession.filter.collectAsState()
+        val rows = remember(items, extras) { catalogRows(items, extras) }
+        val shown = remember(rows, filter) { rows.filteredBy(filter) { it.item.name.de } }
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(24.dp),
+            horizontalArrangement = Arrangement.spacedBy(TabletCardGap),
+            verticalArrangement = Arrangement.spacedBy(TabletCardGap),
+        ) {
+            indoorCatalogGridItems(
+                catalog = IndoorCatalogUi(items),
+                rows = rows,
+                shown = shown,
+                filter = filter,
+                selectedKey = "catalog:alpe-dhuez",
+                onSelect = {},
+                onOpenDetail = {},
+                initialFilterOpen = false,
+            )
+        }
+    }
 }

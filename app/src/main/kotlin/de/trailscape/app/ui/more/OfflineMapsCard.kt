@@ -31,6 +31,7 @@ import de.trailscape.app.R
 import de.trailscape.app.i18n.AppFormats
 import de.trailscape.app.i18n.languageOf
 import de.trailscape.app.ui.components.OneUiDialog
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.map.listOfflineRegions
 import de.trailscape.app.ui.map.readOfflineRegionInfo
 import de.trailscape.app.ui.mapStyles
@@ -70,7 +71,11 @@ import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
  *   ist wie ueberall.
  */
 @Composable
-fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}, onOpenMap: (() -> Unit)? = null) {
+fun OfflineMapsCardContent(
+    onMessage: (String) -> Unit = {},
+    onOpenMap: (() -> Unit)? = null,
+    onRegionsChanged: () -> Unit = {},
+) {
     val context = LocalContext.current
 
     var loading by remember { mutableStateOf(true) }
@@ -103,7 +108,7 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}, onOpenMap: (() -> U
     // Tests der Karte allein) entfaellt er.
     if (onOpenMap != null) {
         Spacer(modifier = Modifier.height(8.dp))
-        SettingsSecondaryButton(onClick = onOpenMap) {
+        TrailscapeSecondaryButton(onClick = onOpenMap) {
             Text(stringResource(R.string.more_offline_maps_open_map_action))
         }
     }
@@ -156,7 +161,7 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}, onOpenMap: (() -> U
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
-            SettingsSecondaryButton(
+            TrailscapeSecondaryButton(
                 onClick = { confirmDeleteAll = true },
                 enabled = !deleteAllBusy,
                 destructive = true,
@@ -178,6 +183,7 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}, onOpenMap: (() -> U
                             busyRegionId = null
                             if (success) {
                                 reloadToken++
+                                onRegionsChanged()
                             } else {
                                 onMessage(deleteFailedMessage(context, 1))
                             }
@@ -206,6 +212,7 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}, onOpenMap: (() -> U
                         deleteAllOfflineRegionsAsync(regions.map { it.region }) { failed ->
                             deleteAllBusy = false
                             reloadToken++
+                            onRegionsChanged()
                             if (failed > 0) {
                                 onMessage(deleteFailedMessage(context, failed))
                             }

@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,6 +16,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.asString
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.theme.CardPadding
 
@@ -36,7 +36,7 @@ import de.trailscape.app.ui.theme.CardPadding
 @Composable
 internal fun RideImpactCard(lines: List<RideImpactLine>) {
     if (lines.isEmpty()) return
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(CardPadding),
             verticalArrangement = Arrangement.spacedBy(10.dp),

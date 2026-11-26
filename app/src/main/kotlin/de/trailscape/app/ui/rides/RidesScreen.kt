@@ -4,13 +4,16 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -42,6 +45,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppLanguage
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.HistorySegment
@@ -49,21 +53,29 @@ import de.trailscape.app.data.ErfolgeStore
 import de.trailscape.app.ui.erfolge.ErfolgeHistoryContent
 import de.trailscape.app.ui.historySegments
 import de.trailscape.app.ui.resolveSegment
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.more.rememberArchiveImportAction
 import de.trailscape.app.ui.training.ProgressContent
 import androidx.compose.ui.semantics.Role
 import de.trailscape.app.ui.components.ForwardBackwardHost
-import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.OneUiSearchField
 import de.trailscape.app.ui.components.SettingsAction
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
+import de.trailscape.app.ui.components.TwoPaneLayout
 import de.trailscape.app.ui.components.screenContentPadding
+import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.rememberActivityImportAction
 import de.trailscape.app.ui.FileImportNoticeEffect
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
+import de.trailscape.app.ui.theme.TabletScreenPadding
+import de.trailscape.app.ui.theme.useTwoPaneLayout
+import java.time.LocalDate
 import kotlinx.coroutines.Job
 
 /**
@@ -134,10 +146,14 @@ fun RidesScreen(appViewModel: AppViewModel) {
     // [AppViewModel.historyMapRequest]); Planungen allein ergaeben eine leere.
     val hasRiddenRides = rides.any { !it.planned }
 
+    val layoutClass = LocalWindowLayoutClass.current
+    val isTwoPane = useTwoPaneLayout(layoutClass)
+
     // Die geoeffnete Tour als ID, nicht als `Ride`: Nach einem Umbenennen oder
     // HF-Merge liefert `appViewModel.rides` ein neues Objekt, ueber die ID
     // zeigt die Ansicht immer auf den aktuellen Stand.
     var detailRideId by rememberSaveable { mutableStateOf<String?>(null) }
+    val detailFullscreen = detailRideId != null && !isTwoPane
 
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -145,12 +161,12 @@ fun RidesScreen(appViewModel: AppViewModel) {
         searchOpen = false
         query = ""
     }
-    BackHandler(enabled = searchOpen && detailRideId == null) { closeSearch() }
+    BackHandler(enabled = searchOpen && !detailFullscreen) { closeSearch() }
 
     // Ergebnis eines Datei-Imports (auch per Teilen/Oeffnen, dafuer springt
-    // die App hierher). Liegt ein Detail ueber der Liste, zeigt es das Detail
-    // — der Snackbar-Host der Liste waere darunter verdeckt.
-    FileImportNoticeEffect(appViewModel, snackbarHostState, standBy = { detailRideId != null })
+    // die App hierher). Liegt ein Detail vollflachig ueber der Liste, zeigt es
+    // das Detail — der Snackbar-Host der Liste waere darunter verdeckt.
+    FileImportNoticeEffect(appViewModel, snackbarHostState, standBy = { detailFullscreen })
 
     // Der Datei-Import (GPX/FIT, Mehrfachauswahl) samt SAF-Launcher und Fehlerdialog — die
     // geteilte Aktion aus `ui/ActivityImportAction.kt`.
@@ -171,18 +187,48 @@ fun RidesScreen(appViewModel: AppViewModel) {
     val pendingSegment by appViewModel.pendingHistorySegment.collectAsStateWithLifecycle()
     LaunchedEffect(pendingSegment) {
         val requested = pendingSegment ?: return@LaunchedEffect
+        if (requested != HistorySegment.TOURS) {
+            closeSearch()
+            detailRideId = null
+        }
         wantedSegment = requested
         appViewModel.consumeHistorySegmentRequest()
     }
     val segment = resolveSegment(wantedSegment, segments)
 
-    // Von der Startseite („Letzte Tour") angeforderte Detailansicht. Erst
-    // quittieren, wenn die Tour wirklich in [rides] vorliegt, sonst ginge eine
-    // Anfrage kurz nach dem Kaltstart (Liste noch leer) spurlos verloren.
+    // Filterstand hier gehalten, damit Master-Detail die aktuell sichtbare
+    // Liste kennt und bei Trefferwechsel direkt rechts nachfuehrt.
+    val today = remember { LocalDate.now() }
+    val language = LocalAppLanguage.current
+    val hasIndoor = remember(rides) { rides.any { it.indoor && !it.planned } }
+    var kindName by rememberSaveable { mutableStateOf(RideKindFilter.ALL.name) }
+    val kind = if (hasIndoor) RideKindFilter.valueOf(kindName) else RideKindFilter.ALL
+    val activeQuery = if (searchOpen) query else ""
+    val sections = remember(rides, activeQuery, today, language, kind) {
+        splitHistory(rides, activeQuery, today, ::localOfEpochMs, language, kind)
+    }
+    val visibleIds = remember(sections) {
+        buildSet {
+            sections.planned.forEach { add(it.id) }
+            sections.months.forEach { group -> group.rides.forEach { add(it.id) } }
+        }
+    }
+    val activeDetailId = if (isTwoPane) {
+        detailRideId?.takeIf { it in visibleIds } ?: firstDisplayRideId(sections)
+    } else {
+        detailRideId
+    }
+
+    // Von der Startseite („Letzte Tour") oder Rekorden angeforderte Detailansicht.
+    // Erst quittieren, wenn die Tour wirklich in [rides] vorliegt, sonst ginge
+    // eine Anfrage kurz nach dem Kaltstart (Liste noch leer) spurlos verloren.
     val pendingRideDetailRequest by appViewModel.pendingRideDetail.collectAsStateWithLifecycle()
     LaunchedEffect(pendingRideDetailRequest, rides) {
         val wanted = pendingRideDetailRequest ?: return@LaunchedEffect
         if (rides.any { it.id == wanted }) {
+            wantedSegment = HistorySegment.TOURS
+            if (searchOpen) closeSearch()
+            kindName = RideKindFilter.ALL.name
             detailRideId = wanted
             appViewModel.consumeRideDetailRequest()
         }
@@ -196,16 +242,16 @@ fun RidesScreen(appViewModel: AppViewModel) {
         }
     }
 
-    // Das Detail ist eine Ebene tiefer: M3 „Forward and backward" im selben
-    // Screen, die Liste bleibt dabei komponiert (Scrollstand, Suche). Die
-    // Kapsel blendet die Huelle solange aus.
-    DisposableEffect(detailRideId != null) {
-        appViewModel.setRideDetailOpen(detailRideId != null)
+    // Auf schmalen Geraeten und Tablet hochkant liegt das Detail als eigene
+    // Ebene ueber der Liste und blendet die Navigation aus. Im Tablet-Querformat
+    // steht es direkt rechts neben der Liste — die linke Leiste bleibt sichtbar.
+    DisposableEffect(detailFullscreen) {
+        appViewModel.setRideDetailOpen(detailFullscreen)
         onDispose { appViewModel.setRideDetailOpen(false) }
     }
 
     ForwardBackwardHost(
-        key = detailRideId,
+        key = if (isTwoPane) null else detailRideId,
         modifier = Modifier.fillMaxSize(),
         base = {
             Scaffold(
@@ -233,7 +279,10 @@ fun RidesScreen(appViewModel: AppViewModel) {
                             segments = segments,
                             segment = segment,
                             onSegment = {
-                                if (it != HistorySegment.TOURS) closeSearch()
+                                if (it != HistorySegment.TOURS) {
+                                    closeSearch()
+                                    detailRideId = null
+                                }
                                 wantedSegment = it
                             },
                             searchOpen = searchOpen,
@@ -249,17 +298,96 @@ fun RidesScreen(appViewModel: AppViewModel) {
                         )
                     }
                     when (segment) {
-                        HistorySegment.TOURS -> TourListContent(
-                            appViewModel = appViewModel,
-                            query = if (searchOpen) query else "",
-                            onOpenDetail = { detailRideId = it },
-                            onRecord = { appViewModel.requestRecording() },
-                            onImportFile = importAction.start,
-                            onImportArchive = importArchive,
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = screenContentPadding(),
-                            header = { item(key = "kopf") { header() } },
-                        )
+                        HistorySegment.TOURS -> if (isTwoPane && rides.isNotEmpty()) {
+                            TwoPaneLayout(
+                                primaryWeight = 0.42f,
+                                modifier = Modifier.fillMaxSize(),
+                                primary = {
+                                    TourListContent(
+                                        appViewModel = appViewModel,
+                                        query = activeQuery,
+                                        onOpenDetail = { detailRideId = it },
+                                        onRecord = { appViewModel.requestRecording() },
+                                        onImportFile = importAction.start,
+                                        onImportArchive = importArchive,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentPadding = PaddingValues(
+                                            start = TabletScreenPadding,
+                                            top = TabletScreenPadding,
+                                            bottom = TabletScreenPadding + LocalFloatingNavigationBarSpace.current,
+                                        ),
+                                        selectedRideId = activeDetailId,
+                                        showDetailSelection = true,
+                                        recordAsSecondary = activeDetailId != null,
+                                        kindFilter = kind,
+                                        onKindFilterChange = { kindName = it.name },
+                                        header = { item(key = "kopf") { header() } },
+                                    )
+                                },
+                                secondary = {
+                                    if (activeDetailId != null) {
+                                        Surface(
+                                            modifier = Modifier.fillMaxSize(),
+                                            color = MaterialTheme.colorScheme.surface,
+                                        ) {
+                                            RideDetailHost(
+                                                rideId = activeDetailId,
+                                                appViewModel = appViewModel,
+                                                inline = true,
+                                                onBack = { detailRideId = null },
+                                                onDelete = { rideId ->
+                                                    detailRideId = null
+                                                    undoJob = deleteRideWithUndo(
+                                                        rideId = rideId,
+                                                        appViewModel = appViewModel,
+                                                        scope = scope,
+                                                        snackbarHostState = snackbarHostState,
+                                                        undoJob = undoJob,
+                                                        message = deletedMessage,
+                                                        actionLabel = undoLabel,
+                                                    )
+                                                },
+                                            )
+                                        }
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(
+                                                    top = TabletScreenPadding,
+                                                    end = TabletScreenPadding,
+                                                    bottom = TabletScreenPadding + LocalFloatingNavigationBarSpace.current,
+                                                ),
+                                            contentAlignment = Alignment.TopCenter,
+                                        ) {
+                                            EmptyDetailPlaceholder(modifier = Modifier.widthIn(max = ContentMaxWidth))
+                                        }
+                                    }
+                                },
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.TopCenter,
+                            ) {
+                                TourListContent(
+                                    appViewModel = appViewModel,
+                                    query = activeQuery,
+                                    onOpenDetail = { detailRideId = it },
+                                    onRecord = { appViewModel.requestRecording() },
+                                    onImportFile = importAction.start,
+                                    onImportArchive = importArchive,
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .widthIn(max = ContentMaxWidth)
+                                        .fillMaxWidth(),
+                                    contentPadding = screenContentPadding(),
+                                    kindFilter = kind,
+                                    onKindFilterChange = { kindName = it.name },
+                                    header = { item(key = "kopf") { header() } },
+                                )
+                            }
+                        }
 
                         HistorySegment.PROGRESS -> ProgressContent(
                             appViewModel = appViewModel,
@@ -371,7 +499,7 @@ private fun VerlaufHeader(
         // ausgeschriebener Knopf statt Segment „Liste | Karte": Das Wort
         // „Karte" allein gehoert der Navigationskapsel.
         if (onTours && onShowMap != null) {
-            NeutralButton(
+            TrailscapeSecondaryButton(
                 onClick = onShowMap,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -394,6 +522,27 @@ private fun VerlaufHeader(
                 modifier = Modifier
                     .padding(top = CardGap)
                     .focusRequester(focusRequester),
+            )
+        }
+    }
+}
+
+/** Ruhige Hinweis-Karte rechts im Tablet-Querformat, wenn kein Suchtreffer gewaehlt ist. */
+@Composable
+private fun EmptyDetailPlaceholder(modifier: Modifier = Modifier) {
+    AtlasCard(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(CardPadding),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.rides_detail_empty_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = stringResource(R.string.rides_detail_empty_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

@@ -1,19 +1,22 @@
 package de.trailscape.app.ui.map
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -25,8 +28,6 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -41,7 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,12 +50,14 @@ import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.ui.components.ActionTileRow
-import de.trailscape.app.ui.components.HoldToEndButton
 import de.trailscape.app.ui.components.Fact
-import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.app.ui.components.HoldToEndButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.TileAction
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.LocalAtlasColors
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 import de.trailscape.app.ui.theme.OverlayGap
@@ -158,6 +160,9 @@ internal fun LiveRecordingCard(
     val formats = LocalAppFormats.current
     Card(
         modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        border = BorderStroke(1.dp, LocalAtlasColors.current.cardBorder),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         Column(
@@ -217,21 +222,25 @@ internal fun LiveRecordingCard(
                 LiveZielZeile(zielZeile)
             }
             Spacer(Modifier.height(8.dp))
-            PrimaryButton(
-                text = stringResource(R.string.map_live_ride_mode_action),
+            TrailscapePrimaryButton(
                 onClick = onOpenRideMode,
                 modifier = Modifier.fillMaxWidth(),
-                leading = {
-                    Icon(
-                        Icons.Filled.Fullscreen,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                },
-            )
+            ) {
+                Icon(
+                    Icons.Filled.Fullscreen,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = stringResource(R.string.map_live_ride_mode_action),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Spacer(Modifier.height(8.dp))
             Row {
-                NeutralButton(
+                TrailscapeSecondaryButton(
                     onClick = onTogglePause,
                     modifier = Modifier.weight(1f),
                 ) {
@@ -302,23 +311,31 @@ internal fun RideCard(
     onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp,
+    inSidePanel: Boolean = false,
+    bodyMaxHeight: Dp = 320.dp,
 ) {
     val stats = ride.stats
     val formats = LocalAppFormats.current
     val ascentLabel = stringResource(R.string.map_ride_card_ascent_label)
     val descentLabel = stringResource(R.string.map_ride_card_descent_label)
-    // Eine Planung hat weder Dauer noch Tempo oder Puls — statt vier Striche
-    // zeigt ihr Blatt, was eine Route ausmacht: Laenge und Hoehenmeter.
+    val durationLabel = stringResource(R.string.map_ride_card_duration_label)
     val headMetrics = if (ride.planned) {
+        val estMin = estimatedDurationMinutes(stats.distanceKm)
+        val estText = if (estMin >= 60) {
+            "~${estMin / 60}:${(estMin % 60).toString().padStart(2, '0')}"
+        } else {
+            "~${estMin}m"
+        }
         listOf(
             formats.km(stats.distanceKm) to "km",
             "${stats.ascentM.roundToInt()}" to ascentLabel,
             "${stats.descentM.roundToInt()}" to descentLabel,
+            estText to durationLabel,
         )
     } else {
         listOf(
             formats.km(stats.distanceKm) to "km",
-            formatDuration(stats.durationS) to stringResource(R.string.map_ride_card_duration_label),
+            formatDuration(stats.durationS) to durationLabel,
             (stats.avgSpeedKmh?.let { formats.decimal(it, 1) } ?: "–") to
                 stringResource(R.string.map_ride_card_avg_speed_label),
             "${stats.ascentM.roundToInt()}" to ascentLabel,
@@ -343,6 +360,7 @@ internal fun RideCard(
         onExpandedChange = onExpandedChange,
         modifier = modifier,
         bottomInset = bottomInset,
+        inSidePanel = inSidePanel,
         peek = {
             // Rechts 8 dp statt [CardPadding]: der Schliessen-IconButton
             // bringt seinen eigenen Beruehrungsrand mit — dasselbe
@@ -406,31 +424,29 @@ internal fun RideCard(
                 // auf „Was hat die Tour gebracht?" steht darueber
                 // ([RideHighlightsBlock]), die ganze im Detail.
                 Column(modifier = Modifier.padding(end = 8.dp)) {
-                    PrimaryButton(
-                        text = when {
-                            navigating -> stringResource(R.string.map_ride_card_navigating_label)
-                            ride.planned -> stringResource(R.string.map_ride_card_start_action)
-                            else -> stringResource(R.string.map_ride_card_ride_again_action)
-                        },
+                    TrailscapePrimaryButton(
                         onClick = onNavigate,
                         enabled = !navigating,
                         modifier = Modifier.fillMaxWidth(),
-                        // Dasselbe Abspielsymbol wie „Diese Tour nochmal
-                        // fahren" im Tourdetail: gleiche Handlung, gleiches
-                        // Zeichen. Unterwegs faellt es weg — dann ist der
-                        // Knopf nur noch Anzeige, nichts zum Starten.
-                        leading = if (navigating) {
-                            null
-                        } else {
-                            {
-                                Icon(
-                                    Icons.Filled.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        },
-                    )
+                    ) {
+                        if (!navigating) {
+                            Icon(
+                                Icons.Filled.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(
+                            text = when {
+                                navigating -> stringResource(R.string.map_ride_card_navigating_label)
+                                ride.planned -> stringResource(R.string.map_ride_card_start_action)
+                                else -> stringResource(R.string.map_ride_card_ride_again_action)
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
                     val detailsLabel = stringResource(R.string.map_ride_card_details_action)
                     val detailsCd = stringResource(R.string.map_ride_card_details_cd)
@@ -468,13 +484,31 @@ internal fun RideCard(
         },
         body = {
             Column(
-                modifier = Modifier.padding(
-                    start = CardPadding,
-                    end = CardPadding,
-                    bottom = OverlayCardPaddingVertical,
-                ),
+                modifier = Modifier
+                    .then(
+                        if (inSidePanel) {
+                            Modifier
+                        } else {
+                            Modifier
+                                .heightIn(max = bodyMaxHeight)
+                                .verticalScroll(rememberScrollState())
+                        },
+                    )
+                    .padding(
+                        start = CardPadding,
+                        end = CardPadding,
+                        bottom = OverlayCardPaddingVertical,
+                    ),
             ) {
                 if (ride.points.size >= 2) {
+                    RoutePolylinePreview(
+                        points = ride.points,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(104.dp)
+                            .clip(RoundedCornerShape(14.dp)),
+                    )
+                    Spacer(Modifier.height(12.dp))
                     ElevationProfile(
                         points = ride.points,
                         lineColor = MaterialTheme.colorScheme.primary,
@@ -514,6 +548,9 @@ internal fun DownloadProgressCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        border = BorderStroke(1.dp, LocalAtlasColors.current.cardBorder),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         Column(
@@ -584,6 +621,9 @@ internal fun LocationPermissionNotice(
     val signals = LocalSignalColors.current
     Card(
         modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        border = BorderStroke(1.dp, LocalAtlasColors.current.cardBorder),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         Column(
@@ -650,6 +690,7 @@ internal fun LocateButton(
         modifier = modifier.size(MapCircleButtonSize),
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        border = BorderStroke(1.dp, LocalAtlasColors.current.cardBorder),
         shadowElevation = MapCircleButtonElevation,
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -674,15 +715,13 @@ private fun RecordDot(color: Color, size: Dp) {
     }
 }
 
+/** Groesse und Schatten der runden Kartenknoepfe (Standort, Ebenen). */
+internal val MapCircleButtonSize = 48.dp
+internal val MapCircleButtonElevation = 3.dp
+
 /**
- * Gefuellter Knopf fuer die Hauptaktion eines Panels, mit optionalem Symbol
- * davor.
- *
- * Als echter Material-`Button` erbt er alles aus dem One-UI-Theme: die Pille
- * von `shapes.small`, `primary`/`onPrimary` als Farben und `labelLarge` fuer
- * die Beschriftung. Die Hoehe folgt One UI statt Material: Contained-Knoepfe
- * sind dort durchgaengig 48 dp hoch. Das Symbol ist dieselbe Zutat wie in
- * [DangerButton] und [de.trailscape.app.ui.components.NeutralButton].
+ * Bruecke fuer Bestandscode ausserhalb von `ui/map/` (z. B. `ReadyToRideDialog.kt`),
+ * delegiert direkt auf [TrailscapePrimaryButton].
  */
 @Composable
 internal fun PrimaryButton(
@@ -692,69 +731,19 @@ internal fun PrimaryButton(
     enabled: Boolean = true,
     leading: @Composable (() -> Unit)? = null,
 ) {
-    Button(
+    TrailscapePrimaryButton(
         onClick = onClick,
-        modifier = modifier.height(48.dp),
+        modifier = modifier,
         enabled = enabled,
-        contentPadding = PaddingValues(horizontal = 20.dp),
     ) {
-        Row(
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (leading != null) {
-                leading()
-                Spacer(Modifier.width(6.dp))
-            }
-            Text(
-                text = text,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.labelLarge,
-            )
+        if (leading != null) {
+            leading()
+            Spacer(Modifier.width(6.dp))
         }
+        Text(
+            text = text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
-
-/**
- * Gefuellter Knopf in der semantischen Warnfarbe (`error`) mit optionalem
- * Symbol davor — Form und Typografie erbt er wie [PrimaryButton] aus dem
- * Theme.
- */
-@Composable
-internal fun DangerButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    leading: @Composable (() -> Unit)? = null,
-) {
-    Button(
-        onClick = onClick,
-        modifier = modifier.height(48.dp),
-        contentPadding = PaddingValues(horizontal = 20.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.error,
-            contentColor = MaterialTheme.colorScheme.onError,
-        ),
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (leading != null) {
-                leading()
-                Spacer(Modifier.width(6.dp))
-            }
-            Text(
-                text = text,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.labelLarge,
-            )
-        }
-    }
-}
-
-/** Groesse und Schatten der runden Kartenknoepfe (Standort, Ebenen). */
-internal val MapCircleButtonSize = 48.dp
-internal val MapCircleButtonElevation = 3.dp

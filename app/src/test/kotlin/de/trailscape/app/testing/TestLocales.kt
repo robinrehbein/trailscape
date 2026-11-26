@@ -36,6 +36,21 @@ object TestLocales {
     /** Galaxy S25 auf Englisch. */
     const val S25_EN = "$EN-$S25"
 
+    /** Schmales Telefon (360 dp Breite). */
+    const val PHONE_NARROW = "w360dp-h740dp-xxhdpi"
+    const val PHONE_NARROW_DE = "$DE-$PHONE_NARROW"
+    const val PHONE_NARROW_EN = "$EN-$PHONE_NARROW"
+
+    /** Galaxy Tab S11 hochkant (~800 × 1280 dp). */
+    const val TAB_S11_PORTRAIT = "w800dp-h1280dp-xhdpi"
+    const val TAB_S11_PORTRAIT_DE = "$DE-$TAB_S11_PORTRAIT"
+    const val TAB_S11_PORTRAIT_EN = "$EN-$TAB_S11_PORTRAIT"
+
+    /** Galaxy Tab S11 quer (~1280 × 800 dp, z. B. auf der Rolle). */
+    const val TAB_S11_LANDSCAPE = "w1280dp-h800dp-xhdpi"
+    const val TAB_S11_LANDSCAPE_DE = "$DE-$TAB_S11_LANDSCAPE"
+    const val TAB_S11_LANDSCAPE_EN = "$EN-$TAB_S11_LANDSCAPE"
+
     /**
      * Prueft, dass der Test wirklich in [expected] laeuft — sowohl die
      * Ressourcen-Konfiguration als auch die Standard-Locale der JVM.

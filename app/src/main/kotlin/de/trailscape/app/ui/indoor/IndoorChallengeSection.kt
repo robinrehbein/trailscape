@@ -12,13 +12,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -39,10 +36,12 @@ import de.trailscape.app.challenge.ChallengeAvailability
 import de.trailscape.app.challenge.ChallengeStore
 import de.trailscape.app.challenge.readChallengeBytes
 import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.core.challenge.CHALLENGE_NAME_MAX_CHARS
 import de.trailscape.core.challenge.ChallengeReject
 import de.trailscape.core.challenge.ChallengeRoute
@@ -84,7 +83,7 @@ fun IndoorChallengeSection(
     var askDelete by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Keine Ueberschrift: Das Segment darueber heisst schon „Herausforderungen".
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column {
             if (ui.items.isEmpty()) {
                 MutedText(
@@ -165,7 +164,10 @@ private fun ChallengeRow(
             }
         }
         when (item.availability) {
-            ChallengeAvailability.READY -> Button(onClick = { onRide(item.routeName?.pick(lang.tag).orEmpty()) }, modifier = Modifier.fillMaxWidth()) {
+            ChallengeAvailability.READY -> TrailscapeSecondaryButton(
+                onClick = { onRide(item.routeName?.pick(lang.tag).orEmpty()) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Text(
                     if (item.name.isBlank()) {
                         stringResource(R.string.spiel3_row_ride_unnamed)
@@ -174,7 +176,7 @@ private fun ChallengeRow(
                     },
                 )
             }
-            ChallengeAvailability.DOWNLOAD -> OutlinedButton(onClick = onDownload, modifier = Modifier.fillMaxWidth()) {
+            ChallengeAvailability.DOWNLOAD -> TrailscapeSecondaryButton(onClick = onDownload, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.spiel3_row_download))
             }
             ChallengeAvailability.MISMATCH -> MutedText(stringResource(R.string.spiel3_row_mismatch))
@@ -448,7 +450,7 @@ internal fun formatChallengeGap(gapS: Double): String {
 @Composable
 fun ChallengeResultCard(opponent: String, gapS: Double?) {
     Eyebrow(stringResource(R.string.spiel3_result_eyebrow))
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val name = challengeTitle(opponent)
             Text(text = name, style = MaterialTheme.typography.titleSmall)

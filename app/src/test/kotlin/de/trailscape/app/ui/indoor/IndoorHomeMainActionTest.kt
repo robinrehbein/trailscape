@@ -146,4 +146,20 @@ class IndoorHomeMainActionTest {
         compose.onAllNodesWithText("Wähle oben eine Strecke.").assertCountEquals(0)
         compose.onAllNodesWithText("Fahren").assertCountEquals(0)
     }
+
+    @Test
+    fun `jede Streckenkarte zeigt Laenge Hoehenmeter und Dauer`() {
+        val savedWithDuration = saved.copy(durationS = 5_400)
+        show {
+            Home(
+                route(selected = savedWithDuration).copy(options = listOf(IndoorRouteOption.TestWorld, savedWithDuration)),
+                offer,
+            )
+        }
+        compose.onNodeWithText("3,0 km").assertExists()
+        compose.onNodeWithText("45 hm").assertExists()
+        compose.onNodeWithText("42,3 km").assertExists()
+        compose.onNodeWithText("310 hm").assertExists()
+        compose.onNodeWithText("1 h 30 min").assertExists()
+    }
 }

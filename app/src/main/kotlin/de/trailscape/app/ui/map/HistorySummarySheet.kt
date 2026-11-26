@@ -25,6 +25,7 @@ import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.UiText
 import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.tabular
 
 /**
  * Die Zusammenfassung unter dem Verlauf als Karte (Fuehrung „Klartext",
@@ -47,10 +48,12 @@ internal fun HistorySummarySheet(
     onClose: () -> Unit,
     bottomInset: Dp,
     modifier: Modifier = Modifier,
+    inSidePanel: Boolean = false,
 ) {
     StaticSheet(
         modifier = modifier,
         bottomInset = bottomInset,
+        inSidePanel = inSidePanel,
     ) {
         Column(
             modifier = Modifier.padding(start = CardPadding, end = CardPadding, bottom = 16.dp),
@@ -121,7 +124,7 @@ internal fun formatTileCount(count: Int): UiText = UiText.Plural(R.plurals.rides
 @Composable
 private fun SummaryValue(value: String, label: String, modifier: Modifier = Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+        Text(value, style = MaterialTheme.typography.titleLarge.tabular(), textAlign = TextAlign.Center)
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,

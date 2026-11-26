@@ -23,18 +23,26 @@ internal fun clampObscuredBottom(obscuredBottomPx: Int, mapHeightPx: Int): Int {
     return obscuredBottomPx.coerceIn(0, (mapHeightPx * MAX_OBSCURED_SHARE).toInt())
 }
 
+/** Verdeckter Rand links (Tablet-Seitenpanel), begrenzt auf [MAX_OBSCURED_SHARE] der Kartenbreite. */
+internal fun clampObscuredLeft(obscuredLeftPx: Int, mapWidthPx: Int): Int {
+    if (mapWidthPx <= 0) return 0
+    return obscuredLeftPx.coerceIn(0, (mapWidthPx * MAX_OBSCURED_SHARE).toInt())
+}
+
 /**
- * Rand fuer das Einpassen einer Route: [base] plus der verdeckte Teil unten —
- * aber immer so, dass waagerecht und senkrecht mindestens [MIN_FIT_AREA_PX]
- * Karte frei bleiben. Sonst liefert `getCameraForLatLngBounds` keinen
- * sinnvollen Zoom.
+ * Rand fuer das Einpassen einer Route: [base] plus der verdeckte Teil unten
+ * und links — aber immer so, dass waagerecht und senkrecht mindestens
+ * [MIN_FIT_AREA_PX] Karte frei bleiben. Sonst liefert `getCameraForLatLngBounds`
+ * keinen sinnvollen Zoom.
  */
 internal fun fitPaddingPx(
     mapWidthPx: Int,
     mapHeightPx: Int,
     base: MapPadding,
     obscuredBottomPx: Int,
+    obscuredLeftPx: Int = 0,
 ): IntArray {
+    val leftWanted = max(base.left, clampObscuredLeft(obscuredLeftPx, mapWidthPx) + base.left)
     val bottomWanted = max(base.bottom, clampObscuredBottom(obscuredBottomPx, mapHeightPx) + base.left)
     fun shrink(a: Int, b: Int, total: Int): Pair<Int, Int> {
         val room = total - MIN_FIT_AREA_PX
@@ -43,13 +51,13 @@ internal fun fitPaddingPx(
         val scale = room.toDouble() / (a + b)
         return (a * scale).toInt() to (b * scale).toInt()
     }
-    val (left, right) = shrink(base.left, base.right, mapWidthPx)
+    val (left, right) = shrink(leftWanted, base.right, mapWidthPx)
     val (top, bottom) = shrink(base.top, bottomWanted, mapHeightPx)
     return intArrayOf(left, top, right, bottom)
 }
 
 /**
- * Passt einen in der Kamera **gespeicherten** Rand an eine neue Kartenhoehe
+ * Passt einen in der Kamera **gespeicherten** Rand an eine neue Kartengroesse
  * an — `null`, wenn er schon passt.
  *
  * [MapController.moveTo] und die Navi-Kamera legen ihren Rand in die
@@ -57,18 +65,29 @@ internal fun fitPaddingPx(
  * wird (Tastatur der Wegpunkt-Suche, Splitscreen, Drehen). Dann ist der
  * gespeicherte Rand ploetzlich hoeher als die Karte selbst — dieselbe Lage,
  * in der MapLibre mit NaN rechnet und die Karte schwarz oder starr stehen
- * bleibt. Deshalb nach jeder Groessenaenderung: unten hoechstens
- * [MAX_OBSCURED_SHARE] der Hoehe, oben so viel, dass mindestens
+ * bleibt. Deshalb nach jeder Groessenaenderung: unten/links hoechstens
+ * [MAX_OBSCURED_SHARE], oben/rechts so viel, dass mindestens
  * [MIN_FIT_AREA_PX] frei bleiben.
  *
  * @param padding links, oben, rechts, unten in Pixeln (MapLibre-Reihenfolge).
  */
-internal fun reclampedCameraPadding(padding: DoubleArray, mapHeightPx: Int): DoubleArray? {
+internal fun reclampedCameraPadding(
+    padding: DoubleArray,
+    mapHeightPx: Int,
+    mapWidthPx: Int = 0,
+): DoubleArray? {
     if (padding.size < 4 || mapHeightPx <= 0) return null
-    val bottom = padding[3].coerceIn(0.0, mapHeightPx * MAX_OBSCURED_SHARE)
-    val top = padding[1].coerceIn(0.0, max(0.0, mapHeightPx - MIN_FIT_AREA_PX - bottom))
-    if (bottom == padding[3] && top == padding[1]) return null
-    return doubleArrayOf(padding[0], top, padding[2], bottom)
+    fun finiteOrZero(value: Double): Double = if (value.isFinite()) value else 0.0
+    val rawLeft = finiteOrZero(padding[0])
+    val rawTop = finiteOrZero(padding[1])
+    val rawRight = finiteOrZero(padding[2])
+    val rawBottom = finiteOrZero(padding[3])
+    val bottom = rawBottom.coerceIn(0.0, mapHeightPx * MAX_OBSCURED_SHARE)
+    val top = rawTop.coerceIn(0.0, max(0.0, mapHeightPx - MIN_FIT_AREA_PX - bottom))
+    val left = if (mapWidthPx > 0) rawLeft.coerceIn(0.0, mapWidthPx * MAX_OBSCURED_SHARE) else rawLeft.coerceAtLeast(0.0)
+    val right = if (mapWidthPx > 0) rawRight.coerceIn(0.0, max(0.0, mapWidthPx - MIN_FIT_AREA_PX - left)) else rawRight.coerceAtLeast(0.0)
+    if (left == padding[0] && top == padding[1] && right == padding[2] && bottom == padding[3]) return null
+    return doubleArrayOf(left, top, right, bottom)
 }
 
 /**

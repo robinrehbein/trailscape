@@ -23,6 +23,7 @@ import de.trailscape.core.shouldReuseWind
 import de.trailscape.core.windCacheKey
 import de.trailscape.core.writeRouteWindEnabled
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -104,8 +105,18 @@ object RouteGenerationController {
     /** Zustand des Generierungs-Panels; `target == null` heisst „Panel zu". */
     val state: StateFlow<RouteGenerationState> = _state.asStateFlow()
 
-    /** Abbruch-Flag des gerade laufenden Durchlaufs. */
-    private var cancelFlag: AtomicBoolean? = null
+    private class RunHandle(
+        val id: Long,
+        val cancelled: AtomicBoolean = AtomicBoolean(false),
+        val suppressCancelMessage: AtomicBoolean = AtomicBoolean(false),
+    )
+
+    private val runLock = Any()
+    private val runCounter = AtomicLong(0L)
+    private val activeRunId = AtomicLong(0L)
+
+    /** Laufender Durchlauf (Flag + Abbruch-Meldungs-Steuerung). */
+    private var currentRun: RunHandle? = null
 
     /** Startpunkt des letzten Durchlaufs — „Andere Vorschläge" benutzt ihn erneut. */
     private var lastStart: TrackPoint? = null
@@ -208,19 +219,82 @@ object RouteGenerationController {
      * (laufende Suche inklusive). Wird vom Karten-Screen gerufen, sobald er
      * `AppViewModel.pendingRouteTarget` abholt.
      */
-    fun open(target: RouteTarget) {
-        cancelFlag?.set(true)
-        cancelFlag = null
-        clearLastRun()
-        _state.value = RouteGenerationState(target = target)
+    fun open(target: RouteTarget, autoStartPending: Boolean = false) {
+        synchronized(runLock) {
+            activeRunId.set(runCounter.incrementAndGet())
+            currentRun?.let {
+                it.suppressCancelMessage.set(true)
+                it.cancelled.set(true)
+            }
+            currentRun = null
+            clearLastRun()
+            _state.value = RouteGenerationState(
+                target = target,
+                autoStartPending = autoStartPending,
+            )
+        }
     }
 
     /** Schliesst das Panel und bricht eine laufende Suche ab. */
     fun close() {
-        cancelFlag?.set(true)
-        cancelFlag = null
-        clearLastRun()
-        _state.value = RouteGenerationState()
+        synchronized(runLock) {
+            activeRunId.set(runCounter.incrementAndGet())
+            currentRun?.let {
+                it.suppressCancelMessage.set(true)
+                it.cancelled.set(true)
+            }
+            currentRun = null
+            clearLastRun()
+            _state.value = RouteGenerationState()
+        }
+    }
+
+    /** Verbraucht bzw. loescht das Flag fuer den automatischen Navigationsstart (Pfad 3b). */
+    fun clearAutoStart() {
+        _state.update { if (it.autoStartPending) it.copy(autoStartPending = false) else it }
+    }
+
+    /** Nur fuer Tests: uebernimmt fertige Kandidaten ohne Netz-/Engine-Lauf. */
+    internal fun publishTestCandidates(candidates: List<RouteCandidate>, selectedIndex: Int = 0) {
+        synchronized(runLock) {
+            activeRunId.set(runCounter.incrementAndGet())
+            currentRun?.let {
+                it.suppressCancelMessage.set(true)
+                it.cancelled.set(true)
+            }
+            currentRun = null
+            _state.update {
+                it.copy(
+                    running = false,
+                    done = candidates.size,
+                    total = candidates.size,
+                    candidates = candidates,
+                    selectedIndex = selectedIndex,
+                    error = null,
+                )
+            }
+        }
+    }
+
+    /** Nur fuer Tests: simuliert einen fehlgeschlagenen Suchlauf. */
+    internal fun publishTestError(message: UiText) {
+        synchronized(runLock) {
+            activeRunId.set(runCounter.incrementAndGet())
+            currentRun?.let {
+                it.suppressCancelMessage.set(true)
+                it.cancelled.set(true)
+            }
+            currentRun = null
+            _state.update {
+                it.copy(
+                    running = false,
+                    done = 0,
+                    total = 0,
+                    autoStartPending = false,
+                    error = message,
+                )
+            }
+        }
     }
 
     /**
@@ -283,38 +357,50 @@ object RouteGenerationController {
         preferNewWays: Boolean = false,
         riddenWays: suspend (isCancelled: () -> Boolean) -> RiddenWaysIndex? = NO_RIDDEN_WAYS,
     ) {
-        val current = _state.value
-        val target = current.target ?: return
-        if (current.running) return
+        val current: RouteGenerationState
+        val target: RouteTarget
+        val appContext: Context
+        val myRunId: Long
+        val run: RunHandle
+        val windSnapshot: Boolean?
+        synchronized(runLock) {
+            current = _state.value
+            target = current.target ?: return
+            if (current.running) return
 
-        val appContext = context.applicationContext
-        lastStart = start
-        lastContext = appContext
-        lastProfile = profile
-        lastOfferMissingSegments = onOfferMissingSegments
-        lastPreferNewAreas = preferNewAreas
-        lastExploredTiles = exploredTiles
-        lastPreferNewWays = preferNewWays
-        lastRiddenWays = riddenWays
-        val flag = AtomicBoolean(false)
-        cancelFlag = flag
-        // Schalterstand jetzt, auf dem Aufruf-Thread, festhalten — nicht erst
-        // im IO-Coroutine aus dem Speicher (siehe [windKnown]). Nur wenn er
-        // noch nie geladen wurde (Einstieg aus Heute/Training, Blatt nie
-        // offen), gilt der gespeicherte Wert; dann schreibt auch niemand.
-        val windSnapshot: Boolean? = if (windKnown) _windEnabled.value else null
+            appContext = context.applicationContext
+            lastStart = start
+            lastContext = appContext
+            lastProfile = profile
+            lastOfferMissingSegments = onOfferMissingSegments
+            lastPreferNewAreas = preferNewAreas
+            lastExploredTiles = exploredTiles
+            lastPreferNewWays = preferNewWays
+            lastRiddenWays = riddenWays
+            myRunId = runCounter.incrementAndGet()
+            activeRunId.set(myRunId)
+            run = RunHandle(id = myRunId)
+            currentRun = run
+            // Schalterstand jetzt, auf dem Aufruf-Thread, festhalten — nicht erst
+            // im IO-Coroutine aus dem Speicher (siehe [windKnown]). Nur wenn er
+            // noch nie geladen wurde (Einstieg aus Heute/Training, Blatt nie
+            // offen), gilt der gespeicherte Wert; dann schreibt auch niemand.
+            windSnapshot = if (windKnown) _windEnabled.value else null
 
-        _state.value = current.copy(
-            running = true,
-            done = 0,
-            total = CANDIDATE_COUNT,
-            candidates = emptyList(),
-            selectedIndex = -1,
-            error = null,
-            hints = emptyList(),
-            fromMapCenter = fromMapCenter,
-            wind = null,
-        )
+            _state.value = current.copy(
+                running = true,
+                done = 0,
+                total = CANDIDATE_COUNT,
+                candidates = emptyList(),
+                selectedIndex = -1,
+                error = null,
+                hints = emptyList(),
+                fromMapCenter = fromMapCenter,
+                wind = null,
+            )
+        }
+
+        fun isStale(): Boolean = run.cancelled.get() || activeRunId.get() != myRunId
 
         AppServices.appScope.launch(Dispatchers.IO) {
             // Was das Backend unterwegs erfaehrt, gesammelt fuer das
@@ -338,14 +424,14 @@ object RouteGenerationController {
                 // Immer holen, auch ohne „Neue Gegenden bevorzugen": Jeder
                 // Vorschlag zeigt „+N neu", und das stimmt nur gegen den
                 // echten Bestand. Bevorzugt wird nur mit Schalter.
-                val explored = optionalInput(flag) { exploredTiles() } ?: emptySet()
+                val explored = optionalInput(::isStale) { exploredTiles() } ?: emptySet()
                 // Die Wege dagegen nur mit „Neue Wege": Der erste Aufbau
                 // laeuft ueber den ganzen Bestand und fragt je Tour das
                 // Abbruch-Flag. Scheitert er, sucht die Runde ohne — „Neue
                 // Wege" ist eine Vorliebe, kein Muss —, sagt es aber.
-                val ways = if (preferNewWays) optionalInput(flag) { riddenWays { flag.get() } } else null
+                val ways = if (preferNewWays) optionalInput(::isStale) { riddenWays { isStale() } } else null
                 val newWaysUnavailable = preferNewWays && ways == null
-                if (flag.get()) throw GenerationCancelled()
+                if (isStale()) throw GenerationCancelled()
                 // Wind nur mit Schalter (siehe „Wind (Opt-in)"): der beim
                 // Start festgehaltene Stand, sonst der gespeicherte — so wird
                 // jeder Einstieg gleich behandelt.
@@ -355,7 +441,7 @@ object RouteGenerationController {
                 // Die Windabfrage blockiert bis zu 4 s — ein Abbruch in dieser
                 // Zeit soll nicht erst noch eine Suche starten. Derselbe Weg
                 // wie ueber den `sleeper`, samt Meldung.
-                if (flag.get()) throw GenerationCancelled()
+                if (isStale()) throw GenerationCancelled()
                 val result = generateRoutes(
                     backend = backend,
                     start = start,
@@ -366,12 +452,14 @@ object RouteGenerationController {
                     // Der einzige Punkt, an dem `generateRoutes` von aussen
                     // unterbrechbar ist (siehe Klassen-KDoc).
                     sleeper = { ms ->
-                        if (flag.get()) throw GenerationCancelled()
+                        if (isStale()) throw GenerationCancelled()
                         if (ms > 0) delay(ms)
                     },
                     onProgress = { done, total ->
-                        if (!flag.get()) {
-                            _state.update { it.copy(done = done, total = total) }
+                        synchronized(runLock) {
+                            if (!isStale()) {
+                                _state.update { it.copy(done = done, total = total) }
+                            }
                         }
                     },
                     exploredTiles = explored,
@@ -384,57 +472,85 @@ object RouteGenerationController {
                     wind = wind,
                     texts = AppServices.coreTexts(),
                 )
-                if (flag.get()) return@launch
-                _state.update {
-                    it.copy(
-                        running = false,
-                        candidates = result,
-                        // Bester zuerst: `generateRoutes` sortiert aufsteigend
-                        // nach Strafpunkten, der erste ist also die Empfehlung
-                        // — und wird gleich auf der Karte gezeigt.
-                        selectedIndex = 0,
-                        hints = generationHints(
-                            candidateHints = result.firstOrNull()?.hints.orEmpty(),
-                            newWaysUnavailable = newWaysUnavailable,
-                            newWaysUnavailableText = {
-                                AppServices.localizedContext()
-                                    .getString(R.string.map_generation_new_ways_unavailable_hint)
-                            },
-                        ),
-                        error = null,
-                        wind = wind,
-                    )
+                val committed = synchronized(runLock) {
+                    if (isStale()) {
+                        false
+                    } else {
+                        _state.update {
+                            if (activeRunId.get() != myRunId) {
+                                it
+                            } else {
+                                it.copy(
+                                    running = false,
+                                    candidates = result,
+                                    // Bester zuerst: `generateRoutes` sortiert aufsteigend
+                                    // nach Strafpunkten, der erste ist also die Empfehlung
+                                    // — und wird gleich auf der Karte gezeigt.
+                                    selectedIndex = 0,
+                                    hints = generationHints(
+                                        candidateHints = result.firstOrNull()?.hints.orEmpty(),
+                                        newWaysUnavailable = newWaysUnavailable,
+                                        newWaysUnavailableText = {
+                                            AppServices.localizedContext()
+                                                .getString(R.string.map_generation_new_ways_unavailable_hint)
+                                        },
+                                    ),
+                                    error = null,
+                                    wind = wind,
+                                )
+                            }
+                        }
+                        if (currentRun === run) currentRun = null
+                        true
+                    }
                 }
-                if (missingFromFallbacks.isNotEmpty()) {
+                if (committed && missingFromFallbacks.isNotEmpty()) {
                     onOfferMissingSegments(missingFromFallbacks.toList())
                 }
             } catch (_: GenerationCancelled) {
-                // [cancel] hat den Zustand bereits freigegeben.
-                onMessage(AppServices.localizedContext().getString(R.string.map_generation_cancelled_status))
+                // [cancel] / [open] / [close] hat den Zustand bereits freigegeben;
+                // wurde der Lauf durch eine neue Sitzung verdraengt, bleibt die Meldung aus.
+                if (!run.suppressCancelMessage.get()) {
+                    onMessage(AppServices.localizedContext().getString(R.string.map_generation_cancelled_status))
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (flag.get()) return@launch
-                _state.update {
-                    it.copy(
-                        running = false,
-                        done = 0,
-                        total = 0,
-                        error = e.message?.takeIf(String::isNotBlank)?.let(UiText::Plain)
-                            ?: UiText.Res(R.string.map_generation_failed_error),
-                    )
+                val committed = synchronized(runLock) {
+                    if (isStale()) {
+                        false
+                    } else {
+                        _state.update {
+                            if (activeRunId.get() != myRunId) {
+                                it
+                            } else {
+                                it.copy(
+                                    running = false,
+                                    done = 0,
+                                    total = 0,
+                                    autoStartPending = false,
+                                    error = e.message?.takeIf(String::isNotBlank)?.let(UiText::Plain)
+                                        ?: UiText.Res(R.string.map_generation_failed_error),
+                                )
+                            }
+                        }
+                        if (currentRun === run) currentRun = null
+                        true
+                    }
                 }
                 // Derselbe Ausweg wie im Fehlerzweig der manuellen Planung
                 // (siehe `missingSegmentsFor`-KDoc): Fehlen fuer die
                 // versuchten Runden Kacheln, soll die Nutzerin das Angebot
                 // sehen und nicht nur die Servermeldung lesen.
-                offerMissingForFailedRun(
-                    context = appContext,
-                    profile = profile,
-                    attemptedWaypointSets = attemptedWaypointSets,
-                    alreadyKnownMissing = missingFromFallbacks,
-                    onOfferMissingSegments = onOfferMissingSegments,
-                )
+                if (committed) {
+                    offerMissingForFailedRun(
+                        context = appContext,
+                        profile = profile,
+                        attemptedWaypointSets = attemptedWaypointSets,
+                        alreadyKnownMissing = missingFromFallbacks,
+                        onOfferMissingSegments = onOfferMissingSegments,
+                    )
+                }
             }
         }
     }
@@ -446,11 +562,11 @@ object RouteGenerationController {
      * daraus [GenerationCancelled] (derselbe Weg samt Meldung wie ueber den
      * `sleeper`), sonst geht sie unveraendert weiter.
      */
-    private suspend fun <T> optionalInput(flag: AtomicBoolean, block: suspend () -> T): T? =
+    private suspend fun <T> optionalInput(isStale: () -> Boolean, block: suspend () -> T): T? =
         try {
             block()
         } catch (e: CancellationException) {
-            if (flag.get()) throw GenerationCancelled()
+            if (isStale()) throw GenerationCancelled()
             throw e
         } catch (e: Exception) {
             null
@@ -488,11 +604,19 @@ object RouteGenerationController {
      * Ergebnis wird verworfen (siehe Klassen-KDoc).
      */
     fun cancel() {
-        val flag = cancelFlag ?: return
-        if (!_state.value.running) return
-        flag.set(true)
-        cancelFlag = null
-        _state.update { it.copy(running = false, done = 0, total = 0) }
+        synchronized(runLock) {
+            val run = currentRun
+            if (run == null || !_state.value.running) {
+                if (_state.value.autoStartPending) {
+                    _state.update { it.copy(autoStartPending = false) }
+                }
+                return
+            }
+            activeRunId.set(runCounter.incrementAndGet())
+            run.cancelled.set(true)
+            currentRun = null
+            _state.update { it.copy(running = false, done = 0, total = 0, autoStartPending = false) }
+        }
     }
 
     /**
@@ -559,6 +683,8 @@ data class RouteGenerationState(
     val fromMapCenter: Boolean = false,
     /** Wind, mit dem sortiert wurde; `null` = aus, offline oder fehlgeschlagen. */
     val wind: WindConditions? = null,
+    /** Ob nach Abschluss der Suche automatisch in die Navigation gewechselt werden soll (Pfad 3b). */
+    val autoStartPending: Boolean = false,
 ) {
     /** Der ausgewaehlte Vorschlag, oder `null`. */
     val selected: RouteCandidate? get() = candidates.getOrNull(selectedIndex)

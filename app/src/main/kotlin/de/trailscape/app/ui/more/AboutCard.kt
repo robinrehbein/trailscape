@@ -36,6 +36,7 @@ import de.trailscape.app.feedback.ProblemReportDialog
 import de.trailscape.app.i18n.UiText
 import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
 import de.trailscape.app.update.RELEASE_PAGE_URL
 import de.trailscape.app.update.UpdateCheckResult
 import de.trailscape.app.ui.theme.OneUiMotion
@@ -195,9 +196,9 @@ fun AboutCardContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (updateVersion != null) {
-            TextButton(
+            Spacer(modifier = Modifier.height(8.dp))
+            TrailscapePrimaryButton(
                 onClick = { uriHandler.openUri(RELEASE_PAGE_URL) },
-                contentPadding = PaddingValues(0.dp),
             ) { Text(stringResource(R.string.more_about_download_action)) }
         }
     }

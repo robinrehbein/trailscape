@@ -21,6 +21,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -43,7 +44,9 @@ import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
 import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.map.ProvideTestLanguage
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
 import de.trailscape.app.ui.theme.TrailscapeTheme
+import de.trailscape.app.ui.theme.windowLayoutClassFor
 import de.trailscape.core.indoor.catalog.CatalogRideKind
 import de.trailscape.core.indoor.catalog.CatalogText
 import de.trailscape.core.i18n.AppLanguage
@@ -99,10 +102,13 @@ class IndoorScreenshotTest {
 
     private fun shot(name: String, content: @Composable () -> Unit) {
         compose.setContent {
+            val widthDp = LocalConfiguration.current.screenWidthDp
             TrailscapeTheme {
                 ProvideTestLanguage {
-                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                        content()
+                    CompositionLocalProvider(LocalWindowLayoutClass provides windowLayoutClassFor(widthDp)) {
+                        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                            content()
+                        }
                     }
                 }
             }
@@ -568,14 +574,17 @@ class IndoorScreenshotTest {
 
     private fun previewShot(name: String, waitFor: String) {
         compose.setContent {
+            val widthDp = LocalConfiguration.current.screenWidthDp
             TrailscapeTheme {
                 ProvideTestLanguage {
-                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                        Column(
-                            modifier = Modifier.fillMaxSize().padding(16.dp),
-                            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
-                        ) {
-                            IndoorCatalogList(previewUi, "catalog:alpe-dhuez", onSelect = {})
+                    CompositionLocalProvider(LocalWindowLayoutClass provides windowLayoutClassFor(widthDp)) {
+                        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                            Column(
+                                modifier = Modifier.fillMaxSize().padding(16.dp),
+                                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+                            ) {
+                                IndoorCatalogList(previewUi, "catalog:alpe-dhuez", onSelect = {})
+                            }
                         }
                     }
                 }
@@ -939,23 +948,25 @@ class IndoorScreenshotTest {
             IndoorDaySuggestionUi(
                 key = "ride:allgaeu", name = "Wochenende Allgäu",
                 availability = de.trailscape.core.indoor.DayRouteAvailability.BUILD,
-                rideKm = 24.6, startKm = 12.4, climbs = dayClimbs, buildMinutes = 14,
+                rideKm = 24.6, ascentM = 640.0, startKm = 12.4, climbs = dayClimbs, buildMinutes = 14,
+                profileElevM = profile.eleM.toList(),
             ),
             IndoorDaySuggestionUi(
                 key = "catalog:grosser-feldberg", name = "Großer Feldberg",
                 availability = de.trailscape.core.indoor.DayRouteAvailability.READY,
-                rideKm = 11.7, climbs = dayClimbs.copy(count = 1, minMinutes = 38, maxMinutes = 38), endsEarlyMin = 9,
+                rideKm = 11.7, ascentM = 820.0, climbs = dayClimbs.copy(count = 1, minMinutes = 38, maxMinutes = 38), endsEarlyMin = 9,
             ),
             IndoorDaySuggestionUi(
                 key = "catalog:schauinsland", name = "Schauinsland",
                 availability = de.trailscape.core.indoor.DayRouteAvailability.DOWNLOAD,
-                rideKm = 15.7, climbs = dayClimbs.copy(count = 1, minMinutes = 52, maxMinutes = 52),
+                rideKm = 15.7, ascentM = 920.0, climbs = dayClimbs.copy(count = 1, minMinutes = 52, maxMinutes = 52),
                 downloadBytes = 114L * 1024 * 1024, estimated = true,
+                profileElevM = profile.eleM.toList(),
             ),
             IndoorDaySuggestionUi(
                 key = "plan", name = "Neue Runde ab deinem Startpunkt",
                 availability = de.trailscape.core.indoor.DayRouteAvailability.PLAN,
-                rideKm = 24.0, buildMinutes = 8,
+                rideKm = 24.0, ascentM = 430.0, buildMinutes = 8,
             ),
         ),
     )
@@ -1048,7 +1059,10 @@ class IndoorScreenshotTest {
         compose.onAllNodesWithText("Today’s session").onFirst().assertExists()
     }
 
-    private val dayGenerated = IndoorDayGeneratedUi(km = 23.8, climbs = 3, reps = 3, workMinutes = 8, buildMinutes = 4)
+    private val dayGenerated = IndoorDayGeneratedUi(
+        km = 23.8, climbs = 3, reps = 3, workMinutes = 8, buildMinutes = 4,
+        ascentM = 310.0, profileElevM = profile.eleM.toList(),
+    )
 
     @Test
     @Config(qualifiers = "${TestLocales.DE}-w411dp-h1500dp-xxhdpi")
@@ -1184,11 +1198,13 @@ class IndoorScreenshotTest {
     @Config(qualifiers = "${TestLocales.DE}-w360dp-h1700dp-night-xxhdpi")
     fun schmalWeltverwaltung() {
         compose.setContent {
+            val widthDp = LocalConfiguration.current.screenWidthDp
             TrailscapeTheme {
                 ProvideTestLanguage {
-                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                        LargeFont {
-                            IndoorWorldsScreen(
+                    CompositionLocalProvider(LocalWindowLayoutClass provides windowLayoutClassFor(widthDp)) {
+                        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                            LargeFont {
+                                IndoorWorldsScreen(
                                 IndoorWorldsUi(
                                     worlds = listOf(
                                         IndoorWorldEntryUi("w1", "Hausrunde Ammersee", IndoorQuality.MEDIUM, 238L * 1024 * 1024, 1_760_000_000_000, attribution, false, true),
@@ -1199,6 +1215,7 @@ class IndoorScreenshotTest {
                                 ),
                                 {}, {}, {},
                             )
+                            }
                         }
                     }
                 }
@@ -1351,5 +1368,99 @@ class IndoorScreenshotTest {
         TestLocales.assertTestLocale(AppLanguage.EN)
         shot("$serverFile-12-angebot-en") { ServerWorld(serverPlan, IndoorServerUi.Offer(nrwLaser, 0)) }
         compose.onAllNodesWithText("Build on server in laser quality").onFirst().assertExists()
+    }
+
+    // ------------------------------------------------------------------ Responsive Matrix (S11 Tablet, 360dp Light 1.3x, S25 Dark/EN 1.3x)
+
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_PORTRAIT_DE)
+    fun tabS11PortraitDe() = shot("m3-indoor-tab-s11-portrait-de") {
+        TabHome(route = routeNoneErg, day = dayOfferSix)
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_PORTRAIT_EN)
+    fun tabS11PortraitEn() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        shot("m3-indoor-tab-s11-portrait-en") {
+            TabHome(
+                route = routeNoneErg.copy(ergTitle = "Threshold 3 x 8 min"),
+                day = dayOfferSix.copy(title = "Threshold 3 x 8 min"),
+                segments = listOf("Routes", "Plan", "Together"),
+            )
+        }
+        compose.onAllNodesWithText("Today’s session").onFirst().assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_LANDSCAPE_DE)
+    fun tabS11LandscapeDe() = shot("m3-indoor-tab-s11-landscape-de") {
+        IndoorHomeScreen(
+            route = routeNoneErg,
+            pair = pairKickr,
+            trainerIssue = null,
+            onSelect = {}, onModeChange = {}, onGhostChange = {}, onRide = {},
+            onBack = null, onOpenPair = {}, onOpenSettings = {},
+            catalog = catalogUi,
+            day = dayOfferSix,
+            initialCatalogOpen = true,
+            title = "Indoor",
+            headerExtra = { PillSegments(options = listOf("Strecken", "Plan", "Gemeinsam"), selectedIndex = 0, onSelect = {}) },
+            onOpenGarage = {},
+        )
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_LANDSCAPE_EN)
+    fun tabS11LandscapeEn() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        shot("m3-indoor-tab-s11-landscape-en") {
+            IndoorHomeScreen(
+                route = routeNoneErg.copy(ergTitle = "Threshold 3 x 8 min"),
+                pair = pairKickr,
+                trainerIssue = null,
+                onSelect = {}, onModeChange = {}, onGhostChange = {}, onRide = {},
+                onBack = null, onOpenPair = {}, onOpenSettings = {},
+                catalog = catalogUi,
+                day = dayOfferSix.copy(title = "Threshold 3 x 8 min"),
+                initialCatalogOpen = true,
+                title = "Indoor",
+                headerExtra = { PillSegments(options = listOf("Routes", "Plan", "Together"), selectedIndex = 0, onSelect = {}) },
+                onOpenGarage = {},
+            )
+        }
+        compose.onAllNodesWithText("Known routes").onFirst().assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.PHONE_NARROW_DE)
+    fun schmalTabHellGross() = shot("m3-indoor-360-light-13x") {
+        LargeFont {
+            TabHome(route = routeNoneErg, day = dayOfferSix)
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h891dp-night-xxhdpi")
+    fun s25DunkelGross() = shot("m3-indoor-s25-dark-13x") {
+        LargeFont {
+            Home(route = routeNoneErg, day = dayOfferSix, catalog = catalogUi)
+        }
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.S25_EN)
+    fun s25EnglischGross() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        shot("m3-indoor-s25-en-13x") {
+            LargeFont {
+                Home(
+                    route = routeNoneErg.copy(ergTitle = "Threshold 3 x 8 min"),
+                    day = dayOfferSix.copy(title = "Threshold 3 x 8 min"),
+                    catalog = catalogUi,
+                )
+            }
+        }
+        compose.onAllNodesWithText("Today’s session").onFirst().assertExists()
     }
 }

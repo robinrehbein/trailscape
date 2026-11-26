@@ -10,8 +10,6 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -25,7 +23,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.Eyebrow
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
 import de.trailscape.app.ui.more.SettingsSwitchRow
 import de.trailscape.core.indoor.VirtualGearTable
 import de.trailscape.core.indoor.sky.IndoorTimeOfDay
@@ -55,7 +55,7 @@ fun IndoorPairScreen(
         title = stringResource(R.string.indoor_app_pair_title),
         onBack = onBack,
         bottomBar = {
-            Button(onClick = onDone, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+            TrailscapePrimaryButton(onClick = onDone, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                 Text(stringResource(R.string.indoor_app_action_done))
             }
         },
@@ -65,13 +65,13 @@ fun IndoorPairScreen(
         // Koppeln, Status, Vergessen: Der Abschnitt bringt Ueberschrift,
         // Einleitung, Berechtigungsabfrage, die gemerkten Geraete je Rolle und
         // den Hinweis „Schalttaster optional" selbst mit.
-        Card(modifier = Modifier.fillMaxWidth()) {
+        AtlasCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(IndoorCardPadding)) {
                 devicesSection()
             }
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        AtlasCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(vertical = 4.dp)) {
                 SettingsSwitchRow(
                     title = stringResource(R.string.indoor_app_pair_demo_title),
@@ -88,7 +88,7 @@ fun IndoorPairScreen(
 /** Stepper „Kettenblatt am Trainer" (ein Zahn je Schritt). */
 @Composable
 internal fun ChainringCard(teeth: Int, onChange: (Int) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Eyebrow(stringResource(R.string.indoor_app_pair_chainring_title))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -121,7 +121,7 @@ internal fun ChainringCard(teeth: Int, onChange: (Int) -> Unit) {
 /** Wahl der Gangtabelle der virtuellen Gaenge (je 24 Gaenge). */
 @Composable
 internal fun GearTableCard(selected: VirtualGearTable, onChange: (VirtualGearTable) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 12.dp)) {
             Eyebrow(
                 stringResource(R.string.indoor_app_pair_gears_title),
@@ -139,7 +139,7 @@ internal fun GearTableCard(selected: VirtualGearTable, onChange: (VirtualGearTab
 /** Wahl der Tageszeit der 3D-Welt (Sonnenstand, Licht, Himmel). */
 @Composable
 internal fun TimeOfDayCard(selected: IndoorTimeOfDay, onChange: (IndoorTimeOfDay) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 12.dp)) {
             Eyebrow(
                 stringResource(R.string.indoor_app_pair_time_title),

@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -25,7 +24,6 @@ import androidx.compose.material.icons.automirrored.filled.DirectionsBike
 import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -56,9 +54,9 @@ import de.trailscape.app.sensors.bluetoothLeSupported
 import de.trailscape.app.sensors.bluetoothPermissions
 import de.trailscape.app.sensors.hasBluetoothPermissions
 import de.trailscape.app.sensors.locationServicesNeeded
-import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.OneUiDialog
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.map.isLocationEnabled
 import de.trailscape.app.ui.more.SettingsHint
 import de.trailscape.app.ui.theme.LocalSignalColors
@@ -298,7 +296,7 @@ internal fun IndoorDevicesContent(
                 }
                 if (ref != null) {
                     Spacer(Modifier.width(12.dp))
-                    NeutralButton(onClick = { vergessen = ref }) {
+                    TrailscapeSecondaryButton(onClick = { vergessen = ref }) {
                         Text(stringResource(R.string.indoor_ble_forget_action))
                     }
                 }
@@ -308,10 +306,9 @@ internal fun IndoorDevicesContent(
         // --- Suche
         Spacer(Modifier.height(20.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
+            TrailscapeSecondaryButton(
                 onClick = onScan,
                 enabled = !state.scanning && state.permissionGranted && state.bluetoothOn,
-                modifier = Modifier.heightIn(min = 48.dp),
             ) {
                 Text(
                     stringResource(
@@ -382,7 +379,7 @@ internal fun IndoorDevicesContent(
                             modifier = Modifier.weight(1f),
                         )
                         Spacer(Modifier.width(12.dp))
-                        NeutralButton(
+                        TrailscapeSecondaryButton(
                             enabled = !schonGemerkt,
                             onClick = {
                                 val alt = state.gemerkt[rolle]

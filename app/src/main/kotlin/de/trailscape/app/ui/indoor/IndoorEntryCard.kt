@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsBike
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -21,6 +20,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.theme.CardPadding
 
 /**
@@ -33,7 +33,7 @@ import de.trailscape.app.ui.theme.CardPadding
  */
 @Composable
 fun IndoorEntryCard(ergTitle: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(
+    AtlasCard(
         modifier = modifier
             .fillMaxWidth()
             .clickable(

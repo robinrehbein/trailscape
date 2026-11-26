@@ -36,6 +36,7 @@ import de.trailscape.app.strava.StravaAuthMessage
 import de.trailscape.app.strava.StravaConnection
 import de.trailscape.app.strava.StravaServices
 import de.trailscape.app.ui.components.OneUiDialog
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import kotlinx.coroutines.launch
 
 /**
@@ -131,7 +132,7 @@ internal fun StravaCardBody(
                 onCheckedChange = onAutoUploadChange,
             )
             Spacer(modifier = Modifier.height(8.dp))
-            SettingsSecondaryButton(onClick = { confirmDisconnect = true }, destructive = true) {
+            TrailscapeSecondaryButton(onClick = { confirmDisconnect = true }, destructive = true) {
                 Text(stringResource(R.string.strava_disconnect))
             }
         }

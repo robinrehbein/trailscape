@@ -1,48 +1,33 @@
 package de.trailscape.app.ui.theme
 
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 /**
- * # One-UI-Farbwelt
+ * # Atlas-Farbwelt (Mischung Atlas + Cockpit)
  *
- * One UI 9 stellt Inhalte auf neutrale Flaechen: ein helles, kuehles Grau als
- * Bildschirmhintergrund, weisse Karten darauf; im Dunkeln ein nahezu
- * schwarzer Grund mit angehobenen Dunkelgrau-Karten. Die Akzentfarbe bleibt
- * das Markengruen von Trailscape — aber in der One-UI-typischen Leuchtkraft
- * statt des bisherigen erdigen Tons, und wie bei Samsung konzentriert auf
- * echte Aktionen (ein gefuellter Knopf je Blick, alles andere ist neutral.
+ * Ruhige, warme Steinweiss-Flaechen fuer Planung, Uebersichten und Streckenwahl;
+ * im Dunkelmodus ein neutrales, tiefes Schiefergrau. Das Markengruen von
+ * Trailscape (`primary`) bleibt fuer Fortschritt, Karten und Routenlinien
+ * erhalten; genau **eine** Hauptaktion pro Bildschirm traegt das satte
+ * Trail-Orange aus [AtlasColors.action].
  *
- * ## Tonal-Slots (die eigentlichen Flaechen)
- * `surface` ist der Bildschirm, die **Karte** ist `surfaceContainerHighest` —
- * denn genau diesen Slot benutzt das gefuellte `Card` von Material 3. Damit
- * Karten und die schwebenden Panels des Karten-Tabs (`surfaceContainerLow`)
- * dieselbe Flaeche haben, tragen beide Slots denselben Wert: hell Weiss,
- * dunkel ein angehobenes Grau.
- *
- * Das bricht bewusst die Material-Ordnung „hoeher = dunkler im Hellmodus":
- * One UI setzt **weisse** Karten auf einen grauen Grund, waehrend Material die
- * Karte dunkler faerben wuerde als den Bildschirm. Die Zwischenstufen
- * `surfaceContainer`/`surfaceContainerHigh` bleiben die getoenten Flaechen, die
- * *auf* einer Karte liegen (Chips, ausgegraute Zeilen) — sie muessen sich
- * deshalb von der Karte absetzen, nicht vom Bildschirm.
- *
- * ## Primaerfarbe als Textfarbe
- * Das Gruen ist eine Stufe dunkler als die Flaeechen-Variante, die man naiv
- * wuerde: Als *Text* auf weisser Karte und auf dem Hintergrund muss es
- * WCAG-AA (4,5:1) bestehen — #0D7A42 schafft beide (5,4:1 / 4,9:1). Als
- * gefuellte Knopf-Flaeche bleibt es dabei lebendig genug fuer One UI.
+ * Die Tonal-Slots fuer Karten (`surfaceContainerHighest` und
+ * `surfaceContainerLow`) bleiben im Hellmodus reinweiss auf warmgrauem Grund
+ * (`surface` = #F6F4EF), im Dunkeln eine Stufe ueber dem Grund (#1B1E23).
  */
-val TrailscapeSeed = Color(0xFF0D7A42)
+val TrailscapeSeed = Color(0xFF1B6B46)
 
 // ------------------------------------------------------------------ Hell
-internal val LightPrimary = Color(0xFF0D7A42)
+internal val LightPrimary = Color(0xFF1B6B46)
 internal val LightOnPrimary = Color(0xFFFFFFFF)
-internal val LightPrimaryContainer = Color(0xFFC3F0D4)
-internal val LightOnPrimaryContainer = Color(0xFF002411)
-internal val LightSecondary = Color(0xFF4E655B)
+internal val LightPrimaryContainer = Color(0xFFD2EFE0)
+internal val LightOnPrimaryContainer = Color(0xFF062617)
+internal val LightSecondary = Color(0xFF4B6357)
 internal val LightOnSecondary = Color(0xFFFFFFFF)
-internal val LightSecondaryContainer = Color(0xFFD3E9DC)
-internal val LightOnSecondaryContainer = Color(0xFF0C1F16)
+internal val LightSecondaryContainer = Color(0xFFD2E7DB)
+internal val LightOnSecondaryContainer = Color(0xFF0B1F16)
 internal val LightTertiary = Color(0xFF2A6474)
 internal val LightOnTertiary = Color(0xFFFFFFFF)
 internal val LightTertiaryContainer = Color(0xFFC4EAF8)
@@ -51,23 +36,23 @@ internal val LightError = Color(0xFFBB2016)
 internal val LightOnError = Color(0xFFFFFFFF)
 internal val LightErrorContainer = Color(0xFFFFDAD4)
 internal val LightOnErrorContainer = Color(0xFF410001)
-internal val LightBackground = Color(0xFFF4F4F6)
-internal val LightOnBackground = Color(0xFF1A1B1E)
-internal val LightSurface = Color(0xFFF4F4F6)
-internal val LightOnSurface = Color(0xFF1A1B1E)
+internal val LightBackground = Color(0xFFF6F4EF)
+internal val LightOnBackground = Color(0xFF181A1F)
+internal val LightSurface = Color(0xFFF6F4EF)
+internal val LightOnSurface = Color(0xFF181A1F)
 internal val LightSurfaceContainerLowest = Color(0xFFFFFFFF)
 
 /** Flaeche der schwebenden Panels des Karten-Tabs — dieselbe wie die Karte. */
 internal val LightSurfaceContainerLow = Color(0xFFFFFFFF)
-internal val LightSurfaceContainer = Color(0xFFEFEFF2)
-internal val LightSurfaceContainerHigh = Color(0xFFE7E8EC)
+internal val LightSurfaceContainer = Color(0xFFEEECE5)
+internal val LightSurfaceContainerHigh = Color(0xFFE6E3DA)
 
 /** **Die Karte.** Material 3 nimmt diesen Slot fuer das gefuellte `Card`. */
 internal val LightSurfaceContainerHighest = Color(0xFFFFFFFF)
-internal val LightSurfaceVariant = Color(0xFFEDEDF0)
-internal val LightOnSurfaceVariant = Color(0xFF545B63)
-internal val LightOutline = Color(0xFF767C86)
-internal val LightOutlineVariant = Color(0xFFDDDEE3)
+internal val LightSurfaceVariant = Color(0xFFECE9E1)
+internal val LightOnSurfaceVariant = Color(0xFF575B64)
+internal val LightOutline = Color(0xFF767980)
+internal val LightOutlineVariant = Color(0xFFE4E0D6)
 internal val LightInverseSurface = Color(0xFF2E3033)
 internal val LightInverseOnSurface = Color(0xFFF2F2F4)
 internal val LightInversePrimary = Color(0xFF75D9A4)
@@ -89,23 +74,66 @@ internal val DarkError = Color(0xFFFFB4A9)
 internal val DarkOnError = Color(0xFF690001)
 internal val DarkErrorContainer = Color(0xFF930006)
 internal val DarkOnErrorContainer = Color(0xFFFFDAD4)
-internal val DarkBackground = Color(0xFF0A0A0C)
-internal val DarkOnBackground = Color(0xFFE3E3E7)
-internal val DarkSurface = Color(0xFF0A0A0C)
-internal val DarkOnSurface = Color(0xFFE3E3E7)
-internal val DarkSurfaceContainerLowest = Color(0xFF060607)
+internal val DarkBackground = Color(0xFF111316)
+internal val DarkOnBackground = Color(0xFFE8E9ED)
+internal val DarkSurface = Color(0xFF111316)
+internal val DarkOnSurface = Color(0xFFE8E9ED)
+internal val DarkSurfaceContainerLowest = Color(0xFF0A0C0F)
 
 /** Flaeche der schwebenden Panels des Karten-Tabs — dieselbe wie die Karte. */
-internal val DarkSurfaceContainerLow = Color(0xFF1C1D21)
-internal val DarkSurfaceContainer = Color(0xFF26272C)
-internal val DarkSurfaceContainerHigh = Color(0xFF303138)
+internal val DarkSurfaceContainerLow = Color(0xFF1B1E23)
+internal val DarkSurfaceContainer = Color(0xFF23272E)
+internal val DarkSurfaceContainerHigh = Color(0xFF2C313A)
 
 /** **Die Karte.** Material 3 nimmt diesen Slot fuer das gefuellte `Card`. */
-internal val DarkSurfaceContainerHighest = Color(0xFF1C1D21)
-internal val DarkSurfaceVariant = Color(0xFF232429)
-internal val DarkOnSurfaceVariant = Color(0xFFBFC3C9)
+internal val DarkSurfaceContainerHighest = Color(0xFF1B1E23)
+internal val DarkSurfaceVariant = Color(0xFF21252C)
+internal val DarkOnSurfaceVariant = Color(0xFFB3B8C2)
 internal val DarkOutline = Color(0xFF8A8F98)
-internal val DarkOutlineVariant = Color(0xFF3A3B40)
-internal val DarkInverseSurface = Color(0xFFE3E3E7)
+internal val DarkOutlineVariant = Color(0xFF2C3038)
+internal val DarkInverseSurface = Color(0xFFE8E9ED)
 internal val DarkInverseOnSurface = Color(0xFF2E3033)
-internal val DarkInversePrimary = Color(0xFF0F8A4A)
+internal val DarkInversePrimary = Color(0xFF1B6B46)
+
+/**
+ * Zusatzfarben fuer den Atlas-Stil, die bewusst nicht ueber `colorScheme.primary`
+ * laufen: genau die eine Hauptaktion traegt [action] (Trail-Orange), waehrend
+ * Fortschrittsbalken, Routenlinien und Karten weiter [LightPrimary]/[DarkPrimary]
+ * nutzen.
+ */
+@Immutable
+data class AtlasColors(
+    /** Fuellfarbe des einen orangefarbenen Hauptknopfs (WCAG AA mit [onAction]). */
+    val action: Color,
+    /** Text- und Symbolfarbe auf [action]. */
+    val onAction: Color,
+    /** Sanfte Hervorhebung fuer sekundaere Aktions-Chips oder ausgewaehlte Flaechen. */
+    val actionContainer: Color,
+    /** Text- und Symbolfarbe auf [actionContainer]. */
+    val onActionContainer: Color,
+    /** Feine 1-dp-Kartenkante im Atlas-Stil. */
+    val cardBorder: Color,
+    /** Halbtransparenter Hintergrund fuer Status-Chips auf Streckenbildern. */
+    val routeMediaScrim: Color,
+)
+
+internal val LightAtlasColors = AtlasColors(
+    action = Color(0xFFC9460F),
+    onAction = Color(0xFFFFFFFF),
+    actionContainer = Color(0xFFFDE7DC),
+    onActionContainer = Color(0xFF4A1700),
+    cardBorder = LightOutlineVariant,
+    routeMediaScrim = Color(0x99121417),
+)
+
+internal val DarkAtlasColors = AtlasColors(
+    action = Color(0xFFF27038),
+    onAction = Color(0xFF140600),
+    actionContainer = Color(0xFF4A1D0A),
+    onActionContainer = Color(0xFFFFD5C2),
+    cardBorder = DarkOutlineVariant,
+    routeMediaScrim = Color(0xB30A0D11),
+)
+
+/** Die aktuell gueltigen Atlas-Sonderfarben; gestellt von [TrailscapeTheme]. */
+val LocalAtlasColors = staticCompositionLocalOf { LightAtlasColors }

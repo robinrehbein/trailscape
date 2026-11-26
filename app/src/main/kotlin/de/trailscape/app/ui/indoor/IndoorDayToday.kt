@@ -47,6 +47,7 @@ fun IndoorTodayEntry(
     onRideDay: (String) -> Unit,
     onPlanRoute: (RouteTarget) -> Unit,
     modifier: Modifier = Modifier,
+    primary: Boolean = true,
 ) {
     val formats = LocalAppFormats.current
     var state by remember { mutableStateOf<Pair<IndoorDayPlan, IndoorDayUi>?>(null) }
@@ -70,15 +71,23 @@ fun IndoorTodayEntry(
                     languageTag = formats.language.tag,
                     planName = context.getString(de.trailscape.app.R.string.indoor_app_day_plan_name),
                 )
-                val bytes = runCatching {
-                    AppServices.indoorCatalogStore.catalog().entries.associate { it.id to it.packageBytes }
-                }.getOrDefault(emptyMap())
+                val catalogEntries = runCatching { AppServices.indoorCatalogStore.catalog().entries }.getOrDefault(emptyList())
+                val bytes = catalogEntries.associate { it.id to it.packageBytes }
+                val previewPaths = catalogEntries.mapNotNull { entry ->
+                    val file = runCatching { AppServices.indoorCatalogStore.cachedPreview(entry) }.getOrNull()
+                    if (file != null) entry.id to file.path else null
+                }.toMap()
                 val genReady = runCatching {
                     val wp = de.trailscape.app.indoor.DefaultIndoorGeneratedWorlds
                         .plan(de.trailscape.core.indoor.dayGeneratedProfile(plan.goal!!), de.trailscape.core.indoor.world.IndoorQuality.MEDIUM, "")
                     AppServices.indoorWorldLibrary.get(wp.worldId)?.complete == true
                 }.getOrDefault(false)
-                indoorDayUiOf(plan, matches, generatedReady = genReady) { id -> bytes[id] }?.let { plan to it }
+                indoorDayUiOf(
+                    plan,
+                    matches,
+                    generatedReady = genReady,
+                    previewPathFor = { id -> previewPaths[id] },
+                ) { id -> bytes[id] }?.let { plan to it }
             }.getOrNull()
         }
     }
@@ -97,8 +106,9 @@ fun IndoorTodayEntry(
             onRideGenerated = { onRideDay(INDOOR_DAY_GENERATED_KEY) },
             onPathChange = { p -> state = current.first to ui.copy(path = p) },
             modifier = modifier,
+            primary = primary,
         )
-        is IndoorDayUi.Rest -> IndoorDayCard(ui = ui, onRide = {}, onNext = {}, onOpenIndoor = onOpen, modifier = modifier)
+        is IndoorDayUi.Rest -> IndoorDayCard(ui = ui, onRide = {}, onNext = {}, onOpenIndoor = onOpen, modifier = modifier, primary = primary)
         else -> IndoorEntryCard(ergTitle = fallbackErgTitle, onClick = onOpen, modifier = modifier)
     }
 }

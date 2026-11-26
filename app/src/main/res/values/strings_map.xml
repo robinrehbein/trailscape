@@ -33,6 +33,10 @@
     <string name="map_explore_build_loop_action">Runde bauen</string>
     <string name="map_explore_saved_routes_label">Gespeicherte Routen</string>
     <string name="map_explore_recent_label">Zuletzt gesucht</string>
+    <string name="map_route_distance_value">%1$s km</string>
+    <string name="map_route_ascent_value">%1$d Hm ↑</string>
+    <string name="map_route_duration_approx">ca. %1$s</string>
+    <string name="map_search_close_cd">Suche schließen</string>
 
     <!-- LongPressHint.kt -->
     <string name="map_long_press_hint_snackbar">Tipp: Tippe auf die Karte und setze einen Punkt – als Ziel oder Start einer Runde.</string>
@@ -100,9 +104,10 @@
     <string name="map_generation_research_action">Neu suchen</string>
     <string name="map_generation_intro_body">Trailscape sucht %1$d Rundkurse ab deiner aktuellen Position – ohne Standort ab der Kartenmitte. Das dauert etwa eine halbe Minute; du kannst zwischendurch ruhig den Tab wechseln.</string>
     <string name="map_generation_running_status">Suche läuft …</string>
+    <string name="map_generation_auto_starting_status">Suche läuft – Fahrt startet danach direkt …</string>
     <string name="map_generation_progress_status">Kandidat %1$d von %2$d …</string>
     <string name="map_generation_cancel_action">Abbrechen</string>
-    <string name="map_generation_candidate_headline">%1$s km · %2$d Hm ↑</string>
+    <string name="map_generation_candidate_headline">%1$s km · %2$d Hm&#160;↑</string>
     <string name="map_generation_best_label">Beste</string>
     <string name="map_generation_candidate_detail">%1$s · %2$d Hm/km · %3$s zum Ziel</string>
     <!-- %1$d = doppelt befahrener Anteil in Prozent -->

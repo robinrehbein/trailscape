@@ -323,6 +323,7 @@
     <string name="more_profile_hr_max_learn_more">Die Schätzung ist 208 − 0,7 × Alter. Genauer wird es mit einem HFmax-Feldtest: nach gutem Aufwärmen ein harter Anstieg über 3–5 Minuten mit maximalem Endspurt.</string>
     <string name="more_profile_hr_max_label">HFmax (bpm, optional)</string>
     <string name="more_profile_lthr_label">Schwellenpuls LTHR (bpm, optional)</string>
+    <string name="more_profile_lthr_hint">Der höchste Puls, den du rund eine Stunde lang gleichmäßig halten kannst.</string>
     <string name="more_profile_resting_hr_label">Ruhepuls (bpm, optional)</string>
     <string name="more_profile_resting_hr_hint">Leer: der aus deinen Vitaldaten gemessene Wert.</string>
     <string name="more_profile_ftp_label">Schwellenleistung FTP (Watt, optional)</string>

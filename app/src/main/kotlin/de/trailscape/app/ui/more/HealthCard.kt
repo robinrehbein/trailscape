@@ -22,9 +22,9 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,6 +52,8 @@ import de.trailscape.app.i18n.UiText
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.OneUiDialog
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.health.rememberRouteConsentLauncher
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.HealthAvailability
@@ -147,14 +149,14 @@ fun HealthCardContent(appViewModel: AppViewModel) {
     ) {
         when {
             connection?.availability == HealthAvailability.NICHT_INSTALLIERT -> {
-                Button(
+                TrailscapePrimaryButton(
                     onClick = { openHealthConnectInPlayStore(context) },
                     enabled = !busy,
                 ) { Text(stringResource(R.string.more_health_install_action)) }
             }
 
             connection?.needsPermissions == true -> {
-                Button(
+                TrailscapePrimaryButton(
                     onClick = {
                         scope.launch {
                             busy = true
@@ -181,7 +183,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
             }
 
             connection?.isReady == true -> {
-                Button(
+                TrailscapePrimaryButton(
                     onClick = {
                         scope.launch {
                             busy = true
@@ -202,7 +204,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
                         CircularProgressIndicator(
                             strokeWidth = 2.dp,
                             modifier = Modifier.size(18.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
+                            color = LocalContentColor.current,
                         )
                     } else {
                         // Nicht „Jetzt synchronisieren": So heisst auch der
@@ -213,7 +215,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
                         Text(stringResource(R.string.more_health_fetch_action))
                     }
                 }
-                SettingsSecondaryButton(
+                TrailscapeSecondaryButton(
                     onClick = {
                         scope.launch {
                             busy = true
@@ -302,7 +304,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
     val consentPending by appViewModel.routeConsentPending.collectAsStateWithLifecycle()
     val requestRoute = rememberRouteConsentLauncher(appViewModel)
     consentPending.firstOrNull()?.let { first ->
-        SettingsSecondaryButton(
+        TrailscapeSecondaryButton(
             onClick = { requestRoute(first) },
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -405,7 +407,7 @@ internal fun HealthHistoryNotice(enabled: Boolean, onRequest: () -> Unit) {
         text = stringResource(R.string.more_health_history_body),
     )
     Spacer(modifier = Modifier.height(8.dp))
-    SettingsSecondaryButton(
+    TrailscapeSecondaryButton(
         onClick = onRequest,
         enabled = enabled,
         modifier = Modifier.fillMaxWidth(),

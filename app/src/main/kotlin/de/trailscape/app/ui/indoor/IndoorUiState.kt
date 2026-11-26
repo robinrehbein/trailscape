@@ -77,6 +77,8 @@ data class IndoorPairUi(
     /** „Einblendungen auf der Strecke" (Bergwertung, Kilometer) im HUD, Vorgabe an. */
     val trailOverlays: Boolean = true,
     val graphics: de.trailscape.core.indoor.world.IndoorGraphics = de.trailscape.core.indoor.world.IndoorGraphics.STANDARD,
+    val bluetoothOn: Boolean = true,
+    val permissionGranted: Boolean = true,
 ) {
     val canContinue: Boolean get() = demoTrainer || trainerName != null
 }
@@ -109,6 +111,8 @@ sealed interface IndoorRouteOption {
         val createdAt: Long,
         val planned: Boolean,
         val hasWorld: Boolean = false,
+        val durationS: Int? = null,
+        val previewPoints: List<Float> = emptyList(),
     ) : IndoorRouteOption {
         override val key: String get() = "ride:$rideId"
     }

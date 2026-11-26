@@ -24,7 +24,7 @@ import de.trailscape.app.challenge.ChallengeRouteInfo
 import de.trailscape.app.challenge.challengeRouteInfo
 import de.trailscape.app.challenge.shareChallengeFile
 import de.trailscape.app.data.AppServices
-import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.indoor.ChallengeShareDialog
 import de.trailscape.app.ui.indoor.IndoorChallengeController
 import de.trailscape.core.Ride
@@ -103,7 +103,7 @@ internal fun ChallengeShareRow(ride: Ride, modifier: Modifier = Modifier) {
 /** Die Zeile selbst — zustandslos, fuer den Screenshot-Test. */
 @Composable
 internal fun ChallengeShareRowContent(reply: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    NeutralButton(onClick = onClick, modifier = modifier.fillMaxWidth()) {
+    TrailscapeSecondaryButton(onClick = onClick, modifier = modifier.fillMaxWidth()) {
         Icon(Icons.Outlined.EmojiEvents, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Text(stringResource(if (reply) R.string.spiel3_result_reply else R.string.spiel3_share_entry))

@@ -540,6 +540,8 @@
     <string name="indoor_app_world_advanced_show">Weitere Möglichkeit: auf deinem Server bauen</string>
     <string name="indoor_app_start_finish_action">Fahrt beenden</string>
     <string name="indoor_app_settings_refresh_body">Neue Strecken und Vorschaubilder holen</string>
+    <string name="indoor_app_route_track_preview_cd">Streckenverlauf von %1$s</string>
+    <string name="indoor_app_route_profile_cd">Höhenprofil von %1$s</string>
     <plurals name="indoor_app_home_catalog_summary">
         <item quantity="one">%1$d Strecke, fertig vorbereitet zum Herunterladen</item>
         <item quantity="other">%1$d Strecken, fertig vorbereitet zum Herunterladen</item>

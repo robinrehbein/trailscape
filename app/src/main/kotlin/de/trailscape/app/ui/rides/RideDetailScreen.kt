@@ -2,12 +2,16 @@ package de.trailscape.app.ui.rides
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,11 +31,10 @@ import androidx.compose.material.icons.filled.PedalBike
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -55,7 +58,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -72,13 +76,17 @@ import de.trailscape.app.i18n.UiText
 import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.CoachCard
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.components.Fact
-import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
+import de.trailscape.app.ui.components.MetricBlock
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.progress.AchievementsCard
 import de.trailscape.app.ui.progress.rememberRideFacts
@@ -98,8 +106,10 @@ import de.trailscape.app.ui.rememberTodayDecision
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.theme.LocalAtlasColors
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.theme.ScreenPadding
+import de.trailscape.app.ui.theme.TabletScreenPadding
 import de.trailscape.core.Confidence
 import de.trailscape.core.DecouplingResult
 import de.trailscape.core.Ride
@@ -206,13 +216,14 @@ import kotlinx.coroutines.withContext
 internal fun RideDetailScreen(
     ride: Ride,
     appViewModel: AppViewModel,
-    snackbarHostState: SnackbarHostState,
-    onBack: () -> Unit,
+    snackbarHostState: SnackbarHostState?,
+    onBack: (() -> Unit)?,
     onShowOnMap: () -> Unit,
     onRideAgain: () -> Unit,
     onRename: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
+    inline: Boolean = false,
     onRideIndoor: (() -> Unit)? = null,
     // „In 3D ansehen" (Idee 4, docs/indoor/vorschau.md); `null` = kein Einstieg.
     onPreview3d: (() -> Unit)? = null,
@@ -317,47 +328,70 @@ internal fun RideDetailScreen(
         }
     }
 
+    val scrollState = rememberScrollState()
+    LaunchedEffect(ride.id) { scrollState.scrollTo(0) }
+    val contentPadding = if (inline) {
+        PaddingValues(
+            top = TabletScreenPadding,
+            end = TabletScreenPadding,
+            bottom = TabletScreenPadding + LocalFloatingNavigationBarSpace.current,
+        )
+    } else {
+        screenContentPadding()
+    }
+    val layoutDirection = LocalLayoutDirection.current
+    val horizontalStartPadding = contentPadding.calculateStartPadding(layoutDirection)
+    val horizontalEndPadding = contentPadding.calculateEndPadding(layoutDirection)
+
     Scaffold(
         // Die Insets hat der Wirt (Dialogfenster in `RidesScreen.kt`) oben und
         // seitlich bereits aufgeloest.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { snackbarHostState?.let { SnackbarHost(it) } },
         bottomBar = {
             // Fest am unteren Rand statt im scrollenden Inhalt: Die Hauptaktion
             // ist immer erreichbar, egal wie lang die Auswertung ist.
             if (againOptions.isNotEmpty()) {
                 Surface(color = MaterialTheme.colorScheme.surface) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(horizontal = ScreenPadding, vertical = 8.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Button(
-                            onClick = {
-                                // Bleibt nur eine Art, braucht es kein Blatt.
-                                if (againOptions.size == 1) pickAgain(againOptions.first()) else againOpen = true
-                            },
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        HorizontalDivider(color = LocalAtlasColors.current.cardBorder)
+                        Box(
                             modifier = Modifier
-                                .widthIn(max = ContentMaxWidth)
-                                .fillMaxWidth(),
+                                .fillMaxWidth()
+                                .navigationBarsPadding(),
+                            contentAlignment = Alignment.TopCenter,
                         ) {
-                            Icon(
-                                Icons.Filled.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(ButtonDefaults.IconSize),
-                            )
-                            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                            Text(
-                                stringResource(
-                                    if (ride.planned) {
-                                        R.string.rides_again_planned_action
-                                    } else {
-                                        R.string.rides_detail_ride_again_action
-                                    },
-                                ),
-                            )
+                            TrailscapePrimaryButton(
+                                onClick = {
+                                    // Bleibt nur eine Art, braucht es kein Blatt.
+                                    if (againOptions.size == 1) pickAgain(againOptions.first()) else againOpen = true
+                                },
+                                modifier = Modifier
+                                    .widthIn(max = ContentMaxWidth)
+                                    .fillMaxWidth()
+                                    .padding(
+                                        start = horizontalStartPadding,
+                                        end = horizontalEndPadding,
+                                        top = 10.dp,
+                                        bottom = 10.dp,
+                                    ),
+                            ) {
+                                Icon(
+                                    Icons.Filled.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(ButtonDefaults.IconSize),
+                                )
+                                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                                Text(
+                                    stringResource(
+                                        if (ride.planned) {
+                                            R.string.rides_again_planned_action
+                                        } else {
+                                            R.string.rides_detail_ride_again_action
+                                        },
+                                    ),
+                                )
+                            }
                         }
                     }
                 }
@@ -374,8 +408,8 @@ internal fun RideDetailScreen(
                 modifier = Modifier
                     .widthIn(max = ContentMaxWidth)
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(screenContentPadding()),
+                    .verticalScroll(scrollState)
+                    .padding(contentPadding),
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
                 // Dieselbe Kopfzeile wie ueberall (Fuehrung „Klartext"): das
@@ -389,7 +423,7 @@ internal fun RideDetailScreen(
                         fromHealthConnect = ride.id.startsWith("hc-"),
                         language = LocalAppLanguage.current,
                     ).asString(),
-                    backLabel = stringResource(R.string.rides_detail_back_label),
+                    backLabel = if (onBack != null) stringResource(R.string.rides_detail_back_label) else null,
                     onBack = onBack,
                     actions = {
                         // Alles, was die App verlaesst, liegt hinter diesem einen
@@ -482,7 +516,7 @@ internal fun RideDetailScreen(
                     }
                 }
 
-                NeutralButton(
+                TrailscapeSecondaryButton(
                     onClick = { allValues = !allValues },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -651,7 +685,10 @@ internal fun rideDetailDateLine(
  */
 @Composable
 private fun RideMapCard(ride: Ride, style: MapStyle) {
-    val controller = remember(ride.id) { MapController() }
+    // Controller ohne `ride.id`-Schluessel merken: MapViewHost bindet ihn einmal
+    // in `AndroidView.factory`, und im Tablet-Master-Detail wechselt `ride.id`
+    // direkt an derselben Kartenflaeche.
+    val controller = remember { MapController() }
 
     LaunchedEffect(controller, ride.id, ride.points.size) {
         controller.setTrack(ride.points)
@@ -669,7 +706,7 @@ private fun RideMapCard(ride: Ride, style: MapStyle) {
     }
 
     val description = stringResource(R.string.rides_detail_map_cd, ride.name)
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -694,64 +731,62 @@ private fun RideMapCard(ride: Ride, style: MapStyle) {
 
 /**
  * Die vierteilige Zahlenzeile (Zieldesign `.stats3` mit vier Spalten):
- * Distanz, Dauer, Anstieg und Ø Puls als grosse, zentrierte Zahlen mit
- * Tabellenziffern. Die Dauer steht als `h:mm` unter „Std." — vorher stand
- * unter „h:min" ein Wert in `h:mm:ss`. Fehlt die Herzfrequenz, steht „–",
- * damit die Zeile immer vierteilig bleibt.
+ * Distanz, Dauer, Anstieg und Ø Puls als grosse Zahlen mit
+ * Tabellenziffern ([MetricBlock]). Die Dauer steht als `h:mm` unter „Std." —
+ * Fehlt die Herzfrequenz, steht „–", damit die Zeile immer vierteilig bleibt.
+ * Auf schmalen Bildschirmen (360 dp) oder bei grosser Schrift (1,3×) bricht die
+ * Zeile sauber in 2×2 um, damit kein Wert abgeschnitten wird.
  */
 @Composable
 private fun RideStatsRow(ride: Ride) {
     val stats = ride.stats
     val formats = LocalAppFormats.current
+    val fontScale = LocalDensity.current.fontScale
+
+    val kmValue = formats.km(stats.distanceKm)
+    val kmLabel = stringResource(R.string.rides_detail_stat_km_label)
+    val hoursValue = formatHoursMinutes(stats.durationS)
+    val hoursLabel = stringResource(R.string.rides_detail_stat_hours_label)
+    val ascentValue = "${stats.ascentM.roundToInt()}"
+    val ascentLabel = stringResource(R.string.rides_detail_stat_elevation_label)
+    val hrValue = stats.avgHrBpm?.toString() ?: "–"
+    val hrLabel = stringResource(R.string.rides_detail_stat_avg_hr_label)
 
     DetailCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceAround,
-        ) {
-            BigStat(
-                value = formats.km(stats.distanceKm),
-                label = stringResource(R.string.rides_detail_stat_km_label),
-            )
-            BigStat(
-                value = formatHoursMinutes(stats.durationS),
-                label = stringResource(R.string.rides_detail_stat_hours_label),
-            )
-            BigStat(
-                value = "${stats.ascentM.roundToInt()}",
-                label = stringResource(R.string.rides_detail_stat_elevation_label),
-            )
-            BigStat(
-                value = stats.avgHrBpm?.toString() ?: "–",
-                label = stringResource(R.string.rides_detail_stat_avg_hr_label),
-            )
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val fourAcross = maxWidth >= 420.dp || (maxWidth >= 340.dp && fontScale <= 1.15f)
+            if (fourAcross) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    MetricBlock(value = kmValue, unit = "", label = kmLabel, modifier = Modifier.weight(1f))
+                    MetricBlock(value = hoursValue, unit = "", label = hoursLabel, modifier = Modifier.weight(1f))
+                    MetricBlock(value = ascentValue, unit = "", label = ascentLabel, modifier = Modifier.weight(1f))
+                    MetricBlock(value = hrValue, unit = "", label = hrLabel, modifier = Modifier.weight(1f))
+                }
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        MetricBlock(value = kmValue, unit = "", label = kmLabel, modifier = Modifier.weight(1f))
+                        MetricBlock(value = hoursValue, unit = "", label = hoursLabel, modifier = Modifier.weight(1f))
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        MetricBlock(value = ascentValue, unit = "", label = ascentLabel, modifier = Modifier.weight(1f))
+                        MetricBlock(value = hrValue, unit = "", label = hrLabel, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
         }
-    }
-}
-
-/**
- * Ein Wert der Zahlenzeile: grosse, zentrierte Zahl in Tabellenziffern
- * (`"tnum"`, Repo-Muster fuer Zahlenreihen — siehe `ui/map/RideCompactBar.kt`),
- * kleine Einheit darunter.
- */
-@Composable
-private fun BigStat(value: String, label: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.headlineSmall.copy(fontFeatureSettings = "tnum"),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-        )
     }
 }
 
@@ -765,10 +800,9 @@ private fun BigStat(value: String, label: String, modifier: Modifier = Modifier)
 private fun RideNoteBox(note: RideNote) {
     val headline = note.headline.asString()
     val body = note.body.asString()
-    Surface(
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        shape = MaterialTheme.shapes.extraSmall,
+    AtlasCard(
+        containerColor = MaterialTheme.colorScheme.primaryContainer,
+        borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
@@ -778,7 +812,8 @@ private fun RideNoteBox(note: RideNote) {
                 append(body)
             },
             style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.padding(CardPadding),
         )
     }
 }
@@ -1060,10 +1095,10 @@ private fun DetailSection(title: String, content: @Composable ColumnScope.() -> 
 /** Luft ueber einer Abschnitts-Augenbraue — trennt Abschnitte deutlicher als [CardGap]. */
 private val SectionTopGap = 8.dp
 
-/** Eine Karte der Detailansicht — ueberall dasselbe Innenmass. */
+/** Eine Karte der Detailansicht — ueberall dasselbe Innenmass im Atlas-Stil. */
 @Composable
 private fun DetailCard(content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(CardPadding), content = content)
     }
 }

@@ -65,6 +65,8 @@ class IndoorCatalogController(
     private val live = java.util.concurrent.ConcurrentHashMap<String, IndoorCatalogState>()
 
     private var job: Job? = null
+    @Volatile private var diskLoadJob: Job? = null
+    private val diskLock = Any()
     @Volatile private var runningId: String? = null
 
     @Volatile private var cancelRequested = false
@@ -88,12 +90,21 @@ class IndoorCatalogController(
      */
     fun load() {
         val s = store ?: return
-        scope.launch {
-            withContext(io) { readDisk(s) }
+        val disk = scope.launch {
+            withContext(io) { synchronized(diskLock) { readDisk(s) } }
             publish(loading = false)
+        }
+        diskLoadJob = disk
+        scope.launch {
+            disk.join()
             autoRefresh(s)
             loadPreviews(s, fetch = isOnline())
         }
+    }
+
+    /** Wartet, bis ein laufendes initiales Plattenlesen von [load] abgeschlossen ist. */
+    suspend fun awaitDiskLoad() {
+        diskLoadJob?.join()
     }
 
     /** Der stille, hoechstens taegliche Abruf (docs/indoor/catalog.md, „Automatisch aktualisieren"). */
@@ -157,7 +168,7 @@ class IndoorCatalogController(
         }
     }
 
-    private fun readDisk(s: CatalogStore) {
+    private fun readDisk(s: CatalogStore) = synchronized(diskLock) {
         val c = runCatching { s.catalog() }.getOrNull()
         catalog = c
         installed = runCatching { s.installed() }.getOrDefault(emptyMap())
@@ -175,24 +186,58 @@ class IndoorCatalogController(
         val s = store ?: return
         val d = downloader ?: return
         if (runningId != null) return
-        val base = catalog?.entry(id) ?: return
+        val currentCatalog = catalog
+        if (currentCatalog != null) {
+            val base = currentCatalog.entry(id) ?: return
+            runningId = id
+            cancelRequested = false
+            live[id] = IndoorCatalogState.Downloading(partials[id] ?: 0L, base.packageBytes)
+            publish()
+            job = scope.launch {
+                val result = try {
+                    withContext(io) { downloadAndInstall(s, d, id) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    IndoorCatalogState.Failed(IndoorCatalogFailure.OTHER, e.toString())
+                } finally {
+                    runningId = null
+                }
+                withContext(io) { readDisk(s) }
+                if (result == null) live.remove(id) else live[id] = result
+                publish()
+            }
+            return
+        }
         runningId = id
         cancelRequested = false
-        live[id] = IndoorCatalogState.Downloading(partials[id] ?: 0L, base.packageBytes)
+        live[id] = IndoorCatalogState.Downloading(0L, 0L)
         publish()
         job = scope.launch {
+            var hasEntry = false
             val result = try {
-                withContext(io) { downloadAndInstall(s, d, id) }
+                diskLoadJob?.join()
+                if (catalog == null) withContext(io) { readDisk(s) }
+                val base = catalog?.entry(id)
+                if (base == null || cancelRequested) {
+                    null
+                } else {
+                    hasEntry = true
+                    live[id] = IndoorCatalogState.Downloading(partials[id] ?: 0L, base.packageBytes)
+                    publish(loading = false)
+                    withContext(io) { downloadAndInstall(s, d, id) }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                hasEntry = true
                 IndoorCatalogState.Failed(IndoorCatalogFailure.OTHER, e.toString())
             } finally {
                 runningId = null
             }
-            withContext(io) { readDisk(s) }
+            if (hasEntry) withContext(io) { readDisk(s) }
             if (result == null) live.remove(id) else live[id] = result
-            publish()
+            publish(loading = false)
         }
     }
 

@@ -5,9 +5,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,11 +22,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Route
-import androidx.compose.material3.Button
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -45,8 +47,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -59,18 +70,23 @@ import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.FileImportNoticeEffect
 import de.trailscape.app.ui.UNDO_DELETE_GRACE_MS
-import de.trailscape.app.ui.components.TagPill
-import de.trailscape.app.ui.components.EmptyState
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.components.OneUiDialog
+import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.theme.LocalAtlasColors
 import de.trailscape.app.ui.theme.LocalSignalColors
+import de.trailscape.app.ui.theme.tabular
 import de.trailscape.core.Ride
-import de.trailscape.core.RideLoad
 import de.trailscape.core.RideSummary
+import de.trailscape.core.SessionIntensity
+import de.trailscape.core.planningSpeedKmh
 import java.time.LocalDate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -124,7 +140,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  *   Bodenfreiheit der schwebenden Navigationskapsel.
  */
 @Composable
-fun TourListContent(
+internal fun TourListContent(
     appViewModel: AppViewModel,
     query: String,
     onOpenDetail: (String) -> Unit,
@@ -133,6 +149,11 @@ fun TourListContent(
     onImportArchive: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    selectedRideId: String? = null,
+    showDetailSelection: Boolean = false,
+    recordAsSecondary: Boolean = showDetailSelection && selectedRideId != null,
+    kindFilter: RideKindFilter? = null,
+    onKindFilterChange: ((RideKindFilter) -> Unit)? = null,
     header: LazyListScope.() -> Unit = {},
 ) {
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
@@ -146,10 +167,20 @@ fun TourListContent(
     // Art-Filter (Alle / Draussen / Indoor); die Auswahl erscheint erst, wenn
     // es eine Indoor-Fahrt gibt. Verschwindet die letzte, gilt wieder „Alle".
     val hasIndoor = remember(rides) { rides.any { it.indoor && !it.planned } }
-    var kindName by rememberSaveable { mutableStateOf(RideKindFilter.ALL.name) }
-    val kind = if (hasIndoor) RideKindFilter.valueOf(kindName) else RideKindFilter.ALL
+    var localKindName by rememberSaveable { mutableStateOf(RideKindFilter.ALL.name) }
+    val kind = when {
+        !hasIndoor -> RideKindFilter.ALL
+        kindFilter != null -> kindFilter
+        else -> RideKindFilter.valueOf(localKindName)
+    }
+    val onSelectKind: (RideKindFilter) -> Unit = { chosen ->
+        if (onKindFilterChange != null) onKindFilterChange(chosen) else localKindName = chosen.name
+    }
     val sections = remember(rides, query, today, language, kind) {
         splitHistory(rides, query, today, ::localOfEpochMs, language, kind)
+    }
+    val planningSpeed = remember(insights.profile, rides) {
+        planningSpeedKmh(SessionIntensity.GRUNDLAGE, insights.profile, rides)
     }
 
     LazyColumn(
@@ -162,7 +193,7 @@ fun TourListContent(
 
         if (hasIndoor) {
             item(key = "art-filter") {
-                RideKindFilterRow(selected = kind, onSelect = { kindName = it.name })
+                RideKindFilterRow(selected = kind, onSelect = onSelectKind)
             }
         }
 
@@ -198,9 +229,11 @@ fun TourListContent(
                     itemsIndexed(sections.planned, key = { _, ride -> "geplant-${ride.id}" }) { index, ride ->
                         PlannedRow(
                             ride = ride,
+                            planningSpeedKmh = planningSpeed,
                             loadRide = appViewModel::loadRide,
                             first = index == 0,
                             last = index == sections.planned.lastIndex,
+                            selected = showDetailSelection && ride.id == selectedRideId,
                             onClick = { onOpenDetail(ride.id) },
                         )
                     }
@@ -215,6 +248,7 @@ fun TourListContent(
                             onImportFile = onImportFile,
                             onImportArchive = onImportArchive,
                             modifier = Modifier.padding(top = SectionEyebrowTop),
+                            recordAsSecondary = recordAsSecondary,
                         )
                     }
 
@@ -237,6 +271,7 @@ fun TourListContent(
                                 loadRide = appViewModel::loadRide,
                                 first = index == 0,
                                 last = index == group.rides.lastIndex,
+                                selected = showDetailSelection && ride.id == selectedRideId,
                                 onClick = { onOpenDetail(ride.id) },
                             )
                         }
@@ -250,17 +285,33 @@ fun TourListContent(
 /** Die Wahl „Alle · Draussen · Indoor" ueber der Verlaufsliste (siehe [RideKindFilter]). */
 @Composable
 private fun RideKindFilterRow(selected: RideKindFilter, onSelect: (RideKindFilter) -> Unit) {
-    Row(
+    val colors = MaterialTheme.colorScheme
+    val atlas = LocalAtlasColors.current
+    FlowRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = CardPadding, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         for (option in RideKindFilter.entries) {
+            val isSelected = option == selected
             FilterChip(
-                selected = option == selected,
+                selected = isSelected,
                 onClick = { onSelect(option) },
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = colors.surfaceContainerHighest,
+                    labelColor = colors.onSurface,
+                    selectedContainerColor = colors.primaryContainer,
+                    selectedLabelColor = colors.onPrimaryContainer,
+                    selectedLeadingIconColor = colors.onPrimaryContainer,
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = isSelected,
+                    borderColor = atlas.cardBorder,
+                    selectedBorderColor = colors.primary,
+                ),
                 label = {
                     Text(
                         stringResource(
@@ -322,101 +373,136 @@ private fun groupShape(first: Boolean, last: Boolean): Shape {
 }
 
 /**
- * Eine Zeile der Verlaufsliste (Zieldesign `.li`): Mini-Karte, Name in einer
- * Zeile, darunter [rideListMeta], rechts [EffortPill].
+ * Eine Zeile der Verlaufsliste (Atlas-Stil): Mini-Karte, Name, ruhige
+ * Datumszeile, darunter Laenge, Hoehenmeter und Dauer in Tabellenziffern,
+ * rechts optional die Marken (Indoor / Haerte).
  */
 @Composable
 private fun RideRow(
     ride: RideSummary,
-    load: RideLoad?,
+    load: de.trailscape.core.RideLoad?,
     loadRide: suspend (String) -> Ride?,
     first: Boolean,
     last: Boolean,
+    selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val language = LocalAppLanguage.current
+    val created = localOfEpochMs(ride.createdAt)
     val effort = rideEffort(load, ride.stats)
     HistoryRow(
         ride = ride,
-        meta = rideListMeta(localOfEpochMs(ride.createdAt), ride.stats, LocalAppLanguage.current).asString(),
+        dateLine = rideRowDateText(created, language),
+        distanceText = rideRowDistanceText(ride.stats.distanceKm, language).asString(),
+        ascentText = rideRowAscentText(ride.stats.ascentM).asString(),
+        durationText = rideRowDurationText(ride.stats.durationS, estimated = false).asString(),
         loadRide = loadRide,
         first = first,
         last = last,
+        selected = selected,
         onClick = onClick,
-        trailing = {
-            // Indoor-Fahrt (`docs/indoor.md` 10.2): Strecke und Kennzahlen
-            // wie jede Tour, dazu eine Marke, damit die virtuelle Strecke
-            // nicht fuer eine Ausfahrt gehalten wird.
-            if (ride.indoor) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TagPill(text = stringResource(R.string.indoor_app_tourlist_pill))
+        trailing = if (ride.indoor || effort != null) {
+            {
+                // Indoor-Fahrt (`docs/indoor.md` 10.2): Strecke und Kennzahlen
+                // wie jede Tour, dazu eine Marke, damit die virtuelle Strecke
+                // nicht fuer eine Ausfahrt gehalten wird.
+                if (ride.indoor) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TagPill(text = stringResource(R.string.indoor_app_tourlist_pill))
+                        effort?.let { EffortPill(it) }
+                    }
+                } else {
                     effort?.let { EffortPill(it) }
                 }
-            } else {
-                effort?.let { EffortPill(it) }
             }
+        } else {
+            null
         },
     )
 }
 
 /**
- * Eine Zeile im Abschnitt „Geplant": dieselbe Form wie [RideRow], aber mit
- * [plannedRouteMeta] („58 km · 640 Hm · erstellt 24.09.") statt Dauer und
- * Tempo, die es fuer eine nie gefahrene Route nicht gibt, und rechts der
- * Pille „Geplant" statt eines Haerte-Worts. Die Pille wiederholt die
- * Abschnittsueberschrift bewusst: Wer nach unten gescrollt hat und zurueck-
- * kommt, sieht die Ueberschrift nicht mehr, die Pille aber in jeder Zeile.
+ * Eine Zeile im Abschnitt „Geplant": dieselbe Atlas-Form wie [RideRow], mit
+ * Erstelldatum, Laenge, Hoehenmetern, geschaetzter Dauer (`~3:14 h`) und
+ * rechts der Pille „Geplant".
  */
 @Composable
 private fun PlannedRow(
     ride: RideSummary,
+    planningSpeedKmh: Double,
     loadRide: suspend (String) -> Ride?,
     first: Boolean,
     last: Boolean,
+    selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val language = LocalAppLanguage.current
+    val created = localOfEpochMs(ride.createdAt)
+    val estimated = ride.stats.durationS == null
+    val durationS = ride.stats.durationS ?: estimatedPlannedDurationS(ride.stats.distanceKm, planningSpeedKmh)
     HistoryRow(
         ride = ride,
-        meta = plannedRouteMeta(localOfEpochMs(ride.createdAt), ride.stats, LocalAppLanguage.current).asString(),
+        dateLine = plannedRowDateText(created, language).asString(),
+        distanceText = rideRowDistanceText(ride.stats.distanceKm, language, integerFrom10Km = true).asString(),
+        ascentText = rideRowAscentText(ride.stats.ascentM).asString(),
+        durationText = rideRowDurationText(durationS, estimated = estimated).asString(),
         loadRide = loadRide,
         first = first,
         last = last,
+        selected = selected,
         onClick = onClick,
         trailing = { TagPill(text = stringResource(R.string.rides_list_planned_pill)) },
     )
 }
 
 /**
- * Die gemeinsame Form von [RideRow] und [PlannedRow]. Der Name bleibt
- * einzeilig — nur so bleiben die Zeilen gleich hoch und die Liste
- * ueberfliegbar; der volle Name steht im Detail.
+ * Die gemeinsame Atlas-Zeile von [RideRow] und [PlannedRow]: Mini-Karte,
+ * Titel + Pille(n), Datumszeile und umbruchfaehige Kennzahlenreihe (Distanz,
+ * Hoehenmeter, Dauer) in Tabellenziffern.
  */
 @Composable
 private fun HistoryRow(
     ride: RideSummary,
-    meta: String,
+    dateLine: String,
+    distanceText: String,
+    ascentText: String,
+    durationText: String,
     loadRide: suspend (String) -> Ride?,
     first: Boolean,
     last: Boolean,
+    selected: Boolean,
     onClick: () -> Unit,
-    trailing: @Composable () -> Unit,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
+    val atlas = LocalAtlasColors.current
+    val fontScale = LocalDensity.current.fontScale
+    val containerColor = if (selected) {
+        colors.primaryContainer.copy(alpha = 0.45f)
+    } else {
+        colors.surfaceContainerHighest
+    }
+    val borderColor = if (selected) colors.primary else atlas.cardBorder
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(groupShape(first, last))
-            // Dieselbe Flaeche wie jede Karte des Themes (Material-Default
-            // von `Card`), damit die Zeilen zusammen als eine Karte lesen.
-            .background(CardDefaults.cardColors().containerColor)
+            .background(containerColor)
+            .groupBorder(
+                first = first,
+                last = last,
+                fullOutline = selected,
+                color = borderColor,
+            )
             .clickable(onClick = onClick),
     ) {
-        if (!first) {
+        if (!first && !selected) {
             HorizontalDivider(
-                color = colors.outlineVariant,
+                color = atlas.cardBorder,
                 modifier = Modifier.padding(horizontal = CardPadding),
             )
         }
@@ -427,23 +513,202 @@ private fun HistoryRow(
         ) {
             RideThumbnail(ride = ride, loadRide = loadRide)
             Column(modifier = Modifier.weight(1f)) {
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val stackPillsBelow = trailing != null && fontScale > 1.15f && maxWidth < 300.dp
+                    if (stackPillsBelow) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = ride.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                trailing()
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = ride.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            trailing?.invoke()
+                        }
+                    }
+                }
                 Text(
-                    text = ride.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = meta,
-                    // Tabellenziffern, damit Datum und km untereinander ruhig
-                    // stehen (Repo-Muster, siehe `ui/map/RideCompactBar.kt`).
-                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                    text = dateLine,
+                    style = MaterialTheme.typography.bodySmall,
                     color = colors.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                FlowRow(
+                    modifier = Modifier
+                        .padding(top = 4.dp)
+                        .semantics(mergeDescendants = true) {},
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = distanceText,
+                        style = MaterialTheme.typography.labelLarge.tabular(),
+                        color = colors.onSurface,
+                    )
+                    Text(
+                        text = ascentText,
+                        style = MaterialTheme.typography.labelLarge.tabular(),
+                        color = colors.onSurfaceVariant,
+                    )
+                    Text(
+                        text = durationText,
+                        style = MaterialTheme.typography.labelLarge.tabular(),
+                        color = colors.onSurface,
+                    )
+                }
             }
-            trailing()
+        }
+    }
+}
+
+/**
+ * Zeichnet die feine 1-dp-Atlas-Kante einer Gruppenzeile ohne doppelt
+ * gestrichene Innenlinien (bei ausgewaehlter Zeile im Master-Detail den vollen
+ * Rahmen in Akzentfarbe).
+ */
+private fun Modifier.groupBorder(
+    first: Boolean,
+    last: Boolean,
+    fullOutline: Boolean,
+    color: Color,
+): Modifier = drawWithContent {
+    drawContent()
+    val strokePx = 1.dp.toPx()
+    val half = strokePx / 2f
+    val w = size.width
+    val h = size.height
+    val radius = 20.dp.toPx().coerceAtMost(minOf(w, h) / 2f)
+    val style = Stroke(width = strokePx)
+
+    when {
+        (first && last) || fullOutline -> {
+            val topR = if (first) radius else 0f
+            val bottomR = if (last) radius else 0f
+            if (topR > 0f && bottomR > 0f && topR == bottomR) {
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(half, half),
+                    size = Size(w - strokePx, h - strokePx),
+                    cornerRadius = CornerRadius((radius - half).coerceAtLeast(0f)),
+                    style = style,
+                )
+            } else {
+                val path = Path().apply {
+                    moveTo(half, if (first) radius else half)
+                    if (first) {
+                        arcTo(
+                            Rect(half, half, 2 * radius - half, 2 * radius - half),
+                            startAngleDegrees = 180f,
+                            sweepAngleDegrees = 90f,
+                            forceMoveTo = false,
+                        )
+                        lineTo(w - radius, half)
+                        arcTo(
+                            Rect(w - 2 * radius + half, half, w - half, 2 * radius - half),
+                            startAngleDegrees = 270f,
+                            sweepAngleDegrees = 90f,
+                            forceMoveTo = false,
+                        )
+                    } else {
+                        lineTo(half, half)
+                        lineTo(w - half, half)
+                    }
+                    if (last) {
+                        lineTo(w - half, h - radius)
+                        arcTo(
+                            Rect(w - 2 * radius + half, h - 2 * radius + half, w - half, h - half),
+                            startAngleDegrees = 0f,
+                            sweepAngleDegrees = 90f,
+                            forceMoveTo = false,
+                        )
+                        lineTo(radius, h - half)
+                        arcTo(
+                            Rect(half, h - 2 * radius + half, 2 * radius - half, h - half),
+                            startAngleDegrees = 90f,
+                            sweepAngleDegrees = 90f,
+                            forceMoveTo = false,
+                        )
+                    } else {
+                        lineTo(w - half, h - half)
+                        lineTo(half, h - half)
+                    }
+                    close()
+                }
+                drawPath(path = path, color = color, style = style)
+            }
+        }
+
+        first -> {
+            val path = Path().apply {
+                moveTo(half, h)
+                lineTo(half, radius)
+                arcTo(
+                    Rect(half, half, 2 * radius - half, 2 * radius - half),
+                    startAngleDegrees = 180f,
+                    sweepAngleDegrees = 90f,
+                    forceMoveTo = false,
+                )
+                lineTo(w - radius, half)
+                arcTo(
+                    Rect(w - 2 * radius + half, half, w - half, 2 * radius - half),
+                    startAngleDegrees = 270f,
+                    sweepAngleDegrees = 90f,
+                    forceMoveTo = false,
+                )
+                lineTo(w - half, h)
+            }
+            drawPath(path = path, color = color, style = style)
+        }
+
+        last -> {
+            val path = Path().apply {
+                moveTo(half, 0f)
+                lineTo(half, h - radius)
+                arcTo(
+                    Rect(half, h - 2 * radius + half, 2 * radius - half, h - half),
+                    startAngleDegrees = 180f,
+                    sweepAngleDegrees = -90f,
+                    forceMoveTo = false,
+                )
+                lineTo(w - radius, h - half)
+                arcTo(
+                    Rect(w - 2 * radius + half, h - 2 * radius + half, w - half, h - half),
+                    startAngleDegrees = 90f,
+                    sweepAngleDegrees = -90f,
+                    forceMoveTo = false,
+                )
+                lineTo(w - half, 0f)
+            }
+            drawPath(path = path, color = color, style = style)
+        }
+
+        else -> {
+            drawLine(color = color, start = Offset(half, 0f), end = Offset(half, h), strokeWidth = strokePx)
+            drawLine(color = color, start = Offset(w - half, 0f), end = Offset(w - half, h), strokeWidth = strokePx)
         }
     }
 }
@@ -521,27 +786,47 @@ private fun RidesEmptyState(
     onImportFile: () -> Unit,
     onImportArchive: () -> Unit,
     modifier: Modifier = Modifier,
+    recordAsSecondary: Boolean = false,
 ) {
     var importMenuOpen by remember { mutableStateOf(false) }
-    EmptyState(
-        title = title,
-        body = stringResource(R.string.rides_list_empty_body),
-        modifier = modifier,
-        actions = {
-            Button(onClick = onRecord) { Text(stringResource(R.string.rides_list_empty_record_action)) }
-            Box {
-                TextButton(onClick = { importMenuOpen = true }) {
-                    Text(stringResource(R.string.rides_list_empty_import_action))
+    AtlasCard(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(CardPadding)) {
+            Text(text = title, style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.rides_list_empty_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (recordAsSecondary) {
+                    TrailscapeSecondaryButton(onClick = onRecord) {
+                        Text(stringResource(R.string.rides_list_empty_record_action))
+                    }
+                } else {
+                    TrailscapePrimaryButton(onClick = onRecord) {
+                        Text(stringResource(R.string.rides_list_empty_record_action))
+                    }
                 }
-                ImportMenu(
-                    expanded = importMenuOpen,
-                    onDismiss = { importMenuOpen = false },
-                    onImportFile = onImportFile,
-                    onImportArchive = onImportArchive,
-                )
+                Box {
+                    TextButton(onClick = { importMenuOpen = true }) {
+                        Text(stringResource(R.string.rides_list_empty_import_action))
+                    }
+                    ImportMenu(
+                        expanded = importMenuOpen,
+                        onDismiss = { importMenuOpen = false },
+                        onImportFile = onImportFile,
+                        onImportArchive = onImportArchive,
+                    )
+                }
             }
-        },
-    )
+        }
+    }
 }
 
 /**
@@ -579,6 +864,7 @@ fun RideDetailHost(
     appViewModel: AppViewModel,
     onBack: () -> Unit,
     onDelete: (String) -> Unit,
+    inline: Boolean = false,
 ) {
 
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
@@ -598,18 +884,20 @@ fun RideDetailHost(
     // Die Trainingslast kann auf dem Tour-Bild stehen (ohne Puls als vierte Zahl).
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
 
-    LaunchedEffect(appViewModel) {
-        appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
+    if (!inline) {
+        LaunchedEffect(appViewModel) {
+            appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
+        }
+        // Wird eine per Teilen importierte Tour direkt hier geoeffnet, gehoert
+        // die Ergebnismeldung hierher (siehe RidesScreen).
+        FileImportNoticeEffect(appViewModel, snackbarHostState)
     }
-    // Wird eine per Teilen importierte Tour direkt hier geoeffnet, gehoert
-    // die Ergebnismeldung hierher (siehe RidesScreen).
-    FileImportNoticeEffect(appViewModel, snackbarHostState)
 
     LaunchedEffect(summary) {
         if (summary == null) onBack()
     }
 
-    BackHandler(onBack = onBack)
+    BackHandler(enabled = !inline, onBack = onBack)
 
     val loaded = ride ?: return
     val load = insights.rideLoads[loaded.id]?.takeIf { it.available }?.load
@@ -617,8 +905,9 @@ fun RideDetailHost(
     RideDetailScreen(
         ride = loaded,
         appViewModel = appViewModel,
-        snackbarHostState = snackbarHostState,
-        onBack = onBack,
+        snackbarHostState = if (inline) null else snackbarHostState,
+        onBack = if (inline) null else onBack,
+        inline = inline,
         // Beide Wege fuehren auf die Karte; das Detail schliesst dabei, sonst
         // stuende es beim Zurueckkommen in den Verlauf wieder offen da.
         onShowOnMap = {

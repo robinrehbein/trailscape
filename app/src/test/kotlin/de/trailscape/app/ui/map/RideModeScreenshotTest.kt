@@ -1,23 +1,35 @@
 package de.trailscape.app.ui.map
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import de.trailscape.app.R
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
 import de.trailscape.app.ui.theme.TrailscapeTheme
+import de.trailscape.app.ui.theme.windowLayoutClassFor
 import de.trailscape.core.LiveKachel
 import de.trailscape.core.LiveSensorAnzeige
 import de.trailscape.core.PulsQuelle
@@ -67,25 +79,37 @@ class RideModeScreenshotTest {
         name: String,
         sensoren: LiveSensorAnzeige = LiveSensorAnzeige.LEER,
         zielZeile: ZielZeile? = null,
+        fontScale: Float = 1.0f,
+        useDialog: Boolean = true,
+        mapContent: (@Composable (Modifier) -> Unit)? = null,
     ) {
         compose.setContent {
-            TrailscapeTheme {
-                ProvideTestLanguage {
-                    RideModeScreen(
-                        speedKmh = if (paused) 0.0 else 23.4,
-                        distanceKm = 12.3,
-                        elapsedS = 2710,
-                        ascentM = 184.0,
-                        paused = paused,
-                        navigation = nav,
-                        onTogglePause = {},
-                        onStop = {},
-                        onClose = {},
-                        onShowMap = {},
-                        autoPaused = paused,
-                        sensoren = sensoren,
-                        zielZeile = zielZeile,
-                    )
+            val density = LocalDensity.current
+            val layoutClass = windowLayoutClassFor(LocalConfiguration.current.screenWidthDp)
+            CompositionLocalProvider(
+                LocalWindowLayoutClass provides layoutClass,
+                LocalDensity provides Density(density.density, fontScale = fontScale),
+            ) {
+                TrailscapeTheme {
+                    ProvideTestLanguage {
+                        RideModeScreen(
+                            speedKmh = if (paused) 0.0 else 23.4,
+                            distanceKm = 12.3,
+                            elapsedS = 2710,
+                            ascentM = 184.0,
+                            paused = paused,
+                            navigation = nav,
+                            onTogglePause = {},
+                            onStop = {},
+                            onClose = {},
+                            onShowMap = {},
+                            autoPaused = paused,
+                            sensoren = sensoren,
+                            zielZeile = zielZeile,
+                            useDialog = useDialog,
+                            mapContent = mapContent,
+                        )
+                    }
                 }
             }
         }
@@ -345,5 +369,177 @@ class RideModeScreenshotTest {
         }
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/$name.png")
+    }
+
+    private fun mockMapContent(label: String): @Composable (Modifier) -> Unit = { modifier ->
+        Box(
+            modifier = modifier.background(Color(0xFF1A2820)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(text = label, color = Color(0xFF9CD3B0))
+        }
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.PHONE_NARROW_DE)
+    fun fahrmodusSchmalGrosseSchrift() {
+        TestLocales.assertTestLocale(AppLanguage.DE)
+        fahrmodus(
+            paused = true,
+            nav = navigation.copy(naechsteKurve = null, naechsteKurveM = null),
+            name = "79-fahrmodus-360-13x-de",
+            sensoren = dreiSensoren,
+            zielZeile = ZielZeile.BestweiteRest(7.6),
+            fontScale = 1.3f,
+        )
+        val context = compose.activity
+        compose.onNodeWithText(context.getString(R.string.map_ride_status_auto_paused), useUnmergedTree = true).assertExists()
+        compose.onNodeWithText(context.getString(R.string.map_ride_show_map_action), useUnmergedTree = true).assertExists()
+        compose.onNodeWithText(context.getString(R.string.map_ride_resume_action), useUnmergedTree = true).assertExists()
+        compose.onNodeWithText(context.getString(R.string.map_ride_end_action), useUnmergedTree = true).assertExists()
+        compose.onNodeWithText(context.getString(R.string.map_ride_end_hold_hint), useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.PHONE_NARROW_EN)
+    fun fahrmodusSchmalGrosseSchriftEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        val context = compose.activity
+        fahrmodus(
+            paused = true,
+            nav = navigation.copy(
+                label = context.getString(R.string.map_screen_planned_route_label),
+                naechsteKurve = null,
+                naechsteKurveM = null,
+            ),
+            name = "79-fahrmodus-360-13x-en",
+            sensoren = dreiSensoren,
+            zielZeile = ZielZeile.WochenzielRest(0.34),
+            fontScale = 1.3f,
+        )
+        compose.onNodeWithText(context.getString(R.string.map_ride_status_auto_paused), useUnmergedTree = true).assertExists()
+        compose.onNodeWithText(context.getString(R.string.map_ride_show_map_action), useUnmergedTree = true).assertExists()
+        compose.onNodeWithText(context.getString(R.string.map_ride_resume_action), useUnmergedTree = true).assertExists()
+        compose.onNodeWithText(context.getString(R.string.map_ride_end_action), useUnmergedTree = true).assertExists()
+        compose.onNodeWithText(context.getString(R.string.map_ride_end_hold_hint), useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.S25_DE)
+    fun fahrmodusS25GrosseSchrift() {
+        TestLocales.assertTestLocale(AppLanguage.DE)
+        fahrmodus(
+            paused = false,
+            nav = navigation,
+            name = "80-fahrmodus-412-13x-de",
+            sensoren = dreiSensoren,
+            zielZeile = ZielZeile.BestweiteRest(7.6),
+            fontScale = 1.3f,
+        )
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.S25_EN)
+    fun fahrmodusS25GrosseSchriftEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        val context = compose.activity
+        fahrmodus(
+            paused = false,
+            nav = navigation.copy(label = context.getString(R.string.map_screen_planned_route_label)),
+            name = "80-fahrmodus-412-13x-en",
+            sensoren = dreiSensoren,
+            zielZeile = ZielZeile.WochenzielRest(0.34),
+            fontScale = 1.3f,
+        )
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_PORTRAIT_DE)
+    fun fahrmodusTabS11Hochkant() {
+        TestLocales.assertTestLocale(AppLanguage.DE)
+        fahrmodus(
+            paused = false,
+            nav = navigation,
+            name = "81-fahrmodus-tab-portrait-de",
+            sensoren = dreiSensoren,
+            zielZeile = ZielZeile.BestweiteRest(7.6),
+        )
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_PORTRAIT_EN)
+    fun fahrmodusTabS11HochkantEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        val context = compose.activity
+        fahrmodus(
+            paused = true,
+            nav = navigation.copy(label = context.getString(R.string.map_screen_planned_route_label)),
+            name = "81-fahrmodus-tab-portrait-en",
+            sensoren = dreiSensoren,
+            zielZeile = ZielZeile.WochenzielRest(0.34),
+        )
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_LANDSCAPE_DE)
+    fun fahrmodusTabS11QuerMitKarte() {
+        TestLocales.assertTestLocale(AppLanguage.DE)
+        fahrmodus(
+            paused = false,
+            nav = navigation,
+            name = "82-fahrmodus-tab-landscape-map-de",
+            sensoren = dreiSensoren,
+            zielZeile = ZielZeile.BestweiteRest(7.6),
+            useDialog = false,
+            mapContent = mockMapContent("Live-Karte"),
+        )
+        compose.onNodeWithText("Live-Karte", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_LANDSCAPE_EN)
+    fun fahrmodusTabS11QuerMitKarteEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        val context = compose.activity
+        fahrmodus(
+            paused = true,
+            nav = navigation.copy(label = context.getString(R.string.map_screen_planned_route_label)),
+            name = "82-fahrmodus-tab-landscape-map-en",
+            sensoren = dreiSensoren,
+            zielZeile = ZielZeile.WochenzielRest(0.34),
+            useDialog = false,
+            mapContent = mockMapContent("Live Map"),
+        )
+        compose.onNodeWithText("Live Map", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_LANDSCAPE_DE)
+    fun fahrmodusTabS11QuerOhneKarte() {
+        TestLocales.assertTestLocale(AppLanguage.DE)
+        fahrmodus(
+            paused = false,
+            nav = navigation.copy(offRoute = true),
+            name = "83-fahrmodus-tab-landscape-offroute-de",
+            sensoren = dreiSensoren,
+            zielZeile = ZielZeile.BestweiteRest(7.6),
+            mapContent = null,
+        )
+        val context = compose.activity
+        compose.onNodeWithText(context.getString(R.string.map_nav_off_route_title), useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_LANDSCAPE_EN)
+    fun fahrmodusTabS11QuerOhneNavigationEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        fahrmodus(
+            paused = true,
+            nav = null,
+            name = "83-fahrmodus-tab-landscape-nonav-en",
+            sensoren = LiveSensorAnzeige(LiveKachel(131, null), PulsQuelle.UHR, null, null),
+            zielZeile = ZielZeile.WochenzielRest(0.34),
+            mapContent = null,
+        )
     }
 }

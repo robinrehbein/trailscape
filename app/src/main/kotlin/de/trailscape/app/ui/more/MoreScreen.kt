@@ -1,5 +1,8 @@
 package de.trailscape.app.ui.more
 
+import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
@@ -9,6 +12,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,19 +24,18 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -43,14 +46,20 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.data.trailscapePrefs
 import de.trailscape.app.i18n.AppLocale
 import de.trailscape.app.i18n.LocalAppLanguage
 import de.trailscape.app.i18n.asString
+import de.trailscape.app.record.PREF_AUTO_PAUSE
+import de.trailscape.app.record.PREF_VOICE
 import de.trailscape.app.record.autoPauseAktiviert
 import de.trailscape.app.record.sprachansagenAktiviert
+import de.trailscape.app.routing.SegmentDownloads
+import de.trailscape.app.sensors.BleSensors
 import de.trailscape.app.strava.StravaConfig
 import de.trailscape.app.strava.StravaServices
 import de.trailscape.app.ui.AppTab
@@ -60,15 +69,23 @@ import de.trailscape.app.ui.IndoorDestination
 import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
+import de.trailscape.app.ui.components.TwoPaneLayout
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.LocalSignalColors
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
 import de.trailscape.app.ui.theme.M3Transitions
+import de.trailscape.app.ui.theme.TabletCardGap
+import de.trailscape.app.ui.theme.TabletScreenPadding
+import de.trailscape.app.ui.theme.WindowLayoutClass
+import de.trailscape.app.ui.theme.useTwoPaneLayout
+import de.trailscape.core.healthSyncStorageKey
 import java.time.LocalDateTime
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.withContext
 
 /**
@@ -128,9 +145,15 @@ import kotlinx.coroutines.withContext
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
+fun MoreScreen(
+    appViewModel: AppViewModel,
+    onBack: (() -> Unit)? = null,
+    onOpenIndoorSettings: () -> Unit = { appViewModel.requestIndoor(IndoorDestination.SETTINGS) },
+) {
     val snackbarHostState = remember { SnackbarHostState() }
     val requestedSection by appViewModel.pendingMoreSection.collectAsStateWithLifecycle()
+    val layoutClass = LocalWindowLayoutClass.current
+    val isExpanded = useTwoPaneLayout(layoutClass)
 
     val listState = rememberLazyListState()
     // Ein anstehendes Sprungziel gilt schon fuer das erste Bild — sonst
@@ -141,6 +164,7 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
     // Ob die aktuelle Seite per Sprungziel geoeffnet wurde — dann fuehrt
     // Zurueck aus den Einstellungen hinaus statt in die Liste.
     var arrivedDirectly by rememberSaveable { mutableStateOf(page != null) }
+    var offlineRefreshTick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
@@ -166,13 +190,14 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
         }
         arrivedDirectly = false
     }
-    BackHandler(enabled = page != null) { leavePage() }
+    BackHandler(enabled = !isExpanded && page != null) { leavePage() }
 
     val density = LocalDensity.current
     Scaffold(
         // Siehe TourList.kt: Die aeussere Huelle (TrailscapeApp) hat die
         // System-Insets bereits aufgeloest — hier duerfen sie nicht nochmal
         // aufschlagen.
+        containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = {
             SnackbarHost(
@@ -183,53 +208,24 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
             )
         },
     ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            // M3 „Forward and backward": Liste → Seite gleitet nach links,
-            // zurueck nach rechts; die Kopfzeile gehoert zur Seite und
-            // gleitet mit. Wer direkt auf eine Seite gesprungen ist, kommt
-            // schon mit dem Uebergang des `NavHost` herein — ein zweiter
-            // Schub waere doppelte Bewegung.
-            AnimatedContent(
-                targetState = page,
-                transitionSpec = {
-                    if (arrivedDirectly && initialState == null) {
-                        EnterTransition.None togetherWith ExitTransition.None
-                    } else {
-                        M3Transitions.sharedAxisX(forward = targetState != null, density)
-                    }
-                },
-                label = "Einstellungsseite",
+        if (isExpanded) {
+            val activePage = page ?: SettingsPage.PROFILE
+            TwoPaneLayout(
+                primaryWeight = 0.40f,
+                gap = TabletCardGap,
                 modifier = Modifier
-                    .fillMaxHeight()
-                    .widthIn(max = ContentMaxWidth)
-                    .fillMaxWidth(),
-            ) { current ->
-                Column(modifier = Modifier.fillMaxSize()) {
-                    // Dieselbe Kopfzeile wie auf den Tabs (Fuehrung
-                    // „Klartext"): „‹ Zurück" bzw. „‹ Einstellungen" oben,
-                    // darunter der Titel.
-                    ScreenHeader(
-                        title = current?.let { stringResource(it.titleRes) }
-                            ?: stringResource(R.string.more_screen_title),
-                        backLabel = if (current != null && !arrivedDirectly) {
-                            stringResource(R.string.more_screen_title)
-                        } else {
-                            stringResource(R.string.common_action_back)
-                        },
-                        onBack = if (current != null) ::leavePage else onBack,
-                        modifier = Modifier.padding(
-                            start = ScreenPadding,
-                            end = ScreenPadding,
-                            top = ScreenPadding,
-                        ),
-                    )
-                    Box(modifier = Modifier.weight(1f)) {
-                        if (current == null) {
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(horizontal = TabletScreenPadding),
+                primary = {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        ScreenHeader(
+                            title = stringResource(R.string.more_screen_title),
+                            backLabel = stringResource(R.string.common_action_back),
+                            onBack = onBack,
+                            modifier = Modifier.padding(top = TabletScreenPadding),
+                        )
+                        Box(modifier = Modifier.weight(1f)) {
                             SettingsList(
                                 appViewModel = appViewModel,
                                 listState = listState,
@@ -237,9 +233,118 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
                                     arrivedDirectly = false
                                     page = it
                                 },
+                                selectedPage = activePage,
+                                onOpenIndoorSettings = onOpenIndoorSettings,
+                                offlineRefreshTick = offlineRefreshTick,
+                                contentPadding = PaddingValues(
+                                    top = CardGap,
+                                    bottom = TabletScreenPadding + LocalFloatingNavigationBarSpace.current,
+                                ),
                             )
+                        }
+                    }
+                },
+                secondary = {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        ScreenHeader(
+                            title = stringResource(activePage.titleRes),
+                            onBack = null,
+                            modifier = Modifier.padding(top = TabletScreenPadding),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            contentAlignment = Alignment.TopStart,
+                        ) {
+                            key(activePage) {
+                                SettingsPageContent(
+                                    page = activePage,
+                                    appViewModel = appViewModel,
+                                    modifier = Modifier
+                                        .widthIn(max = ContentMaxWidth)
+                                        .fillMaxWidth(),
+                                    contentPadding = PaddingValues(
+                                        top = CardGap,
+                                        bottom = TabletScreenPadding + LocalFloatingNavigationBarSpace.current,
+                                    ),
+                                    onOfflineChanged = { offlineRefreshTick++ },
+                                )
+                            }
+                        }
+                    }
+                },
+            )
+        } else {
+            val outerPadding = if (layoutClass == WindowLayoutClass.Compact) {
+                ScreenPadding
+            } else {
+                TabletScreenPadding
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                // M3 „Forward and backward": Liste → Seite gleitet nach links,
+                // zurueck nach rechts; die Kopfzeile gehoert zur Seite und
+                // gleitet mit. Wer direkt auf eine Seite gesprungen ist, kommt
+                // schon mit dem Uebergang des `NavHost` herein — ein zweiter
+                // Schub waere doppelte Bewegung.
+                AnimatedContent(
+                    targetState = page,
+                    transitionSpec = {
+                        if (arrivedDirectly && initialState == null) {
+                            EnterTransition.None togetherWith ExitTransition.None
                         } else {
-                            SettingsPageContent(page = current, appViewModel = appViewModel)
+                            M3Transitions.sharedAxisX(forward = targetState != null, density)
+                        }
+                    },
+                    label = "Einstellungsseite",
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .widthIn(max = ContentMaxWidth)
+                        .fillMaxWidth(),
+                ) { current ->
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Dieselbe Kopfzeile wie auf den Tabs (Fuehrung
+                        // „Klartext"): „‹ Zurück" bzw. „‹ Einstellungen" oben,
+                        // darunter der Titel.
+                        ScreenHeader(
+                            title = current?.let { stringResource(it.titleRes) }
+                                ?: stringResource(R.string.more_screen_title),
+                            backLabel = if (current != null && !arrivedDirectly) {
+                                stringResource(R.string.more_screen_title)
+                            } else {
+                                stringResource(R.string.common_action_back)
+                            },
+                            onBack = if (current != null) ::leavePage else onBack,
+                            modifier = Modifier.padding(
+                                start = outerPadding,
+                                end = outerPadding,
+                                top = outerPadding,
+                            ),
+                        )
+                        Box(modifier = Modifier.weight(1f)) {
+                            if (current == null) {
+                                SettingsList(
+                                    appViewModel = appViewModel,
+                                    listState = listState,
+                                    onOpen = {
+                                        arrivedDirectly = false
+                                        page = it
+                                    },
+                                    onOpenIndoorSettings = onOpenIndoorSettings,
+                                    offlineRefreshTick = offlineRefreshTick,
+                                )
+                            } else {
+                                SettingsPageContent(
+                                    page = current,
+                                    appViewModel = appViewModel,
+                                    onOfflineChanged = { offlineRefreshTick++ },
+                                )
+                            }
                         }
                     }
                 }
@@ -301,6 +406,10 @@ private fun SettingsList(
     appViewModel: AppViewModel,
     listState: LazyListState,
     onOpen: (SettingsPage) -> Unit,
+    selectedPage: SettingsPage? = null,
+    onOpenIndoorSettings: () -> Unit = { appViewModel.requestIndoor(IndoorDestination.SETTINGS) },
+    offlineRefreshTick: Int = 0,
+    contentPadding: PaddingValues = screenContentPadding(),
 ) {
     val context = LocalContext.current
     val language = LocalAppLanguage.current
@@ -308,14 +417,58 @@ private fun SettingsList(
     val profile by appViewModel.profile.collectAsStateWithLifecycle()
     val profileConfirmed by appViewModel.profileConfirmed.collectAsStateWithLifecycle()
     val health by appViewModel.healthConnection.collectAsStateWithLifecycle()
+    val lastSyncReport by appViewModel.lastSyncReport.collectAsStateWithLifecycle()
     val reminders by appViewModel.reminderSettings.collectAsStateWithLifecycle()
     val syncConfig by appViewModel.syncConfig.collectAsStateWithLifecycle()
 
-    val recordingStatus = remember {
+    val prefs = remember(context) { trailscapePrefs(context) }
+    var prefsTick by remember { mutableIntStateOf(0) }
+    var healthRefreshTick by remember { mutableIntStateOf(0) }
+    var localOfflineRefreshTick by remember { mutableIntStateOf(0) }
+
+    DisposableEffect(prefs) {
+        val mainHandler = Handler(Looper.getMainLooper())
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            fun bump() {
+                when (key) {
+                    null -> {
+                        prefsTick++
+                        healthRefreshTick++
+                    }
+                    PREF_AUTO_PAUSE,
+                    PREF_VOICE,
+                    PREF_LAST_BACKUP_AT,
+                    BleSensors.PREF_BLE_SENSORS,
+                    -> prefsTick++
+                    healthSyncStorageKey -> healthRefreshTick++
+                }
+            }
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                bump()
+            } else {
+                mainHandler.post { bump() }
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    LifecycleResumeEffect(Unit) {
+        prefsTick++
+        healthRefreshTick++
+        localOfflineRefreshTick++
+        onPauseOrDispose { }
+    }
+
+    val segmentDownloadStatus by remember(context) {
+        runCatching { SegmentDownloads.statusFlow(context) }.getOrNull() ?: emptyFlow()
+    }.collectAsStateWithLifecycle(initialValue = null)
+
+    val recordingStatus = remember(prefsTick) {
         recordingStatusText(autoPauseAktiviert(context), sprachansagenAktiviert(context))
     }
-    val lastBackupAt = remember { lastBackupAt(context) }
-    val sensorsStatus = remember { sensorsListStatus(context) }
+    val lastBackupAt = remember(prefsTick) { lastBackupAt(context) }
+    val sensorsStatus = remember(prefsTick) { sensorsListStatus(context) }
     var lastHealthImport by remember { mutableStateOf<LocalDateTime?>(null) }
     var offlineStatus by remember { mutableStateOf(offlineStatusText(null, null, 0L, language)) }
     val versionName = remember {
@@ -324,12 +477,19 @@ private fun SettingsList(
         }.getOrNull()
     } ?: stringResource(R.string.common_unknown)
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(health, lastSyncReport, healthRefreshTick) {
         lastHealthImport = runCatching {
             withContext(Dispatchers.IO) { appViewModel.healthSync.lastImportAt() }
         }.getOrNull()
     }
-    LaunchedEffect(language) {
+    LaunchedEffect(
+        language,
+        selectedPage,
+        offlineRefreshTick,
+        localOfflineRefreshTick,
+        segmentDownloadStatus?.finished,
+        segmentDownloadStatus?.fileName,
+    ) {
         // Beide Bestaende getrennt abfragen: Ist der Kartenspeicher gerade
         // nicht lesbar, soll die Zahl der Routing-Kacheln trotzdem erscheinen.
         val maps = runCatching { offlineMapsSummary(context) }.getOrNull()
@@ -347,7 +507,7 @@ private fun SettingsList(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = screenContentPadding(),
+        contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(CardGap),
     ) {
         // Ganz oben und nur, wenn es wirklich etwas Neues gibt: Die App
@@ -368,12 +528,14 @@ private fun SettingsList(
                     title = stringResource(SettingsPage.PROFILE.titleRes),
                     status = profileStatusText(profile, profileConfirmed, language).asString(),
                     onClick = { onOpen(SettingsPage.PROFILE) },
+                    selected = selectedPage == SettingsPage.PROFILE,
                 )
                 ListDivider()
                 SettingsNavRow(
                     title = stringResource(SettingsPage.HEALTH.titleRes),
                     status = healthStatusText(health, lastHealthImport, language).asString(),
                     onClick = { onOpen(SettingsPage.HEALTH) },
+                    selected = selectedPage == SettingsPage.HEALTH,
                 )
             }
         }
@@ -384,6 +546,7 @@ private fun SettingsList(
                     title = stringResource(SettingsPage.SENSORS.titleRes),
                     status = sensorsStatus,
                     onClick = { onOpen(SettingsPage.SENSORS) },
+                    selected = selectedPage == SettingsPage.SENSORS,
                 )
             }
         }
@@ -394,6 +557,7 @@ private fun SettingsList(
                     title = stringResource(SettingsPage.RECORDING.titleRes),
                     status = recordingStatus.asString(),
                     onClick = { onOpen(SettingsPage.RECORDING) },
+                    selected = selectedPage == SettingsPage.RECORDING,
                 )
                 ListDivider()
                 // Indoor ist keine Seite dieses Bildschirms, sondern ein
@@ -407,13 +571,14 @@ private fun SettingsList(
                 SettingsNavRow(
                     title = stringResource(R.string.more_list_indoor_title),
                     status = stringResource(R.string.more_list_indoor_status),
-                    onClick = { appViewModel.requestIndoor(IndoorDestination.SETTINGS) },
+                    onClick = onOpenIndoorSettings,
                 )
                 ListDivider()
                 SettingsNavRow(
                     title = stringResource(SettingsPage.REMINDERS.titleRes),
                     status = reminderStatusText(reminders).joinedStatus(),
                     onClick = { onOpen(SettingsPage.REMINDERS) },
+                    selected = selectedPage == SettingsPage.REMINDERS,
                 )
             }
         }
@@ -433,12 +598,14 @@ private fun SettingsList(
                         Color.Unspecified
                     },
                     onClick = { onOpen(SettingsPage.BACKUP) },
+                    selected = selectedPage == SettingsPage.BACKUP,
                 )
                 ListDivider()
                 SettingsNavRow(
                     title = stringResource(SettingsPage.OFFLINE.titleRes),
                     status = offlineStatus.joinedStatus(),
                     onClick = { onOpen(SettingsPage.OFFLINE) },
+                    selected = selectedPage == SettingsPage.OFFLINE,
                 )
                 // Strava steht nur da, wenn der Build es kann — sonst gibt es
                 // die Zeile schlicht nicht (siehe StravaConfig).
@@ -456,6 +623,7 @@ private fun SettingsList(
                             Color.Unspecified
                         },
                         onClick = { onOpen(SettingsPage.STRAVA) },
+                        selected = selectedPage == SettingsPage.STRAVA,
                     )
                 }
                 ListDivider()
@@ -463,6 +631,7 @@ private fun SettingsList(
                     title = stringResource(SettingsPage.SYNC.titleRes),
                     status = syncStatusText(syncConfig).asString(),
                     onClick = { onOpen(SettingsPage.SYNC) },
+                    selected = selectedPage == SettingsPage.SYNC,
                 )
             }
         }
@@ -473,12 +642,14 @@ private fun SettingsList(
                     title = stringResource(SettingsPage.LANGUAGE.titleRes),
                     status = languageStatusAnnotated(AppLocale.preference(context), LocalAppLanguage.current),
                     onClick = { onOpen(SettingsPage.LANGUAGE) },
+                    selected = selectedPage == SettingsPage.LANGUAGE,
                 )
                 ListDivider()
                 SettingsNavRow(
                     title = stringResource(SettingsPage.ABOUT.titleRes),
                     status = stringResource(R.string.more_list_about_status, versionName),
                     onClick = { onOpen(SettingsPage.ABOUT) },
+                    selected = selectedPage == SettingsPage.ABOUT,
                 )
             }
         }
@@ -490,12 +661,18 @@ private fun SettingsList(
  * ([SettingsSection]) gefasst. Die Seite scrollt als Ganzes.
  */
 @Composable
-private fun SettingsPageContent(page: SettingsPage, appViewModel: AppViewModel) {
+private fun SettingsPageContent(
+    page: SettingsPage,
+    appViewModel: AppViewModel,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = screenContentPadding(),
+    onOfflineChanged: () -> Unit = {},
+) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(screenContentPadding()),
+            .padding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(CardGap),
     ) {
         when (page) {
@@ -524,10 +701,14 @@ private fun SettingsPageContent(page: SettingsPage, appViewModel: AppViewModel) 
                     OfflineMapsCardContent(
                         onMessage = appViewModel::showMessage,
                         onOpenMap = { appViewModel.requestTab(AppTab.MAP) },
+                        onRegionsChanged = onOfflineChanged,
                     )
                 }
                 SettingsSection(label = stringResource(R.string.more_offline_section_routing)) {
-                    OfflineRoutingCardContent(appViewModel)
+                    OfflineRoutingCardContent(
+                        appViewModel = appViewModel,
+                        onSegmentsChanged = onOfflineChanged,
+                    )
                 }
             }
             SettingsPage.BACKUP -> SettingsSection { BackupCardContent(appViewModel) }

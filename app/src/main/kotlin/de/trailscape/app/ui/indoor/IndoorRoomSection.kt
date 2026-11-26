@@ -18,13 +18,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -45,9 +42,12 @@ import androidx.compose.foundation.selection.toggleable
 import de.trailscape.app.R
 import de.trailscape.app.challenge.ChallengeAvailability
 import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.core.room.RoomRoute
 
 /**
@@ -113,7 +113,7 @@ fun IndoorRoomSection(
         onInviteConsumed()
     }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         when (ui) {
             is IndoorRoomUi.Closed -> RoomClosedContent(
                 notice = ui.notice,
@@ -256,14 +256,14 @@ private fun RoomClosedContent(
             )
         }
         MutedText(stringResource(R.string.raum_intro))
-        Button(onClick = onCreate, enabled = server.configured, modifier = Modifier.fillMaxWidth()) {
+        TrailscapePrimaryButton(onClick = onCreate, enabled = server.configured, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.raum_create))
         }
         if (!server.configured) {
             MutedText(stringResource(R.string.raum_no_server))
             TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.raum_open_settings)) }
         }
-        OutlinedButton(onClick = onJoin, modifier = Modifier.fillMaxWidth()) {
+        TrailscapeSecondaryButton(onClick = onJoin, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.raum_join))
         }
     }
@@ -514,11 +514,11 @@ private fun RoomOpenContent(
         )
         when (ui.route.availability) {
             ChallengeAvailability.READY -> if (!ui.selfAtStart) {
-                Button(onClick = { onRide(routeName) }, modifier = Modifier.fillMaxWidth()) {
+                TrailscapePrimaryButton(onClick = { onRide(routeName) }, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.raum_to_start))
                 }
             }
-            ChallengeAvailability.DOWNLOAD -> OutlinedButton(
+            ChallengeAvailability.DOWNLOAD -> TrailscapeSecondaryButton(
                 onClick = { ui.route.catalogId?.let(onDownload) },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(stringResource(R.string.spiel3_row_download)) }
@@ -534,7 +534,7 @@ private fun RoomOpenContent(
             )
             ui.started -> MutedText(stringResource(R.string.raum_started))
             ui.host -> {
-                OutlinedButton(onClick = onStartCountdown, enabled = online, modifier = Modifier.fillMaxWidth()) {
+                TrailscapeSecondaryButton(onClick = onStartCountdown, enabled = online, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.raum_start_action, IndoorRoomController.COUNTDOWN_S))
                 }
                 MutedText(stringResource(R.string.raum_start_host_hint))
@@ -552,7 +552,7 @@ private fun RoomOpenContent(
 
         HorizontalDivider()
         SharePowerRow(checked = ui.sharePower, onCheckedChange = onSharePower)
-        OutlinedButton(onClick = { shareInvite(context, ui.inviteLink, chooserTitle) }, modifier = Modifier.fillMaxWidth()) {
+        TrailscapeSecondaryButton(onClick = { shareInvite(context, ui.inviteLink, chooserTitle) }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Filled.Share, contentDescription = null)
             Text(text = stringResource(R.string.raum_share_invite), modifier = Modifier.padding(start = 8.dp))
         }

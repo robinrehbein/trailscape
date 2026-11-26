@@ -19,17 +19,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,9 +41,9 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import de.trailscape.app.ui.theme.LocalNavigationBarColors
 import de.trailscape.app.ui.theme.OneUiMotion
 
@@ -212,7 +212,7 @@ fun RowScope.OneUiNavigationBarItem(
             )
             // Innenabstand der Pille: Sie umschliesst Symbol *und*
             // Beschriftung, so wie in den Samsung-Apps.
-            .padding(vertical = 6.dp, horizontal = 4.dp),
+            .padding(vertical = 6.dp, horizontal = 2.dp),
         contentAlignment = Alignment.Center,
     ) {
         CompositionLocalProvider(LocalContentColor provides contentColor) {
@@ -228,21 +228,24 @@ fun RowScope.OneUiNavigationBarItem(
                         .scale(iconScale),
                 )
                 // Die Beschriftung traegt die Auskunft mit — One UI beschriftet
-                // jedes Ziel, auch das nicht gewaehlte. Einzeilig mit Ellipse,
-                // damit fuenf Ziele auf ein 320-dp-Geraet passen, ohne dass
-                // ein Umbruch die Kapsel hoeher macht.
-                Text(
+                // jedes Ziel, auch das nicht gewaehlte. Einzeilig mit automatischer
+                // Schriftgroessenanpassung, damit auch bei 360 dp und 1,3x Schrift
+                // keine Ellipse ("Verla…") entsteht.
+                val labelStyle = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = if (selected) FontWeight.W600 else FontWeight.W400,
+                    color = LocalContentColor.current,
+                )
+                BasicText(
                     text = label,
-                    // Nur das aktive Ziel steht fett. One UI gewichtet die
-                    // Beschriftung mit der Auswahl mit; alle fuenf Labels im
-                    // selben halbfetten Schnitt liessen die Leiste laut und
-                    // die Auswahl schwerer erkennbar wirken.
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = if (selected) FontWeight.W600 else FontWeight.W400,
-                    ),
+                    style = labelStyle,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 3.dp, start = 2.dp, end = 2.dp),
+                    softWrap = false,
+                    autoSize = TextAutoSize.StepBased(
+                        minFontSize = 8.5.sp,
+                        maxFontSize = labelStyle.fontSize,
+                        stepSize = 0.5.sp,
+                    ),
+                    modifier = Modifier.padding(top = 3.dp),
                 )
             }
         }

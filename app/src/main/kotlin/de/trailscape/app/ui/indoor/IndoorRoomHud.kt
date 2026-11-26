@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.indoor
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,8 +11,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -26,6 +28,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
+import de.trailscape.app.ui.theme.CockpitTheme
+import de.trailscape.app.ui.theme.LocalCockpitColors
 
 /**
  * # Der Raum in der Fahransicht
@@ -60,9 +64,10 @@ internal fun HudRoomChips(room: RoomRideUi, modifier: Modifier = Modifier) {
 
 @Composable
 private fun RoomChipText(text: String, muted: Boolean = false) {
+    val cockpit = LocalCockpitColors.current
     Text(
         text = text,
-        style = hudStyle(MaterialTheme.typography.labelLarge, if (muted) HudColors.inkMuted else HudColors.ink),
+        style = hudStyle(MaterialTheme.typography.labelLarge, if (muted) cockpit.inkMuted else cockpit.ink),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
@@ -70,6 +75,7 @@ private fun RoomChipText(text: String, muted: Boolean = false) {
 
 @Composable
 private fun HudRoomRiderChip(rider: RoomGapUi) {
+    val cockpit = LocalCockpitColors.current
     val ahead = rider.gapM >= 0.0
     val meters = indoorGapMeters(rider.gapM)
     val watts = rider.powerW?.takeIf { !rider.stale }
@@ -83,7 +89,7 @@ private fun HudRoomRiderChip(rider: RoomGapUi) {
             Box(
                 modifier = Modifier
                     .size(10.dp)
-                    .background(if (rider.stale) HudColors.inkMuted else HudColors.ghost, CircleShape),
+                    .background(if (rider.stale) cockpit.inkMuted else HudColors.ghost, RoundedCornerShape(3.dp)),
             )
             Spacer(modifier = Modifier.width(8.dp))
             RoomChipText(text, muted = rider.stale)
@@ -102,55 +108,67 @@ internal fun RoomStartCard(
     onLeave: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val online = room.connection is RoomConnectionUi.Online
-    Surface(
-        color = HudColors.panelStrong,
-        shape = MaterialTheme.shapes.large,
-        modifier = modifier.widthIn(max = 360.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+    CockpitTheme {
+        val cockpit = LocalCockpitColors.current
+        val online = room.connection is RoomConnectionUi.Online
+        Surface(
+            color = cockpit.panel,
+            shape = MaterialTheme.shapes.large,
+            border = BorderStroke(1.dp, cockpit.border),
+            modifier = modifier.widthIn(max = 360.dp),
         ) {
-            val countdown = room.countdownS
-            if (countdown != null) {
-                Text(
-                    text = stringResource(R.string.raum_wait_countdown, countdown),
-                    style = hudStyle(MaterialTheme.typography.displaySmall),
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                )
-            } else {
-                Text(
-                    text = stringResource(R.string.raum_wait_title),
-                    style = hudStyle(MaterialTheme.typography.titleLarge),
-                )
-            }
-            Text(
-                text = stringResource(R.string.raum_wait_count, room.atStart, room.total),
-                style = hudStyle(MaterialTheme.typography.bodyLarge, HudColors.inkMuted),
-            )
-            when (val connection = room.connection) {
-                RoomConnectionUi.Online -> Unit
-                is RoomConnectionUi.Reconnecting -> Text(
-                    text = roomReconnectingText(connection),
-                    style = hudStyle(MaterialTheme.typography.bodyMedium),
-                )
-            }
-            if (countdown == null) {
-                if (room.host) {
-                    Button(onClick = onStart, enabled = online) {
-                        Text(stringResource(R.string.raum_start_action, IndoorRoomController.COUNTDOWN_S))
-                    }
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                val countdown = room.countdownS
+                if (countdown != null) {
+                    Text(
+                        text = stringResource(R.string.raum_wait_countdown, countdown),
+                        style = hudStyle(MaterialTheme.typography.displaySmall, cockpit.ink),
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
                 } else {
                     Text(
-                        text = stringResource(R.string.raum_start_guest_hint),
-                        style = hudStyle(MaterialTheme.typography.bodyMedium, HudColors.inkMuted),
+                        text = stringResource(R.string.raum_wait_title),
+                        style = hudStyle(MaterialTheme.typography.titleLarge, cockpit.ink),
                     )
                 }
-            }
-            TextButton(onClick = onLeave) {
-                Text(text = stringResource(R.string.raum_wait_leave), color = HudColors.ink)
+                Text(
+                    text = stringResource(R.string.raum_wait_count, room.atStart, room.total),
+                    style = hudStyle(MaterialTheme.typography.bodyLarge, cockpit.inkMuted),
+                )
+                when (val connection = room.connection) {
+                    RoomConnectionUi.Online -> Unit
+                    is RoomConnectionUi.Reconnecting -> Text(
+                        text = roomReconnectingText(connection),
+                        style = hudStyle(MaterialTheme.typography.bodyMedium, cockpit.ink),
+                    )
+                }
+                if (countdown == null) {
+                    if (room.host) {
+                        Button(
+                            onClick = onStart,
+                            enabled = online,
+                            shape = MaterialTheme.shapes.small,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = cockpit.action,
+                                contentColor = cockpit.onAction,
+                            ),
+                        ) {
+                            Text(stringResource(R.string.raum_start_action, IndoorRoomController.COUNTDOWN_S))
+                        }
+                    } else {
+                        Text(
+                            text = stringResource(R.string.raum_start_guest_hint),
+                            style = hudStyle(MaterialTheme.typography.bodyMedium, cockpit.inkMuted),
+                        )
+                    }
+                }
+                TextButton(onClick = onLeave) {
+                    Text(text = stringResource(R.string.raum_wait_leave), color = cockpit.ink)
+                }
             }
         }
     }

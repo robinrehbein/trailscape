@@ -3,19 +3,15 @@ package de.trailscape.app.ui.today
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Route
-import androidx.compose.material3.Card
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -44,9 +41,12 @@ import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.i18n.asString
+import de.trailscape.app.ui.components.AtlasCard
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.map.lastKnownLocationIfPermitted
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
+import de.trailscape.app.ui.theme.tabular
 import de.trailscape.core.PlannedRide
 import de.trailscape.core.RideInfo
 import de.trailscape.core.TrackPoint
@@ -92,7 +92,7 @@ internal fun WeekPlanCard(
 ) {
     val texts = LocalCoreTexts.current
     val theme = MaterialTheme.colorScheme
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard {
         Column(
             modifier = Modifier.padding(CardPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -163,7 +163,7 @@ private fun WeekPlanRow(
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.titleSmall)
+            Text(text = title, style = MaterialTheme.typography.titleSmall.tabular())
             Text(
                 text = reason,
                 style = MaterialTheme.typography.bodySmall,
@@ -171,12 +171,9 @@ private fun WeekPlanRow(
             )
         }
         Spacer(modifier = Modifier.width(12.dp))
-        FilledTonalButton(
+        TrailscapeSecondaryButton(
             onClick = onBuild,
-            modifier = Modifier
-                .heightIn(min = 48.dp)
-                .semantics { contentDescription = buildDescription },
-            contentPadding = PaddingValues(horizontal = 14.dp),
+            modifier = Modifier.semantics { contentDescription = buildDescription },
         ) {
             Icon(Icons.Filled.Route, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
@@ -338,8 +335,11 @@ private fun rideStartPoint(rideId: String): TrackPoint? {
  * der Herbst-Zeitumstellung ergibt die volle Stunde zweimal dasselbe „02:00",
  * und ein Schluessel auf dem Wert wuerde den naechsten Wecker nie stellen.
  */
+internal val LocalTestHourNow = staticCompositionLocalOf<LocalDateTime?> { null }
+
 @Composable
 internal fun rememberHourNow(): LocalDateTime {
+    LocalTestHourNow.current?.let { return it }
     var now by remember { mutableStateOf(LocalDateTime.now().truncatedTo(ChronoUnit.HOURS)) }
     var tick by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()

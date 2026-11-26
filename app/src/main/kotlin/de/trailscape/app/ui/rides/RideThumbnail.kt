@@ -2,6 +2,7 @@ package de.trailscape.app.ui.rides
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,6 +21,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.theme.LocalAtlasColors
 import de.trailscape.core.Ride
 import de.trailscape.core.RideInfo
 import de.trailscape.core.TrackPoint
@@ -178,12 +180,14 @@ internal fun RideThumbnail(
     }
     val trackColor = MaterialTheme.colorScheme.primary
     val background = mapTint()
+    val shape = RoundedCornerShape(ThumbnailCorner)
 
     Box(
         modifier = modifier
             .size(ThumbnailSize)
-            .clip(RoundedCornerShape(ThumbnailCorner))
-            .background(background),
+            .clip(shape)
+            .background(background)
+            .border(1.dp, LocalAtlasColors.current.cardBorder, shape),
     ) {
         val coords = line
         if (coords != null && coords.size >= 4) {
@@ -235,6 +239,6 @@ private fun mapTint(): Color =
 private val MapTintLight = Color(0xFFE6ECE6)
 private val MapTintDark = Color(0xFF161B20)
 
-private val ThumbnailSize = 44.dp
+private val ThumbnailSize = 48.dp
 private val ThumbnailCorner = 12.dp
 private val ThumbnailInset = 6.dp

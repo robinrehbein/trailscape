@@ -75,6 +75,7 @@ import de.trailscape.core.indoor.RideFeel
 import de.trailscape.core.indoor.RideProtocolRecorder
 import de.trailscape.core.indoor.RiderSetup
 import de.trailscape.core.indoor.calibrationGearShift
+import de.trailscape.core.indoor.catalog.estimateCatalogRideSeconds
 import de.trailscape.core.indoor.flatCalibrationRoute
 import de.trailscape.core.indoor.ShifterEvent
 import de.trailscape.core.indoor.TrainerCapabilities
@@ -397,6 +398,17 @@ class IndoorViewModel(
     /** Von „Heute" gewaehlter Vorschlag, der beim Anzeigen vorausgewaehlt wird. */
     private var preferredDayKey: String? = null
 
+    /** Von „Heute" gewaehlter Vorschlag zum direkten Starten, sobald Einheit und Strecken geladen sind. */
+    private var pendingDayStartKey: String? = null
+
+    private enum class PendingAfterPair { DAY_SUGGESTION, DAY_GENERATED }
+
+    private var pendingAfterPair: PendingAfterPair? = null
+    private val _pairFromRideFlow = MutableStateFlow(false)
+    val pairFromRideFlow: StateFlow<Boolean> = _pairFromRideFlow.asStateFlow()
+
+    private val previewPointsCache = java.util.concurrent.ConcurrentHashMap<String, List<Float>>()
+
     /** „Indoor fahren" aus der Tourdetailansicht: diese Tour waehlen, sobald die Strecken gelesen sind. */
     private var preferredRideId: String? = null
 
@@ -426,6 +438,7 @@ class IndoorViewModel(
      */
     @Volatile private var worldToken: WorldJobToken? = null
     private var worldJob: Job? = null
+    private var worldAutoStartPending = false
 
     private class WorldJobToken {
         /** Abbruch fuer den Weltbau ([WorldBuildListener.isCancelled]). */
@@ -494,19 +507,59 @@ class IndoorViewModel(
             }
         }
         // Einheit des Tages: Ist die fuer sie geladene Katalogstrecke bereit,
-        // geht es ohne weitere Auswahl weiter.
+        // geht es ohne weitere Auswahl weiter; neue Metadaten (Groesse/Vorschau)
+        // uebernimmt die Karte auch nachtraeglich.
         this.scope.launch {
             catalog.collect { c ->
+                val offer = _day.value as? IndoorDayUi.Offer
+                if (offer != null && c.items.isNotEmpty()) {
+                    val byId = c.items.associateBy { it.id }
+                    var changed = false
+                    val updated = offer.suggestions.map { s ->
+                        if (!s.key.startsWith("catalog:")) {
+                            s
+                        } else {
+                            val item = byId[s.key.removePrefix("catalog:")]
+                            if (item == null) {
+                                s
+                            } else {
+                                val newPreview = item.previewPath
+                                if (item.ready && s.availability == DayRouteAvailability.DOWNLOAD) {
+                                    changed = true
+                                    s.copy(
+                                        availability = DayRouteAvailability.READY,
+                                        downloadBytes = null,
+                                        previewPath = newPreview,
+                                    )
+                                } else {
+                                    val newBytes = if (s.availability == DayRouteAvailability.DOWNLOAD) item.packageBytes else s.downloadBytes
+                                    if (newBytes != s.downloadBytes || newPreview != s.previewPath) {
+                                        changed = true
+                                        s.copy(downloadBytes = newBytes, previewPath = newPreview)
+                                    } else {
+                                        s
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (changed) _day.value = offer.copy(suggestions = updated)
+                }
                 val id = dayAwaitingCatalog ?: return@collect
                 val item = c.items.firstOrNull { it.id == id } ?: return@collect
                 when {
                     item.ready -> {
                         dayAwaitingCatalog = null
                         if (_stage.value == IndoorStage.ROUTE) {
-                            rideDayOn(
-                                IndoorRouteOption.Catalog(id, item.name.pick(texts.languageTag()), item.distanceKm, item.ascentM),
-                                "catalog:$id",
-                            )
+                            val p = _pair.value
+                            if (indoorTrainerIssue(p, p.bluetoothOn, p.permissionGranted) != null) {
+                                openPairFromRideFlow(PendingAfterPair.DAY_SUGGESTION)
+                            } else {
+                                rideDayOn(
+                                    IndoorRouteOption.Catalog(id, item.name.pick(texts.languageTag()), item.distanceKm, item.ascentM),
+                                    "catalog:$id",
+                                )
+                            }
                         }
                     }
                     item.state is IndoorCatalogState.Failed -> dayAwaitingCatalog = null
@@ -663,18 +716,70 @@ class IndoorViewModel(
     private var rendererWorldQuality: de.trailscape.core.indoor.world.IndoorQuality? = null
 
     /**
+     * Uebernimmt den aktuellen Bluetooth-/Berechtigungsstand der Oberflaeche,
+     * damit `BLUETOOTH_OFF` / `NO_PERMISSION` bei gemerktem Trainer den Fluss
+     * in „Trainer koppeln" statt in die Fahrt leiten.
+     */
+    fun updateBluetoothState(bluetoothOn: Boolean, permissionGranted: Boolean) {
+        _pair.update {
+            if (it.bluetoothOn == bluetoothOn && it.permissionGranted == permissionGranted) {
+                it
+            } else {
+                it.copy(bluetoothOn = bluetoothOn, permissionGranted = permissionGranted)
+            }
+        }
+    }
+
+    private fun trainerIssue(): IndoorTrainerIssue? {
+        val p = _pair.value
+        return indoorTrainerIssue(p, p.bluetoothOn, p.permissionGranted)
+    }
+
+    /**
      * Zurueck von „Trainer koppeln" zur Startseite und die Strecken neu lesen
-     * (nur wenn [IndoorPairUi.canContinue]; sonst bleibt die Seite offen).
+     * (nur wenn der Trainer fahrbereit ist; sonst bleibt die Seite offen).
+     * Kam der Nutzer aus dem Fahrt-Ablauf (z. B. Tageskarte), wird dieser
+     * nahtlos fortgesetzt.
      */
     fun continueFromPair() {
-        if (!_pair.value.canContinue) return
+        if (trainerIssue() != null) return
+        val after = pendingAfterPair
+        pendingAfterPair = null
+        _pairFromRideFlow.value = false
         _stage.value = IndoorStage.ROUTE
-        loadRouteOptions()
+        when (after) {
+            null -> loadRouteOptions()
+            PendingAfterPair.DAY_SUGGESTION ->
+                if (routeOptionsRequested && !_route.value.loadingOptions && _day.value is IndoorDayUi.Offer) {
+                    rideDaySuggestion()
+                } else {
+                    pendingDayStartKey = (_day.value as? IndoorDayUi.Offer)?.current?.key ?: preferredDayKey
+                    loadRouteOptions()
+                }
+            PendingAfterPair.DAY_GENERATED ->
+                if (routeOptionsRequested && !_route.value.loadingOptions && _day.value is IndoorDayUi.Offer) {
+                    rideDayGenerated()
+                } else {
+                    pendingDayStartKey = INDOOR_DAY_GENERATED_KEY
+                    loadRouteOptions()
+                }
+        }
     }
 
     /** Nebenseite „Trainer koppeln" (von der Startseite). */
     fun openPair() {
-        if (_stage.value == IndoorStage.ROUTE) _stage.value = IndoorStage.PAIR
+        if (_stage.value == IndoorStage.ROUTE) {
+            pendingAfterPair = null
+            _pairFromRideFlow.value = false
+            _stage.value = IndoorStage.PAIR
+        }
+    }
+
+    private fun openPairFromRideFlow(kind: PendingAfterPair) {
+        if (_stage.value != IndoorStage.ROUTE) return
+        pendingAfterPair = kind
+        _pairFromRideFlow.value = true
+        _stage.value = IndoorStage.PAIR
     }
 
     /** Nebenseite „Einstellungen" (von der Startseite). */
@@ -684,7 +789,13 @@ class IndoorViewModel(
 
     /** Nebenseite schliessen — zurueck zur Startseite, die Auswahl bleibt. */
     fun closeSubPage() {
-        if (_stage.value == IndoorStage.PAIR || _stage.value == IndoorStage.SETTINGS) _stage.value = IndoorStage.ROUTE
+        if (_stage.value == IndoorStage.PAIR || _stage.value == IndoorStage.SETTINGS) {
+            if (_stage.value == IndoorStage.PAIR) {
+                pendingAfterPair = null
+                _pairFromRideFlow.value = false
+            }
+            _stage.value = IndoorStage.ROUTE
+        }
     }
 
     private fun readDemoFlag(): Boolean = runCatching { store.getString(KEY_DEMO_TRAINER) == "true" }.getOrDefault(false)
@@ -790,6 +901,7 @@ class IndoorViewModel(
         challengeController.refresh()
         scope.launch {
             val (saved, erg) = withContext(io) { savedOptions() to computeErg() }
+            catalogController.awaitDiskLoad()
             ergWorkout = erg
             _catalogExtras.value = withContext(io) { readCatalogExtras() }
             launchDaySearch()
@@ -813,6 +925,7 @@ class IndoorViewModel(
                 )
             }
             applyPreferredRide()
+            tryConsumePendingDayStart()
         }
     }
 
@@ -852,10 +965,14 @@ class IndoorViewModel(
         val withWorld = runCatching {
             worlds.listWorlds().filter { it.complete }.mapNotNull { it.source?.rideId }.toSet()
         }.getOrDefault(emptySet())
+        val rider = runCatching { catalogRiderOf(profile()) }.getOrDefault(de.trailscape.core.indoor.catalog.CatalogRider.NEUTRAL)
         return summaries
             .filter { !it.indoor && it.pointCount >= 2 }
             .sortedByDescending { it.createdAt }
             .map { s ->
+                val durationS = s.stats.movingTimeS
+                    ?: s.stats.durationS
+                    ?: estimateCatalogRideSeconds(s.stats.distanceKm * 1000.0, s.stats.ascentM, null, emptyMap(), rider)
                 IndoorRouteOption.Saved(
                     rideId = s.id,
                     name = s.name,
@@ -864,8 +981,21 @@ class IndoorViewModel(
                     createdAt = s.createdAt,
                     planned = s.planned,
                     hasWorld = s.id in withWorld,
+                    durationS = durationS,
                 )
             }
+    }
+
+    suspend fun routePreviewPoints(rideId: String): List<Float> {
+        previewPointsCache[rideId]?.let { return it }
+        val points = withContext(io) {
+            runCatching {
+                val ride = rideStorage.loadRide(rideId) ?: return@runCatching emptyList()
+                indoorRoutePolyline(ride.points)
+            }.getOrDefault(emptyList())
+        }
+        if (points.isNotEmpty()) previewPointsCache[rideId] = points
+        return points
     }
 
     /**
@@ -904,11 +1034,13 @@ class IndoorViewModel(
         val finder = dayFinder
         if (plan == null || finder == null) {
             _day.value = null
+            pendingDayStartKey = null
             return
         }
         val first = indoorDayUiOf(plan, emptyList())
         if (first !is IndoorDayUi.Offer) {
             _day.value = first
+            pendingDayStartKey = null
             return
         }
         if (_day.value !is IndoorDayUi.Offer) _day.value = IndoorDayUi.Loading
@@ -919,8 +1051,15 @@ class IndoorViewModel(
             }
             if (dayPlan !== plan) return@launch
             dayMatches = matches
-            val bytes = catalog.value.items.associate { it.id to it.packageBytes }
-            val ui = indoorDayUiOf(plan, matches, generatedReady = genReady) { id -> bytes[id] }
+            val items = catalog.value.items
+            val bytes = items.associate { it.id to it.packageBytes }
+            val previews = items.associate { it.id to it.previewPath }
+            val ui = indoorDayUiOf(
+                plan,
+                matches,
+                generatedReady = genReady,
+                previewPathFor = { id -> previews[id] },
+            ) { id -> bytes[id] }
             val previous = (_day.value as? IndoorDayUi.Offer)?.current?.key
             val prev = _day.value as? IndoorDayUi.Offer
             val shown = (ui as? IndoorDayUi.Offer)?.let { offer ->
@@ -932,6 +1071,7 @@ class IndoorViewModel(
             }
             preferredDayKey = null
             _day.value = shown ?: ui
+            tryConsumePendingDayStart()
         }
     }
 
@@ -939,6 +1079,36 @@ class IndoorViewModel(
     fun preferDaySuggestion(key: String?) {
         val offer = _day.value as? IndoorDayUi.Offer
         if (offer != null) _day.value = offer.showing(key) else preferredDayKey = key
+    }
+
+    /** Von „Heute": diesen Vorschlag direkt starten, sobald Einheit und Strecken bereit sind. */
+    fun startDaySuggestion(key: String) {
+        preferredDayKey = key
+        pendingDayStartKey = key
+        tryConsumePendingDayStart()
+    }
+
+    private fun tryConsumePendingDayStart() {
+        val key = pendingDayStartKey ?: return
+        if (_stage.value != IndoorStage.ROUTE || _route.value.loadingOptions) return
+        val dayUi = _day.value
+        if (dayUi == null || dayUi is IndoorDayUi.Rest || dayUi is IndoorDayUi.Event) {
+            pendingDayStartKey = null
+            return
+        }
+        val offer = dayUi as? IndoorDayUi.Offer ?: return
+        pendingDayStartKey = null
+        val shown = offer.showing(key)
+        when {
+            key == INDOOR_DAY_GENERATED_KEY && shown.generated != null -> {
+                _day.value = shown
+                rideDayGenerated()
+            }
+            shown.current?.key == key -> {
+                _day.value = shown
+                rideDaySuggestion()
+            }
+        }
     }
 
     /** Ob die generierte Welt zur Einheit [plan] schon gebaut auf dem Geraet liegt (blockierend). */
@@ -958,8 +1128,8 @@ class IndoorViewModel(
      * Einheit, ERG-Modus, weiter zu „Welt laden" (bereit → direkt in die Fahrt).
      */
     fun rideDayGenerated() {
-        if (!_pair.value.canContinue) {
-            openPair()
+        if (trainerIssue() != null) {
+            openPairFromRideFlow(PendingAfterPair.DAY_GENERATED)
             return
         }
         val goal = dayPlan?.goal ?: return
@@ -987,15 +1157,19 @@ class IndoorViewModel(
             val len = match.candidate.profile?.lengthM ?: 0.0
             if (st.startM > 0 && len > 0) s.key to st.startM / len else null
         }
-        // Ohne Trainer fuehrt „Fahren" erst zum Koppeln (die Strecke laedt
-        // sich auch ohne Trainer).
-        if (!_pair.value.canContinue &&
-            (s.availability == DayRouteAvailability.READY || s.availability == DayRouteAvailability.BUILD)
+        val catalogReady = s.availability == DayRouteAvailability.DOWNLOAD &&
+            s.key.startsWith("catalog:") &&
+            catalog.value.items.firstOrNull { it.id == s.key.removePrefix("catalog:") }?.ready == true
+        val effectiveAvailability = if (catalogReady) DayRouteAvailability.READY else s.availability
+        // Ohne fahrbereiten Trainer fuehrt „Fahren" erst zum Koppeln (die
+        // Katalogstrecke laedt sich auch ohne Trainer).
+        if (trainerIssue() != null &&
+            (effectiveAvailability == DayRouteAvailability.READY || effectiveAvailability == DayRouteAvailability.BUILD)
         ) {
-            openPair()
+            openPairFromRideFlow(PendingAfterPair.DAY_SUGGESTION)
             return
         }
-        when (s.availability) {
+        when (effectiveAvailability) {
             DayRouteAvailability.PLAN -> dayPlan?.planTarget?.let { onPlanRoute(it) }
             DayRouteAvailability.DOWNLOAD -> {
                 val id = s.key.removePrefix("catalog:")
@@ -1279,12 +1453,11 @@ class IndoorViewModel(
      */
     fun continueFromRoute() {
         calibrationRequested = false
-        // Ohne Trainer (oder Demo) geht es nicht in die Fahrt; die Startseite
-        // sagt das und bietet „Koppeln" an.
-        if (!_route.value.canContinue || !_pair.value.canContinue) return
+        // Ohne fahrbereiten Trainer (oder Demo) geht es nicht in die Fahrt; die
+        // Startseite sagt das und bietet „Koppeln"/„Beheben" an.
+        if (!_route.value.canContinue || trainerIssue() != null) return
         _stage.value = IndoorStage.WORLD
-        val sel = _route.value.selected
-        prepareWorld(autoStart = sel is IndoorRouteOption.Catalog || sel is IndoorRouteOption.Generated)
+        prepareWorld(autoStart = true)
     }
 
     // -----------------------------------------------------------------------
@@ -1297,6 +1470,7 @@ class IndoorViewModel(
         val previous = cancelRunningWorldJob()
         resetWorld()
         serverController.close()
+        worldAutoStartPending = autoStart && !previewMode
         _world.value = IndoorWorldUi.Preparing
         val token = WorldJobToken().also {
             it.autoStart = autoStart
@@ -1316,7 +1490,7 @@ class IndoorViewModel(
                 }
             }
             commitWorld(token, ui)
-            if (token === worldToken && !previewMode) openServerFor(option, ui)
+            if (token === worldToken && !previewMode && _stage.value == IndoorStage.WORLD) openServerFor(option, ui)
         }
     }
 
@@ -1555,10 +1729,14 @@ class IndoorViewModel(
         if (current !is IndoorWorldUi.Plan && current !is IndoorWorldUi.Failed) return
         // Nie zugleich auf dem Server und auf dem Geraet bauen.
         if (serverController.busy) return
+        val autoStart = worldAutoStartPending && !previewMode
         (_route.value.selected as? IndoorRouteOption.Generated)?.let { generated ->
             val previous = cancelRunningWorldJob()
             _world.value = IndoorWorldUi.Building(WorldBuildPhase.ELEVATION, 0, 0, 0f)
-            val token = WorldJobToken().also { worldToken = it }
+            val token = WorldJobToken().also {
+                it.autoStart = autoStart
+                worldToken = it
+            }
             worldJob = scope.launch {
                 previous?.join()
                 val ui = withContext(io) { worldGuard(canRetry = true) { buildGenerated(generated, token) } }
@@ -1569,7 +1747,10 @@ class IndoorViewModel(
         val ride = selectedRide ?: return
         val previous = cancelRunningWorldJob()
         _world.value = IndoorWorldUi.Building(WorldBuildPhase.ELEVATION, 0, 0, 0f)
-        val token = WorldJobToken().also { worldToken = it }
+        val token = WorldJobToken().also {
+            it.autoStart = autoStart
+            worldToken = it
+        }
         val name = routeName
         worldJob = scope.launch {
             // Nie zwei Bauten gleichzeitig: der abgeloeste laeuft bis zur
@@ -2264,6 +2445,9 @@ class IndoorViewModel(
         trail.stop()
         pendingRide = null
         dayStartPick = null
+        pendingDayStartKey = null
+        pendingAfterPair = null
+        _pairFromRideFlow.value = false
         _summary.value = null
         _ride.value = null
         rideStatic = null
@@ -2281,6 +2465,10 @@ class IndoorViewModel(
         // Die Startseite ist der Anfang: Zurueck verlaesst den Ablauf.
         IndoorStage.ROUTE -> false
         IndoorStage.PAIR, IndoorStage.SETTINGS -> {
+            if (_stage.value == IndoorStage.PAIR) {
+                pendingAfterPair = null
+                _pairFromRideFlow.value = false
+            }
             _stage.value = IndoorStage.ROUTE
             true
         }

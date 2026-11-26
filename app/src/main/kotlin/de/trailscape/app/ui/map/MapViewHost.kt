@@ -3,7 +3,9 @@ package de.trailscape.app.ui.map
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.input.pointer.pointerInput
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Handler
@@ -103,6 +105,7 @@ internal fun MapViewHost(
     modifier: Modifier = Modifier,
     gesturesEnabled: Boolean = true,
     renderingActive: Boolean = true,
+    attributionStartOffsetPx: Int = 0,
     /**
      * Die Nutzerin hat die Karte **selbst** verschoben oder gezoomt.
      *
@@ -123,19 +126,47 @@ internal fun MapViewHost(
      */
     onUserPanEnd: () -> Unit = {},
 ) {
-    // Screenshot-Tests laufen auf der JVM ohne MapLibres native Bibliothek;
-    // dort steht an Stelle der Karte eine ruhige Kartenflaeche, damit alles
-    // darueber (Blaetter, Knoepfe) gerendert und geprueft werden kann.
-    if (!LocalMapRenderingAvailable.current) {
-        Box(modifier.fillMaxSize().background(Color(0xFFE6ECE6)))
-        return
-    }
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val currentTap by rememberUpdatedState(onMapTap)
     val currentLongPress by rememberUpdatedState(onMapLongPress)
     val currentPan by rememberUpdatedState(onUserPan)
     val currentPanEnd by rememberUpdatedState(onUserPanEnd)
+    // Screenshot-Tests laufen auf der JVM ohne MapLibres native Bibliothek;
+    // dort steht an Stelle der Karte eine ruhige Kartenflaeche, damit alles
+    // darueber (Blaetter, Knoepfe) gerendert und geprueft werden kann.
+    if (!LocalMapRenderingAvailable.current) {
+        Box(
+            modifier
+                .fillMaxSize()
+                .background(Color(0xFFE6ECE6))
+                .then(
+                    if (gesturesEnabled) {
+                        Modifier.pointerInput(Unit) {
+                            detectTapGestures(
+                                onTap = { offset ->
+                                    val w = size.width.coerceAtLeast(1)
+                                    val h = size.height.coerceAtLeast(1)
+                                    val lat = 48.40 + (offset.y / h) * 0.05
+                                    val lon = 9.40 + (offset.x / w) * 0.05
+                                    currentTap(lat, lon)
+                                },
+                                onLongPress = { offset ->
+                                    val w = size.width.coerceAtLeast(1)
+                                    val h = size.height.coerceAtLeast(1)
+                                    val lat = 48.40 + (offset.y / h) * 0.05
+                                    val lon = 9.40 + (offset.x / w) * 0.05
+                                    currentLongPress(lat, lon)
+                                },
+                            )
+                        }
+                    } else {
+                        Modifier
+                    },
+                ),
+        )
+        return
+    }
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     // Kameraposition ueber Konfigurationsaenderungen (Drehen) hinweg merken.
     // MapView.onSaveInstanceState/onCreate(Bundle) waere der View-Weg, in einem
@@ -232,11 +263,13 @@ internal fun MapViewHost(
     AndroidView(
         modifier = modifier,
         factory = {
-            // Wird die Karte kleiner (Tastatur der Suche, Splitscreen), passt
-            // der in der Kamera gespeicherte Rand womoeglich nicht mehr —
+            // Wird die Karte kleiner (Tastatur der Suche, Splitscreen, Seitenpanel),
+            // passt der in der Kamera gespeicherte Rand womoeglich nicht mehr —
             // gleich wieder begrenzen, bevor MapLibre damit rechnet.
-            mapView.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
-                if (bottom - top != oldBottom - oldTop) controller.reclampPadding()
+            mapView.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                if (bottom - top != oldBottom - oldTop || right - left != oldRight - oldLeft) {
+                    controller.reclampPadding()
+                }
             }
             mapView.getMapAsync { map ->
                 map.uiSettings.apply {
@@ -268,7 +301,7 @@ internal fun MapViewHost(
                     // (Panelhoehen laufend in Pixel-Margins umrechnen), ohne
                     // dass der Info-Knopf je verdeckt waere.
                     attributionGravity = Gravity.TOP or Gravity.START
-                    setAttributionMargins(12, 12, 0, 0)
+                    setAttributionMargins(12 + attributionStartOffsetPx, 12, 0, 0)
                     isCompassEnabled = true
                     compassGravity = Gravity.TOP or Gravity.END
                     val rand = (16 * context.resources.displayMetrics.density).toInt()
@@ -348,6 +381,12 @@ internal fun MapViewHost(
 
     LaunchedEffect(renderingActive) {
         sync(effective(lifecycleOwner.lifecycle.currentState))
+    }
+
+    LaunchedEffect(mapView, attributionStartOffsetPx) {
+        mapView.getMapAsync { map ->
+            map.uiSettings.setAttributionMargins(12 + attributionStartOffsetPx, 12, 0, 0)
+        }
     }
 }
 
@@ -721,6 +760,13 @@ internal class MapController {
      */
     private var obscuredTopPx = 0
 
+    /**
+     * Wie viele Pixel am linken Rand verdeckt sind (schwebendes 380-dp-Seitenpanel
+     * im Tablet-Querformat) — Zentrieren, Einpassen und Navi-Kamera weichen
+     * in den freien Kartenbereich rechts aus.
+     */
+    private var obscuredLeftPx = 0
+
     fun setObscuredTop(px: Int) {
         obscuredTopPx = px.coerceAtLeast(0)
     }
@@ -750,6 +796,16 @@ internal class MapController {
         val neu = px.coerceAtLeast(0)
         val alt = obscuredBottomPx
         obscuredBottomPx = neu
+        if (followedFit != null && abs(neu - alt) >= REFIT_MIN_CHANGE_PX) {
+            refitHandler.removeCallbacks(refit)
+            refitHandler.postDelayed(refit, REFIT_DELAY_MS)
+        }
+    }
+
+    fun setObscuredLeft(px: Int) {
+        val neu = px.coerceAtLeast(0)
+        val alt = obscuredLeftPx
+        obscuredLeftPx = neu
         if (followedFit != null && abs(neu - alt) >= REFIT_MIN_CHANGE_PX) {
             refitHandler.removeCallbacks(refit)
             refitHandler.postDelayed(refit, REFIT_DELAY_MS)
@@ -789,6 +845,7 @@ internal class MapController {
                         mapHeightPx = map.height.toInt(),
                         base = padding,
                         obscuredBottomPx = obscuredBottomPx,
+                        obscuredLeftPx = obscuredLeftPx,
                     ),
                 )
             }.getOrNull() ?: return@run
@@ -835,7 +892,12 @@ internal class MapController {
                 CameraPosition.Builder()
                     .target(LatLng(lat, lon))
                     .zoom(zoom)
-                    .padding(0.0, 0.0, 0.0, clampObscuredBottom(obscuredBottomPx, map.height.toInt()).toDouble())
+                    .padding(
+                        clampObscuredLeft(obscuredLeftPx, map.width.toInt()).toDouble(),
+                        0.0,
+                        0.0,
+                        clampObscuredBottom(obscuredBottomPx, map.height.toInt()).toDouble(),
+                    )
                     .build(),
             )
             if (animate) map.animateCamera(update, CAMERA_ANIMATION_MS) else map.moveCamera(update)
@@ -885,6 +947,7 @@ internal class MapController {
                 obscuredBottomPx = obscuredBottomPx,
                 versatz = versatz,
             )
+            val leftPad = clampObscuredLeft(obscuredLeftPx, map.width.toInt()).toDouble()
             map.easeCamera(
                 CameraUpdateFactory.newCameraPosition(
                     CameraPosition.Builder()
@@ -892,7 +955,7 @@ internal class MapController {
                         .zoom(zoom)
                         .bearing(bearingGrad)
                         .tilt(if (versatz) NAV_KAMERA_NEIGUNG_GRAD else 0.0)
-                        .padding(0.0, topPad, 0.0, bottomPad)
+                        .padding(leftPad, topPad, 0.0, bottomPad)
                         .build(),
                 ),
                 NAV_CAMERA_EASE_MS,
@@ -943,10 +1006,11 @@ internal class MapController {
                     .build()
             }.getOrNull() ?: return@run
             val pad = OFF_ROUTE_FIT_PADDING_PX
+            val leftPad = max(pad, clampObscuredLeft(obscuredLeftPx, map.width.toInt()) + pad)
             val target = runCatching {
                 // Ausdruecklich fuer Nord oben (bearing 0, tilt 0) rechnen —
                 // die Kamera kann in diesem Moment noch course-up gedreht sein.
-                map.getCameraForLatLngBounds(bounds, intArrayOf(pad, pad, pad, pad), 0.0, 0.0)
+                map.getCameraForLatLngBounds(bounds, intArrayOf(leftPad, pad, pad, pad), 0.0, 0.0)
             }.getOrNull() ?: return@run
             // Dieselbe Sperre wie beim Einpassen: Auf einer sehr flachen
             // Karte (Tastatur, Splitscreen) liefert die Rechnung mit festem
@@ -1023,7 +1087,7 @@ internal class MapController {
         val map = map ?: return
         val position = map.cameraPosition
         val padding = position.padding ?: return
-        val clamped = reclampedCameraPadding(padding, map.height.toInt()) ?: return
+        val clamped = reclampedCameraPadding(padding, map.height.toInt(), map.width.toInt()) ?: return
         map.moveCamera(
             CameraUpdateFactory.newCameraPosition(
                 CameraPosition.Builder(position)

@@ -5,8 +5,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +28,7 @@ import de.trailscape.app.data.AppServices
 import de.trailscape.app.i18n.UiText
 import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.components.OneUiTextField
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.withCause
 import de.trailscape.core.SyncConfig
@@ -118,13 +119,13 @@ fun SyncCardContent(appViewModel: AppViewModel) {
     )
     Spacer(modifier = Modifier.height(12.dp))
 
-    Button(
+    TrailscapePrimaryButton(
         onClick = {
             val url = urlText.trim()
             val token = tokenText.trim()
             if (url.isEmpty() || token.isEmpty()) {
                 statusText = UiText.Res(R.string.more_sync_missing_error)
-                return@Button
+                return@TrailscapePrimaryButton
             }
             scope.launch {
                 syncing = true
@@ -156,7 +157,7 @@ fun SyncCardContent(appViewModel: AppViewModel) {
             CircularProgressIndicator(
                 strokeWidth = 2.dp,
                 modifier = Modifier.size(18.dp),
-                color = MaterialTheme.colorScheme.onPrimary,
+                color = LocalContentColor.current,
             )
         } else {
             // Nicht „Jetzt synchronisieren": So hiess auch der Knopf der

@@ -7,6 +7,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -21,9 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -41,11 +39,16 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
+import de.trailscape.app.ui.components.AtlasCard
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.LocalAtlasColors
 import de.trailscape.app.ui.theme.OneUiMotion
 
 /**
@@ -85,7 +88,7 @@ fun MoreGroupLabel(text: String, modifier: Modifier = Modifier) {
  */
 @Composable
 fun MoreGroupCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier = modifier.fillMaxWidth(), content = content)
+    AtlasCard(modifier = modifier, content = content)
 }
 
 /**
@@ -119,6 +122,7 @@ fun SettingsNavRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     statusColor: Color = Color.Unspecified,
+    selected: Boolean = false,
 ) {
     SettingsNavRow(
         title = title,
@@ -126,6 +130,7 @@ fun SettingsNavRow(
         onClick = onClick,
         modifier = modifier,
         statusColor = statusColor,
+        selected = selected,
     )
 }
 
@@ -140,25 +145,34 @@ fun SettingsNavRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     statusColor: Color = Color.Unspecified,
+    selected: Boolean = false,
 ) {
+    val atlas = LocalAtlasColors.current
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .background(if (selected) atlas.actionContainer else Color.Transparent)
+            .semantics { this.selected = selected }
             .clickable(onClick = onClick)
             .padding(horizontal = CardPadding, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = if (selected) atlas.onActionContainer else Color.Unspecified,
+            )
             Text(
                 text = status,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (statusColor == Color.Unspecified) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    statusColor
+                color = when {
+                    selected -> atlas.onActionContainer.copy(alpha = if (statusColor == Color.Unspecified) 0.85f else 1f)
+                    statusColor != Color.Unspecified -> statusColor
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
-                maxLines = 1,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
@@ -166,7 +180,7 @@ fun SettingsNavRow(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             // Der Titel sagt schon alles; der Pfeil ist nur Wegweiser.
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (selected) atlas.onActionContainer else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -274,19 +288,11 @@ fun SettingsSecondaryButton(
     destructive: Boolean = false,
     content: @Composable RowScope.() -> Unit,
 ) {
-    FilledTonalButton(
+    TrailscapeSecondaryButton(
         onClick = onClick,
-        modifier = modifier.heightIn(min = 48.dp),
+        modifier = modifier,
         enabled = enabled,
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-        colors = if (destructive) {
-            ButtonDefaults.filledTonalButtonColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer,
-            )
-        } else {
-            ButtonDefaults.filledTonalButtonColors()
-        },
+        destructive = destructive,
         content = content,
     )
 }

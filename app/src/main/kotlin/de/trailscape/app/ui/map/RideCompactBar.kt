@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.map
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
@@ -46,6 +47,7 @@ import de.trailscape.app.i18n.asString
 import de.trailscape.core.LiveSensorAnzeige
 import de.trailscape.app.ui.components.HoldToEndButton
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.LocalAtlasColors
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 import de.trailscape.app.ui.theme.OverlayGap
 import de.trailscape.core.formatDuration
@@ -106,6 +108,9 @@ internal fun RideCompactBar(
 
     Card(
         modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        border = BorderStroke(1.dp, LocalAtlasColors.current.cardBorder),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         Column(

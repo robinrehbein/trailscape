@@ -14,18 +14,17 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -62,9 +61,10 @@ import de.trailscape.app.sensors.bluetoothPermissions
 import de.trailscape.app.sensors.hasBluetoothPermissions
 import de.trailscape.app.sensors.indoor.IndoorDevicesSectionMitZustand
 import de.trailscape.app.sensors.locationServicesNeeded
-import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.OneUiDialog
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.BleKanal
 import de.trailscape.core.BleSensorTyp
@@ -334,18 +334,21 @@ internal fun ColumnScope.SensorsPageContent(
             }
             if (sensor != null) {
                 Spacer(Modifier.width(12.dp))
-                NeutralButton(onClick = { vergessen = sensor }) { Text(stringResource(R.string.ble_forget)) }
+                TrailscapeSecondaryButton(onClick = { vergessen = sensor }) { Text(stringResource(R.string.ble_forget)) }
             }
         }
     }
 
     // --- Suche
     Spacer(Modifier.height(20.dp))
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        TrailscapePrimaryButton(
             onClick = onScan,
             enabled = !state.scanning && state.permissionGranted && state.bluetoothOn,
-            modifier = Modifier.heightIn(min = 48.dp),
         ) {
             Text(stringResource(if (state.scanning) R.string.ble_scan_running else R.string.ble_scan))
         }
@@ -393,7 +396,7 @@ internal fun ColumnScope.SensorsPageContent(
                         modifier = Modifier.weight(1f),
                     )
                     Spacer(Modifier.width(12.dp))
-                    NeutralButton(
+                    TrailscapeSecondaryButton(
                         enabled = !schonGekoppelt,
                         onClick = {
                             val alt = gekoppelt[typ]

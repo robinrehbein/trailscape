@@ -3,16 +3,23 @@ package de.trailscape.app.ui.today
 import de.trailscape.app.ui.training.fitnessTestWeek
 import de.trailscape.app.ui.training.goalTitleParts
 import de.trailscape.app.ui.training.planSessionTargets
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -29,8 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.R
@@ -42,12 +47,13 @@ import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
-import de.trailscape.app.ui.components.EmptyState
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
-import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.SectionEyebrow
 import de.trailscape.app.ui.components.SettingsAction
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
+import de.trailscape.app.ui.components.TwoPaneLayout
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.indoor.IndoorTodayEntry
 import de.trailscape.app.ui.indoor.indoorErgTitleFor
@@ -58,7 +64,13 @@ import de.trailscape.app.ui.rememberWeekTarget
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
-import de.trailscape.app.ui.theme.ScreenPadding
+import de.trailscape.app.ui.theme.LocalAtlasColors
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
+import de.trailscape.app.ui.theme.TabletCardGap
+import de.trailscape.app.ui.theme.TabletScreenPadding
+import de.trailscape.app.ui.theme.WindowLayoutClass
+import de.trailscape.app.ui.theme.useNavigationRail
+import de.trailscape.app.ui.theme.useTwoPaneLayout
 import de.trailscape.app.ui.progress.ChallengeCard
 import de.trailscape.app.ui.progress.NextGoalsCard
 import de.trailscape.app.ui.progress.StreakFooter
@@ -319,10 +331,215 @@ fun TodayScreen(appViewModel: AppViewModel) {
         }
     }
     val context = LocalContext.current
+    val layoutClass = LocalWindowLayoutClass.current
+    val showSettingsInHeader = !useNavigationRail(layoutClass)
+    val progressCardModifier = Modifier.border(
+        width = 1.dp,
+        color = LocalAtlasColors.current.cardBorder,
+        shape = MaterialTheme.shapes.medium,
+    )
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
+    }
+
+    val primaryPaneItems: LazyListScope.(Boolean) -> Unit = { includeFirstRideInline ->
+        item(key = "hero") {
+            HeroCard(
+                score = if (readiness.available) readiness.score.roundToInt() else null,
+                band = band,
+                headline = todayHeadline(effort, todayRoute, band, planRestDay),
+                sentence = todaySentence(effort, todayRoute),
+                sessionTargets = todaySession
+                    ?.takeIf { showSessionTargets(it, todayRoute) }
+                    ?.let { planSessionTargets(it, insights) },
+                offer = offer,
+                // Kernweg 3: genau 1 Tipp startet die Routensuche sofort.
+                onBuildRoute = {
+                    offer?.let { appViewModel.requestRouteGeneration(it.target, autoStart = true) }
+                },
+                onWhy = { showWhy = true },
+                healthHint = healthHint,
+                onOpenHealth = { appViewModel.requestMoreSection(MoreSection.HEALTH) },
+                goalDistanceKm = if (effort == TodayEffort.ZIELTAG) displayPlan?.goal?.distanceKm else null,
+                goalAscentM = if (effort == TodayEffort.ZIELTAG) displayPlan?.goal?.ascentM?.roundToInt() else null,
+                goalDurationMin = if (effort == TodayEffort.ZIELTAG) displayPlan?.goal?.targetDurationMin else null,
+            )
+        }
+
+        if (includeFirstRideInline && !ridesLoading && !hasRiddenRide) {
+            item(key = "erste-tour") {
+                FirstRideState(
+                    onRecord = appViewModel::requestRecording,
+                    onImport = { appViewModel.requestTab(AppTab.RIDES) },
+                    hasOffer = offer != null,
+                )
+            }
+        }
+
+        item(key = "ort") {
+            // Draussen oder drinnen zur Einheit des Tages
+            // (`core/…/TodayPlace.kt`, docs/trainingswissenschaft.md 17).
+            val placeNow = rememberHourNow().atZone(java.time.ZoneId.systemDefault())
+            TodayPlaceEntry(
+                decision = decision,
+                rides = rides,
+                rideLoads = remember(insights) { insights.rideLoads.mapValues { it.value.load } },
+                now = placeNow,
+                onPlanRoute = { target -> appViewModel.requestRouteGeneration(target, autoStart = true) },
+            )
+        }
+
+        item(key = "indoor") {
+            // Einheit des Tages fahren: passende Strecke zur Einheit
+            // (docs/indoor/app.md), sonst der allgemeine Einstieg.
+            IndoorTodayEntry(
+                today = todayRoute,
+                profile = insights.profile,
+                rideCount = rides.size,
+                coreTexts = coreTexts,
+                fallbackErgTitle = indoorErgTitle,
+                onOpen = { appViewModel.requestIndoorRoutes() },
+                onRideDay = appViewModel::requestIndoorDay,
+                onPlanRoute = { target -> appViewModel.requestRouteGeneration(target, autoStart = true) },
+                primary = (offer == null && !ridesLoading && !planRestDay && effort != TodayEffort.RUHETAG && effort != TodayEffort.ZIELTAG),
+            )
+        }
+    }
+
+    val secondaryPaneItems: LazyListScope.(Boolean) -> Unit = { includeFirstRide ->
+        // Solange die Touren noch aus der Datenbank kommen, weder
+        // Wochenstreifen noch „Noch keine Touren" — sonst blitzt der
+        // Erststart kurz auch bei vorhandener Historie auf.
+        if (ridesLoading) {
+            Unit
+        } else if (!hasRiddenRide) {
+            if (includeFirstRide) {
+                item(key = "erste-tour") {
+                    FirstRideState(
+                        onRecord = appViewModel::requestRecording,
+                        // Touren kommen im Verlauf hinein („+" bzw. sein Leerzustand).
+                        onImport = { appViewModel.requestTab(AppTab.RIDES) },
+                        hasOffer = offer != null,
+                    )
+                }
+            }
+        } else {
+            recap?.let { lastWeek ->
+                item(key = "sec-rueckblick") { SectionEyebrow(stringResource(R.string.progress_recap_eyebrow)) }
+                item(key = "rueckblick") { WeeklyRecapCard(lastWeek, modifier = progressCardModifier) }
+            }
+            item(key = "sec-woche") { SectionEyebrow(stringResource(R.string.today_week_eyebrow)) }
+            item(key = "woche") {
+                WeekCard(summary = weekSummaryText, strip = strip, goal = goalLine, footer = { StreakFooter(streak) })
+            }
+            weekPlan?.let { plan ->
+                item(key = "wochenplan") {
+                    WeekPlanCard(
+                        plan = plan,
+                        today = today,
+                        weather = weekPlanWeather.ui,
+                        onWeatherEnabledChange = { weekPlanWeather.setEnabled(it) },
+                        onPlanRide = { ride ->
+                            val speed = planningSpeedKmh(SessionIntensity.GRUNDLAGE, insights.profile, rides)
+                            val day = weekPlanDayLong(ride.date, today, coreTexts).resolve(context)
+                            appViewModel.requestRouteGeneration(
+                                RouteTarget(
+                                    distanceKm = ride.km.toDouble(),
+                                    ascentPreference = AscentPreference.MODERAT,
+                                    durationH = ride.km / speed,
+                                    speedKmh = speed,
+                                    intensity = SessionIntensity.GRUNDLAGE,
+                                    label = context.getString(R.string.today_week_plan_route_label, day),
+                                    source = RouteTargetSource.SELBST_GEWAEHLT,
+                                ),
+                            )
+                        },
+                    )
+                }
+            }
+
+            item(key = "sec-naechstes") { SectionEyebrow(stringResource(R.string.progress_next_eyebrow)) }
+            challenge?.let { stretch ->
+                item(key = "bestweite") {
+                    ChallengeCard(
+                        challenge = stretch,
+                        modifier = progressCardModifier,
+                        onBuild = {
+                            val speed = planningSpeedKmh(SessionIntensity.GRUNDLAGE, insights.profile, rides)
+                            appViewModel.requestRouteGeneration(
+                                RouteTarget(
+                                    distanceKm = stretch.targetKm.toDouble(),
+                                    ascentPreference = AscentPreference.MODERAT,
+                                    durationH = stretch.targetKm / speed,
+                                    speedKmh = speed,
+                                    intensity = SessionIntensity.GRUNDLAGE,
+                                    label = challengeLabel,
+                                    source = RouteTargetSource.SELBST_GEWAEHLT,
+                                ),
+                            )
+                        },
+                    )
+                }
+            }
+            item(key = "ziele") {
+                NextGoalsCard(
+                    yearGoal = yearGoal,
+                    year = today.year,
+                    suggestedKm = suggestedYearGoalKm,
+                    milestone = milestone,
+                    onYearGoal = { showYearGoal = true },
+                    onOpenProgress = { appViewModel.requestProgress() },
+                    modifier = progressCardModifier,
+                    challenge = nextChallenge,
+                )
+            }
+        }
+
+        if (!ridesLoading || !includeFirstRide) {
+            item(key = "sec-ziel") { SectionEyebrow(stringResource(R.string.today_goal_eyebrow)) }
+            item(key = "ziel") {
+                // Jeder Knopf oeffnet, was er nennt (Seitenkarte, Befund 9):
+                // „Dein Ziel" den Plan, „Ziel festlegen" gleich das Formular.
+                val openTraining = { appViewModel.requestPlan() }
+                val shownPlan = displayPlan
+                if (shownPlan == null) {
+                    GoalPromptCard(onOpenTraining = { appViewModel.requestPlan(openGoalEditor = true) })
+                } else {
+                    val goal = shownPlan.goal
+                    val goalDate = localOfEpochMs(goal.date).toLocalDate()
+                    val planStart = shownPlan.weeks.firstOrNull()?.start ?: shownPlan.createdAt
+                    val targetMin = goal.targetDurationMin
+                    val lineParts = if (targetMin != null) {
+                        goalTimeLine(
+                            today = today,
+                            goalDate = goalDate,
+                            targetMin = targetMin,
+                            currentMin = goalPrediction?.prognosis?.currentMin,
+                        )
+                    } else {
+                        goalLine(
+                            today = today,
+                            goalDate = goalDate,
+                            weekIndex = currentWeek?.index ?: -1,
+                            weekCount = shownPlan.weeks.size,
+                            texts = coreTexts,
+                        )
+                    }
+                    // Fitnessziel: kein „0 km", sondern wie die Zielkarte im Training.
+                    val titleParts = goalTitleParts(goal, language, fitnessTestWeek(shownPlan), formats::km)
+                        .map { it.asString() }.joinToString(" · ")
+                    GoalCard(
+                        title = "${goal.name} · $titleParts",
+                        // Erst aufloesen, dann mit dem sprachneutralen „ · " verbinden.
+                        line = lineParts.map { it.asString() }.joinToString(" · "),
+                        progress = goalProgress(localOfEpochMs(planStart).toLocalDate(), goalDate, today),
+                        onOpenTraining = openTraining,
+                    )
+                }
+            }
+        }
     }
 
     Scaffold(
@@ -336,208 +553,89 @@ fun TodayScreen(appViewModel: AppViewModel) {
             )
         },
     ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            LazyColumn(
+        if (useTwoPaneLayout(layoutClass)) {
+            val rightPaneState = rememberLazyListState()
+            var initialAnchored by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(ridesLoading) {
+                if (!ridesLoading && !initialAnchored) {
+                    initialAnchored = true
+                    rightPaneState.scrollToItem(0)
+                }
+            }
+            Column(
                 modifier = Modifier
-                    .fillMaxHeight()
-                    .widthIn(max = ContentMaxWidth)
-                    .fillMaxWidth(),
-                contentPadding = screenContentPadding(),
-                verticalArrangement = Arrangement.spacedBy(CardGap),
+                    .fillMaxSize()
+                    .padding(innerPadding),
             ) {
-                item(key = "kopf") {
-                    ScreenHeader(
-                        title = stringResource(R.string.today_screen_title),
-                        overline = formats.weekdayDate(today),
-                        actions = {
+                ScreenHeader(
+                    title = stringResource(R.string.today_screen_title),
+                    overline = formats.weekdayDate(today),
+                    modifier = Modifier.padding(horizontal = TabletScreenPadding),
+                    actions = {
+                        if (showSettingsInHeader) {
                             SettingsAction(onClick = { appViewModel.requestTab(AppTab.MORE) })
-                        },
-                    )
-                }
-
-                item(key = "hero") {
-                    HeroCard(
-                        score = if (readiness.available) readiness.score.roundToInt() else null,
-                        band = band,
-                        headline = todayHeadline(effort, todayRoute, band, planRestDay),
-                        sentence = todaySentence(effort, todayRoute),
-                        sessionTargets = todaySession
-                            ?.takeIf { showSessionTargets(it, todayRoute) }
-                            ?.let { planSessionTargets(it, insights) },
-                        offer = offer,
-                        // Die erste Runde ohne Historie baut sofort („Runde bauen ·
-                        // 26 km"), alle anderen Angebote oeffnen wie bisher nur
-                        // das Panel.
-                        onBuildRoute = {
-                            offer?.let { appViewModel.requestRouteGeneration(it.target, autoStart = it.firstRound) }
-                        },
-                        onWhy = { showWhy = true },
-                        healthHint = healthHint,
-                        onOpenHealth = { appViewModel.requestMoreSection(MoreSection.HEALTH) },
-                    )
-                }
-
-                item(key = "ort") {
-                    // Draussen oder drinnen zur Einheit des Tages
-                    // (`core/…/TodayPlace.kt`, docs/trainingswissenschaft.md 17).
-                    val placeNow = rememberHourNow().atZone(java.time.ZoneId.systemDefault())
-                    TodayPlaceEntry(
-                        decision = decision,
-                        rides = rides,
-                        rideLoads = remember(insights) { insights.rideLoads.mapValues { it.value.load } },
-                        now = placeNow,
-                        onPlanRoute = { target -> appViewModel.requestRouteGeneration(target) },
-                    )
-                }
-
-                item(key = "indoor") {
-                    // Einheit des Tages fahren: passende Strecke zur Einheit
-                    // (docs/indoor/app.md), sonst der allgemeine Einstieg.
-                    IndoorTodayEntry(
-                        today = todayRoute,
-                        profile = insights.profile,
-                        rideCount = rides.size,
-                        coreTexts = coreTexts,
-                        fallbackErgTitle = indoorErgTitle,
-                        onOpen = { appViewModel.requestIndoorRoutes() },
-                        onRideDay = appViewModel::requestIndoorDay,
-                        onPlanRoute = { target -> appViewModel.requestRouteGeneration(target) },
-                    )
-                }
-
-                // Solange die Touren noch aus der Datenbank kommen, weder
-                // Wochenstreifen noch „Noch keine Touren" — sonst blitzt der
-                // Erststart kurz auch bei vorhandener Historie auf.
-                if (ridesLoading) {
-                    Unit
-                } else if (!hasRiddenRide) {
-                    // Erststart: Ein Streifen aus lauter „–" sagte nichts —
-                    // hier steht stattdessen der Weg zur ersten Tour. Nur
-                    // gespeicherte Planungen zaehlen dabei nicht als Tour: Der
-                    // Streifen waere sonst genauso leer.
-                    item(key = "erste-tour") {
-                        FirstRideState(
-                            onRecord = appViewModel::requestRecording,
-                            // Touren kommen im Verlauf hinein („+" bzw. sein Leerzustand).
-                            onImport = { appViewModel.requestTab(AppTab.RIDES) },
-                            hasOffer = offer != null,
+                        }
+                    },
+                )
+                val paneBottomPadding = TabletScreenPadding + LocalFloatingNavigationBarSpace.current
+                TwoPaneLayout(
+                    primaryWeight = 0.58f,
+                    gap = TabletCardGap,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = TabletScreenPadding),
+                    primary = {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(top = TabletCardGap, bottom = paneBottomPadding),
+                            verticalArrangement = Arrangement.spacedBy(TabletCardGap),
+                        ) {
+                            primaryPaneItems(false)
+                        }
+                    },
+                    secondary = {
+                        LazyColumn(
+                            state = rightPaneState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(top = TabletCardGap, bottom = paneBottomPadding),
+                            verticalArrangement = Arrangement.spacedBy(TabletCardGap),
+                        ) {
+                            secondaryPaneItems(true)
+                        }
+                    },
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .widthIn(max = ContentMaxWidth)
+                        .fillMaxWidth(),
+                    contentPadding = screenContentPadding(),
+                    verticalArrangement = Arrangement.spacedBy(
+                        if (layoutClass == WindowLayoutClass.Compact) CardGap else TabletCardGap,
+                    ),
+                ) {
+                    item(key = "kopf") {
+                        ScreenHeader(
+                            title = stringResource(R.string.today_screen_title),
+                            overline = formats.weekdayDate(today),
+                            actions = {
+                                if (showSettingsInHeader) {
+                                    SettingsAction(onClick = { appViewModel.requestTab(AppTab.MORE) })
+                                }
+                            },
                         )
                     }
-                } else {
-                    recap?.let { lastWeek ->
-                        item(key = "sec-rueckblick") { SectionEyebrow(stringResource(R.string.progress_recap_eyebrow)) }
-                        item(key = "rueckblick") { WeeklyRecapCard(lastWeek) }
-                    }
-                    item(key = "sec-woche") { SectionEyebrow(stringResource(R.string.today_week_eyebrow)) }
-                    item(key = "woche") {
-                        WeekCard(summary = weekSummaryText, strip = strip, goal = goalLine, footer = { StreakFooter(streak) })
-                    }
-                    weekPlan?.let { plan ->
-                        item(key = "wochenplan") {
-                            WeekPlanCard(
-                                plan = plan,
-                                today = today,
-                                weather = weekPlanWeather.ui,
-                                onWeatherEnabledChange = { weekPlanWeather.setEnabled(it) },
-                                onPlanRide = { ride ->
-                                    val speed = planningSpeedKmh(SessionIntensity.GRUNDLAGE, insights.profile, rides)
-                                    val day = weekPlanDayLong(ride.date, today, coreTexts).resolve(context)
-                                    appViewModel.requestRouteGeneration(
-                                        RouteTarget(
-                                            distanceKm = ride.km.toDouble(),
-                                            ascentPreference = AscentPreference.MODERAT,
-                                            durationH = ride.km / speed,
-                                            speedKmh = speed,
-                                            intensity = SessionIntensity.GRUNDLAGE,
-                                            label = context.getString(R.string.today_week_plan_route_label, day),
-                                            source = RouteTargetSource.SELBST_GEWAEHLT,
-                                        ),
-                                    )
-                                },
-                            )
-                        }
-                    }
-
-                    item(key = "sec-naechstes") { SectionEyebrow(stringResource(R.string.progress_next_eyebrow)) }
-                    challenge?.let { stretch ->
-                        item(key = "bestweite") {
-                            ChallengeCard(
-                                challenge = stretch,
-                                onBuild = {
-                                    val speed = planningSpeedKmh(SessionIntensity.GRUNDLAGE, insights.profile, rides)
-                                    appViewModel.requestRouteGeneration(
-                                        RouteTarget(
-                                            distanceKm = stretch.targetKm.toDouble(),
-                                            ascentPreference = AscentPreference.MODERAT,
-                                            durationH = stretch.targetKm / speed,
-                                            speedKmh = speed,
-                                            intensity = SessionIntensity.GRUNDLAGE,
-                                            label = challengeLabel,
-                                            source = RouteTargetSource.SELBST_GEWAEHLT,
-                                        ),
-                                    )
-                                },
-                            )
-                        }
-                    }
-                    item(key = "ziele") {
-                        NextGoalsCard(
-                            yearGoal = yearGoal,
-                            year = today.year,
-                            suggestedKm = suggestedYearGoalKm,
-                            milestone = milestone,
-                            onYearGoal = { showYearGoal = true },
-                            onOpenProgress = { appViewModel.requestProgress() },
-                            challenge = nextChallenge,
-                        )
-                    }
-                }
-
-                item(key = "sec-ziel") { SectionEyebrow(stringResource(R.string.today_goal_eyebrow)) }
-                item(key = "ziel") {
-                    // Jeder Knopf oeffnet, was er nennt (Seitenkarte, Befund 9):
-                    // „Dein Ziel" den Plan, „Ziel festlegen" gleich das Formular.
-                    val openTraining = { appViewModel.requestPlan() }
-                    val shownPlan = displayPlan
-                    if (shownPlan == null) {
-                        GoalPromptCard(onOpenTraining = { appViewModel.requestPlan(openGoalEditor = true) })
-                    } else {
-                        val goal = shownPlan.goal
-                        val goalDate = localOfEpochMs(goal.date).toLocalDate()
-                        val planStart = shownPlan.weeks.firstOrNull()?.start ?: shownPlan.createdAt
-                        val targetMin = goal.targetDurationMin
-                        val lineParts = if (targetMin != null) {
-                            goalTimeLine(
-                                today = today,
-                                goalDate = goalDate,
-                                targetMin = targetMin,
-                                currentMin = goalPrediction?.prognosis?.currentMin,
-                            )
-                        } else {
-                            goalLine(
-                                today = today,
-                                goalDate = goalDate,
-                                weekIndex = currentWeek?.index ?: -1,
-                                weekCount = shownPlan.weeks.size,
-                                texts = coreTexts,
-                            )
-                        }
-                        // Fitnessziel: kein „0 km", sondern wie die Zielkarte im Training.
-                        val titleParts = goalTitleParts(goal, language, fitnessTestWeek(shownPlan), formats::km)
-                            .map { it.asString() }.joinToString(" · ")
-                        GoalCard(
-                            title = "${goal.name} · $titleParts",
-                            // Erst aufloesen, dann mit dem sprachneutralen „ · " verbinden.
-                            line = lineParts.map { it.asString() }.joinToString(" · "),
-                            progress = goalProgress(localOfEpochMs(planStart).toLocalDate(), goalDate, today),
-                            onOpenTraining = openTraining,
-                        )
-                    }
+                    primaryPaneItems(true)
+                    secondaryPaneItems(false)
                 }
             }
         }
@@ -599,12 +697,30 @@ fun TodayScreen(appViewModel: AppViewModel) {
  */
 @Composable
 private fun FirstRideState(onRecord: () -> Unit, onImport: () -> Unit, hasOffer: Boolean) {
-    EmptyState(
-        title = stringResource(R.string.today_first_ride_title),
-        body = stringResource(if (hasOffer) R.string.today_first_ride_offer_body else R.string.today_first_ride_body),
-        actions = {
-            NeutralButton(onClick = onImport) { Text(stringResource(R.string.today_first_ride_import_action)) }
-            NeutralButton(onClick = onRecord) { Text(stringResource(R.string.today_first_ride_record_action)) }
-        },
-    )
+    AtlasCard {
+        Column(modifier = Modifier.padding(CardPadding)) {
+            Text(
+                text = stringResource(R.string.today_first_ride_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(if (hasOffer) R.string.today_first_ride_offer_body else R.string.today_first_ride_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TrailscapeSecondaryButton(onClick = onImport) {
+                    Text(stringResource(R.string.today_first_ride_import_action))
+                }
+                TrailscapeSecondaryButton(onClick = onRecord) {
+                    Text(stringResource(R.string.today_first_ride_record_action))
+                }
+            }
+        }
+    }
 }

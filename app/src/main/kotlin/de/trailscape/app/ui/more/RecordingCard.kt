@@ -30,6 +30,7 @@ import de.trailscape.app.record.setzeOffRouteVibrationAktiviert
 import de.trailscape.app.record.setzeSprachansagenAktiviert
 import de.trailscape.app.record.sprachansagenAktiviert
 import de.trailscape.app.record.vonBatterieoptimierungAusgenommen
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 
 /**
  * Einstellungen der Aufzeichnung — der Abschnitt „Aufzeichnung" der Seite
@@ -87,7 +88,7 @@ fun RecordingCardContent() {
     )
     if (!ausgenommen) {
         Spacer(modifier = Modifier.height(8.dp))
-        SettingsSecondaryButton(
+        TrailscapeSecondaryButton(
             onClick = {
                 try {
                     ausnahmeLauncher.launch(batterieAusnahmeIntent(context))

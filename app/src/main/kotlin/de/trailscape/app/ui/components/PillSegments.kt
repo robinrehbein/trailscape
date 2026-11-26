@@ -1,22 +1,23 @@
 package de.trailscape.app.ui.components
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -24,8 +25,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.intl.LocaleList
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
 /**
  * # Der Pillen-Umschalter (Fuehrung „Klartext")
@@ -72,22 +75,28 @@ fun PillSegments(
     role: Role = Role.RadioButton,
 ) {
     val haptics = LocalHapticFeedback.current
+    val baseStyle = MaterialTheme.typography.labelLarge
     Surface(
-        modifier = modifier.fillMaxWidth().height(SegmentTrackHeight),
+        modifier = modifier.fillMaxWidth().heightIn(min = SegmentTrackHeight),
         shape = CircleShape,
         color = trackColor,
     ) {
-        Row(
-            modifier = Modifier.padding(SegmentInset).selectableGroup(),
-            verticalAlignment = Alignment.CenterVertically,
+        ProportionalSegmentRow(
+            modifier = Modifier
+                .padding(SegmentInset)
+                .selectableGroup(),
         ) {
             options.forEachIndexed { index, label ->
                 val selected = index == selectedIndex
                 val description = optionDescriptions.getOrNull(index)
+                val contentColor = if (selected) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
                 Surface(
                     modifier = Modifier
-                        .weight(1f)
-                        .height(SegmentTrackHeight - SegmentInset * 2)
+                        .heightIn(min = SegmentTrackHeight - SegmentInset * 2)
                         .clip(CircleShape)
                         .selectable(
                             selected = selected,
@@ -110,21 +119,105 @@ fun PillSegments(
                     color = if (selected) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent,
                     shadowElevation = if (selected) 1.dp else 0.dp,
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
+                    Box(
+                        modifier = Modifier.padding(horizontal = SegmentLabelPadding, vertical = 6.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        BasicText(
                             text = localeTagged(label, optionLocales.getOrNull(index)),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (selected) {
-                                MaterialTheme.colorScheme.onSurface
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
+                            style = baseStyle.copy(color = contentColor),
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 8.dp),
+                            softWrap = false,
+                            autoSize = TextAutoSize.StepBased(
+                                minFontSize = 11.sp,
+                                maxFontSize = baseStyle.fontSize,
+                                stepSize = 0.5.sp,
+                            ),
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Verteilt die Segmentbreiten nach natuerlichem Textbedarf statt starrer
+ * Gleichverteilung, damit laengere Woerter („Gemeinsam", „Fortschritt") bei
+ * schmalen Bildschirmen und grosser Schrift nicht abgeschnitten werden.
+ */
+@Composable
+private fun ProportionalSegmentRow(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Layout(
+        modifier = modifier,
+        content = content,
+    ) { measurables, constraints ->
+        if (measurables.isEmpty()) {
+            return@Layout layout(constraints.minWidth, constraints.minHeight) {}
+        }
+        val availableWidth = constraints.maxWidth.coerceAtLeast(1)
+        val count = measurables.size
+        val naturalWidths = measurables.map { it.maxIntrinsicWidth(constraints.maxHeight).coerceAtLeast(1) }
+        val naturalSum = naturalWidths.sum()
+        val targetWidths = if (naturalSum <= availableWidth) {
+            val extra = availableWidth - naturalSum
+            val perItem = extra / count
+            var remainder = extra % count
+            naturalWidths.map { w ->
+                val bonus = if (remainder > 0) {
+                    remainder--
+                    1
+                } else {
+                    0
+                }
+                w + perItem + bonus
+            }
+        } else {
+            val minSlot = (availableWidth / (count * 2)).coerceAtLeast(1)
+            val scaled = MutableList(count) { i ->
+                ((naturalWidths[i].toLong() * availableWidth) / naturalSum).toInt().coerceAtLeast(minSlot)
+            }
+            var diff = availableWidth - scaled.sum()
+            while (diff != 0) {
+                var changed = false
+                for (i in scaled.indices) {
+                    if (diff == 0) break
+                    if (diff > 0) {
+                        scaled[i]++
+                        diff--
+                        changed = true
+                    } else if (scaled[i] > minSlot) {
+                        scaled[i]--
+                        diff++
+                        changed = true
+                    }
+                }
+                if (!changed) break
+            }
+            scaled
+        }
+
+        val minH = if (constraints.hasBoundedHeight) constraints.minHeight else 0
+        val placeables = measurables.mapIndexed { index, measurable ->
+            measurable.measure(
+                Constraints(
+                    minWidth = targetWidths[index],
+                    maxWidth = targetWidths[index],
+                    minHeight = minH,
+                    maxHeight = constraints.maxHeight,
+                ),
+            )
+        }
+        val rowHeight = placeables.maxOf { it.height }.coerceIn(constraints.minHeight, constraints.maxHeight)
+        layout(availableWidth, rowHeight) {
+            var x = 0
+            placeables.forEach { placeable ->
+                val y = (rowHeight - placeable.height) / 2
+                placeable.placeRelative(x, y)
+                x += placeable.width
             }
         }
     }
@@ -135,6 +228,9 @@ private val SegmentTrackHeight = 44.dp
 
 /** Luft zwischen Spur und gewaehltem Segment. */
 private val SegmentInset = 3.dp
+
+/** Waagerechtes Innenpolster eines einzelnen Segments. */
+private val SegmentLabelPadding = 10.dp
 
 /**
  * [text] als [AnnotatedString], bei gesetzter [locale] durchgehend mit dieser

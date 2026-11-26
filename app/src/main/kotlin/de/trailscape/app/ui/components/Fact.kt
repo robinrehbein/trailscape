@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
+import de.trailscape.app.ui.theme.tabular
 
 /**
  * # Die eine Grammatik fuer Kennzahlen
@@ -42,11 +43,11 @@ fun Fact(
         )
         Text(
             text = value,
-            style = if (compact) {
+            style = (if (compact) {
                 MaterialTheme.typography.titleMedium
             } else {
                 MaterialTheme.typography.headlineSmall
-            },
+            }).tabular(),
             color = valueColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

@@ -2,6 +2,7 @@ package de.trailscape.app.ui.today
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,8 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Terrain
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,6 +32,9 @@ import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.i18n.AppFormats
 import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.ui.components.AtlasCard
+import de.trailscape.app.ui.components.RouteCard
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.wear.WearGlanceSender
 import de.trailscape.core.CachedForecast
@@ -129,13 +131,22 @@ fun TodayPlaceEntry(
         location = point
         forecast = day
     }
-    val progress = remember(decision, rides, rideLoads, now) {
-        runCatching {
-            todaySessionProgress(decision.currentWeek, decision.todaySession, rides, now.toInstant().toEpochMilli(), rideLoads)
-        }.getOrNull()
+    val suppressed = decision.planRestDay || decision.effort == TodayEffort.RUHETAG || decision.effort == TodayEffort.ZIELTAG
+    val progress = remember(decision, rides, rideLoads, now, suppressed) {
+        if (suppressed) {
+            null
+        } else {
+            runCatching {
+                todaySessionProgress(decision.currentWeek, decision.todaySession, rides, now.toInstant().toEpochMilli(), rideLoads)
+            }.getOrNull()
+        }
     }
-    val suggested = remember(decision.route, now, location, forecast) {
-        runCatching { suggestTodayPlace(daySessionFor(decision.route), decision.route, now, location, forecast) }.getOrNull()
+    val suggested = remember(decision.route, now, location, forecast, suppressed) {
+        if (suppressed) {
+            null
+        } else {
+            runCatching { suggestTodayPlace(daySessionFor(decision.route), decision.route, now, location, forecast) }.getOrNull()
+        }
     }
     val place = suggested?.let { applyPlaceChoice(it, choice, date) }
     val done = progress?.status == PlanSessionStatus.ERLEDIGT
@@ -150,7 +161,8 @@ fun TodayPlaceEntry(
     }
 
     val ui: TodayPlaceUi = when {
-        done && progress != null -> TodayPlaceUi.Done(progress)
+        suppressed -> return
+        progress?.status == PlanSessionStatus.ERLEDIGT -> TodayPlaceUi.Done(progress)
         place != null -> TodayPlaceUi.Suggest(place, now)
         else -> return
     }
@@ -184,7 +196,18 @@ fun TodayPlaceCard(
     modifier: Modifier = Modifier,
 ) {
     val formats = LocalAppFormats.current
-    Card(modifier = modifier.fillMaxWidth()) {
+    if (ui is TodayPlaceUi.Suggest && ui.place.place == RidePlace.OUTDOOR && ui.place.outdoorTarget != null) {
+        OutdoorSuggestRouteCard(
+            ui = ui,
+            target = ui.place.outdoorTarget!!,
+            formats = formats,
+            onFlip = onFlip,
+            onPlanRoute = onPlanRoute,
+            modifier = modifier,
+        )
+        return
+    }
+    AtlasCard(modifier = modifier) {
         Column(modifier = Modifier.padding(CardPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             when (ui) {
                 is TodayPlaceUi.Done -> DoneBody(ui.progress, formats)
@@ -192,6 +215,84 @@ fun TodayPlaceCard(
             }
         }
     }
+}
+
+@Composable
+private fun OutdoorSuggestRouteCard(
+    ui: TodayPlaceUi.Suggest,
+    target: RouteTarget,
+    formats: AppFormats,
+    onFlip: () -> Unit,
+    onPlanRoute: (RouteTarget) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val p = ui.place
+    val metrics = rememberTodayRouteMetrics(
+        distanceKm = target.distanceKm,
+        ascentM = estimatedAscentM(target.distanceKm, target.ascentPreference),
+        exactAscent = false,
+        durationMin = routeDurationMinutes(target, fallbackMinutes = p.minutes),
+        ascentPreference = target.ascentPreference,
+    )
+    val lines = p.reasons.take(2).map { placeReasonText(it, p, ui.now, formats) }
+    val allBullets = buildList {
+        if (lines.isEmpty() && p.suggested == RidePlace.OUTDOOR) {
+            add("• ${stringResource(R.string.idee02_place_reason_none)}")
+        }
+        lines.forEach { add("• $it") }
+        if (p.chosen) {
+            add(
+                "• ${
+                    stringResource(
+                        if (p.suggested == RidePlace.INDOOR) R.string.idee02_place_suggested_was_indoor
+                        else R.string.idee02_place_suggested_was_outdoor,
+                    )
+                }",
+            )
+        }
+    }
+    val title = stringResource(
+        if (p.chosen) R.string.idee02_place_title_outdoor_chosen else R.string.idee02_place_title_outdoor,
+    )
+    val primaryReason = allBullets.firstOrNull()
+    val extraReasons = allBullets.drop(1)
+
+    RouteCard(
+        title = title,
+        subtitle = primaryReason,
+        distanceText = metrics.distanceText,
+        ascentText = metrics.ascentText,
+        durationText = metrics.durationText,
+        statusLabel = metrics.statusLabel,
+        modifier = modifier,
+        media = {
+            TodayRoutePreview(
+                ascentPreference = target.ascentPreference,
+                spokenSummary = "${metrics.distanceText}, ${metrics.ascentText}, ${metrics.durationText}",
+                showStatusBadge = false,
+                modifier = Modifier.matchParentSize(),
+            )
+        },
+        action = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                extraReasons.forEach { bullet ->
+                    Text(text = bullet, style = MaterialTheme.typography.bodyMedium)
+                }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TrailscapeSecondaryButton(onClick = { onPlanRoute(target) }) {
+                        Text(stringResource(R.string.idee02_place_plan_action))
+                    }
+                    TextButton(onClick = onFlip) {
+                        Text(stringResource(R.string.idee02_place_flip_to_indoor_action))
+                    }
+                }
+            }
+        },
+    )
 }
 
 @Composable
@@ -267,7 +368,7 @@ private fun SuggestBody(
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (!indoor && target != null) {
-            Button(onClick = { onPlanRoute(target) }) { Text(stringResource(R.string.idee02_place_plan_action)) }
+            TrailscapeSecondaryButton(onClick = { onPlanRoute(target) }) { Text(stringResource(R.string.idee02_place_plan_action)) }
         }
         TextButton(onClick = onFlip) {
             Text(

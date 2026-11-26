@@ -24,7 +24,7 @@ import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.components.OneUiDialog
-import de.trailscape.app.ui.map.PrimaryButton
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
 import de.trailscape.app.ui.today.TodayOffer
 import de.trailscape.app.ui.today.offerDialogAction
 import de.trailscape.app.ui.today.offerHint
@@ -215,11 +215,12 @@ private fun DialogButtonStack(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        PrimaryButton(
-            text = primaryLabel,
+        TrailscapePrimaryButton(
             onClick = onPrimary,
             modifier = Modifier.fillMaxWidth(),
-        )
+        ) {
+            Text(primaryLabel)
+        }
         if (secondaryLabel != null) {
             OutlinedButton(
                 onClick = onSecondary,

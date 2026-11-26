@@ -28,20 +28,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -54,11 +53,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.components.RouteCard
 import de.trailscape.app.ui.components.TagPill
+import de.trailscape.core.indoor.catalog.CatalogFilter
 import de.trailscape.core.indoor.catalog.CatalogProfile
 import de.trailscape.core.indoor.catalog.CatalogRideKind
 import de.trailscape.core.indoor.catalog.CatalogTimeBasis
@@ -139,6 +141,53 @@ internal fun IndoorCatalogList(
     }
 }
 
+/** Erweitert ein `LazyVerticalGrid` um Filterleiste und 2-spaltige Katalog-Karten (Tablet quer). */
+internal fun LazyGridScope.indoorCatalogGridItems(
+    catalog: IndoorCatalogUi,
+    rows: List<CatalogRow>,
+    shown: List<CatalogRow>,
+    filter: CatalogFilter,
+    selectedKey: String?,
+    onSelect: (IndoorRouteOption) -> Unit,
+    onOpenDetail: (String) -> Unit,
+    initialFilterOpen: Boolean = false,
+) {
+    when {
+        catalog.loading -> item(span = { GridItemSpan(2) }) {
+            Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.Center) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            }
+        }
+        catalog.items.isEmpty() -> item(span = { GridItemSpan(2) }) {
+            MutedText(stringResource(R.string.indoor_app_catalog_empty))
+        }
+        else -> {
+            item(span = { GridItemSpan(2) }) {
+                CatalogFilterBar(
+                    filter = filter,
+                    shown = shown.size,
+                    total = rows.size,
+                    onChange = CatalogBrowseSession::set,
+                    initiallyOpen = initialFilterOpen,
+                )
+            }
+            if (shown.isEmpty()) {
+                item(span = { GridItemSpan(2) }) {
+                    CatalogNoMatch(onReset = { CatalogBrowseSession.set(filter.cleared()) })
+                }
+            }
+            items(shown, key = { "catalog:${it.item.id}" }) { row ->
+                CatalogCard(
+                    row = row,
+                    selected = selectedKey == "catalog:${row.item.id}",
+                    onSelect = onSelect,
+                    onDetails = { onOpenDetail(row.item.id) },
+                )
+            }
+        }
+    }
+}
+
 /** Ergebnis von „Liste aktualisieren" als ein Satz (Einstellungen). */
 @Composable
 internal fun catalogRefreshText(r: IndoorCatalogRefresh): String = stringResource(
@@ -150,71 +199,130 @@ internal fun catalogRefreshText(r: IndoorCatalogRefresh): String = stringResourc
 )
 
 @Composable
-private fun CatalogCard(
+internal fun CatalogCard(
     row: CatalogRow,
     selected: Boolean,
     onSelect: (IndoorRouteOption) -> Unit,
     onDetails: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val item = row.item
     val formats = LocalAppFormats.current
     val lang = formats.language.tag
     val name = item.name.pick(lang)
     val option = IndoorRouteOption.Catalog(item.id, name, item.distanceKm, item.ascentM)
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .selectable(selected = selected, role = Role.RadioButton, onClick = { onSelect(option) }),
-        colors = if (selected) {
-            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-        } else {
-            CardDefaults.cardColors()
-        },
-    ) {
-        CatalogPreviewArea(item, name)
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                RadioButton(selected = selected, onClick = null)
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = name, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = listOf(item.region.pick(lang), countryName(item.country, formats.language.locale))
-                            .filter { it.isNotBlank() }.joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+    val subtitle = listOf(
+        item.region.pick(lang),
+        countryName(item.country, formats.language.locale),
+        kindLabel(item.kind),
+    ).filter { it.isNotBlank() }.joinToString(" · ")
+    RouteCard(
+        title = name,
+        subtitle = subtitle.ifBlank { null },
+        distanceText = stringResource(R.string.indoor_i10_km_value, formats.km(item.distanceKm)),
+        ascentText = stringResource(R.string.indoor_app_value_elevation, formats.indoorAscent(item.ascentM)),
+        durationText = row.estimateS?.let { catalogDuration(it) } ?: INDOOR_NO_VALUE,
+        statusLabel = catalogStatusText(item),
+        selected = selected,
+        modifier = modifier.selectable(selected = selected, role = Role.RadioButton, onClick = { onSelect(option) }),
+        media = { CatalogRouteMedia(item, name) },
+        action = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = catalogGradeText(row, formats),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                CatalogSurfaceSummary(item)
+                // Mit Bild steht das Profil klein unter den Zahlen; ohne Bild steht es oben gross.
+                if (item.profile != null && item.previewPath != null) {
+                    CatalogProfileChart(item.profile, name, Modifier.fillMaxWidth().height(40.dp), showRange = false)
                 }
-                TagPill(text = kindLabel(item.kind))
-            }
-            CatalogFactsGrid(row)
-            CatalogSurfaceSummary(item)
-            // Mit Bild steht das Profil klein unter den Zahlen; ohne Bild steht es oben gross.
-            if (item.profile != null && item.previewPath != null) {
-                CatalogProfileChart(item.profile, name, Modifier.fillMaxWidth().height(44.dp), showRange = true)
-            }
-            Text(
-                text = item.description.pick(lang),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 3,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FlowRow(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                Text(
+                    text = item.description.pick(lang),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    CatalogStatusPill(item)
-                    CatalogRiddenPill(row)
+                    Box(modifier = Modifier.weight(1f)) {
+                        CatalogRiddenPill(row)
+                    }
+                    val detailsCd = stringResource(R.string.indoor_i10_details_cd, name)
+                    TextButton(onClick = onDetails, modifier = Modifier.semantics { contentDescription = detailsCd }) {
+                        Text(stringResource(R.string.indoor_i10_details))
+                    }
                 }
-                val detailsCd = stringResource(R.string.indoor_i10_details_cd, name)
-                TextButton(onClick = onDetails, modifier = Modifier.semantics { contentDescription = detailsCd }) {
-                    Text(stringResource(R.string.indoor_i10_details))
-                }
+            }
+        },
+    )
+}
+
+@Composable
+internal fun CatalogRouteMedia(item: IndoorCatalogItemUi, name: String) {
+    val bitmap = remember(item.previewPath) {
+        item.previewPath?.let { path -> runCatching { BitmapFactory.decodeFile(path)?.asImageBitmap() }.getOrNull() }
+    }
+    Box(modifier = Modifier.fillMaxSize()) {
+        when {
+            bitmap != null -> Image(
+                bitmap = bitmap,
+                contentDescription = stringResource(R.string.indoor_app_catalog_preview_image, name),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            item.profile != null -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .padding(start = 12.dp, end = 12.dp, top = 36.dp, bottom = 8.dp),
+            ) {
+                CatalogProfileChart(item.profile, name, Modifier.fillMaxSize(), showRange = false)
+            }
+            else -> Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Icon(
+                    Icons.Outlined.Landscape,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    text = stringResource(R.string.indoor_app_catalog_preview_missing),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (item.laser) {
+                TagPill(
+                    text = stringResource(R.string.indoor_app_catalog_laser),
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+            if (item.isNew) {
+                TagPill(
+                    text = stringResource(R.string.indoor_app_catalog_new),
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                )
             }
         }
     }
@@ -288,26 +396,35 @@ internal fun CatalogSurfaceSummary(item: IndoorCatalogItemUi) {
  * fehlgeschlagen, neue Fassung.
  */
 @Composable
-internal fun CatalogStatusPill(item: IndoorCatalogItemUi) {
+internal fun catalogStatusText(item: IndoorCatalogItemUi): String {
     val formats = LocalAppFormats.current
     val size = if (item.packageBytes > 0) formats.indoorBytes(item.packageBytes) else null
     fun pct(done: Long, total: Long): Int = indoorPercent(if (total > 0) (done.toDouble() / total).toFloat() else 0f)
-    val (text, strong) = when (val s = item.state) {
-        IndoorCatalogState.Ready -> stringResource(R.string.indoor_app_home_status_ready) to true
-        is IndoorCatalogState.UpdateAvailable -> stringResource(R.string.indoor_app_home_status_update) to true
-        IndoorCatalogState.NotLoaded -> (
+    return when (val s = item.state) {
+        IndoorCatalogState.Ready -> stringResource(R.string.indoor_app_home_status_ready)
+        is IndoorCatalogState.UpdateAvailable -> stringResource(R.string.indoor_app_home_status_update)
+        IndoorCatalogState.NotLoaded ->
             size?.let { stringResource(R.string.indoor_app_home_status_download, it) }
                 ?: stringResource(R.string.indoor_app_home_status_download_unknown)
-            ) to false
-        is IndoorCatalogState.Paused -> stringResource(R.string.indoor_app_home_status_paused, pct(s.doneBytes, s.totalBytes)) to false
-        is IndoorCatalogState.Downloading -> stringResource(R.string.indoor_app_home_status_downloading, indoorPercent(s.fraction)) to false
-        IndoorCatalogState.Installing -> stringResource(R.string.indoor_app_home_status_installing) to false
+        is IndoorCatalogState.Paused -> stringResource(R.string.indoor_app_home_status_paused, pct(s.doneBytes, s.totalBytes))
+        is IndoorCatalogState.Downloading -> stringResource(R.string.indoor_app_home_status_downloading, indoorPercent(s.fraction))
+        IndoorCatalogState.Installing -> stringResource(R.string.indoor_app_home_status_installing)
         is IndoorCatalogState.Failed ->
             if (s.installed) {
-                stringResource(R.string.indoor_app_home_status_ready) to true
+                stringResource(R.string.indoor_app_home_status_ready)
             } else {
-                stringResource(R.string.indoor_app_home_status_failed) to false
+                stringResource(R.string.indoor_app_home_status_failed)
             }
+    }
+}
+
+@Composable
+internal fun CatalogStatusPill(item: IndoorCatalogItemUi) {
+    val text = catalogStatusText(item)
+    val strong = when (val s = item.state) {
+        IndoorCatalogState.Ready, is IndoorCatalogState.UpdateAvailable -> true
+        is IndoorCatalogState.Failed -> s.installed
+        else -> false
     }
     if (strong) {
         TagPill(

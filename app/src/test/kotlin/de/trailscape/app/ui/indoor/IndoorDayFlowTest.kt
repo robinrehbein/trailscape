@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import de.trailscape.app.data.RideStorage
 import de.trailscape.app.indoor.IndoorDayRouteFinder
+import de.trailscape.app.indoor.catalog.CatalogDownloader
+import de.trailscape.app.indoor.catalog.CatalogStore
 import de.trailscape.app.indoor.testing.FakeClock
 import de.trailscape.app.indoor.testing.FakeIndoorParts
 import de.trailscape.app.indoor.world.WorldLibrary
@@ -27,9 +29,21 @@ import de.trailscape.core.indoor.DayRouteAvailability
 import de.trailscape.core.indoor.DaySessionKind
 import de.trailscape.core.indoor.IndoorMode
 import de.trailscape.core.indoor.IndoorPhase
+import de.trailscape.core.indoor.SurfaceKind
+import de.trailscape.core.indoor.catalog.CatalogEntry
+import de.trailscape.core.indoor.catalog.CatalogRideKind
+import de.trailscape.core.indoor.catalog.CatalogText
+import de.trailscape.core.indoor.catalog.IndoorCatalog
+import de.trailscape.core.indoor.catalog.sha256Hex
+import de.trailscape.core.indoor.catalog.writeCatalogPackage
 import de.trailscape.core.indoor.createIndoorSession
 import de.trailscape.core.indoor.ergWorkoutFor
+import de.trailscape.core.indoor.world.IndoorQuality
+import de.trailscape.core.indoor.world.createWorldBuilder
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.io.path.createTempDirectory
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -40,6 +54,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import okhttp3.OkHttpClient
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
+import okio.Buffer
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -366,5 +386,644 @@ class IndoorDayFlowTest {
         assertNotNull(offer.generated)
         vm.preferDaySuggestion(INDOOR_DAY_GENERATED_KEY)
         assertEquals(IndoorDayPath.GENERATED, (vm.day.value as IndoorDayUi.Offer).path)
+    }
+
+    @Test
+    fun startDaySuggestion_readyWorld_autoStartsRide() {
+        rideStorage.saveRide(ride("ready", "Fertige Runde", 40_000.0, hilly))
+        val setup = viewModel(TodayRoute(target(SessionIntensity.HART), intervals, 25, 1.0, false, null))
+        setup.toRoute()
+        val saved = setup.route.value.options.filterIsInstance<IndoorRouteOption.Saved>().single { it.rideId == "ready" }
+        setup.selectRoute(saved)
+        setup.continueFromRoute()
+        setup.loadWorld()
+        assertIs<IndoorWorldUi.Ready>(setup.world.value)
+        setup.release()
+
+        val vm = viewModel(TodayRoute(target(SessionIntensity.HART), intervals, 25, 1.0, false, null))
+        vm.setDemoTrainer(true)
+        vm.ensureRouteOptions()
+        vm.startDaySuggestion("ride:ready")
+
+        assertEquals(IndoorStage.RIDE, vm.stage.value)
+        vm.tick(1)
+        assertEquals(IndoorMode.ERG, vm.ride.value?.session?.mode)
+        assertNotNull(vm.renderer.value)
+    }
+
+    @Test
+    fun startDaySuggestion_beforeDayLoads_autoStartsAfterLoad() {
+        val setup = viewModel(null)
+        setup.toRoute()
+        setup.selectRoute(IndoorRouteOption.TestWorld)
+        setup.continueFromRoute()
+        setup.release()
+
+        val vm = viewModel(TodayRoute(target(SessionIntensity.GRUNDLAGE, hours = 2.0), null, null, 0.9, false, null))
+        vm.setDemoTrainer(true)
+        vm.startDaySuggestion(IndoorRouteOption.TestWorld.key)
+        assertEquals(IndoorStage.ROUTE, vm.stage.value)
+
+        vm.ensureRouteOptions()
+        assertEquals(IndoorStage.RIDE, vm.stage.value)
+        assertEquals(IndoorRouteOption.TestWorld, vm.route.value.selected)
+    }
+
+    @Test
+    fun startDaySuggestion_generatedKey_launchesGeneratedRide() {
+        rideStorage.saveRide(ride("flach", "Flache Runde", 30_000.0) { 0.0 })
+        val setup = viewModel(TodayRoute(target(SessionIntensity.HART), intervals, 25, 1.0, false, null))
+        setup.toRoute()
+        setup.rideDayGenerated()
+        setup.loadWorld()
+        setup.release()
+
+        val vm = viewModel(TodayRoute(target(SessionIntensity.HART), intervals, 25, 1.0, false, null))
+        vm.setDemoTrainer(true)
+        vm.ensureRouteOptions()
+        vm.startDaySuggestion(INDOOR_DAY_GENERATED_KEY)
+
+        assertEquals(IndoorStage.RIDE, vm.stage.value)
+        vm.tick(1)
+        assertEquals(IndoorMode.ERG, vm.ride.value?.session?.mode)
+    }
+
+    @Test
+    fun startDaySuggestion_unpaired_opensPairAndResumesOnContinueFromPair() {
+        val setup = viewModel(null)
+        setup.toRoute()
+        setup.selectRoute(IndoorRouteOption.TestWorld)
+        setup.continueFromRoute()
+        setup.release()
+
+        val devices = kotlinx.coroutines.flow.MutableStateFlow<Map<de.trailscape.core.indoor.IndoorDeviceRole, de.trailscape.app.sensors.indoor.IndoorDeviceRef>>(emptyMap())
+        val vm = IndoorViewModel(
+            parts = parts,
+            rideStorage = rideStorage,
+            worlds = worlds,
+            store = MemoryKeyValueStore(),
+            texts = ContextIndoorTexts(
+                context = { ApplicationProvider.getApplicationContext<Application>() },
+                language = { AppLanguage.DE },
+            ),
+            profile = { TrainingProfile(ageYears = 40, weightKg = 75.0) },
+            plan = { null },
+            coreTexts = { CoreTextsDe },
+            today = { TodayRoute(target(SessionIntensity.GRUNDLAGE, hours = 2.0), null, null, 0.9, false, null) },
+            dayFinder = IndoorDayRouteFinder(rideStorage, worlds, null),
+            generatedWorlds = generatedWorlds,
+            devices = devices,
+            io = Dispatchers.Unconfined,
+            clock = clock,
+            wallClock = { 1_765_000_000_000L },
+            runtimeDispatcher = Dispatchers.Unconfined,
+            autoLoop = false,
+            scope = scope,
+        ).also { vm = it }
+
+        vm.ensureRouteOptions()
+        vm.startDaySuggestion(IndoorRouteOption.TestWorld.key)
+        assertEquals(IndoorStage.PAIR, vm.stage.value)
+        assertTrue(vm.pairFromRideFlow.value)
+
+        devices.value = mapOf(
+            de.trailscape.core.indoor.IndoorDeviceRole.TRAINER to
+                de.trailscape.app.sensors.indoor.IndoorDeviceRef(
+                    de.trailscape.core.indoor.IndoorDeviceRole.TRAINER,
+                    "AA:BB:CC:DD:EE:FF",
+                    "KICKR CORE",
+                ),
+        )
+        assertTrue(vm.pair.value.canContinue)
+        vm.continueFromPair()
+        assertEquals(IndoorStage.RIDE, vm.stage.value)
+    }
+
+    @Test
+    fun manualOpenPair_doesNotAutoStartRideOnCloseSubPage() {
+        val vm = viewModel(TodayRoute(target(SessionIntensity.GRUNDLAGE, hours = 2.0), null, null, 0.9, false, null))
+        vm.ensureRouteOptions()
+        vm.openPair()
+        assertEquals(IndoorStage.PAIR, vm.stage.value)
+        assertTrue(!vm.pairFromRideFlow.value)
+
+        vm.setDemoTrainer(true)
+        vm.closeSubPage()
+        assertEquals(IndoorStage.ROUTE, vm.stage.value)
+    }
+
+    @Test
+    fun continueFromRoute_unbuiltSaved_stopsAtWorldPlan() {
+        rideStorage.saveRide(ride("unbuilt", "Ungebaute Runde", 20_000.0, hilly))
+        val vm = viewModel(null)
+        vm.toRoute()
+        val saved = vm.route.value.options.filterIsInstance<IndoorRouteOption.Saved>().single { it.rideId == "unbuilt" }
+        vm.selectRoute(saved)
+        vm.continueFromRoute()
+
+        assertEquals(IndoorStage.WORLD, vm.stage.value)
+        assertIs<IndoorWorldUi.Plan>(vm.world.value)
+    }
+
+    @Test
+    fun startDaySuggestion_missingKey_doesNotAutoStartFirstSuggestion() {
+        rideStorage.saveRide(ride("berge", "Drei Anstiege", 40_000.0, hilly))
+        val vm = viewModel(TodayRoute(target(SessionIntensity.HART), intervals, 25, 1.0, false, null))
+        vm.toRoute()
+        val offer = assertIs<IndoorDayUi.Offer>(vm.day.value)
+        assertTrue(offer.suggestions.isNotEmpty())
+        assertEquals(0, offer.index)
+
+        vm.startDaySuggestion("missing:key")
+
+        assertEquals(IndoorStage.ROUTE, vm.stage.value)
+        assertNull(vm.route.value.selected)
+    }
+
+    @Test
+    fun startDaySuggestion_bluetoothOffOrNoPermissionWithRememberedTrainer_opensPairAndResumesAfterFix() {
+        val setup = viewModel(null)
+        setup.toRoute()
+        setup.selectRoute(IndoorRouteOption.TestWorld)
+        setup.continueFromRoute()
+        setup.release()
+
+        val devices = kotlinx.coroutines.flow.MutableStateFlow(
+            mapOf(
+                de.trailscape.core.indoor.IndoorDeviceRole.TRAINER to
+                    de.trailscape.app.sensors.indoor.IndoorDeviceRef(
+                        de.trailscape.core.indoor.IndoorDeviceRole.TRAINER,
+                        "AA:BB:CC:DD:EE:FF",
+                        "KICKR CORE",
+                    ),
+            ),
+        )
+        val vm = IndoorViewModel(
+            parts = parts,
+            rideStorage = rideStorage,
+            worlds = worlds,
+            store = MemoryKeyValueStore(),
+            texts = ContextIndoorTexts(
+                context = { ApplicationProvider.getApplicationContext<Application>() },
+                language = { AppLanguage.DE },
+            ),
+            profile = { TrainingProfile(ageYears = 40, weightKg = 75.0) },
+            plan = { null },
+            coreTexts = { CoreTextsDe },
+            today = { TodayRoute(target(SessionIntensity.GRUNDLAGE, hours = 2.0), null, null, 0.9, false, null) },
+            dayFinder = IndoorDayRouteFinder(rideStorage, worlds, null),
+            generatedWorlds = generatedWorlds,
+            devices = devices,
+            io = Dispatchers.Unconfined,
+            clock = clock,
+            wallClock = { 1_765_000_000_000L },
+            runtimeDispatcher = Dispatchers.Unconfined,
+            autoLoop = false,
+            scope = scope,
+        ).also { vm = it }
+
+        vm.updateBluetoothState(bluetoothOn = false, permissionGranted = true)
+        vm.ensureRouteOptions()
+        vm.startDaySuggestion(IndoorRouteOption.TestWorld.key)
+
+        assertEquals(IndoorStage.PAIR, vm.stage.value)
+        assertTrue(vm.pairFromRideFlow.value)
+
+        vm.continueFromPair()
+        assertEquals(IndoorStage.PAIR, vm.stage.value)
+
+        vm.updateBluetoothState(bluetoothOn = true, permissionGranted = false)
+        vm.continueFromPair()
+        assertEquals(IndoorStage.PAIR, vm.stage.value)
+
+        vm.updateBluetoothState(bluetoothOn = true, permissionGranted = true)
+        vm.continueFromPair()
+        assertEquals(IndoorStage.RIDE, vm.stage.value)
+    }
+
+    @Test
+    fun startDaySuggestion_catalogWithDelayedStoreLoad_triggersDownload() {
+        val worldSrc = File(tmp, "src-world")
+        val manifest = createWorldBuilder().buildTestWorld(worldSrc, IndoorQuality.LOW)
+        val pkg = File(tmp, "testrunde-v1.zip")
+        writeCatalogPackage(worldSrc, "testrunde", 1, pkg)
+        val sha = sha256Hex(pkg)
+
+        val server = MockWebServer()
+        try {
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    val path = request.path.orEmpty().substringBefore('?')
+                    return when (path) {
+                        "/release/catalog.json" -> {
+                            val entry = CatalogEntry(
+                                id = "testrunde",
+                                version = 1,
+                                worldId = manifest.worldId,
+                                name = CatalogText("Testrunde am See", "Test loop by the lake"),
+                                region = CatalogText("Erfunden", "Made up"),
+                                country = "DE",
+                                kind = CatalogRideKind.GRAVEL,
+                                lengthM = 3000.0,
+                                ascentM = 40.0,
+                                surfaces = mapOf(SurfaceKind.GRAVEL to 0.7, SurfaceKind.ASPHALT to 0.3),
+                                description = CatalogText("Zum Testen.", "For tests."),
+                                packageFile = pkg.name,
+                                packageBytes = pkg.length(),
+                                sha256 = sha,
+                                aerial = false,
+                            )
+                            MockResponse().setBody(IndoorCatalog(server.url("/release/").toString(), 1, listOf(entry)).toJson())
+                        }
+                        "/release/${pkg.name}" -> MockResponse().setBody(Buffer().write(pkg.readBytes()))
+                        else -> MockResponse().setResponseCode(404)
+                    }
+                }
+            }
+            server.start()
+            val base = server.url("/release/").toString()
+            val allow: (String) -> Boolean = { it.startsWith(server.url("/").toString()) }
+            val catalogJson = IndoorCatalog(
+                base,
+                0,
+                listOf(
+                    CatalogEntry(
+                        id = "testrunde",
+                        version = 1,
+                        worldId = manifest.worldId,
+                        name = CatalogText("Testrunde am See", "Test loop by the lake"),
+                        region = CatalogText("Erfunden", "Made up"),
+                        country = "DE",
+                        kind = CatalogRideKind.GRAVEL,
+                        lengthM = 3000.0,
+                        ascentM = 40.0,
+                        surfaces = mapOf(SurfaceKind.GRAVEL to 0.7, SurfaceKind.ASPHALT to 0.3),
+                        description = CatalogText("Zum Testen.", "For tests."),
+                        packageFile = pkg.name,
+                        packageBytes = pkg.length(),
+                        sha256 = sha,
+                        aerial = false,
+                    ),
+                ),
+            ).toJson()
+
+            val releaseCatalogRead = CountDownLatch(1)
+            val readCount = AtomicInteger(0)
+            val delayedStore = CatalogStore(
+                baseDir = File(tmp, "files/indoor/catalog"),
+                worlds = worlds,
+                worldsDir = File(tmp, "files/indoor/worlds"),
+                bundled = {
+                    if (readCount.incrementAndGet() == 1) {
+                        releaseCatalogRead.await(2, TimeUnit.SECONDS)
+                    }
+                    catalogJson
+                },
+                allowUrl = allow,
+            )
+            val downloader = CatalogDownloader(OkHttpClient(), "TrailscapeTest/1.0", allow)
+            val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            try {
+                val vm = IndoorViewModel(
+                    parts = parts,
+                    rideStorage = rideStorage,
+                    worlds = worlds,
+                    store = MemoryKeyValueStore(),
+                    texts = ContextIndoorTexts(
+                        context = { ApplicationProvider.getApplicationContext<Application>() },
+                        language = { AppLanguage.DE },
+                    ),
+                    profile = { TrainingProfile(ageYears = 40, weightKg = 75.0) },
+                    plan = { null },
+                    coreTexts = { CoreTextsDe },
+                    today = { TodayRoute(target(SessionIntensity.GRUNDLAGE, hours = 2.0), null, null, 0.9, false, null) },
+                    dayFinder = IndoorDayRouteFinder(rideStorage, worlds, delayedStore),
+                    generatedWorlds = generatedWorlds,
+                    io = Dispatchers.IO,
+                    clock = clock,
+                    wallClock = { 1_765_000_000_000L },
+                    runtimeDispatcher = Dispatchers.Unconfined,
+                    autoLoop = false,
+                    scope = ioScope,
+                    catalogStore = delayedStore,
+                    catalogDownloader = downloader,
+                ).also { vm = it }
+
+                vm.setDemoTrainer(true)
+                vm.ensureRouteOptions()
+                // Jetzt ist der Katalog-Plattenlesevorgang noch blockiert; erst loslassen,
+                // nachdem startDaySuggestion bereits registriert wurde.
+                vm.startDaySuggestion("catalog:testrunde")
+                releaseCatalogRead.countDown()
+
+                val deadline = System.currentTimeMillis() + 5_000L
+                while (vm.stage.value != IndoorStage.RIDE && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(25)
+                }
+                assertEquals(IndoorStage.RIDE, vm.stage.value)
+                assertEquals("catalog:testrunde", vm.route.value.selected?.key)
+                val offer = assertIs<IndoorDayUi.Offer>(vm.day.value)
+                val catalogSuggestion = offer.suggestions.first { it.key == "catalog:testrunde" }
+                assertEquals(DayRouteAvailability.READY, catalogSuggestion.availability)
+                assertNull(catalogSuggestion.downloadBytes)
+                assertTrue(server.requestCount >= 2)
+            } finally {
+                vm?.release()
+                ioScope.cancel()
+            }
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun downloadCatalog_beforeInitialLoadFinishes_stillDownloadsAndInstalls() {
+        val worldSrc = File(tmp, "src-world-direct")
+        val manifest = createWorldBuilder().buildTestWorld(worldSrc, IndoorQuality.LOW)
+        val pkg = File(tmp, "testrunde-direct.zip")
+        writeCatalogPackage(worldSrc, "testrunde", 1, pkg)
+        val sha = sha256Hex(pkg)
+
+        val server = MockWebServer()
+        try {
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    val path = request.path.orEmpty().substringBefore('?')
+                    return when (path) {
+                        "/release/catalog.json" -> {
+                            val entry = CatalogEntry(
+                                id = "testrunde",
+                                version = 1,
+                                worldId = manifest.worldId,
+                                name = CatalogText("Testrunde am See", "Test loop by the lake"),
+                                region = CatalogText("Erfunden", "Made up"),
+                                country = "DE",
+                                kind = CatalogRideKind.GRAVEL,
+                                lengthM = 3000.0,
+                                ascentM = 40.0,
+                                surfaces = mapOf(SurfaceKind.GRAVEL to 0.7, SurfaceKind.ASPHALT to 0.3),
+                                description = CatalogText("Zum Testen.", "For tests."),
+                                packageFile = pkg.name,
+                                packageBytes = pkg.length(),
+                                sha256 = sha,
+                                aerial = false,
+                            )
+                            MockResponse().setBody(IndoorCatalog(server.url("/release/").toString(), 1, listOf(entry)).toJson())
+                        }
+                        "/release/${pkg.name}" -> MockResponse().setBody(Buffer().write(pkg.readBytes()))
+                        else -> MockResponse().setResponseCode(404)
+                    }
+                }
+            }
+            server.start()
+            val base = server.url("/release/").toString()
+            val allow: (String) -> Boolean = { it.startsWith(server.url("/").toString()) }
+            val catalogJson = IndoorCatalog(
+                base,
+                0,
+                listOf(
+                    CatalogEntry(
+                        id = "testrunde",
+                        version = 1,
+                        worldId = manifest.worldId,
+                        name = CatalogText("Testrunde am See", "Test loop by the lake"),
+                        region = CatalogText("Erfunden", "Made up"),
+                        country = "DE",
+                        kind = CatalogRideKind.GRAVEL,
+                        lengthM = 3000.0,
+                        ascentM = 40.0,
+                        surfaces = mapOf(SurfaceKind.GRAVEL to 0.7, SurfaceKind.ASPHALT to 0.3),
+                        description = CatalogText("Zum Testen.", "For tests."),
+                        packageFile = pkg.name,
+                        packageBytes = pkg.length(),
+                        sha256 = sha,
+                        aerial = false,
+                    ),
+                ),
+            ).toJson()
+
+            val store = CatalogStore(
+                baseDir = File(tmp, "files/indoor/catalog-direct"),
+                worlds = worlds,
+                worldsDir = File(tmp, "files/indoor/worlds"),
+                bundled = { catalogJson },
+                allowUrl = allow,
+            )
+            val downloader = CatalogDownloader(OkHttpClient(), "TrailscapeTest/1.0", allow)
+            val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            try {
+                val vm = IndoorViewModel(
+                    parts = parts,
+                    rideStorage = rideStorage,
+                    worlds = worlds,
+                    store = MemoryKeyValueStore(),
+                    texts = ContextIndoorTexts(
+                        context = { ApplicationProvider.getApplicationContext<Application>() },
+                        language = { AppLanguage.DE },
+                    ),
+                    profile = { TrainingProfile(ageYears = 40, weightKg = 75.0) },
+                    plan = { null },
+                    coreTexts = { CoreTextsDe },
+                    today = { null },
+                    dayFinder = null,
+                    generatedWorlds = generatedWorlds,
+                    io = Dispatchers.IO,
+                    clock = clock,
+                    wallClock = { 1_765_000_000_000L },
+                    runtimeDispatcher = Dispatchers.Unconfined,
+                    autoLoop = false,
+                    scope = ioScope,
+                    catalogStore = store,
+                    catalogDownloader = downloader,
+                ).also { vm = it }
+
+                // Direkt ohne vorheriges loadRouteOptions() aufrufen — catalog ist noch null.
+                vm.downloadCatalog("testrunde")
+
+                val deadline = System.currentTimeMillis() + 5_000L
+                while (vm.catalog.value.items.firstOrNull { it.id == "testrunde" }?.ready != true &&
+                    System.currentTimeMillis() < deadline
+                ) {
+                    Thread.sleep(25)
+                }
+                assertTrue(vm.catalog.value.items.firstOrNull { it.id == "testrunde" }?.ready == true)
+                assertTrue(server.requestCount >= 2)
+            } finally {
+                vm?.release()
+                ioScope.cancel()
+            }
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun rideDaySuggestion_catalogDownloadWithBluetoothOff_transitionsToReadyAndResumesWithoutRedownload() {
+        val worldSrc = File(tmp, "src-world-pair-resume")
+        val manifest = createWorldBuilder().buildTestWorld(worldSrc, IndoorQuality.LOW)
+        val pkg = File(tmp, "testrunde-pair-resume.zip")
+        writeCatalogPackage(worldSrc, "testrunde", 1, pkg)
+        val sha = sha256Hex(pkg)
+        val pkgRequests = AtomicInteger(0)
+
+        val server = MockWebServer()
+        try {
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    val path = request.path.orEmpty().substringBefore('?')
+                    return when (path) {
+                        "/release/catalog.json" -> {
+                            val entry = CatalogEntry(
+                                id = "testrunde",
+                                version = 1,
+                                worldId = manifest.worldId,
+                                name = CatalogText("Testrunde am See", "Test loop by the lake"),
+                                region = CatalogText("Erfunden", "Made up"),
+                                country = "DE",
+                                kind = CatalogRideKind.GRAVEL,
+                                lengthM = 3000.0,
+                                ascentM = 40.0,
+                                surfaces = mapOf(SurfaceKind.GRAVEL to 0.7, SurfaceKind.ASPHALT to 0.3),
+                                description = CatalogText("Zum Testen.", "For tests."),
+                                packageFile = pkg.name,
+                                packageBytes = pkg.length(),
+                                sha256 = sha,
+                                aerial = false,
+                            )
+                            MockResponse().setBody(IndoorCatalog(server.url("/release/").toString(), 1, listOf(entry)).toJson())
+                        }
+                        "/release/${pkg.name}" -> {
+                            pkgRequests.incrementAndGet()
+                            MockResponse().setBody(Buffer().write(pkg.readBytes()))
+                        }
+                        else -> MockResponse().setResponseCode(404)
+                    }
+                }
+            }
+            server.start()
+            val base = server.url("/release/").toString()
+            val allow: (String) -> Boolean = { it.startsWith(server.url("/").toString()) }
+            val catalogJson = IndoorCatalog(
+                base,
+                0,
+                listOf(
+                    CatalogEntry(
+                        id = "testrunde",
+                        version = 1,
+                        worldId = manifest.worldId,
+                        name = CatalogText("Testrunde am See", "Test loop by the lake"),
+                        region = CatalogText("Erfunden", "Made up"),
+                        country = "DE",
+                        kind = CatalogRideKind.GRAVEL,
+                        lengthM = 3000.0,
+                        ascentM = 40.0,
+                        surfaces = mapOf(SurfaceKind.GRAVEL to 0.7, SurfaceKind.ASPHALT to 0.3),
+                        description = CatalogText("Zum Testen.", "For tests."),
+                        packageFile = pkg.name,
+                        packageBytes = pkg.length(),
+                        sha256 = sha,
+                        aerial = false,
+                    ),
+                ),
+            ).toJson()
+
+            val catalogStore = CatalogStore(
+                baseDir = File(tmp, "files/indoor/catalog-pair-resume"),
+                worlds = worlds,
+                worldsDir = File(tmp, "files/indoor/worlds"),
+                bundled = { catalogJson },
+                allowUrl = allow,
+            )
+            val downloader = CatalogDownloader(OkHttpClient(), "TrailscapeTest/1.0", allow)
+            val devices = kotlinx.coroutines.flow.MutableStateFlow(
+                mapOf(
+                    de.trailscape.core.indoor.IndoorDeviceRole.TRAINER to
+                        de.trailscape.app.sensors.indoor.IndoorDeviceRef(
+                            de.trailscape.core.indoor.IndoorDeviceRole.TRAINER,
+                            "AA:BB:CC:DD:EE:FF",
+                            "KICKR CORE",
+                        ),
+                ),
+            )
+            val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            try {
+                val vm = IndoorViewModel(
+                    parts = parts,
+                    rideStorage = rideStorage,
+                    worlds = worlds,
+                    store = MemoryKeyValueStore(),
+                    texts = ContextIndoorTexts(
+                        context = { ApplicationProvider.getApplicationContext<Application>() },
+                        language = { AppLanguage.DE },
+                    ),
+                    profile = { TrainingProfile(ageYears = 40, weightKg = 75.0) },
+                    plan = { null },
+                    coreTexts = { CoreTextsDe },
+                    today = { TodayRoute(target(SessionIntensity.GRUNDLAGE, hours = 2.0), null, null, 0.9, false, null) },
+                    dayFinder = IndoorDayRouteFinder(rideStorage, worlds, catalogStore),
+                    generatedWorlds = generatedWorlds,
+                    devices = devices,
+                    io = Dispatchers.IO,
+                    clock = clock,
+                    wallClock = { 1_765_000_000_000L },
+                    runtimeDispatcher = Dispatchers.Unconfined,
+                    autoLoop = false,
+                    scope = ioScope,
+                    catalogStore = catalogStore,
+                    catalogDownloader = downloader,
+                ).also { vm = it }
+
+                vm.updateBluetoothState(bluetoothOn = false, permissionGranted = true)
+                vm.ensureRouteOptions()
+
+                val offerDeadline = System.currentTimeMillis() + 5_000L
+                while (
+                    (vm.day.value as? IndoorDayUi.Offer)?.suggestions?.any { it.key == "catalog:testrunde" } != true &&
+                    System.currentTimeMillis() < offerDeadline
+                ) {
+                    Thread.sleep(25)
+                }
+                vm.preferDaySuggestion("catalog:testrunde")
+                val initialOffer = assertIs<IndoorDayUi.Offer>(vm.day.value)
+                assertEquals("catalog:testrunde", initialOffer.current?.key)
+                assertEquals(DayRouteAvailability.DOWNLOAD, initialOffer.current?.availability)
+
+                vm.rideDaySuggestion()
+
+                val pairDeadline = System.currentTimeMillis() + 5_000L
+                while (vm.stage.value != IndoorStage.PAIR && System.currentTimeMillis() < pairDeadline) {
+                    Thread.sleep(25)
+                }
+                assertEquals(IndoorStage.PAIR, vm.stage.value)
+                assertEquals(1, pkgRequests.get())
+                assertTrue(vm.catalog.value.items.first { it.id == "testrunde" }.ready)
+                val offerAfterDownload = assertIs<IndoorDayUi.Offer>(vm.day.value)
+                val afterItem = offerAfterDownload.suggestions.first { it.key == "catalog:testrunde" }
+                assertEquals(DayRouteAvailability.READY, afterItem.availability)
+                assertNull(afterItem.downloadBytes)
+
+                // Offline-Sicherheit: Server abschalten, bevor Bluetooth behoben wird.
+                server.shutdown()
+                vm.updateBluetoothState(bluetoothOn = true, permissionGranted = true)
+                vm.continueFromPair()
+
+                val rideDeadline = System.currentTimeMillis() + 5_000L
+                while (vm.stage.value != IndoorStage.RIDE && System.currentTimeMillis() < rideDeadline) {
+                    Thread.sleep(25)
+                }
+                assertEquals(IndoorStage.RIDE, vm.stage.value)
+                assertEquals(1, pkgRequests.get())
+                assertEquals(IndoorCatalogState.Ready, vm.catalog.value.items.first { it.id == "testrunde" }.state)
+                assertEquals(
+                    DayRouteAvailability.READY,
+                    (vm.day.value as IndoorDayUi.Offer).suggestions.first { it.key == "catalog:testrunde" }.availability,
+                )
+            } finally {
+                vm?.release()
+                ioScope.cancel()
+            }
+        } finally {
+            runCatching { server.shutdown() }
+        }
     }
 }

@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -17,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.core.indoor.GHOST_EVEN_S
 import de.trailscape.core.indoor.GhostSection
@@ -48,7 +48,7 @@ internal fun OutdoorComparison(ui: IndoorSummaryUi) {
     val section = ui.ghostSection
     if (gap == null && section == null) return
     Eyebrow(stringResource(R.string.idee01_summary_eyebrow))
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ui.ghostLabel?.let { Text(text = it, style = MaterialTheme.typography.titleSmall) }
             if (gap != null) {

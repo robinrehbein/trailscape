@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -55,6 +56,8 @@ import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.i18n.languageOf
 import de.trailscape.app.indoor.render.IndoorDiagnosticsScreen
 import de.trailscape.app.record.RecordingRepository
+import de.trailscape.app.ui.components.AtlasNavigationRail
+import de.trailscape.app.ui.components.AtlasNavigationRailItem
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.OneUiNavigationBar
 import de.trailscape.app.ui.components.OneUiNavigationBarDefaults
@@ -62,6 +65,7 @@ import de.trailscape.app.ui.components.OneUiNavigationBarItem
 import de.trailscape.app.ui.components.RecButtonState
 import de.trailscape.app.ui.components.RecCapsuleButton
 import de.trailscape.app.ui.components.RecCapsuleButtonDefaults
+import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.indoor.IndoorFlowMode
 import de.trailscape.app.ui.indoor.IndoorFlowScreen
 import de.trailscape.app.ui.indoor.IndoorTabScreen
@@ -71,7 +75,10 @@ import de.trailscape.app.ui.map.MapScreen
 import de.trailscape.app.ui.more.MoreScreen
 import de.trailscape.app.ui.onboarding.OnboardingScreen
 import de.trailscape.app.ui.rides.RidesScreen
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
 import de.trailscape.app.ui.theme.M3Transitions
+import de.trailscape.app.ui.theme.useNavigationRail
+import de.trailscape.app.ui.theme.windowLayoutClassFor
 import de.trailscape.app.ui.today.TodayScreen
 import de.trailscape.core.i18n.coreTexts
 
@@ -253,11 +260,15 @@ private fun NavDestination?.isOn(route: String): Boolean =
 fun TrailscapeApp() {
     val configuration = LocalConfiguration.current
     val language = remember(configuration) { languageOf(configuration) }
+    val layoutClass = remember(configuration.screenWidthDp) {
+        windowLayoutClassFor(configuration.screenWidthDp)
+    }
     LaunchedEffect(language) { AppServices.setAppLanguage(language) }
     CompositionLocalProvider(
         LocalAppLanguage provides language,
         LocalCoreTexts provides coreTexts(language),
         LocalAppFormats provides remember(language) { AppFormats(language) },
+        LocalWindowLayoutClass provides layoutClass,
     ) {
         TrailscapeAppContent()
     }
@@ -347,10 +358,14 @@ private fun TrailscapeAppContent() {
     //
     // Das System-Inset wird gelesen und NICHT verzehrt: Die Bildschirme
     // brauchen es als Zahl, nicht als Padding.
+    val layoutClass = LocalWindowLayoutClass.current
+    val railMode = useNavigationRail(layoutClass)
+    val railVisible = railMode && !navHidden
+
     val systemBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     var navigationBandHeightPx by remember { mutableIntStateOf(0) }
     val measuredBandHeight = with(LocalDensity.current) { navigationBandHeightPx.toDp() }
-    val navigationBarSpace = if (navHidden) {
+    val navigationBarSpace = if (railMode || navHidden) {
         systemBottomInset
     } else {
         maxOf(
@@ -388,23 +403,56 @@ private fun TrailscapeAppContent() {
     var readyDialogOpen by remember { mutableStateOf(false) }
 
     val density = LocalDensity.current
+    val onRecClick = {
+        // Laeuft eine Aufzeichnung, ist der Knopf der Weg ins Fahr-Cockpit —
+        // das wohnt im Karten-Screen (`RideModeScreen.kt`), also dorthin.
+        // Sonst fragt der Bereit-Dialog, was gefahren werden soll.
+        if (isRecording) {
+            appViewModel.requestRideCockpit()
+        } else {
+            readyDialogOpen = true
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalFloatingNavigationBarSpace provides navigationBarSpace) {
-            NavHost(
-                navController = navController,
-                startDestination = AppRoutes.HOME,
-                // Oben und seitlich loest jedes Ziel die System-Insets ueber
-                // [InsetPadded] auf (das taten vorher die `innerPadding` des
-                // `Scaffold`, danach der `NavHost` selbst); unten ausdruecklich
-                // nicht — dort soll der Inhalt bis unter die Kapsel laufen.
-                // Ausnahme sind Indoor-Tab und Indoor-Ablauf: Die Fahransicht legt die
-                // 3D-Welt randlos unter Status- und Navigationsleiste und
-                // loest die Insets selbst auf (`IndoorRideScreen`,
-                // `IndoorPage`). `imePadding` haelt Eingabefelder ueber der
-                // Tastatur, was zuvor am `contentWindowInsets` des Scaffold hing.
-                modifier = Modifier
-                    .fillMaxSize()
-                    .imePadding(),
+            Row(modifier = Modifier.fillMaxSize()) {
+                AnimatedVisibility(visible = railVisible) {
+                    AtlasNavigationRail(
+                        topAction = {
+                            RecCapsuleButton(state = recState, onClick = onRecClick)
+                        },
+                        bottomAction = {
+                            SettingsAction(onClick = { navController.navigateToSettings() })
+                        },
+                    ) {
+                        SHELL_TABS.forEach { shellTab ->
+                            val look = tabLook(shellTab.tab)
+                            AtlasNavigationRailItem(
+                                selected = currentDestination.isOn(shellTab.route),
+                                onClick = { navController.navigateToTab(shellTab.route) },
+                                icon = look.icon,
+                                label = stringResource(look.labelRes),
+                            )
+                        }
+                    }
+                }
+                NavHost(
+                    navController = navController,
+                    startDestination = AppRoutes.HOME,
+                    // Oben und seitlich loest jedes Ziel die System-Insets ueber
+                    // [InsetPadded] auf (das taten vorher die `innerPadding` des
+                    // `Scaffold`, danach der `NavHost` selbst); unten ausdruecklich
+                    // nicht — dort soll der Inhalt bis unter die Kapsel laufen.
+                    // Ausnahme sind Indoor-Tab und Indoor-Ablauf: Die Fahransicht legt die
+                    // 3D-Welt randlos unter Status- und Navigationsleiste und
+                    // loest die Insets selbst auf (`IndoorRideScreen`,
+                    // `IndoorPage`). `imePadding` haelt Eingabefelder ueber der
+                    // Tastatur, was zuvor am `contentWindowInsets` des Scaffold hing.
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .imePadding(),
                 // Uebergaenge nach M3 (siehe [M3Transitions]): zwischen den
                 // Tabs „Top level" (Fade through), in die Einstellungen und
                 // zurueck „Forward and backward" (Shared axis X). Die
@@ -454,8 +502,8 @@ private fun TrailscapeAppContent() {
                 val openGarage = {
                     navController.navigate(AppRoutes.INDOOR_GARAGE) { launchSingleTop = true }
                 }
-                composable(AppRoutes.HOME) { InsetPadded { TodayScreen(appViewModel) } }
-                composable(AppRoutes.MAP) { InsetPadded { MapScreen(appViewModel) } }
+                composable(AppRoutes.HOME) { InsetPadded(consumeStartInset = !railVisible) { TodayScreen(appViewModel) } }
+                composable(AppRoutes.MAP) { InsetPadded(consumeStartInset = !railVisible) { MapScreen(appViewModel) } }
                 // Der Indoor-Tab: Strecken (der Indoor-Ablauf, sein ViewModel
                 // haengt an diesem Eintrag) und Plan. Ohne [InsetPadded] — die
                 // Fahransicht ist randlos, jede Seite loest die Insets selbst auf.
@@ -467,13 +515,13 @@ private fun TrailscapeAppContent() {
                         onOpenGarage = openGarage,
                     )
                 }
-                composable(AppRoutes.RIDES) { InsetPadded { RidesScreen(appViewModel) } }
+                composable(AppRoutes.RIDES) { InsetPadded(consumeStartInset = !railVisible) { RidesScreen(appViewModel) } }
                 // Zweite Ebene, kein Tab: Der Zurueck-Pfeil in der Kopfzeile
                 // und die Systemzurueckgeste (die der `NavHost` fuer ein
                 // gepushtes Ziel von selbst bedient) fuehren zurueck dorthin,
                 // von wo das Zahnrad angetippt wurde.
                 composable(AppRoutes.MORE) {
-                    InsetPadded { MoreScreen(appViewModel, onBack = { navController.popBackStack() }) }
+                    InsetPadded(consumeStartInset = !railVisible) { MoreScreen(appViewModel, onBack = { navController.popBackStack() }) }
                 }
                 // Indoor-Ablauf mit vorgewaehlter Strecke (Einheit des Tages
                 // von „Heute", „Indoor fahren" und „In 3D ansehen" aus dem
@@ -508,11 +556,12 @@ private fun TrailscapeAppContent() {
                     GarageDestination(onBack = { navController.popBackStack() })
                 }
                 composable(AppRoutes.INDOOR_WORLDS) {
-                    InsetPadded { IndoorWorldsDestination(onBack = { navController.popBackStack() }) }
+                    InsetPadded(consumeStartInset = !railVisible) { IndoorWorldsDestination(onBack = { navController.popBackStack() }) }
                 }
                 composable(AppRoutes.INDOOR_DIAGNOSTICS) {
-                    InsetPadded { IndoorDiagnosticsScreen(onBack = { navController.popBackStack() }) }
+                    InsetPadded(consumeStartInset = !railVisible) { IndoorDiagnosticsScreen(onBack = { navController.popBackStack() }) }
                 }
+            }
             }
         }
 
@@ -542,7 +591,7 @@ private fun TrailscapeAppContent() {
         // Das Band faehrt ueber den unteren Rand hinaus und wieder herein,
         // statt schlagartig zu verschwinden.
         AnimatedVisibility(
-            visible = !navHidden,
+            visible = !railMode && !navHidden,
             modifier = Modifier.align(Alignment.BottomCenter),
             enter = M3Transitions.sheetEnter(),
             exit = M3Transitions.sheetExit(),
@@ -588,18 +637,7 @@ private fun TrailscapeAppContent() {
                 ) {
                     RecCapsuleButton(
                         state = recState,
-                        onClick = {
-                            // Laeuft eine Aufzeichnung, ist der Knopf der Weg
-                            // ins Fahr-Cockpit — das wohnt im Karten-Screen
-                            // (`RideModeScreen.kt`), also dorthin. Sonst
-                            // fragt der Bereit-Dialog, was gefahren werden
-                            // soll.
-                            if (isRecording) {
-                                appViewModel.requestRideCockpit()
-                            } else {
-                                readyDialogOpen = true
-                            }
-                        },
+                        onClick = onRecClick,
                     )
                 }
             }
@@ -633,11 +671,19 @@ private fun TrailscapeAppContent() {
  * laeuft der Inhalt unter die Kapsel.
  */
 @Composable
-private fun InsetPadded(content: @Composable () -> Unit) {
+private fun InsetPadded(
+    consumeStartInset: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    val sides = if (consumeStartInset) {
+        WindowInsetsSides.Top + WindowInsetsSides.Horizontal
+    } else {
+        WindowInsetsSides.Top + WindowInsetsSides.End
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(sides)),
         // Wie zuvor am `NavHost`: Das Ziel bekommt die volle Flaeche als Mindestmass.
         propagateMinConstraints = true,
     ) {

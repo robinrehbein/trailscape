@@ -34,8 +34,8 @@ import de.trailscape.app.R
 import de.trailscape.app.strava.StravaConfig
 import de.trailscape.app.strava.StravaConnection
 import de.trailscape.app.strava.StravaServices
-import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.Ride
 import de.trailscape.core.StravaError
@@ -179,7 +179,7 @@ internal fun StravaConnectRow(onConnect: () -> Unit, modifier: Modifier = Modifi
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        NeutralButton(onClick = onConnect, modifier = Modifier.fillMaxWidth()) {
+        TrailscapeSecondaryButton(onClick = onConnect, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.strava_connect))
         }
     }
@@ -208,7 +208,7 @@ internal fun StravaRideActionContent(
         when (state) {
             StravaRideActionState.NotUploaded -> {
                 val description = stringResource(R.string.strava_upload_action_cd)
-                NeutralButton(
+                TrailscapeSecondaryButton(
                     onClick = onUpload,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -313,7 +313,7 @@ private fun DoneIcon() {
 
 @Composable
 private fun ViewButton(onClick: () -> Unit) {
-    NeutralButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+    TrailscapeSecondaryButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Icon(
             Icons.AutoMirrored.Filled.OpenInNew,
             contentDescription = null,

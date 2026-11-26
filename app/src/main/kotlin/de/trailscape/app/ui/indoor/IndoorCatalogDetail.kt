@@ -1,24 +1,25 @@
 package de.trailscape.app.ui.indoor
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +34,9 @@ import androidx.compose.ui.window.DialogProperties
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
+import de.trailscape.app.ui.theme.ContentMaxWidth
 
 /**
  * # Detailansicht einer bekannten Strecke
@@ -73,6 +77,7 @@ internal fun CatalogDetailDialog(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CatalogDetailContent(
     row: CatalogRow,
@@ -91,7 +96,8 @@ internal fun CatalogDetailContent(
     val lang = formats.language.tag
     val name = item.name.pick(lang)
     val option = IndoorRouteOption.Catalog(item.id, name, item.distanceKm, item.ascentM)
-    Column(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        Column(modifier = Modifier.widthIn(max = ContentMaxWidth).fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
             IconButton(onClick = onClose) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.indoor_i10_detail_close))
@@ -115,7 +121,10 @@ internal fun CatalogDetailContent(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     TagPill(text = kindLabel(item.kind))
                     CatalogStatusPill(item)
                     CatalogRiddenPill(row)
@@ -132,7 +141,7 @@ internal fun CatalogDetailContent(
 
                 Section(R.string.indoor_i10_detail_profile) {
                     if (item.profile != null) {
-                        CatalogProfileChart(item.profile, name, Modifier.fillMaxWidth().height(160.dp).padding(top = 20.dp), showRange = true)
+                        CatalogProfileChart(item.profile, name, Modifier.fillMaxWidth().height(160.dp).padding(top = 26.dp), showRange = true)
                     } else {
                         MutedText(stringResource(R.string.indoor_i10_detail_profile_none))
                     }
@@ -166,6 +175,7 @@ internal fun CatalogDetailContent(
                 CatalogDetailActions(row, selected, canRide, option, onSelect, onRide, onDownload, onCancel, onDiscard, onClose)
             }
         }
+    }
     }
 }
 
@@ -214,18 +224,18 @@ private fun CatalogDetailActions(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 24.dp)) {
         if (item.ready) {
             if (canRide) {
-                Button(
+                TrailscapePrimaryButton(
                     onClick = { onSelect(option); onClose(); onRide() },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(stringResource(R.string.indoor_i10_action_ride)) }
             }
             if (!selected) {
                 if (canRide) {
-                    OutlinedButton(onClick = { onSelect(option) }, modifier = Modifier.fillMaxWidth()) {
+                    TrailscapeSecondaryButton(onClick = { onSelect(option) }, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.indoor_i10_action_choose))
                     }
                 } else {
-                    FilledTonalButton(onClick = { onSelect(option) }, modifier = Modifier.fillMaxWidth()) {
+                    TrailscapePrimaryButton(onClick = { onSelect(option) }, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.indoor_i10_action_choose))
                     }
                 }
@@ -233,21 +243,25 @@ private fun CatalogDetailActions(
                 MutedText(stringResource(R.string.indoor_i10_action_chosen))
             }
             (item.state as? IndoorCatalogState.UpdateAvailable)?.let {
-                OutlinedButton(onClick = { onSelect(option); onDownload(item.id) }, modifier = Modifier.fillMaxWidth()) {
+                TrailscapeSecondaryButton(onClick = { onSelect(option); onDownload(item.id) }, modifier = Modifier.fillMaxWidth()) {
                     Text(size?.let { s -> stringResource(R.string.indoor_i10_action_update, s) } ?: stringResource(R.string.indoor_i10_action_download_unknown))
                 }
             }
             MutedText(stringResource(R.string.indoor_i10_hint_delete_installed))
         } else {
             when (val s = item.state) {
-                is IndoorCatalogState.Downloading -> OutlinedButton(onClick = { onCancel(item.id) }, modifier = Modifier.fillMaxWidth()) {
+                is IndoorCatalogState.Downloading -> TrailscapeSecondaryButton(onClick = { onCancel(item.id) }, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.indoor_i10_action_cancel))
                 }
                 IndoorCatalogState.Installing -> Unit
                 else -> {
-                    Button(onClick = { onSelect(option); onDownload(item.id) }, modifier = Modifier.fillMaxWidth()) { Text(downloadText) }
+                    TrailscapePrimaryButton(onClick = { onSelect(option); onDownload(item.id) }, modifier = Modifier.fillMaxWidth()) { Text(downloadText) }
                     if (s is IndoorCatalogState.Paused || s is IndoorCatalogState.Failed) {
-                        OutlinedButton(onClick = { onDiscard(item.id) }, modifier = Modifier.fillMaxWidth()) {
+                        TrailscapeSecondaryButton(
+                            onClick = { onDiscard(item.id) },
+                            destructive = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
                             Text(stringResource(R.string.indoor_i10_action_discard))
                         }
                     }

@@ -17,12 +17,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -37,7 +35,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.Eyebrow
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.indoor.IndoorPage
 import de.trailscape.app.ui.indoor.MutedText
 import de.trailscape.core.garage.GarageColor
@@ -70,7 +70,7 @@ fun GarageScreen(
     safeMode: Boolean = false,
 ) {
     IndoorPage(title = stringResource(R.string.garage_title), onBack = onBack) {
-        Card(modifier = Modifier.fillMaxWidth()) {
+        AtlasCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 GaragePreview(
                     avatar = avatar,
@@ -118,7 +118,7 @@ fun GarageScreen(
         }
 
         MutedText(stringResource(R.string.garage_cosmetic_note))
-        OutlinedButton(
+        TrailscapeSecondaryButton(
             onClick = { onChange(RiderAvatar.DEFAULT) },
             enabled = avatar != RiderAvatar.DEFAULT,
             modifier = Modifier.fillMaxWidth(),
@@ -128,7 +128,7 @@ fun GarageScreen(
 
 @Composable
 private fun GarageCard(content: @Composable () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 4.dp)) { content() }
     }
 }

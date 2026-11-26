@@ -1,53 +1,70 @@
 package de.trailscape.app.ui.indoor
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsBike
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.AppFormats
 import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.indoor.IndoorDayPlan
 import de.trailscape.app.indoor.IndoorDayRouteFinder
+import de.trailscape.app.ui.components.AtlasCard
+import de.trailscape.app.ui.components.PillSegments
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.LocalAtlasColors
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
+import de.trailscape.app.ui.theme.WindowLayoutClass
+import de.trailscape.app.ui.theme.tabular
 import de.trailscape.core.indoor.DayClimbs
 import de.trailscape.core.indoor.DayRideEnd
 import de.trailscape.core.indoor.DayRouteAvailability
 import de.trailscape.core.indoor.DayRouteMatch
+import de.trailscape.core.indoor.DayRouteProfile
 import de.trailscape.core.indoor.DaySessionKind
 import de.trailscape.core.indoor.DayTerrain
 import de.trailscape.core.indoor.DAY_PLAN_SCORE
 import de.trailscape.core.indoor.dayGeneratedProfile
 import de.trailscape.core.indoor.generated.GeneratedProfile
 import de.trailscape.core.indoor.sessionDurationMinutes
-import de.trailscape.app.ui.components.PillSegments
 import kotlin.math.roundToInt
 
 // ---------------------------------------------------------------------------
@@ -80,6 +97,10 @@ data class IndoorDaySuggestionUi(
     val downloadBytes: Long? = null,
     val buildMinutes: Int? = null,
     val estimated: Boolean = false,
+    val ascentM: Double = 0.0,
+    val durationMinutes: Int? = null,
+    val profileElevM: List<Float> = emptyList(),
+    val previewPath: String? = null,
 )
 
 /** Die beiden Wege der Karte. */
@@ -105,6 +126,8 @@ data class IndoorDayGeneratedUi(
     val workMinutes: Int,
     val buildMinutes: Int,
     val ready: Boolean = false,
+    val ascentM: Double = 0.0,
+    val profileElevM: List<Float> = emptyList(),
 )
 
 /** Schluessel, mit dem „Heute" den Weg „Generierte Welt" an den Ablauf weitergibt. */
@@ -178,6 +201,7 @@ fun indoorDayUiOf(
     plan: IndoorDayPlan,
     matches: List<DayRouteMatch>,
     generatedReady: Boolean = false,
+    previewPathFor: (String) -> String? = { null },
     packageBytes: (String) -> Long? = { null },
 ): IndoorDayUi? {
     val kind = plan.day.kind
@@ -198,11 +222,16 @@ fun indoorDayUiOf(
             DayRouteAvailability.PLAN -> plan.planTarget?.distanceKm
             else -> null
         }
+        val rideKm = sim?.distanceM?.div(1000.0) ?: plan.planTarget?.distanceKm ?: goal.expectedFlatM / 1000.0
+        val ascentM = c.profile?.ascentM ?: when (c.availability) {
+            DayRouteAvailability.PLAN -> estimatePlanAscentM(rideKm, goal.terrain)
+            else -> 0.0
+        }
         IndoorDaySuggestionUi(
             key = c.key,
             name = c.name,
             availability = c.availability,
-            rideKm = sim?.distanceM?.div(1000.0) ?: plan.planTarget?.distanceKm ?: goal.expectedFlatM / 1000.0,
+            rideKm = rideKm,
             startKm = m.start?.startM?.takeIf { it > 0 }?.div(1000.0),
             laps = sim?.laps ?: 1,
             climbs = m.climbs,
@@ -210,6 +239,10 @@ fun indoorDayUiOf(
             downloadBytes = if (c.availability == DayRouteAvailability.DOWNLOAD) packageBytes(c.key.removePrefix("catalog:")) else null,
             buildMinutes = buildKm?.let { ((it * IndoorDayRouteFinder.BUILD_SECONDS_PER_KM) / 60.0).roundToInt().coerceAtLeast(1) },
             estimated = c.profile?.estimated == true,
+            ascentM = ascentM,
+            durationMinutes = (minutes - (ends ?: 0)).coerceAtLeast(1),
+            profileElevM = sampleDayElevProfile(c.profile),
+            previewPath = if (c.key.startsWith("catalog:")) previewPathFor(c.key.removePrefix("catalog:")) else null,
         )
     }
     val generated = runCatching {
@@ -222,6 +255,8 @@ fun indoorDayUiOf(
             workMinutes = goal.intervals.maxOfOrNull { it.durationS }?.let { (it / 60.0).roundToInt() } ?: 0,
             buildMinutes = ((km * GENERATED_BUILD_SECONDS_PER_KM) / 60.0).roundToInt().coerceAtLeast(1),
             ready = generatedReady,
+            ascentM = profile.legs.filter { it.gradePct > 0 }.sumOf { it.lengthM * it.gradePct / 100.0 },
+            profileElevM = sampleGeneratedElevProfile(profile),
         )
     }.getOrNull()
     // Gibt es keine passende echte Strecke, ist die generierte Welt der Vorschlag.
@@ -239,6 +274,53 @@ fun indoorDayUiOf(
  * ([IndoorDayRouteFinder.BUILD_SECONDS_PER_KM]); auf dem Geraet zu pruefen.
  */
 const val GENERATED_BUILD_SECONDS_PER_KM: Int = 10
+
+private const val DAY_PROFILE_MAX_SAMPLES = 48
+
+private fun estimatePlanAscentM(km: Double, terrain: DayTerrain): Double = when (terrain) {
+    DayTerrain.FLAT -> 0.0
+    DayTerrain.ROLLING -> km * 8.0
+    DayTerrain.CLIMBS -> km * 18.0
+}
+
+private fun downsampleFloats(values: List<Double>, maxCount: Int = DAY_PROFILE_MAX_SAMPLES): List<Float> {
+    if (values.size <= maxCount) return values.map { it.toFloat() }
+    val out = ArrayList<Float>(maxCount)
+    val last = values.lastIndex
+    for (i in 0 until maxCount) {
+        val idx = (i * last) / (maxCount - 1)
+        out.add(values[idx].toFloat())
+    }
+    return out
+}
+
+private fun sampleDayElevProfile(profile: DayRouteProfile?): List<Float> {
+    if (profile == null || profile.gradePct.isEmpty()) return emptyList()
+    val raw = ArrayList<Double>(profile.steps + 1)
+    var ele = 0.0
+    raw.add(ele)
+    for (i in 0 until profile.steps) {
+        ele += profile.stepLengthM(i) * profile.gradePct[i] / 100.0
+        raw.add(ele)
+    }
+    return downsampleFloats(raw)
+}
+
+internal fun sampleGeneratedElevProfile(profile: GeneratedProfile): List<Float> {
+    if (profile.legs.isEmpty()) return emptyList()
+    val raw = ArrayList<Double>(profile.legs.size * 2 + 1)
+    var ele = 0.0
+    raw.add(ele)
+    for (leg in profile.legs) {
+        val sub = (leg.lengthM / 250.0).roundToInt().coerceIn(1, 8)
+        val stepM = leg.lengthM / sub
+        repeat(sub) {
+            ele += stepM * leg.gradePct / 100.0
+            raw.add(ele)
+        }
+    }
+    return downsampleFloats(raw)
+}
 
 // ---------------------------------------------------------------------------
 // Texte
@@ -343,8 +425,8 @@ fun IndoorDayCard(
     primary: Boolean = true,
 ) {
     val formats = LocalAppFormats.current
-    Card(modifier = modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(CardPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    AtlasCard(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(CardPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.DirectionsBike,
@@ -387,6 +469,58 @@ fun IndoorDayCard(
     }
 }
 
+private val DayMediaShape = RoundedCornerShape(14.dp)
+
+@Composable
+private fun DayMediaPreview(
+    statusLabel: String,
+    media: @Composable () -> Unit,
+) {
+    val atlas = LocalAtlasColors.current
+    val expanded = LocalWindowLayoutClass.current == WindowLayoutClass.Expanded
+    val sizeModifier = if (expanded) {
+        Modifier.fillMaxWidth().height(176.dp)
+    } else {
+        Modifier.fillMaxWidth().aspectRatio(16f / 10f)
+    }
+    Box(
+        modifier = sizeModifier
+            .clip(DayMediaShape)
+            .background(MaterialTheme.colorScheme.surfaceContainer),
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) { media() }
+        Surface(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(10.dp),
+            shape = CircleShape,
+            color = atlas.routeMediaScrim,
+        ) {
+            Text(
+                text = statusLabel,
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DayRouteFacts(distanceText: String, ascentText: String, durationText: String) {
+    FlowRow(
+        modifier = Modifier.semantics(mergeDescendants = true) {},
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(text = distanceText, style = MaterialTheme.typography.labelLarge.tabular(), color = MaterialTheme.colorScheme.onSurface)
+        Text(text = ascentText, style = MaterialTheme.typography.labelLarge.tabular(), color = MaterialTheme.colorScheme.onSurface)
+        Text(text = durationText, style = MaterialTheme.typography.labelLarge.tabular(), color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
 @Composable
 private fun OfferBody(
     ui: IndoorDayUi.Offer,
@@ -418,7 +552,7 @@ private fun OfferBody(
             onSelect = { onPathChange(if (it == 0) IndoorDayPath.REAL else IndoorDayPath.GENERATED) },
         )
         if (ui.path == IndoorDayPath.GENERATED) {
-            GeneratedBody(generated, ui.terrain, formats, primary, onRideGenerated)
+            GeneratedBody(generated, ui.minutes, ui.terrain, formats, primary, onRideGenerated)
             return
         }
     }
@@ -427,19 +561,26 @@ private fun OfferBody(
         MutedText(stringResource(R.string.indoor_app_day_none_found))
         return
     }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    val (_, line) = availabilityLine(s, formats)
+    DayMediaPreview(statusLabel = line) {
+        IndoorPreviewImageOrProfile(
+            previewPath = s.previewPath,
+            elevM = s.profileElevM,
+            routeName = s.name,
+        )
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(text = s.name, style = MaterialTheme.typography.titleSmall, maxLines = 2)
+        DayRouteFacts(
+            distanceText = stringResource(R.string.indoor_app_value_km, formats.km(s.rideKm)),
+            ascentText = stringResource(R.string.indoor_app_value_elevation, formats.indoorAscent(s.ascentM)),
+            durationText = catalogDuration((s.durationMinutes ?: ui.minutes) * 60),
+        )
         Text(
             text = indoorDayReason(s, ui.terrain),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        val (icon, line) = availabilityLine(s, formats)
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(line, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
     }
     // Untereinander, nie nebeneinander: Auf einem schmalen Geraet bliebe dem
     // zweiten Knopf sonst kaum Breite, und sein Text braeche Buchstabe fuer Buchstabe um.
@@ -449,6 +590,7 @@ private fun OfferBody(
             TextButton(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = stringResource(R.string.indoor_app_day_next_action, ui.index + 1, ui.suggestions.size),
+                    maxLines = 1,
                     textAlign = TextAlign.Center,
                 )
             }
@@ -456,21 +598,46 @@ private fun OfferBody(
     }
 }
 
-/** Der eine Knopf der Karte ueber die volle Breite; gefuellt nur als Hauptaktion des Bildschirms. */
+/** Der eine Knopf der Karte ueber die volle Breite; orange nur als Hauptaktion des Bildschirms. */
 @Composable
 private fun DayMainButton(text: String, primary: Boolean, onClick: () -> Unit) {
-    val modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+    val modifier = Modifier.fillMaxWidth()
     if (primary) {
-        Button(onClick = onClick, modifier = modifier) { Text(text, textAlign = TextAlign.Center) }
+        TrailscapePrimaryButton(onClick = onClick, modifier = modifier) {
+            Text(text, maxLines = 1, textAlign = TextAlign.Center)
+        }
     } else {
-        FilledTonalButton(onClick = onClick, modifier = modifier) { Text(text, textAlign = TextAlign.Center) }
+        TrailscapeSecondaryButton(onClick = onClick, modifier = modifier) {
+            Text(text, maxLines = 1, textAlign = TextAlign.Center)
+        }
     }
 }
 
 @Composable
-private fun GeneratedBody(g: IndoorDayGeneratedUi, terrain: DayTerrain, formats: AppFormats, primary: Boolean, onRide: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(text = stringResource(R.string.indoor_app_day_generated_title), style = MaterialTheme.typography.titleSmall)
+private fun GeneratedBody(
+    g: IndoorDayGeneratedUi,
+    sessionMinutes: Int,
+    terrain: DayTerrain,
+    formats: AppFormats,
+    primary: Boolean,
+    onRide: () -> Unit,
+) {
+    val genTitle = stringResource(R.string.indoor_app_day_generated_title)
+    val statusText = if (g.ready) {
+        stringResource(R.string.indoor_app_day_world_ready)
+    } else {
+        stringResource(R.string.indoor_app_day_generated_build, g.buildMinutes)
+    }
+    DayMediaPreview(statusLabel = statusText) {
+        IndoorElevationMedia(elevM = g.profileElevM, routeName = genTitle)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(text = genTitle, style = MaterialTheme.typography.titleSmall)
+        DayRouteFacts(
+            distanceText = stringResource(R.string.indoor_app_value_km, formats.km(g.km)),
+            ascentText = stringResource(R.string.indoor_app_value_elevation, formats.indoorAscent(g.ascentM)),
+            durationText = catalogDuration(sessionMinutes * 60),
+        )
         val shape = when {
             g.climbs > 0 && g.reps > 0 -> pluralStringResource(R.plurals.indoor_app_day_generated_climbs_count, g.climbs, g.climbs, g.reps, g.workMinutes)
             terrain == DayTerrain.ROLLING -> stringResource(R.string.indoor_app_day_reason_rolling)
@@ -485,24 +652,6 @@ private fun GeneratedBody(g: IndoorDayGeneratedUi, terrain: DayTerrain, formats:
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-            Icon(
-                if (g.ready) Icons.Filled.CheckCircle else Icons.Filled.Build,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = if (g.ready) {
-                    stringResource(R.string.indoor_app_day_world_ready)
-                } else {
-                    stringResource(R.string.indoor_app_day_generated_build, g.buildMinutes)
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
     DayMainButton(
         text = stringResource(if (g.ready) R.string.indoor_app_day_ride_action else R.string.indoor_app_day_build_action),

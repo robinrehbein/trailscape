@@ -269,3 +269,59 @@ internal fun historyTotals(rides: List<RideInfo>): HistoryTotals {
     val ridden = riddenRides(rides)
     return HistoryTotals(ridden.size, ridden.sumOf { it.stats.distanceKm })
 }
+
+/**
+ * Geschaetzte Dauer einer geplanten Route in Sekunden anhand von [speedKmh];
+ * `null`, wenn die Laenge oder Geschwindigkeit nicht sinnvoll positiv ist.
+ */
+internal fun estimatedPlannedDurationS(distanceKm: Double, speedKmh: Double): Int? {
+    if (!distanceKm.isFinite() || !speedKmh.isFinite() || distanceKm <= 0.0 || speedKmh <= 0.0) {
+        return null
+    }
+    return (distanceKm / speedKmh * 3600.0).roundToInt().coerceAtLeast(60)
+}
+
+/** Ruhige Datumszeile einer gefahrenen Tour in der Atlas-Listenzeile. */
+internal fun rideRowDateText(at: LocalDateTime, language: AppLanguage): String =
+    formatRideShortDate(at, language)
+
+/** Ruhige Datumszeile einer gespeicherten Planung in der Atlas-Listenzeile. */
+internal fun plannedRowDateText(createdAt: LocalDateTime, language: AppLanguage): UiText =
+    UiText.Res(R.string.rides_list_planned_created, listOf(formatDateShort(createdAt, language)))
+
+/** Formatierte Distanz fuer die Atlas-Listenzeile. */
+internal fun rideRowDistanceText(
+    distanceKm: Double,
+    language: AppLanguage,
+    integerFrom10Km: Boolean = false,
+): UiText {
+    val km = if (integerFrom10Km && distanceKm >= 10.0) {
+        "${distanceKm.roundToInt()}"
+    } else {
+        formatDistanceKm(distanceKm, language)
+    }
+    return UiText.Res(R.string.rides_list_distance_value, listOf(km))
+}
+
+/** Formatierte Hoehenmeter fuer die Atlas-Listenzeile (`hm` / `m`). */
+internal fun rideRowAscentText(ascentM: Double): UiText =
+    UiText.Res(R.string.rides_list_ascent_value, listOf(ascentM.roundToInt()))
+
+/** Formatierte Dauer (`1:24 h`, `~3:14 h` oder `–`) fuer die Atlas-Listenzeile. */
+internal fun rideRowDurationText(durationS: Int?, estimated: Boolean = false): UiText = when {
+    durationS == null -> UiText.Plain("–")
+    estimated -> UiText.Res(R.string.rides_list_estimated_duration_value, listOf(formatHoursMinutes(durationS)))
+    else -> UiText.Res(R.string.rides_list_duration_value, listOf(formatHoursMinutes(durationS)))
+}
+
+/**
+ * Erste sichtbare Tour-ID der aufgeteilten Verlaufsliste (erst Planungen, dann
+ * Monatsgruppen) fuer die Vorauswahl im Tablet-Master-Detail.
+ */
+internal fun <T : RideInfo> firstDisplayRideId(
+    sections: HistorySections<T>,
+    fallbackRides: List<T> = emptyList(),
+): String? =
+    sections.planned.firstOrNull()?.id
+        ?: sections.months.firstOrNull()?.rides?.firstOrNull()?.id
+        ?: fallbackRides.firstOrNull()?.id

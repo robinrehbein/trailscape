@@ -174,7 +174,17 @@
     <string name="today_goal_target_time_label">Ziel %1$s h</string>
     <string name="today_goal_current_time_label">Stand heute ca. %1$s h</string>
 
-    <!-- TodayCards.kt -->
+    <!-- TodayCards.kt & TodayRoutePreview.kt -->
+    <string name="today_route_distance_km">%1$s km</string>
+    <string name="today_route_ascent_approx">~%1$d hm</string>
+    <string name="today_route_ascent_exact">%1$d hm</string>
+    <string name="today_route_duration_hours">%1$s h</string>
+    <string name="today_route_preview_cd">Streckenvorschau: %1$s</string>
+    <string name="today_route_status_rest">Ruhetag</string>
+    <string name="today_route_status_event">Zielevent</string>
+    <string name="today_route_metric_distance_label">Strecke</string>
+    <string name="today_route_metric_ascent_label">Höhenmeter</string>
+    <string name="today_route_metric_duration_label">Dauer</string>
     <string name="today_hero_connect_watch_hint">Verbinde deine Uhr, um deine Tagesform zu sehen.</string>
     <string name="today_hero_open_health_action">Gesundheitsdaten öffnen</string>
     <string name="today_hero_collecting_hint">Deine Uhr sammelt noch Werte. In ein paar Tagen siehst du hier deine Tagesform.</string>

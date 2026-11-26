@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.map
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
@@ -16,6 +17,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -50,6 +53,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.LocalAtlasColors
 import de.trailscape.app.ui.theme.OneUiMotion
 
 /**
@@ -93,6 +98,8 @@ internal fun SwipeableSheet(
     bottomInset: Dp = 0.dp,
     expandedHeight: Dp? = null,
     onRevealFraction: ((Float) -> Unit)? = null,
+    inSidePanel: Boolean = false,
+    footer: (@Composable () -> Unit)? = null,
     body: @Composable () -> Unit,
 ) {
     SwipeableSheet(
@@ -104,6 +111,8 @@ internal fun SwipeableSheet(
         halfStop = false,
         expandedHeight = expandedHeight,
         onRevealFraction = onRevealFraction,
+        inSidePanel = inSidePanel,
+        footer = footer,
         body = body,
     )
 }
@@ -138,17 +147,39 @@ internal fun SwipeableSheet(
     halfStop: Boolean = false,
     expandedHeight: Dp? = null,
     onRevealFraction: ((Float) -> Unit)? = null,
+    inSidePanel: Boolean = false,
+    footer: (@Composable () -> Unit)? = null,
     body: @Composable () -> Unit,
 ) {
+    if (inSidePanel) {
+        SidePanelSurface(modifier = modifier) {
+            Column(modifier = Modifier.padding(top = CardPadding)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    peek()
+                    body()
+                }
+                footer?.invoke()
+            }
+        }
+        return
+    }
+
     val density = LocalDensity.current
     var bodyHeightPx by remember { mutableIntStateOf(0) }
     var headHeightPx by remember { mutableIntStateOf(0) }
+    var footHeightPx by remember { mutableIntStateOf(0) }
     // Vor dem ersten Messen des Kopfs ein Schaetzwert — der Koerper braucht
     // schon im ersten Bild eine feste Hoehe, sonst misst sein Scrollbereich
     // unendlich.
     val fixedBodyHeight = expandedHeight?.let { total ->
         val head = if (headHeightPx > 0) with(density) { headHeightPx.toDp() } else FallbackHeadHeight
-        (total - head).coerceAtLeast(0.dp)
+        val foot = if (footHeightPx > 0) with(density) { footHeightPx.toDp() } else 0.dp
+        (total - head - foot).coerceAtLeast(0.dp)
     }
     val withHalf = halfStop && with(density) { bodyHeightPx.toDp() } >= MinHalfStopBody
     // Ohne Mittelstufe gibt es sie auch als Zustand nicht: aus „halb" wird
@@ -332,6 +363,16 @@ internal fun SwipeableSheet(
                     body()
                 }
             }
+
+            if (footer != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onSizeChanged { footHeightPx = it.height },
+                ) {
+                    footer()
+                }
+            }
         }
     }
 }
@@ -346,13 +387,39 @@ internal fun SwipeableSheet(
 internal fun StaticSheet(
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp,
+    inSidePanel: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    FloatingSheetSurface(modifier = modifier, bottomInset = bottomInset) {
-        Column(
-            modifier = Modifier.padding(top = SheetHandleHeight),
-            content = content,
-        )
+    if (inSidePanel) {
+        SidePanelSurface(modifier = modifier) {
+            Column(
+                modifier = Modifier.padding(top = CardPadding),
+                content = content,
+            )
+        }
+    } else {
+        FloatingSheetSurface(modifier = modifier, bottomInset = bottomInset) {
+            Column(
+                modifier = Modifier.padding(top = SheetHandleHeight),
+                content = content,
+            )
+        }
+    }
+}
+
+@Composable
+internal fun SidePanelSurface(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        border = BorderStroke(1.dp, LocalAtlasColors.current.cardBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+    ) {
+        content()
     }
 }
 
@@ -375,6 +442,8 @@ private fun FloatingSheetSurface(
             .padding(bottom = bottomInset + SheetBottomGap)
             .fillMaxWidth(),
         shape = FloatingSheetShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        border = BorderStroke(1.dp, LocalAtlasColors.current.cardBorder),
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
     ) {
         content()

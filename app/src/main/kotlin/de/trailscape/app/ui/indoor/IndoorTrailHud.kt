@@ -4,13 +4,13 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -28,7 +28,8 @@ import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.AppFormats
 import de.trailscape.app.i18n.LocalAppFormats
-import de.trailscape.app.ui.theme.DarkSignalColors
+import de.trailscape.app.ui.theme.DefaultCockpitColors
+import de.trailscape.app.ui.theme.LocalCockpitColors
 import de.trailscape.core.indoor.climb.Climb
 import de.trailscape.core.indoor.climb.ClimbCategory
 import de.trailscape.core.indoor.climb.ClimbEffort
@@ -99,15 +100,16 @@ internal fun AppFormats.climbKm(climb: Climb): String = decimal(climb.lengthM / 
 internal fun AppFormats.climbGrade(climb: Climb): String = decimal(climb.avgGradePct, 1)
 
 /** Schneller als die Bestzeit gruen, langsamer orange. */
-private fun deltaColor(ms: Long): Color = if (ms <= 0) DarkSignalColors.good else DarkSignalColors.warning
-
-private val PanelShape = RoundedCornerShape(14.dp)
+private fun deltaColor(ms: Long): Color =
+    if (ms <= 0) DefaultCockpitColors.good else DefaultCockpitColors.warning
 
 @Composable
 private fun TrailPanel(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val cockpit = LocalCockpitColors.current
     Surface(
-        color = HudColors.panelStrong,
-        shape = PanelShape,
+        color = cockpit.panel,
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(1.dp, cockpit.border),
         modifier = modifier.widthIn(max = 460.dp).semantics { liveRegion = LiveRegionMode.Polite },
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) { content() }
@@ -116,25 +118,25 @@ private fun TrailPanel(modifier: Modifier = Modifier, content: @Composable () ->
 
 @Composable
 private fun ClimbAheadChip(c: ClimbLive.Ahead) {
+    val cockpit = LocalCockpitColors.current
     val formats = LocalAppFormats.current
     val text = stringResource(R.string.trail_hud_ahead, aheadMeters(c.toStartM), formats.climbKm(c.climb), formats.climbGrade(c.climb))
     val category = climbCategoryLabel(c.climb.category)
     val best = c.bestMs?.let { stringResource(R.string.trail_hud_ahead_best, formatClimbTime(it)) }
     HudChip(modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
                 text = text,
-                style = hudStyle(MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
+                style = hudStyle(MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), cockpit.ink),
             )
             listOfNotNull(category, best).forEach { extra ->
                 Text(
-                    text = "  ·  $extra",
-                    style = hudStyle(MaterialTheme.typography.labelLarge, HudColors.inkMuted),
-                    maxLines = 1,
-                    softWrap = false,
+                    text = "·  $extra",
+                    style = hudStyle(MaterialTheme.typography.labelLarge, cockpit.inkMuted),
                 )
             }
         }
@@ -143,12 +145,13 @@ private fun ClimbAheadChip(c: ClimbLive.Ahead) {
 
 @Composable
 private fun ClimbOnPanel(c: ClimbLive.On) {
+    val cockpit = LocalCockpitColors.current
     val formats = LocalAppFormats.current
     TrailPanel {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = stringResource(R.string.trail_hud_on_title),
-                style = hudStyle(MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), HudColors.accent),
+                style = hudStyle(MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), cockpit.good),
                 maxLines = 1,
             )
             val extras = listOfNotNull(
@@ -156,7 +159,7 @@ private fun ClimbOnPanel(c: ClimbLive.On) {
                 if (!c.ranked) stringResource(R.string.trail_hud_on_unranked) else null,
             )
             extras.forEach {
-                Text(text = "  ·  $it", style = hudStyle(MaterialTheme.typography.labelLarge, HudColors.inkMuted), maxLines = 1)
+                Text(text = "  ·  $it", style = hudStyle(MaterialTheme.typography.labelLarge, cockpit.inkMuted), maxLines = 1)
             }
         }
         // Bricht auf schmalen Geraeten und bei grosser Schrift in eine zweite Zeile um.
@@ -181,9 +184,10 @@ private fun ClimbOnPanel(c: ClimbLive.On) {
 }
 
 @Composable
-private fun TrailValue(label: String, value: String, color: Color = HudColors.ink) {
+private fun TrailValue(label: String, value: String, color: Color = LocalCockpitColors.current.ink) {
+    val cockpit = LocalCockpitColors.current
     Column {
-        Text(text = label, style = hudStyle(MaterialTheme.typography.labelSmall, HudColors.inkMuted), maxLines = 1)
+        Text(text = label, style = hudStyle(MaterialTheme.typography.labelSmall, cockpit.inkMuted), maxLines = 1)
         Text(
             text = value,
             style = hudStyle(MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color),
@@ -216,13 +220,14 @@ internal fun climbVerdictText(e: ClimbEffort): String = when (climbOutcome(e)) {
 }
 
 private fun hudOutcomeColor(o: ClimbOutcome): Color = when (o) {
-    ClimbOutcome.UNRANKED -> HudColors.inkMuted
-    ClimbOutcome.FIRST, ClimbOutcome.NEW_BEST -> DarkSignalColors.good
-    ClimbOutcome.SLOWER -> DarkSignalColors.warning
+    ClimbOutcome.UNRANKED -> DefaultCockpitColors.inkMuted
+    ClimbOutcome.FIRST, ClimbOutcome.NEW_BEST -> DefaultCockpitColors.good
+    ClimbOutcome.SLOWER -> DefaultCockpitColors.warning
 }
 
 @Composable
 private fun ClimbDonePanel(e: ClimbEffort) {
+    val cockpit = LocalCockpitColors.current
     val formats = LocalAppFormats.current
     val verdict = climbVerdictText(e)
     val color = hudOutcomeColor(climbOutcome(e))
@@ -230,16 +235,16 @@ private fun ClimbDonePanel(e: ClimbEffort) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = stringResource(R.string.trail_hud_done_title, formats.decimal(e.climb.topEleM, 0)),
-                style = hudStyle(MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)),
+                style = hudStyle(MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), cockpit.ink),
                 maxLines = 1,
             )
             climbCategoryLabel(e.climb.category)?.let {
-                Text(text = "  ·  $it", style = hudStyle(MaterialTheme.typography.labelLarge, HudColors.inkMuted), maxLines = 1)
+                Text(text = "  ·  $it", style = hudStyle(MaterialTheme.typography.labelLarge, cockpit.inkMuted), maxLines = 1)
             }
         }
         Text(
             text = stringResource(R.string.trail_hud_done_time, formatClimbTime(e.timeMs)),
-            style = hudStyle(MaterialTheme.typography.labelLarge),
+            style = hudStyle(MaterialTheme.typography.labelLarge, cockpit.ink),
             maxLines = 1,
         )
         Text(
@@ -253,10 +258,11 @@ private fun ClimbDonePanel(e: ClimbEffort) {
 
 @Composable
 private fun KilometerChip(km: Int) {
+    val cockpit = LocalCockpitColors.current
     HudChip(modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
         Text(
             text = stringResource(R.string.trail_hud_km, km),
-            style = hudStyle(MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), HudColors.inkMuted),
+            style = hudStyle(MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), cockpit.inkMuted),
             maxLines = 1,
         )
     }

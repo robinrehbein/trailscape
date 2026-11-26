@@ -65,8 +65,8 @@ import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.ui.components.Fact
-import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.OneUiDialog
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.Milestone
@@ -181,7 +181,7 @@ internal fun ProgressRow(
             }
             if (fraction != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                ProgressBar(fraction, tint)
+                ProgressBar(fraction)
             }
         }
         if (trailing != null) {
@@ -320,11 +320,9 @@ internal fun ChallengeCard(challenge: StretchChallenge, onBuild: () -> Unit, mod
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(14.dp))
-            NeutralButton(
+            TrailscapeSecondaryButton(
                 onClick = onBuild,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Rounded.Route, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))

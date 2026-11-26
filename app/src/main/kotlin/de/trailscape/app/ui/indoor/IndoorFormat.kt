@@ -1,7 +1,10 @@
 package de.trailscape.app.ui.indoor
 
 import de.trailscape.app.i18n.AppFormats
+import de.trailscape.core.TrackPoint
 import de.trailscape.core.formatDuration
+import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
@@ -53,3 +56,40 @@ fun AppFormats.indoorBytes(size: Long): String = bytes(size) ?: "0 KB"
 
 /** Anteil 0..1 als ganze Prozent fuer den Fortschritt. */
 fun indoorPercent(fraction: Float): Int = (fraction.coerceIn(0f, 1f) * 100f).toInt()
+
+/**
+ * Normierte Spur einer gespeicherten Strecke (x, y-Paare im Einheitsquadrat 0..1)
+ * fuer die Vorschau in [de.trailscape.app.ui.components.RouteCard].
+ */
+internal fun indoorRoutePolyline(points: List<TrackPoint>, maxPoints: Int = 48): List<Float> {
+    if (points.size < 2 || maxPoints < 2) return emptyList()
+    val gaps = points.size - 1
+    val slots = (maxPoints - 2).coerceAtLeast(1)
+    val step = max(1, (gaps + slots - 1) / slots)
+    val picked = buildList {
+        var i = 0
+        while (i < points.size) {
+            add(points[i])
+            i += step
+        }
+        if (last() !== points.last()) add(points.last())
+    }
+    val meanLat = picked.sumOf { it.lat } / picked.size
+    val lonScale = cos(Math.toRadians(meanLat))
+    val xs = DoubleArray(picked.size) { picked[it].lon * lonScale }
+    val ys = DoubleArray(picked.size) { -picked[it].lat }
+    val minX = xs.min()
+    val minY = ys.min()
+    val spanX = xs.max() - minX
+    val spanY = ys.max() - minY
+    val span = max(spanX, spanY)
+    if (span <= 0.0) return listOf(0.5f, 0.5f, 0.5f, 0.5f)
+    val offsetX = (span - spanX) / 2
+    val offsetY = (span - spanY) / 2
+    val out = ArrayList<Float>(picked.size * 2)
+    for (i in picked.indices) {
+        out.add(((xs[i] - minX + offsetX) / span).toFloat())
+        out.add(((ys[i] - minY + offsetY) / span).toFloat())
+    }
+    return out
+}

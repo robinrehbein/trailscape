@@ -21,7 +21,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
-import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 import de.trailscape.core.GeoResult
@@ -101,12 +102,13 @@ internal fun PlaceCard(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp,
+    inSidePanel: Boolean = false,
 ) {
     val (title, area) = placeTitleAndArea(place.displayName)
     // Ein angedocktes Blatt wie alle anderen am unteren Kartenrand — keine
     // schwebende Karte mehr (ein Muster fuer „Info zu etwas auf der Karte").
     // Ohne aufziehbaren Teil und daher ohne Griff.
-    StaticSheet(modifier = modifier, bottomInset = bottomInset) {
+    StaticSheet(modifier = modifier, bottomInset = bottomInset, inSidePanel = inSidePanel) {
         // Rechts 8 dp statt CardPadding: derselbe Ausgleich fuer den
         // eigenen Beruehrungsrand des Schliessen-Knopfs wie bei RideCard.
         Column(
@@ -144,21 +146,31 @@ internal fun PlaceCard(
             }
             Spacer(Modifier.height(OverlayCardPaddingVertical))
             when (mode) {
-                MapMode.PLANEN -> PrimaryButton(
-                    text = stringResource(R.string.map_place_waypoint_action),
+                MapMode.PLANEN -> TrailscapePrimaryButton(
                     onClick = onAddWaypoint,
                     modifier = Modifier.fillMaxWidth(),
-                )
+                ) {
+                    Text(
+                        text = stringResource(R.string.map_place_waypoint_action),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
 
                 // Primaerknopf ueber einem Sekundaerknopf in voller Breite.
                 MapMode.ERKUNDEN -> Column {
-                    PrimaryButton(
-                        text = stringResource(R.string.map_place_route_here_action),
+                    TrailscapePrimaryButton(
                         onClick = onRouteHere,
                         modifier = Modifier.fillMaxWidth(),
-                    )
+                    ) {
+                        Text(
+                            text = stringResource(R.string.map_place_route_here_action),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
-                    NeutralButton(
+                    TrailscapeSecondaryButton(
                         onClick = onRoundTripHere,
                         modifier = Modifier.fillMaxWidth(),
                     ) {

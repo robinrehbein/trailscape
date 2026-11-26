@@ -9,12 +9,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,7 +25,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import de.trailscape.app.R
 import de.trailscape.app.indoor.IndoorProtocolStore
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.Eyebrow
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.prepareShareDirectory
 import de.trailscape.core.indoor.FEEL_TARGET_WINDOW_S
 import de.trailscape.core.indoor.FeelPhase
@@ -59,7 +59,7 @@ internal fun FeelCard(
     onSurfaceChange: (Double) -> Unit,
     onReset: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Eyebrow(stringResource(R.string.indoor_feel_card_title))
             FeelSlider(
@@ -155,19 +155,19 @@ internal fun IndoorCalibrationScreen(
             val result = ui.result
             when {
                 result is FeelResult.Suggest && !ui.accepted && result.suggestion.worthChanging -> {
-                    Button(onClick = onAccept, modifier = Modifier.fillMaxWidth()) {
+                    TrailscapePrimaryButton(onClick = onAccept, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.indoor_feel_cal_accept))
                     }
-                    OutlinedButton(onClick = onLeave, modifier = Modifier.fillMaxWidth()) {
+                    TrailscapeSecondaryButton(onClick = onLeave, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.indoor_feel_cal_decline))
                     }
                 }
                 result != null -> {
-                    Button(onClick = onLeave, modifier = Modifier.fillMaxWidth()) {
+                    TrailscapePrimaryButton(onClick = onLeave, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.indoor_feel_cal_done))
                     }
                 }
-                else -> OutlinedButton(onClick = onLeave, modifier = Modifier.fillMaxWidth()) {
+                else -> TrailscapeSecondaryButton(onClick = onLeave, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.indoor_feel_cal_cancel))
                 }
             }
@@ -176,7 +176,7 @@ internal fun IndoorCalibrationScreen(
         val result = ui.result
         if (result == null) {
             MutedText(stringResource(R.string.indoor_feel_cal_intro))
-            Card(modifier = Modifier.fillMaxWidth()) {
+            AtlasCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         text = when (ui.phase) {
@@ -204,8 +204,8 @@ internal fun IndoorCalibrationScreen(
                     )
                     // FlowRow: passt der zweite Knopf nicht mehr daneben, rutscht er in die naechste Zeile.
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onGearLess) { Text(stringResource(R.string.indoor_feel_cal_gear_less)) }
-                        OutlinedButton(onClick = onGearMore) { Text(stringResource(R.string.indoor_feel_cal_gear_more)) }
+                        TrailscapeSecondaryButton(onClick = onGearLess) { Text(stringResource(R.string.indoor_feel_cal_gear_less)) }
+                        TrailscapeSecondaryButton(onClick = onGearMore) { Text(stringResource(R.string.indoor_feel_cal_gear_more)) }
                     }
                     if (ui.phase == FeelPhase.MEASURING && ui.phaseS >= de.trailscape.core.indoor.FEEL_MIN_SAMPLES) {
                         TextButton(onClick = onFinishNow) { Text(stringResource(R.string.indoor_feel_cal_finish_now)) }
@@ -221,7 +221,7 @@ internal fun IndoorCalibrationScreen(
 
 @Composable
 private fun CalibrationResult(result: FeelResult, accepted: Boolean) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             when (result) {
                 is FeelResult.Suggest -> {
@@ -300,13 +300,13 @@ internal fun IndoorProtocolScreen(
             val lines = openedText.lines()
             val preview = lines.take(PROTOCOL_PREVIEW_LINES).joinToString("\n")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { onShare(openedId) }) { Text(stringResource(R.string.indoor_feel_log_share)) }
-                OutlinedButton(onClick = { onDelete(openedId) }) { Text(stringResource(R.string.indoor_feel_log_delete)) }
+                TrailscapePrimaryButton(onClick = { onShare(openedId) }) { Text(stringResource(R.string.indoor_feel_log_share)) }
+                TrailscapeSecondaryButton(onClick = { onDelete(openedId) }, destructive = true) { Text(stringResource(R.string.indoor_feel_log_delete)) }
             }
             if (lines.size > PROTOCOL_PREVIEW_LINES) {
                 MutedText(stringResource(R.string.indoor_feel_log_truncated, PROTOCOL_PREVIEW_LINES))
             }
-            Card(modifier = Modifier.fillMaxWidth()) {
+            AtlasCard(modifier = Modifier.fillMaxWidth()) {
                 SelectionContainer {
                     Text(
                         text = preview,
@@ -323,7 +323,7 @@ internal fun IndoorProtocolScreen(
             MutedText(stringResource(R.string.indoor_feel_log_empty))
             return@IndoorPage
         }
-        Card(modifier = Modifier.fillMaxWidth()) {
+        AtlasCard(modifier = Modifier.fillMaxWidth()) {
             Column {
                 rows.forEachIndexed { i, row ->
                     if (i > 0) HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -343,7 +343,7 @@ internal fun IndoorProtocolScreen(
                 }
             }
         }
-        OutlinedButton(onClick = onDeleteAll, modifier = Modifier.fillMaxWidth()) {
+        TrailscapeSecondaryButton(onClick = onDeleteAll, destructive = true, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.indoor_feel_log_delete_all))
         }
     }

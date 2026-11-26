@@ -1,11 +1,13 @@
 package de.trailscape.app.ui.map
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Air
@@ -32,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.selected
@@ -45,9 +49,12 @@ import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.i18n.UiText
 import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.LocalAtlasColors
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
+import de.trailscape.app.ui.theme.tabular
 import de.trailscape.core.PlannedRoute
 import de.trailscape.core.RouteCandidate
 import de.trailscape.core.RouteQualityIssue
@@ -164,6 +171,8 @@ internal fun RouteGenerationSheet(
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp,
     windEnabled: Boolean = false,
+    inSidePanel: Boolean = false,
+    autoStarting: Boolean = false,
 ) {
     val coreTexts = LocalCoreTexts.current
     val target = state.target ?: return
@@ -176,6 +185,47 @@ internal fun RouteGenerationSheet(
         expanded = expanded,
         onExpandedChange = onExpandedChange,
         modifier = modifier,
+        inSidePanel = inSidePanel,
+        footer = if (inSidePanel && !locating && !state.running) {
+            {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = CardPadding, end = CardPadding, top = 4.dp, bottom = 14.dp),
+                ) {
+                    if (state.candidates.isEmpty()) {
+                        TrailscapePrimaryButton(
+                            onClick = onStart,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = if (state.error == null) {
+                                    stringResource(R.string.map_generation_search_action)
+                                } else {
+                                    stringResource(R.string.map_generation_retry_action)
+                                },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    } else {
+                        TrailscapePrimaryButton(
+                            onClick = onApply,
+                            enabled = state.selected != null,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.map_generation_apply_action),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            null
+        },
         peek = {
             Column(
                 modifier = Modifier.padding(
@@ -293,7 +343,10 @@ internal fun RouteGenerationSheet(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = stringResource(R.string.map_generation_locating_status),
+                            text = stringResource(
+                                if (autoStarting) R.string.map_generation_auto_starting_status
+                                else R.string.map_generation_locating_status,
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -301,20 +354,28 @@ internal fun RouteGenerationSheet(
                     state.running -> SearchProgress(
                         done = state.done,
                         total = state.total,
+                        autoStarting = autoStarting,
                         onCancel = onCancel,
                     )
 
-                    state.candidates.isEmpty() -> PrimaryButton(
-                        text = if (state.error == null) {
-                            stringResource(R.string.map_generation_search_action)
-                        } else {
-                            stringResource(R.string.map_generation_retry_action)
-                        },
-                        onClick = onStart,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(end = 8.dp),
-                    )
+                    state.candidates.isEmpty() -> if (!inSidePanel) {
+                        TrailscapePrimaryButton(
+                            onClick = onStart,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(end = 8.dp),
+                        ) {
+                            Text(
+                                text = if (state.error == null) {
+                                    stringResource(R.string.map_generation_search_action)
+                                } else {
+                                    stringResource(R.string.map_generation_retry_action)
+                                },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
 
                     else -> {
                         // Gedeckelt und scrollbar: Der Peek steht immer im
@@ -322,15 +383,20 @@ internal fun RouteGenerationSheet(
                         // schwebenden Knoepfe. Ohne Deckel schoebe eine lange
                         // Liste sie vom Bildschirm.
                         Column(
-                            modifier = Modifier
-                                .heightIn(max = candidatesMaxHeight)
-                                .verticalScroll(rememberScrollState()),
+                            modifier = if (inSidePanel) {
+                                Modifier
+                            } else {
+                                Modifier
+                                    .heightIn(max = candidatesMaxHeight)
+                                    .verticalScroll(rememberScrollState())
+                            },
                         ) {
                             state.candidates.forEachIndexed { index, candidate ->
                                 CandidateRow(
                                     candidate = candidate,
                                     rank = index + 1,
                                     selected = index == state.selectedIndex,
+                                    targetSpeedKmh = target.speedKmh,
                                     onClick = { onSelect(index) },
                                     modifier = Modifier.padding(end = 8.dp, bottom = 6.dp),
                                 )
@@ -350,15 +416,22 @@ internal fun RouteGenerationSheet(
                             )
                         }
 
-                        Spacer(Modifier.height(2.dp))
-                        PrimaryButton(
-                            text = stringResource(R.string.map_generation_apply_action),
-                            onClick = onApply,
-                            enabled = state.selected != null,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(end = 8.dp),
-                        )
+                        if (!inSidePanel) {
+                            Spacer(Modifier.height(2.dp))
+                            TrailscapePrimaryButton(
+                                onClick = onApply,
+                                enabled = state.selected != null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(end = 8.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.map_generation_apply_action),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -366,8 +439,15 @@ internal fun RouteGenerationSheet(
         body = {
             Column(
                 modifier = Modifier
-                    .heightIn(max = bodyMaxHeight)
-                    .verticalScroll(rememberScrollState())
+                    .then(
+                        if (inSidePanel) {
+                            Modifier
+                        } else {
+                            Modifier
+                                .heightIn(max = bodyMaxHeight)
+                                .verticalScroll(rememberScrollState())
+                        },
+                    )
                     .padding(
                         start = CardPadding,
                         end = CardPadding,
@@ -431,15 +511,20 @@ internal fun RouteGenerationSheet(
  * die naechste wieder bei null.
  */
 @Composable
-private fun SearchProgress(done: Int, total: Int, onCancel: () -> Unit) {
+private fun SearchProgress(
+    done: Int,
+    total: Int,
+    autoStarting: Boolean,
+    onCancel: () -> Unit,
+) {
     val highWater = remember { floatArrayOf(0f) }
     Column(modifier = Modifier.padding(end = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = if (total <= 0) {
-                    stringResource(R.string.map_generation_running_status)
-                } else {
-                    stringResource(R.string.map_generation_progress_status, (done + 1).coerceAtMost(total), total)
+                text = when {
+                    total <= 0 && autoStarting -> stringResource(R.string.map_generation_auto_starting_status)
+                    total <= 0 -> stringResource(R.string.map_generation_running_status)
+                    else -> stringResource(R.string.map_generation_progress_status, (done + 1).coerceAtMost(total), total)
                 },
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodySmall,
@@ -466,11 +551,13 @@ private fun CandidateRow(
     candidate: RouteCandidate,
     rank: Int,
     selected: Boolean,
+    targetSpeedKmh: Double?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val coreTexts = LocalCoreTexts.current
     val theme = MaterialTheme.colorScheme
+    val atlas = LocalAtlasColors.current
     // Ausserhalb des `semantics`-Blocks festhalten: Dort verdeckt die
     // gleichnamige Semantik-Eigenschaft den Parameter.
     val isSelected = selected
@@ -483,31 +570,61 @@ private fun CandidateRow(
             // erfuhr nie, welcher gerade auf der Karte liegt.
             .semantics { this.selected = isSelected },
         shape = MaterialTheme.shapes.medium,
-        // Unselektiert eine Container-Stufe ueber der Karte des Panels, damit
-        // die waehlbaren Reihen auf ihr sichtbar bleiben; ausgewaehlt heben
-        // sie sich im One-UI-Gruen der `primaryContainer` ab.
-        color = if (selected) theme.primaryContainer else theme.surfaceContainer,
+        border = BorderStroke(1.dp, if (selected) theme.primary else atlas.cardBorder),
+        color = if (selected) theme.primaryContainer.copy(alpha = 0.45f) else theme.surfaceContainerHighest,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            DirectionChip(bearingDeg = candidate.bearingDeg, highlighted = selected)
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(
-                        R.string.map_generation_candidate_headline,
-                        LocalAppFormats.current.km(candidate.distanceKm),
-                        candidate.ascentM.roundToInt(),
-                    ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall,
+            Box(
+                modifier = Modifier
+                    .size(width = 64.dp, height = 52.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+            ) {
+                RoutePolylinePreview(
+                    points = candidate.route.points,
+                    modifier = Modifier.fillMaxSize(),
+                    strokeWidth = 2.5.dp,
+                    paddingFraction = 0.16f,
                 )
+                DirectionChip(
+                    bearingDeg = candidate.bearingDeg,
+                    highlighted = selected,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(3.dp),
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = stringResource(
+                            R.string.map_generation_candidate_headline,
+                            LocalAppFormats.current.km(candidate.distanceKm),
+                            candidate.ascentM.roundToInt(),
+                        ),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleSmall.tabular(),
+                    )
+                    Text(
+                        text = formatRouteDurationApprox(
+                            estimatedDurationMinutes(candidate.distanceKm, targetSpeedKmh),
+                        ).asString(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelMedium.tabular(),
+                        color = theme.onSurfaceVariant,
+                    )
+                }
                 Text(
                     text = candidateDetailLine(candidate, coreTexts).asString(),
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodySmall,
                     color = theme.onSurfaceVariant,
@@ -520,7 +637,7 @@ private fun CandidateRow(
                 unpavedLabel(candidate.route, coreTexts)?.let { surface ->
                     Text(
                         text = surface,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodySmall,
                         color = theme.onSurfaceVariant,
@@ -612,17 +729,21 @@ private fun CandidateRow(
 
 /** Himmelsrichtung des Rundkurses als runder Chip (Pille aus `shapes.small`). */
 @Composable
-private fun DirectionChip(bearingDeg: Double, highlighted: Boolean) {
+private fun DirectionChip(
+    bearingDeg: Double,
+    highlighted: Boolean,
+    modifier: Modifier = Modifier,
+) {
     Surface(
-        modifier = Modifier.size(36.dp),
-        shape = MaterialTheme.shapes.small,
-        color = if (highlighted) RouteBlue else MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = if (highlighted) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.size(width = 24.dp, height = 18.dp),
+        shape = RoundedCornerShape(6.dp),
+        color = if (highlighted) RouteBlue else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.9f),
+        contentColor = if (highlighted) Color.White else MaterialTheme.colorScheme.onSurface,
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
                 text = compassLabel(bearingDeg).asString(),
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
             )
         }
     }

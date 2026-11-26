@@ -540,6 +540,8 @@
     <string name="indoor_app_world_advanced_show">More options: build on your server</string>
     <string name="indoor_app_start_finish_action">End ride</string>
     <string name="indoor_app_settings_refresh_body">Fetch new routes and preview images</string>
+    <string name="indoor_app_route_track_preview_cd">Route preview of %1$s</string>
+    <string name="indoor_app_route_profile_cd">Elevation profile of %1$s</string>
     <plurals name="indoor_app_home_catalog_summary">
         <item quantity="one">%1$d ready-made route to download</item>
         <item quantity="other">%1$d ready-made routes to download</item>

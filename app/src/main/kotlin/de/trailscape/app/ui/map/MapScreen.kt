@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,7 +39,6 @@ import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -60,12 +60,14 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -79,9 +81,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
@@ -113,6 +117,7 @@ import de.trailscape.app.ui.MapStyle
 import de.trailscape.app.ui.PlaceSearchHistoryEntry
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.OneUiDialog
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
 import de.trailscape.app.ui.mapStyleSubtitle
 import de.trailscape.app.ui.mapStyles
 import de.trailscape.app.ui.prepareShareDirectory
@@ -124,10 +129,14 @@ import de.trailscape.app.ui.rides.RideShareDialog
 import de.trailscape.app.ui.rides.finishMarkers
 import de.trailscape.app.ui.rides.historyTotals
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.CockpitTheme
 import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.theme.LocalAtlasColors
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
 import de.trailscape.app.ui.theme.M3Transitions
 import de.trailscape.app.ui.theme.OverlayGap
 import de.trailscape.app.ui.theme.OverlayScreenPadding
+import de.trailscape.app.ui.theme.WindowLayoutClass
 import de.trailscape.app.voice.VoiceAnnouncer
 import de.trailscape.app.voice.vibriereOffRoute
 import de.trailscape.core.AscentPreference
@@ -841,6 +850,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
         impreciseLocationNotice = false
         if (action == PendingAction.GENERATE_ROUTES_AT_POSITION && !locationGranted) {
+            RouteGenerationController.clearAutoStart()
             // Die automatisch gestartete erste Runde rechnet nie ab der
             // Kartenmitte (siehe [runGenerateRoutes]). Kein
             // [LocationPermissionNotice]: Dessen „ohne sie geht es hier nicht
@@ -1076,8 +1086,16 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Der Fahrmodus ist nur eine andere Ansicht auf dieselbe Aufzeichnung —
     // endet sie (auch ueber die Notification oder den Aufnahmeknopf), gibt es
     // nichts mehr anzuzeigen, und beide Seiten schliessen sich mit ihr.
+    // Beginnt die Aufzeichnung (auch extern ueber Service/Uhr), schliessen sich
+    // Setup- und Such-Overlay sofort.
     LaunchedEffect(isRecording) {
-        if (!isRecording) rideModeSeite = RideModeSeite.KEINE
+        if (isRecording) {
+            roundTripSetupOpen = false
+            searchOpen = false
+            searchPickerCallback = null
+        } else {
+            rideModeSeite = RideModeSeite.KEINE
+        }
     }
 
     LaunchedEffect(livePoints.size) {
@@ -1461,6 +1479,10 @@ fun MapScreen(appViewModel: AppViewModel) {
      * [exitPlanning] und zum „Leeren"-Knopf.
      */
     fun restorePlanning(snapshot: PlanningSnapshot) {
+        if (isRecording) {
+            appViewModel.showMessage(UiText.Res(R.string.map_screen_stop_recording_first_status))
+            return
+        }
         mode = MapMode.PLANEN
         waypoints = snapshot.waypoints
         waypointUndo = WaypointUndoStack()
@@ -1590,8 +1612,8 @@ fun MapScreen(appViewModel: AppViewModel) {
      * Hoehenprofil, Teilen, Speichern und „Navigieren" sofort, ohne dass es
      * dafuer einen zweiten Weg gaebe.
      */
-    fun applyGeneratedRoute() {
-        val candidate = generation.selected ?: return
+    fun applyGeneratedRoute(): PlannedRoute? {
+        val candidate = generation.selected ?: return null
         RouteGenerationController.close()
         appViewModel.select(null)
         waypoints = emptyList()
@@ -1604,7 +1626,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         mode = MapMode.PLANEN
         planSheetExpanded = true
         controller.fitToPoints(candidate.route.points)
-        appViewModel.showMessage(UiText.Res(R.string.map_screen_loop_applied_status))
+        return candidate.route
     }
 
     // Jede Aktion mit Standortbedarf gibt es zweimal: `run…` ist der Rumpf,
@@ -1665,6 +1687,9 @@ fun MapScreen(appViewModel: AppViewModel) {
             plannedFor = null
         }
         if (mode == MapMode.PLANEN) mode = MapMode.ERKUNDEN
+        roundTripSetupOpen = false
+        searchOpen = false
+        searchPickerCallback = null
         selectedPlace = null
         hoverPoint = null
         appViewModel.select(null)
@@ -2159,6 +2184,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 locating = false
             }
             if (position == null && requirePosition) {
+                RouteGenerationController.clearAutoStart()
                 appViewModel.showMessage(UiText.Res(R.string.map_generation_first_round_no_position))
                 return@launch
             }
@@ -2168,6 +2194,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 controller.rememberCamera()?.let { TrackPoint(lat = it.lat, lon = it.lon) }
             }
             if (start == null) {
+                RouteGenerationController.clearAutoStart()
                 appViewModel.showMessage(UiText.Res(R.string.map_screen_no_start_error))
                 return@launch
             }
@@ -2343,8 +2370,8 @@ fun MapScreen(appViewModel: AppViewModel) {
      * wuerde [runRecording] das Signal nehmen, mit dem es entscheidet, ob die
      * Route eine anschliessende Aufzeichnung ueberlebt.
      */
-    fun runNavigatePlannedRoute() {
-        val route = plannedRoute ?: return
+    fun runNavigatePlannedRoute(routeOverride: PlannedRoute? = null) {
+        val route = routeOverride ?: plannedRoute ?: return
         if (route.points.size < 2) return
         locationGranted = true
         navState = null
@@ -2360,9 +2387,10 @@ fun MapScreen(appViewModel: AppViewModel) {
         starteNavigationsAnsicht()
     }
 
-    fun navigatePlannedRoute() {
-        if ((plannedRoute?.points?.size ?: 0) < 2) return
-        withPermissions(PendingAction.NAVIGATE_ROUTE) { runNavigatePlannedRoute() }
+    fun navigatePlannedRoute(routeOverride: PlannedRoute? = null) {
+        val route = routeOverride ?: plannedRoute ?: return
+        if (route.points.size < 2) return
+        withPermissions(PendingAction.NAVIGATE_ROUTE) { runNavigatePlannedRoute(route) }
     }
 
     /**
@@ -2426,15 +2454,35 @@ fun MapScreen(appViewModel: AppViewModel) {
     LaunchedEffect(pendingRouteTarget) {
         val target = pendingRouteTarget ?: return@LaunchedEffect
         val autoStart = appViewModel.consumeRouteTarget()
+        if (isRecording) {
+            appViewModel.showMessage(UiText.Res(R.string.map_screen_stop_recording_first_status))
+            return@LaunchedEffect
+        }
         if (mode == MapMode.PLANEN) exitPlanning()
         appViewModel.select(null)
-        RouteGenerationController.open(target)
-        // „Runde bauen" (Einfuehrung, erste Runde auf „Heute") meint: jetzt
-        // suchen — aber nur ab echtem Standort, siehe [runGenerateRoutes].
+        RouteGenerationController.open(target, autoStartPending = autoStart)
         if (autoStart) {
-            withPermissions(PendingAction.GENERATE_ROUTES_AT_POSITION) {
-                runGenerateRoutes(requirePosition = true)
+            if (target.isFirstRound) {
+                withPermissions(PendingAction.GENERATE_ROUTES_AT_POSITION) {
+                    runGenerateRoutes(requirePosition = true)
+                }
+            } else {
+                generateRoutes()
             }
+        }
+    }
+
+    LaunchedEffect(
+        generation.autoStartPending,
+        generation.target,
+        generation.running,
+        generation.selectedIndex,
+        generation.candidates.size,
+    ) {
+        if (shouldAutoLaunchGeneratedRoute(generation.autoStartPending, generation)) {
+            RouteGenerationController.clearAutoStart()
+            val applied = applyGeneratedRoute()
+            if (applied != null) navigatePlannedRoute(applied)
         }
     }
 
@@ -2474,9 +2522,14 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Huelle blendet solange Navigationskapsel und Fahren-Knopf aus. Beim
     // Verlassen des Tabs wird der Zustand zurueckgesetzt, sonst fehlte die
     // Kapsel auf dem naechsten Tab.
-    val mapTaskActive = !isRecording && navTarget == null && (
-        mode == MapMode.PLANEN || generation.target != null ||
-            selectedPlace != null || selectedRide != null || roundTripSetupOpen || historyMode
+    val layoutClass = LocalWindowLayoutClass.current
+    val isExpanded = layoutClass == WindowLayoutClass.Expanded
+    val inlineRideModeActive = isExpanded && rideModeSeite == RideModeSeite.DATEN && isRecording
+    val mapTaskActive = inlineRideModeActive || (
+        !isRecording && navTarget == null && (
+            mode == MapMode.PLANEN || generation.target != null ||
+                selectedPlace != null || selectedRide != null || roundTripSetupOpen || historyMode
+            )
         )
     LaunchedEffect(mapTaskActive) { appViewModel.setMapTaskActive(mapTaskActive) }
     DisposableEffect(Unit) { onDispose { appViewModel.setMapTaskActive(false) } }
@@ -2609,7 +2662,9 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Ohne offenen Vorschlag nichts mehr nachfuehren — sonst zoge ein
     // spaeter schrumpfendes Blatt die Karte auf eine verworfene Runde.
     LaunchedEffect(generation.target == null) {
-        if (generation.target == null) controller.stopFollowingFit()
+        if (generation.target == null) {
+            controller.stopFollowingFit()
+        }
     }
 
     // ------------------------------- geplante Route → Aufnahme-Knopf der Huelle
@@ -2790,10 +2845,11 @@ fun MapScreen(appViewModel: AppViewModel) {
     // die Nutzerin selbst gegangen waere und den sie rueckwaerts wieder
     // erwarten wuerde.
     BackHandler(
-        enabled = exploreSearching || historyMode || roundTripSetupOpen || generation.target != null ||
-            mode == MapMode.PLANEN || sheetStage == MapSheetStage.AUFGEZOGEN,
+        enabled = searchOpen || exploreSearching || historyMode || roundTripSetupOpen ||
+            generation.target != null || mode == MapMode.PLANEN || sheetStage == MapSheetStage.AUFGEZOGEN,
     ) {
         when {
+            searchOpen -> closeSearchSheet()
             exploreSearching -> endExploreSearch()
             historyMode -> {
                 historyMode = false
@@ -2907,26 +2963,37 @@ fun MapScreen(appViewModel: AppViewModel) {
     val generationRest =
         (overlaySheetBudget - GenerationPeekFixedHeight).coerceAtLeast(MinSheetBodyHeight)
 
-    Scaffold(
-        // Die Huelle (TrailscapeApp) hat die System-Insets schon aufgeloest.
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = {
-            // Ueber der schwebenden Navigationskapsel, nicht dahinter.
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = LocalFloatingNavigationBarSpace.current),
-            )
-        },
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-        ) {
+    val sheetBottomInset = if (imeVisible) 0.dp else LocalFloatingNavigationBarSpace.current
+    val ride = selectedRide
+    val place = selectedPlace
+    val dockedSheet = when {
+        generation.target != null && !isRecording -> DockedSheet.VORSCHLAEGE
+        place != null && !isRecording -> DockedSheet.ORT
+        mode == MapMode.PLANEN && !isRecording -> DockedSheet.PLANUNG
+        ride != null && !isRecording -> DockedSheet.TOUR
+        historyMode && !isRecording -> DockedSheet.VERLAUF
+        roundTripSetupOpen && !isRecording -> DockedSheet.RUNDE
+        mode == MapMode.ERKUNDEN && !isRecording && navTarget == null -> DockedSheet.ERKUNDEN
+        else -> null
+    }
+    val sidePanelVisible = isExpanded && !naviKarteAktiv && (dockedSheet != null || searchOpen)
+    var sidePanelFootprintPx by remember { mutableIntStateOf(0) }
+    val effectiveSidePanelFootprintPx = if (sidePanelVisible) sidePanelFootprintPx else 0
+    LaunchedEffect(effectiveSidePanelFootprintPx) {
+        controller.setObscuredLeft(effectiveSidePanelFootprintPx)
+    }
+
+    val mapRenderingActive = isExpanded || !(rideModeSeite == RideModeSeite.DATEN && isRecording)
+    val currentStyle by rememberUpdatedState(mapStyle)
+    val currentLocationEnabled by rememberUpdatedState(locationGranted)
+    val currentRenderingActive by rememberUpdatedState(mapRenderingActive)
+    val currentAttributionOffset by rememberUpdatedState(effectiveSidePanelFootprintPx)
+    val mapPane = remember {
+        movableContentOf<Modifier> { paneModifier ->
             MapViewHost(
                 controller = controller,
-                style = mapStyle,
-                locationEnabled = locationGranted,
+                style = currentStyle,
+                locationEnabled = currentLocationEnabled,
                 onMapTap = ::onMapTap,
                 onMapLongPress = ::onMapLongPress,
                 onUserPan = {
@@ -2938,21 +3005,288 @@ fun MapScreen(appViewModel: AppViewModel) {
                     userPanning = false
                     lastUserPanAt = SystemClock.elapsedRealtime()
                 },
-                modifier = Modifier.fillMaxSize(),
-                // Hinter der Datenseite des Fahrmodus liegt die Karte
-                // vollstaendig verdeckt. Sie dann weiterzeichnen zu lassen
-                // waere ausgerechnet in dem Modus teuer, der fuer
-                // mehrstuendige Touren gedacht ist — und der ohnehin schon
-                // den Bildschirm anlaesst. Auf der NAVI_KARTE-Seite ist die
-                // Karte dagegen die Hauptdarstellerin und zeichnet natuerlich.
-                //
-                // Dieselbe Bedingung wie beim Anzeigen der Datenseite (unten,
-                // `rideModeSeite == DATEN && isRecording`): `runRecording()`
-                // setzt die Seite schon vor dem Start des Dienstes. Startet
-                // der nicht (oder endet sofort), blieb die Karte vorher
-                // angehalten — das letzte Bild stand, keine Geste bewegte sie.
-                renderingActive = !(rideModeSeite == RideModeSeite.DATEN && isRecording),
+                modifier = paneModifier.testTag("map_screen_map_pane"),
+                renderingActive = currentRenderingActive,
+                attributionStartOffsetPx = currentAttributionOffset,
             )
+        }
+    }
+
+    @Composable
+    fun DockedSheetContent(
+        sheet: DockedSheet,
+        placeForSheet: Place?,
+        rideForSheet: Ride?,
+        generationStateForSheet: RouteGenerationState,
+        inSidePanel: Boolean,
+        bottomInsetForSheet: Dp,
+        planningMaxHeight: Dp,
+        candidatesMaxHeight: Dp,
+        bodyMaxHeight: Dp,
+    ) {
+        when (sheet) {
+            DockedSheet.VORSCHLAEGE -> {
+                if (!inSidePanel) Spacer(Modifier.height(OverlayGap))
+                RouteGenerationSheet(
+                    state = generationStateForSheet,
+                    expanded = planSheetExpanded,
+                    onExpandedChange = { planSheetExpanded = it },
+                    route = plannedRoute,
+                    candidatesMaxHeight = candidatesMaxHeight,
+                    bodyMaxHeight = bodyMaxHeight,
+                    locating = locating,
+                    onStart = ::generateRoutes,
+                    onCancel = { RouteGenerationController.cancel() },
+                    onSelect = RouteGenerationController::select,
+                    onNextSuggestions = {
+                        RouteGenerationController.nextSuggestions(appViewModel::showMessage)
+                    },
+                    onApply = { applyGeneratedRoute() },
+                    onDiscard = ::discardGeneratedRoute,
+                    onHoverPoint = { hoverPoint = it },
+                    bottomInset = bottomInsetForSheet,
+                    windEnabled = considerWind,
+                    inSidePanel = inSidePanel,
+                    autoStarting = generationStateForSheet.autoStartPending,
+                )
+            }
+            DockedSheet.PLANUNG -> {
+                if (!inSidePanel) Spacer(Modifier.height(OverlayGap))
+                PlanningSheet(
+                    expanded = planSheetExpanded,
+                    half = planSheetHalf,
+                    onHalfChange = { planSheetHalf = it },
+                    onExpandedChange = { planSheetExpanded = it },
+                    profile = routeProfile,
+                    onProfileChange = { routeProfile = it },
+                    roundTrip = roundTrip,
+                    onRoundTripChange = { roundTrip = it },
+                    waypoints = waypoints,
+                    route = plannedRoute,
+                    busy = planBusy,
+                    error = planError,
+                    maxHeight = planningMaxHeight,
+                    progress = planProgress,
+                    generated = routeFromGenerator,
+                    source = routeSource,
+                    locating = locating,
+                    onUseMyPosition = ::useMyPositionAsStart,
+                    onRemoveWaypoint = { index ->
+                        changeWaypoints(waypoints.filterIndexed { i, _ -> i != index })
+                    },
+                    canUndo = waypointUndo.canUndo && !routeFromGenerator,
+                    onUndo = ::undoLastWaypointChange,
+                    onDiscard = {
+                        exitPlanningWithUndo(context.getString(R.string.map_screen_planning_discarded_status))
+                    },
+                    onAddWaypointViaSearch = { openPlaceSearch { picked -> addPlaceAsWaypoint(picked) } },
+                    onClear = {
+                        val snapshot = PlanningSnapshot(
+                            waypoints = waypoints,
+                            route = plannedRoute,
+                            plannedFor = plannedFor,
+                            fromGenerator = routeFromGenerator,
+                        )
+                        routeFromGenerator = false
+                        waypoints = emptyList()
+                        waypointUndo = WaypointUndoStack()
+                        plannedRoute = null
+                        plannedFor = null
+                        planError = null
+                        planSheetExpanded = true
+                        if (!snapshot.isEmpty) {
+                            scope.launch {
+                                val answer = snackbarHostState.showSnackbar(
+                                    message = context.getString(R.string.map_screen_planning_cleared_status),
+                                    actionLabel = context.getString(R.string.map_screen_undo_action),
+                                    duration = SnackbarDuration.Long,
+                                )
+                                if (answer == SnackbarResult.ActionPerformed) {
+                                    restorePlanning(snapshot)
+                                }
+                            }
+                        }
+                    },
+                    onSave = { saveRouteDialog = true },
+                    onShare = {
+                        plannedRoute?.let { shareRoute("trailscape-route", it.points) }
+                    },
+                    onNavigate = { navigatePlannedRoute() },
+                    onHoverPoint = { hoverPoint = it },
+                    onClose = { goToSheetStage(MapSheetStage.AUFGEZOGEN) },
+                    bottomInset = bottomInsetForSheet,
+                    inSidePanel = inSidePanel,
+                )
+            }
+            DockedSheet.ORT -> placeForSheet?.let { card ->
+                if (!inSidePanel) Spacer(Modifier.height(OverlayGap))
+                PlaceCard(
+                    place = card,
+                    mode = mode,
+                    distanceKm = controller.lastKnownLocation()?.let { (lat, lon) ->
+                        haversineM(
+                            TrackPoint(lat = lat, lon = lon),
+                            TrackPoint(lat = card.lat, lon = card.lon),
+                        ) / 1000.0
+                    },
+                    onRouteHere = { runRouteToPlace(card) },
+                    onRoundTripHere = { openRoundTripSetup(card) },
+                    onAddWaypoint = { addPlaceAsWaypoint(card) },
+                    onClose = { selectedPlace = null },
+                    bottomInset = bottomInsetForSheet,
+                    inSidePanel = inSidePanel,
+                )
+            }
+            DockedSheet.TOUR -> rideForSheet?.let { card ->
+                if (!inSidePanel) Spacer(Modifier.height(OverlayGap))
+                val highlights = rememberRideHighlights(
+                    appViewModel = appViewModel,
+                    rideId = card.id,
+                    rideUpdatedAt = card.updatedAt,
+                    planned = card.planned,
+                    facts = rideFacts,
+                    today = today,
+                    weekTargetKm = weekTargetKm,
+                )
+                val rideCardBodyMaxHeight = (
+                    overlaySheetBudget -
+                        RideCardPeekFixedHeight -
+                        if (highlights.isNotEmpty()) RideCardHighlightsFixedHeight else 0.dp
+                    ).coerceAtLeast(MinSheetBodyHeight)
+                RideCard(
+                    ride = card,
+                    highlights = highlights,
+                    navigating = navTarget?.rideId == card.id,
+                    onNavigate = { navigateRide(card) },
+                    onShare = {
+                        if (card.planned) {
+                            shareRoute(card.name, card.points)
+                        } else {
+                            shareDialogRide = card
+                        }
+                    },
+                    onDelete = { deleteDialogRide = card },
+                    onOpenDetails = { appViewModel.requestRideDetail(card.id) },
+                    onClose = {
+                        hoverPoint = null
+                        appViewModel.select(null)
+                    },
+                    onHoverPoint = { hoverPoint = it },
+                    expanded = rideSheetExpanded,
+                    onExpandedChange = { rideSheetExpanded = it },
+                    bottomInset = bottomInsetForSheet,
+                    inSidePanel = inSidePanel,
+                    bodyMaxHeight = rideCardBodyMaxHeight,
+                )
+            }
+            DockedSheet.VERLAUF -> {
+                if (!inSidePanel) Spacer(Modifier.height(OverlayGap))
+                val totals = historyTotals(rides)
+                HistorySummarySheet(
+                    rideCount = totals.rideCount,
+                    totalKm = totals.totalKm,
+                    tileCount = explorerTiles.size,
+                    squareSize = explorerMaxSquare?.size,
+                    clusterSize = explorerMaxClusterSize,
+                    onClose = {
+                        historyMode = false
+                        appViewModel.requestTab(AppTab.RIDES)
+                    },
+                    bottomInset = bottomInsetForSheet,
+                    inSidePanel = inSidePanel,
+                )
+            }
+            DockedSheet.RUNDE -> {
+                if (!inSidePanel) Spacer(Modifier.height(OverlayGap))
+                RoundTripSetupSheet(
+                    startLabel = roundTripStart?.let {
+                        stringResource(R.string.map_screen_round_trip_from_place, it.displayName)
+                    } ?: stringResource(R.string.map_screen_round_trip_from_position),
+                    distanceKm = roundTripKm,
+                    onDistanceChange = { roundTripKm = it },
+                    profile = routeProfile,
+                    onProfileChange = { routeProfile = it },
+                    discoveryMode = discoveryMode,
+                    onDiscoveryModeChange = { discoveryMode = it },
+                    considerWind = considerWind,
+                    onConsiderWindChange = RouteGenerationController::setWindEnabled,
+                    onShowSuggestions = ::confirmRoundTripSetup,
+                    onClose = { roundTripSetupOpen = false },
+                    bottomInset = bottomInsetForSheet,
+                    inSidePanel = inSidePanel,
+                )
+            }
+            DockedSheet.ERKUNDEN -> {
+                if (!inSidePanel) Spacer(Modifier.height(OverlayGap))
+                ExploreSheet(
+                    searchMaxHeight = screenHeight * SEARCH_RESULTS_MAX_HEIGHT_FACTOR,
+                    searchQuery = placeSearch.query,
+                    onSearchQueryChange = ::changeSearchQuery,
+                    onSubmitSearch = ::submitSearch,
+                    searching = exploreSearching,
+                    onSearchingChange = { focused ->
+                        if (focused) exploreSearching = true
+                    },
+                    onEndSearch = ::endExploreSearch,
+                    searchBusy = placeSearch.busy,
+                    searchError = placeSearch.error?.asString(),
+                    searchResults = placeSearch.results,
+                    searchHistory = placeHistory,
+                    onSelectPlace = { picked ->
+                        endExploreSearch()
+                        onPlaceChosen(picked)
+                    },
+                    onPlanRoute = { goToSheetStage(MapSheetStage.PLANEN) },
+                    onRoundTripHere = { openRoundTripSetup(null) },
+                    onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
+                    expanded = exploreSheetExpanded,
+                    onExpandedChange = { exploreSheetExpanded = it },
+                    savedRoutes = savedRoutes,
+                    onSelectRoute = { selected ->
+                        exploreSheetExpanded = false
+                        appViewModel.select(selected.id)
+                    },
+                    expandedHeight = exploreExpandedHeight,
+                    onRevealFraction = { exploreReveal = it },
+                    bottomInset = bottomInsetForSheet,
+                    loadRide = appViewModel::loadRide,
+                    inSidePanel = inSidePanel,
+                )
+            }
+        }
+    }
+
+    val rightOverlayStartPadding = if (sidePanelVisible) MapSidePanelFootprint else 0.dp
+    var dockedSheetPx by remember { mutableIntStateOf(0) }
+    var naviBottomPx by remember { mutableIntStateOf(0) }
+    val snackbarBottomSpace = when {
+        naviKarteAktiv -> maxOf(LocalFloatingNavigationBarSpace.current, with(density) { naviBottomPx.toDp() })
+        !isExpanded && !searchOpen && dockedSheet != null ->
+            maxOf(LocalFloatingNavigationBarSpace.current, with(density) { dockedSheetPx.toDp() })
+        else -> LocalFloatingNavigationBarSpace.current
+    }
+
+    Scaffold(
+        // Die Huelle (TrailscapeApp) hat die System-Insets schon aufgeloest.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = {
+            // Ueber der schwebenden Navigationskapsel bzw. dem angedockten Blatt, nicht dahinter.
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .padding(start = rightOverlayStartPadding)
+                    .padding(bottom = snackbarBottomSpace),
+            )
+        },
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            if (!inlineRideModeActive) {
+                mapPane(Modifier.fillMaxSize())
+            }
 
             // Auch die Kartenseite des Fahrmodus haelt den Bildschirm an —
             // dieselbe Lenker-Situation wie im Dialog, nur mit Karte statt
@@ -2966,16 +3300,20 @@ fun MapScreen(appViewModel: AppViewModel) {
             // Spalte samt Rand der Kamera — die Navi-Kamera setzt die Position
             // in den freien Bereich darunter.
             var topOverlayPx by remember { mutableIntStateOf(0) }
-            LaunchedEffect(topOverlayPx) { controller.setObscuredTop(topOverlayPx) }
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .widthIn(max = ContentMaxWidth)
-                    .fillMaxWidth()
-                    .onSizeChanged { topOverlayPx = it.height }
-                    .padding(OverlayScreenPadding),
-                verticalArrangement = Arrangement.spacedBy(OverlayGap),
-            ) {
+            LaunchedEffect(topOverlayPx, inlineRideModeActive) {
+                controller.setObscuredTop(if (inlineRideModeActive) 0 else topOverlayPx)
+            }
+            if (!inlineRideModeActive) {
+                Column(
+                    modifier = Modifier
+                        .align(if (sidePanelVisible) Alignment.TopEnd else Alignment.TopCenter)
+                        .padding(start = rightOverlayStartPadding)
+                        .widthIn(max = ContentMaxWidth)
+                        .fillMaxWidth()
+                        .onSizeChanged { topOverlayPx = it.height }
+                        .padding(OverlayScreenPadding),
+                    verticalArrangement = Arrangement.spacedBy(OverlayGap),
+                ) {
                 // Kein Overlay-Chip und keine Knopfreihe an dieser Kante:
                 // Suche, „Route planen", Kartenstil und Offline wohnen alle im
                 // einen unteren Blatt und seinen Stufen (siehe
@@ -3098,6 +3436,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                         total = downloadState.totalTiles,
                     )
                 }
+                }
             }
 
             // ----------------------------------------------------------- unten
@@ -3119,11 +3458,12 @@ fun MapScreen(appViewModel: AppViewModel) {
             // Live-Leiste, Blaetter und die runden Knoepfe wuerden sie nur
             // verstellen (Beenden/Pause wohnen in der Leiste, „Re-zentrieren"
             // ersetzt den Positions-Knopf).
-            if (naviKarteAktiv) {
+            if (inlineRideModeActive) {
+                LaunchedEffect(Unit) { controller.setObscuredBottom(0) }
+            } else if (naviKarteAktiv) {
                 // Auch hier meldet der Stapel, was er unten verdeckt — sonst
                 // rechnete die Navi-Kamera mit dem Wert des zuletzt offenen
                 // Blatts und setzte die Position unter die Live-Leiste.
-                var naviBottomPx by remember { mutableIntStateOf(0) }
                 LaunchedEffect(naviBottomPx) { controller.setObscuredBottom(naviBottomPx) }
                 Column(
                     modifier = Modifier
@@ -3153,6 +3493,119 @@ fun MapScreen(appViewModel: AppViewModel) {
                         onShowData = { rideModeSeite = RideModeSeite.DATEN },
                     )
                 }
+            } else if (isExpanded) {
+                val sidePanelMaxHeight = (
+                    screenHeight - overlayTopInset - OverlayScreenPadding * 2
+                    ).coerceAtLeast(MinOverlaySheetBudget)
+                val sidePanelGenRest =
+                    (sidePanelMaxHeight - GenerationPeekFixedHeight).coerceAtLeast(MinSheetBodyHeight)
+                if (sidePanelVisible) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .onSizeChanged { sidePanelFootprintPx = it.width }
+                            .padding(
+                                start = OverlayScreenPadding,
+                                top = overlayTopInset + OverlayScreenPadding,
+                                bottom = OverlayScreenPadding,
+                            )
+                            .width(MapSidePanelWidth)
+                            .heightIn(max = sidePanelMaxHeight),
+                    ) {
+                        if (searchOpen) {
+                            SearchPickerPanel(
+                                query = placeSearch.query,
+                                onQueryChange = ::changeSearchQuery,
+                                onSearch = ::submitSearch,
+                                busy = placeSearch.busy,
+                                error = placeSearch.error?.asString(),
+                                results = placeSearch.results,
+                                history = placeHistory,
+                                onSelect = ::onPlaceChosen,
+                                onDismiss = ::closeSearchSheet,
+                            )
+                        } else if (dockedSheet != null) {
+                            val planningHasRoute = plannedRoute != null && plannedRoute!!.points.size >= 2
+                            val planningFixedHeight = PlanningPeekFixedHeight +
+                                if (planningHasRoute) PlanningFooterFixedHeight else 0.dp
+                            DockedSheetContent(
+                                sheet = dockedSheet,
+                                placeForSheet = place,
+                                rideForSheet = ride,
+                                generationStateForSheet = generation,
+                                inSidePanel = true,
+                                bottomInsetForSheet = 0.dp,
+                                planningMaxHeight = (sidePanelMaxHeight - planningFixedHeight)
+                                    .coerceAtLeast(MinSheetBodyHeight),
+                                candidatesMaxHeight = sidePanelGenRest * GENERATION_CANDIDATES_SHARE,
+                                bodyMaxHeight = sidePanelGenRest * GENERATION_BODY_SHARE,
+                            )
+                        }
+                    }
+                }
+
+                var topCardPx by remember { mutableIntStateOf(0) }
+                LaunchedEffect(topCardPx) { controller.setObscuredBottom(topCardPx) }
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(start = rightOverlayStartPadding)
+                        .widthIn(max = ContentMaxWidth)
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = OverlayScreenPadding,
+                            vertical = OverlayScreenPadding,
+                        )
+                        .padding(bottom = sheetBottomInset),
+                    horizontalAlignment = Alignment.End,
+                ) {
+                    if (navTarget != null && !followMe) {
+                        RezentrierenChip(
+                            onClick = ::rezentriereNaviKamera,
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                        )
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    if (!isRecording && navTarget == null) {
+                        MapLayersButton(onClick = { showStyleSheet = true })
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    LocateButton(onClick = ::goToMyPosition, following = followMe)
+                    val topCard: Any? = if (isRecording) RecordingCardKey else null
+                    if (topCard == RecordingCardKey) {
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    AnimatedContent(
+                        targetState = topCard,
+                        transitionSpec = {
+                            (M3Transitions.cardEnter() togetherWith M3Transitions.cardExit())
+                                .using(SizeTransform(clip = false))
+                        },
+                        contentAlignment = Alignment.BottomCenter,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onSizeChanged { topCardPx = it.height },
+                        label = "Karte über dem Blatt",
+                    ) { card ->
+                        when (card) {
+                            RecordingCardKey -> LiveRecordingCard(
+                                speedKmh = speedKmh,
+                                distanceKm = recordedKm,
+                                elapsedS = (elapsedMs / 1000).toInt(),
+                                ascentM = liveAscentM,
+                                pointCount = livePoints.size,
+                                paused = isPaused,
+                                autoPaused = isAutoPaused,
+                                onTogglePause = { RecordingRepository.togglePause() },
+                                onStop = { RecordingRepository.stop() },
+                                onOpenRideMode = { rideModeSeite = RideModeSeite.DATEN },
+                                zielZeile = liveZiel,
+                            )
+
+                            else -> Unit
+                        }
+                    }
+                }
             } else if (!searchOpen) {
                 // Die Blaetter (Wohin?, Runde ab hier, Vorschlaege, Planung)
                 // sind am unteren Rand angedockt (Fuehrung „Klartext") und
@@ -3161,32 +3614,10 @@ fun MapScreen(appViewModel: AppViewModel) {
                 // frei ([sheetBottomInset]), ihre Flaeche laeuft darunter bis
                 // an den Rand. Nur der Kopf darueber — Standort-Knopf und die
                 // schwebenden Karten — steht mit Rand.
-                //
-                // Bei offener Tastatur ist die Kapsel verdeckt; der reservierte
-                // Platz waere nur Leere zwischen Blatt und Tastatur.
-                val sheetBottomInset = if (imeVisible) 0.dp else LocalFloatingNavigationBarSpace.current
-                val ride = selectedRide
-                val place = selectedPlace
-                // Welches Blatt am unteren Rand steht — eines zur Zeit, in
-                // dieser Rangfolge (siehe Klassen-KDoc, „Rangfolge am unteren
-                // Kartenrand"). Ort und Tour sind Blaetter wie alle anderen:
-                // Ein angetippter Ort legt sich waehrend der Planung kurz ueber
-                // das Planungsblatt („Als Wegpunkt") und gibt es danach zurueck.
-                val dockedSheet = when {
-                    generation.target != null -> DockedSheet.VORSCHLAEGE
-                    place != null && !isRecording -> DockedSheet.ORT
-                    mode == MapMode.PLANEN -> DockedSheet.PLANUNG
-                    ride != null && !isRecording -> DockedSheet.TOUR
-                    historyMode -> DockedSheet.VERLAUF
-                    roundTripSetupOpen -> DockedSheet.RUNDE
-                    mode == MapMode.ERKUNDEN && !isRecording && navTarget == null -> DockedSheet.ERKUNDEN
-                    else -> null
-                }
                 val dockedSheetShown = dockedSheet != null
 
                 // Was unten verdeckt ist, meldet der Stapel der Kamera: Blatt,
                 // Live-Leiste und — ohne Blatt — die Navigationskapsel.
-                var dockedSheetPx by remember { mutableIntStateOf(0) }
                 var topCardPx by remember { mutableIntStateOf(0) }
                 val navSpacePx = with(density) { sheetBottomInset.roundToPx() }
                 val obscuredBottomPx = topCardPx + if (dockedSheetShown) dockedSheetPx else navSpacePx
@@ -3202,13 +3633,6 @@ fun MapScreen(appViewModel: AppViewModel) {
                     // Alles ueber dem Blatt in einer eigenen Spalte, damit es
                     // sich in einem Stueck messen laesst — die Zahl ist das
                     // [overlayHeaderHeight] der Budgetrechnung weiter oben.
-                    // Eine Konstante von Hand kannte die Karte nicht, die hier
-                    // je nach Zustand steht (Aufzeichnung, Tour, Ort), und lag
-                    // bei grosser Schrift ohnehin daneben.
-                    // Beim Aufziehen des Erkunden-Blatts schrumpft der Kopf im
-                    // selben Mass, wie das Blatt waechst, und blendet aus —
-                    // so passt die Spalte in jedem Moment auf den Bildschirm,
-                    // und ganz oben gehoert der Platz dem Blatt.
                     val fadeHeader = dockedSheet == DockedSheet.ERKUNDEN
                     Column(
                         modifier = Modifier
@@ -3232,9 +3656,6 @@ fun MapScreen(appViewModel: AppViewModel) {
                             .onSizeChanged { overlayHeaderPx = it.height },
                         horizontalAlignment = Alignment.End,
                     ) {
-                        // Waehrend einer Navigation mit selbst verschobener
-                        // Karte: der Rueckweg in die Navi-Kamera — derselbe
-                        // Chip wie auf der NAVI_KARTE-Seite.
                         if (navTarget != null && !followMe) {
                             RezentrierenChip(
                                 onClick = ::rezentriereNaviKamera,
@@ -3242,19 +3663,6 @@ fun MapScreen(appViewModel: AppViewModel) {
                             )
                             Spacer(Modifier.height(12.dp))
                         }
-                        // Der fruehere RecordButton an dieser Stelle ist mit
-                        // der Fuehrung "Eine Leiste" entfallen: Die Aufnahme
-                        // startet und stoppt jetzt der eine schwebende
-                        // REC-Knopf neben der Navigationskapsel (siehe
-                        // `ui/components/RecCapsuleButton.kt`) — zwei
-                        // Startknoepfe auf demselben Bildschirm waren nach dem
-                        // ersten Geraetetest sichtbar einer zu viel.
-                        // Die Kartenknoepfe in einer Spalte unten rechts,
-                        // direkt ueber dem Blatt (One UI: Bedienung in
-                        // Daumenreichweite): Ebenen, darunter die eigene
-                        // Position. Die Spalte faehrt mit dem Blatt hoch und
-                        // runter. Der Kompass erscheint nur, wenn die Karte
-                        // gedreht ist (MapLibre, oben rechts).
                         if (!isRecording && navTarget == null) {
                             MapLayersButton(onClick = { showStyleSheet = true })
                             Spacer(Modifier.height(12.dp))
@@ -3262,10 +3670,6 @@ fun MapScreen(appViewModel: AppViewModel) {
                         LocateButton(onClick = ::goToMyPosition, following = followMe)
                         Spacer(Modifier.height(12.dp))
 
-                        // M3 „Enter and exit, within screen bounds": Die
-                        // Live-Leiste ueber dem Rand klappt von unten auf, weg
-                        // vom Rand, und wieder zu. Ort und Tour sind keine
-                        // schwebenden Karten mehr, sondern Blaetter (unten).
                         val topCard: Any? = if (isRecording) RecordingCardKey else null
                         AnimatedContent(
                             targetState = topCard,
@@ -3299,32 +3703,13 @@ fun MapScreen(appViewModel: AppViewModel) {
                         }
                     }
 
-                    // Ein Blatt, eine Aufgabe: Solange Vorschlaege zur Wahl
-                    // stehen, IST das Blatt die Wahl; danach ist es die
-                    // Planung. Vorher liefen beide gleichzeitig — die Wahl
-                    // oben, die Planung unten — und ueberlappten sich beim
-                    // Aufziehen (siehe KDoc von `RouteGenerationSheet`).
-                    // M3 „Enter and exit, beyond screen bounds": Ein Blatt faehrt
-                    // ueber den unteren Rand herein und hinaus, ohne
-                    // Ueberblenden; beim Wechsel faehrt das alte hinab, waehrend
-                    // das neue heraufkommt. Die Spalte darueber (Karten,
-                    // Standort-Knopf) folgt der Hoehe gleitend.
-                    // Beim Betreten der Karte faehrt das Blatt von unten
-                    // herein, waehrend die Karte nur einblendet: Das erste
-                    // Bild zeigt noch kein Blatt, das zweite das echte — der
-                    // Wechsel dazwischen ist genau der Eintritt oben.
                     var sheetEntered by remember { mutableStateOf(false) }
                     LaunchedEffect(Unit) { sheetEntered = true }
-                    // Ort und Tour tragen ihren Gegenstand im Schluessel: Ein
-                    // anderer Ort tauscht das Blatt, derselbe mit neuem Stand
-                    // nicht.
                     val sheetKey: Any? = when (dockedSheet) {
                         DockedSheet.ORT -> place?.let { "ort:${it.lat},${it.lon}" }
                         DockedSheet.TOUR -> ride?.let { "tour:${it.id}" }
                         else -> dockedSheet
                     }
-                    // Beim Hinausgleiten zeichnen Ort und Tour den letzten
-                    // Stand — ohne ihn waere das Blatt schlagartig leer.
                     val lastPlace = remember { arrayOfNulls<Place>(1) }
                     if (place != null) lastPlace[0] = place
                     val lastRide = remember { arrayOfNulls<Ride>(1) }
@@ -3347,285 +3732,26 @@ fun MapScreen(appViewModel: AppViewModel) {
                             is String -> if (key.startsWith("ort:")) DockedSheet.ORT else DockedSheet.TOUR
                             else -> null
                         }
-                        // Die Vorschlagswahl wird beim Hinausgleiten mit dem
-                        // letzten Stand gezeichnet — ohne Ziel zeichnet sie
-                        // nichts, und das Blatt waere schlagartig weg.
                         val lastGeneration = remember { arrayOf(generation) }
                         if (generation.target != null) lastGeneration[0] = generation
                         Column(horizontalAlignment = Alignment.End) {
-                    when (sheet) {
-                    DockedSheet.VORSCHLAEGE -> {
-                        Spacer(Modifier.height(OverlayGap))
-                        RouteGenerationSheet(
-                            state = lastGeneration[0],
-                            expanded = planSheetExpanded,
-                            onExpandedChange = { planSheetExpanded = it },
-                            route = plannedRoute,
-                            candidatesMaxHeight = generationRest * GENERATION_CANDIDATES_SHARE,
-                            bodyMaxHeight = generationRest * GENERATION_BODY_SHARE,
-                            locating = locating,
-                            onStart = ::generateRoutes,
-                            onCancel = RouteGenerationController::cancel,
-                            onSelect = RouteGenerationController::select,
-                            onNextSuggestions = {
-                                RouteGenerationController.nextSuggestions(appViewModel::showMessage)
-                            },
-                            onApply = ::applyGeneratedRoute,
-                            onDiscard = ::discardGeneratedRoute,
-                            onHoverPoint = { hoverPoint = it },
-                            bottomInset = sheetBottomInset,
-                            windEnabled = considerWind,
-                        )
-                    }
-                    DockedSheet.PLANUNG -> {
-                        // Die oberste Stufe desselben Blatts
-                        // ([MapSheetStage.PLANEN]): Der Planungsinhalt tritt an
-                        // die Stelle der Aktionszeile, der Griff bleibt.
-                        Spacer(Modifier.height(OverlayGap))
-                        PlanningSheet(
-                            expanded = planSheetExpanded,
-                            half = planSheetHalf,
-                            onHalfChange = { planSheetHalf = it },
-                            // Der Griff bleibt hier die Stufe zwischen vollem
-                            // Planungsinhalt und blosser Statuszeile — nicht
-                            // der Ausgang aus der Planung. Wer waehrend des
-                            // Wegpunktsetzens die Karte freiraeumt, will die
-                            // Planung ja gerade behalten; der Ausgang steht
-                            // eindeutig als Zurueck-Pfeil in der Kopfzeile
-                            // (`onClose` weiter unten).
-                            onExpandedChange = { planSheetExpanded = it },
-                            profile = routeProfile,
-                            onProfileChange = { routeProfile = it },
-                            // Der Schalter „Zurück zum Start": Er
-                            // aendert keinen Wegpunkt, nur die Art, wie sie
-                            // verbunden werden — nachgerechnet wird ueber
-                            // `roundTrip` im Schluessel des Planungs-Effekts.
-                            roundTrip = roundTrip,
-                            onRoundTripChange = { roundTrip = it },
-                            waypoints = waypoints,
-                            route = plannedRoute,
-                            busy = planBusy,
-                            error = planError,
-                            maxHeight = (overlaySheetBudget - PlanningPeekFixedHeight)
-                                .coerceAtLeast(MinSheetBodyHeight),
-                            progress = planProgress,
-                            generated = routeFromGenerator,
-                            source = routeSource,
-                            locating = locating,
-                            onUseMyPosition = ::useMyPositionAsStart,
-                            onRemoveWaypoint = { index ->
-                                changeWaypoints(waypoints.filterIndexed { i, _ -> i != index })
-                            },
-                            canUndo = waypointUndo.canUndo && !routeFromGenerator,
-                            onUndo = ::undoLastWaypointChange,
-                            // „Verwerfen": Planung samt Route wegwerfen und
-                            // zurueck auf „Wohin?" — per Snackbar rueckholbar
-                            // wie jeder andere Ausgang aus der Planung.
-                            onDiscard = {
-                                exitPlanningWithUndo(context.getString(R.string.map_screen_planning_discarded_status))
-                            },
-                            onAddWaypointViaSearch = { openPlaceSearch { place -> addPlaceAsWaypoint(place) } },
-                            onClear = {
-                                // Wie „Planung beenden": Der Fehlgriff darf nicht
-                                // das Ende der Arbeit sein (siehe
-                                // [exitPlanningWithUndo]) — nur bleibt der
-                                // Planungsmodus hier an.
-                                val snapshot = PlanningSnapshot(
-                                    waypoints = waypoints,
-                                    route = plannedRoute,
-                                    plannedFor = plannedFor,
-                                    fromGenerator = routeFromGenerator,
+                            if (sheet != null) {
+                                val planningHasRoute = plannedRoute != null && plannedRoute!!.points.size >= 2
+                                val planningFixedHeight = PlanningPeekFixedHeight +
+                                    if (planningHasRoute) PlanningFooterFixedHeight else 0.dp
+                                DockedSheetContent(
+                                    sheet = sheet,
+                                    placeForSheet = lastPlace[0],
+                                    rideForSheet = lastRide[0],
+                                    generationStateForSheet = lastGeneration[0],
+                                    inSidePanel = false,
+                                    bottomInsetForSheet = sheetBottomInset,
+                                    planningMaxHeight = (overlaySheetBudget - planningFixedHeight)
+                                        .coerceAtLeast(MinSheetBodyHeight),
+                                    candidatesMaxHeight = generationRest * GENERATION_CANDIDATES_SHARE,
+                                    bodyMaxHeight = generationRest * GENERATION_BODY_SHARE,
                                 )
-                                routeFromGenerator = false
-                                waypoints = emptyList()
-                                waypointUndo = WaypointUndoStack()
-                                plannedRoute = null
-                                plannedFor = null
-                                planError = null
-                                planSheetExpanded = true
-                                if (!snapshot.isEmpty) {
-                                    scope.launch {
-                                        val answer = snackbarHostState.showSnackbar(
-                                            message = context.getString(R.string.map_screen_planning_cleared_status),
-                                            actionLabel = context.getString(R.string.map_screen_undo_action),
-                                            duration = SnackbarDuration.Long,
-                                        )
-                                        if (answer == SnackbarResult.ActionPerformed) {
-                                            restorePlanning(snapshot)
-                                        }
-                                    }
-                                }
-                            },
-                            onSave = { saveRouteDialog = true },
-                            onShare = {
-                                plannedRoute?.let { shareRoute("trailscape-route", it.points) }
-                            },
-                            onNavigate = ::navigatePlannedRoute,
-                            onHoverPoint = { hoverPoint = it },
-                            // Der Zurueck-Pfeil der Planungs-Kopfzeile: eine
-                            // Stufe tiefer, also zurueck auf die Aktionszeile
-                            // ([MapSheetStage.AUFGEZOGEN]). Dass dabei die
-                            // Planung endet, faengt die Rueckhol-Snackbar in
-                            // [exitPlanningWithUndo] ab, durch die
-                            // [goToSheetStage] genau dafuer laeuft.
-                            onClose = { goToSheetStage(MapSheetStage.AUFGEZOGEN) },
-                            bottomInset = sheetBottomInset,
-                        )
-                    }
-
-                    // Die beiden Erkunden-Stufen desselben Blatts (siehe
-                    // `ExploreSheet.kt`): eingeklappt die Suchzeile, aufgezogen
-                    // zusaetzlich die Aktionszeile — aber nur, wenn kein
-                    // anderer Zustand den unteren Rand beansprucht: keine
-                    // Aufzeichnung, keine gewaehlte Tour, kein Ort, keine
-                    // Planung, keine Navigation und kein offener
-                    // Generator-Vorschlag (dessen Blatt liegt hier ebenfalls;
-                    // zwei Werkzeugflaechen zugleich helfen niemandem). Das ist
-                    // zugleich die Rangfolge aus dem Klassen-KDoc oben
-                    // („Rangfolge am unteren Kartenrand"): In all diesen
-                    // Faellen ist das Blatt schlicht nicht komponiert, kein
-                    // eigener Versteck-Zustand noetig.
-                    DockedSheet.ORT -> lastPlace[0]?.let { card ->
-                        Spacer(Modifier.height(OverlayGap))
-                        PlaceCard(
-                            place = card,
-                            mode = mode,
-                            // Synchron aus dem Standortpunkt der Karte
-                            // gelesen (siehe dessen KDoc): kein zweiter
-                            // GPS-Abonnent nur fuer diese eine
-                            // Entfernungszahl.
-                            distanceKm = controller.lastKnownLocation()?.let { (lat, lon) ->
-                                haversineM(
-                                    TrackPoint(lat = lat, lon = lon),
-                                    TrackPoint(lat = card.lat, lon = card.lon),
-                                ) / 1000.0
-                            },
-                            onRouteHere = { runRouteToPlace(card) },
-                            onRoundTripHere = { openRoundTripSetup(card) },
-                            // „Als Wegpunkt" gibt es nur in der Planung;
-                            // dort haengt es den Ort hinten an.
-                            onAddWaypoint = { addPlaceAsWaypoint(card) },
-                            onClose = { selectedPlace = null },
-                            bottomInset = sheetBottomInset,
-                        )
-                    }
-                    DockedSheet.TOUR -> lastRide[0]?.let { card ->
-                        Spacer(Modifier.height(OverlayGap))
-                        // Nur fuer die juengste gefahrene Tour von heute —
-                        // also direkt nach dem Stopp (siehe `RideHighlights.kt`).
-                        val highlights = rememberRideHighlights(
-                            appViewModel = appViewModel,
-                            rideId = card.id,
-                            rideUpdatedAt = card.updatedAt,
-                            planned = card.planned,
-                            facts = rideFacts,
-                            today = today,
-                            weekTargetKm = weekTargetKm,
-                        )
-                        RideCard(
-                            ride = card,
-                            highlights = highlights,
-                            navigating = navTarget?.rideId == card.id,
-                            onNavigate = { navigateRide(card) },
-                            // Gefahrene Touren fragen wie in der Detailansicht
-                            // nach Bild oder GPX — direkt nach der Fahrt ist
-                            // dieses Blatt der naechste Weg zum Tour-Bild.
-                            // Geplante Routen haben nichts zu zeigen: GPX.
-                            onShare = {
-                                if (card.planned) {
-                                    shareRoute(card.name, card.points)
-                                } else {
-                                    shareDialogRide = card
-                                }
-                            },
-                            onDelete = { deleteDialogRide = card },
-                            onOpenDetails = { appViewModel.requestRideDetail(card.id) },
-                            onClose = {
-                                hoverPoint = null
-                                appViewModel.select(null)
-                            },
-                            onHoverPoint = { hoverPoint = it },
-                            expanded = rideSheetExpanded,
-                            onExpandedChange = { rideSheetExpanded = it },
-                            bottomInset = sheetBottomInset,
-                        )
-                    }
-                    DockedSheet.VERLAUF -> {
-                        Spacer(Modifier.height(OverlayGap))
-                        // Nur gefahrene Touren — Planungen zaehlen nicht (getestet).
-                        val totals = historyTotals(rides)
-                        HistorySummarySheet(
-                            rideCount = totals.rideCount,
-                            totalKm = totals.totalKm,
-                            tileCount = explorerTiles.size,
-                            squareSize = explorerMaxSquare?.size,
-                            clusterSize = explorerMaxClusterSize,
-                            onClose = {
-                                historyMode = false
-                                appViewModel.requestTab(AppTab.RIDES)
-                            },
-                            bottomInset = sheetBottomInset,
-                        )
-                    }
-                    DockedSheet.RUNDE -> {
-                        Spacer(Modifier.height(OverlayGap))
-                        RoundTripSetupSheet(
-                            startLabel = roundTripStart?.let {
-                                stringResource(R.string.map_screen_round_trip_from_place, it.displayName)
-                            } ?: stringResource(R.string.map_screen_round_trip_from_position),
-                            distanceKm = roundTripKm,
-                            onDistanceChange = { roundTripKm = it },
-                            profile = routeProfile,
-                            onProfileChange = { routeProfile = it },
-                            discoveryMode = discoveryMode,
-                            onDiscoveryModeChange = { discoveryMode = it },
-                            considerWind = considerWind,
-                            onConsiderWindChange = RouteGenerationController::setWindEnabled,
-                            onShowSuggestions = ::confirmRoundTripSetup,
-                            onClose = { roundTripSetupOpen = false },
-                            bottomInset = sheetBottomInset,
-                        )
-                    }
-                    DockedSheet.ERKUNDEN -> {
-                        Spacer(Modifier.height(OverlayGap))
-                        ExploreSheet(
-                            searchMaxHeight = screenHeight * SEARCH_RESULTS_MAX_HEIGHT_FACTOR,
-                            searchQuery = placeSearch.query,
-                            onSearchQueryChange = ::changeSearchQuery,
-                            onSubmitSearch = ::submitSearch,
-                            searching = exploreSearching,
-                            onSearchingChange = { focused ->
-                                if (focused) exploreSearching = true
-                            },
-                            onEndSearch = ::endExploreSearch,
-                            searchBusy = placeSearch.busy,
-                            searchError = placeSearch.error?.asString(),
-                            searchResults = placeSearch.results,
-                            searchHistory = placeHistory,
-                            onSelectPlace = { place ->
-                                endExploreSearch()
-                                onPlaceChosen(place)
-                            },
-                            // „Route planen": die Planung beginnt leer; der
-                            // erste Punkt kommt per Tipp auf die Karte, per
-                            // Suche oder als „Mein Standort als Start".
-                            onPlanRoute = { goToSheetStage(MapSheetStage.PLANEN) },
-                            onRoundTripHere = { openRoundTripSetup(null) },
-                            onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
-                            expanded = exploreSheetExpanded,
-                            onExpandedChange = { exploreSheetExpanded = it },
-                            savedRoutes = savedRoutes,
-                            onSelectRoute = { route ->
-                                exploreSheetExpanded = false
-                                appViewModel.select(route.id)
-                            },
-                            expandedHeight = exploreExpandedHeight,
-                            onRevealFraction = { exploreReveal = it },
-                            bottomInset = sheetBottomInset,
-                        )
-                    }
-                    null -> Unit
-                    }
+                            }
                         }
                     }
                 }
@@ -3634,7 +3760,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // ----------------------------------------------------------------- Dialoge
-    if (searchOpen) {
+    if (searchOpen && !isExpanded) {
         SearchSheet(
             query = placeSearch.query,
             onQueryChange = ::changeSearchQuery,
@@ -3753,6 +3879,8 @@ fun MapScreen(appViewModel: AppViewModel) {
             // zu, Kompaktleiste an) — der Fahrmodus endet dabei nicht.
             onShowMap = { rideModeSeite = RideModeSeite.NAVI_KARTE },
             zielZeile = liveZiel,
+            useDialog = !isExpanded,
+            mapContent = if (isExpanded) mapPane else null,
         )
     }
 
@@ -3766,66 +3894,76 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Fehlende Kartendaten: ein Angebot, keine Fehlermeldung. Die Route liegt
     // in diesem Moment schon vor (ueber den Server berechnet) — hier geht es
     // nur darum, ob das naechste Mal ohne Netz und schneller gehen soll.
+    val rideModeDialogTheme = rideModeSeite == RideModeSeite.DATEN && isRecording
     segmentOffer?.let { offer ->
-        OneUiDialog(
-            onDismissRequest = appViewModel::dismissSegmentOffer,
-            icon = { Icon(Icons.Filled.DownloadForOffline, contentDescription = null) },
-            title = { Text(stringResource(R.string.map_screen_segment_offer_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.map_screen_segment_offer_body,
-                        offer.titleText(LocalCoreTexts.current).asString(),
-                        formats.bytes(offer.totalBytes)
-                            ?: stringResource(R.string.map_screen_segment_offer_size_unknown),
-                    ),
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { appViewModel.acceptSegmentOffer(context) }) {
-                    Text(stringResource(R.string.map_screen_segment_offer_accept_action))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = appViewModel::dismissSegmentOffer) { Text(stringResource(R.string.map_screen_segment_offer_later_action)) }
-            },
-        )
+        val content: @Composable () -> Unit = {
+            OneUiDialog(
+                onDismissRequest = appViewModel::dismissSegmentOffer,
+                icon = { Icon(Icons.Filled.DownloadForOffline, contentDescription = null) },
+                title = { Text(stringResource(R.string.map_screen_segment_offer_title)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.map_screen_segment_offer_body,
+                            offer.titleText(LocalCoreTexts.current).asString(),
+                            formats.bytes(offer.totalBytes)
+                                ?: stringResource(R.string.map_screen_segment_offer_size_unknown),
+                        ),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { appViewModel.acceptSegmentOffer(context) }) {
+                        Text(stringResource(R.string.map_screen_segment_offer_accept_action))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = appViewModel::dismissSegmentOffer) { Text(stringResource(R.string.map_screen_segment_offer_later_action)) }
+                },
+            )
+        }
+        if (rideModeDialogTheme) CockpitTheme { content() } else content()
     }
 
     shareDialogRide?.let { ride ->
         val insights by appViewModel.insights.collectAsStateWithLifecycle()
-        RideShareDialog(
-            ride = ride,
-            load = insights.rideLoads[ride.id]?.takeIf { it.available }?.load,
-            appViewModel = appViewModel,
-            onDismiss = { shareDialogRide = null },
-            // Wie im Tourdetail: „Herausforderung teilen" einer teilbaren Indoor-Tour.
-            extraRows = { de.trailscape.app.ui.rides.ChallengeShareRow(ride) },
-        )
+        val content: @Composable () -> Unit = {
+            RideShareDialog(
+                ride = ride,
+                load = insights.rideLoads[ride.id]?.takeIf { it.available }?.load,
+                appViewModel = appViewModel,
+                onDismiss = { shareDialogRide = null },
+                // Wie im Tourdetail: „Herausforderung teilen" einer teilbaren Indoor-Tour.
+                extraRows = { de.trailscape.app.ui.rides.ChallengeShareRow(ride) },
+            )
+        }
+        if (rideModeDialogTheme) CockpitTheme { content() } else content()
     }
 
     deleteDialogRide?.let { ride ->
-        OneUiDialog(
-            onDismissRequest = { deleteDialogRide = null },
-            title = { Text(stringResource(R.string.map_screen_delete_title)) },
-            text = { Text(stringResource(R.string.map_screen_delete_body, ride.name)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        deleteDialogRide = null
-                        if (navTarget?.rideId == ride.id) stopNavigation()
-                        appViewModel.removeRide(ride.id)
-                    },
-                ) {
-                    Text(stringResource(R.string.map_screen_delete_action), color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteDialogRide = null }) {
-                    Text(stringResource(R.string.map_screen_delete_cancel_action))
-                }
-            },
-        )
+        val content: @Composable () -> Unit = {
+            OneUiDialog(
+                onDismissRequest = { deleteDialogRide = null },
+                title = { Text(stringResource(R.string.map_screen_delete_title)) },
+                text = { Text(stringResource(R.string.map_screen_delete_body, ride.name)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            deleteDialogRide = null
+                            if (navTarget?.rideId == ride.id) stopNavigation()
+                            appViewModel.removeRide(ride.id)
+                        },
+                    ) {
+                        Text(stringResource(R.string.map_screen_delete_action), color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { deleteDialogRide = null }) {
+                        Text(stringResource(R.string.map_screen_delete_cancel_action))
+                    }
+                },
+            )
+        }
+        if (rideModeDialogTheme) CockpitTheme { content() } else content()
     }
 }
 
@@ -4060,13 +4198,12 @@ private fun MapStyleSheet(
             // Offline gehoert zur Karte selbst und wohnt deshalb hier, hinter
             // dem Ebenen-Knopf — nicht mehr als dritter Knopf im Suchblatt.
             if (current.offlineAllowed) {
-                FilledTonalButton(
+                TrailscapePrimaryButton(
                     onClick = onDownload,
                     enabled = downloadEnabled,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = CardPadding)
-                        .heightIn(min = 48.dp),
+                        .padding(horizontal = CardPadding),
                 ) {
                     Icon(Icons.Filled.DownloadForOffline, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
@@ -4083,12 +4220,11 @@ private fun MapStyleSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
-                FilledTonalButton(
+                TrailscapePrimaryButton(
                     onClick = onChooseOfflineStyle,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = CardPadding)
-                        .heightIn(min = 48.dp),
+                        .padding(horizontal = CardPadding),
                 ) {
                     // Wechsel-, kein Download-Symbol: Der Knopf laedt nichts
                     // herunter, er stellt nur den Stil um.
@@ -4332,6 +4468,20 @@ private val GenerationPeekFixedHeight = 184.dp
  */
 private val PlanningPeekFixedHeight = 84.dp
 
+/**
+ * Aktionszeile am Fuss des Planungsblatts (`PlanningActionFooter`, sobald eine
+ * Route vorliegt): `PrimaryButtonMinHeight` (52 dp) plus 4 dp oben und 14 dp unten.
+ */
+private val PlanningFooterFixedHeight = 70.dp
+
+/**
+ * Tour-Blatt (`RideCard`): Griff (24), Titelzeile (52), Kennzahlenreihe (~44),
+ * Hauptaktion (52), Aktionskacheln (~64) und Abstaende (~44) — ohne
+ * Highlights-Block; mit Highlights kommt [RideCardHighlightsFixedHeight] dazu.
+ */
+private val RideCardPeekFixedHeight = 280.dp
+private val RideCardHighlightsFixedHeight = 68.dp
+
 /** Untergrenze, damit die Rechnung auf sehr flachen Fenstern nicht negativ wird. */
 private val MinOverlaySheetBudget = 240.dp
 
@@ -4451,6 +4601,7 @@ private fun MapLayersButton(onClick: () -> Unit, modifier: Modifier = Modifier) 
         modifier = modifier.size(MapCircleButtonSize),
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        border = BorderStroke(1.dp, LocalAtlasColors.current.cardBorder),
         shadowElevation = MapCircleButtonElevation,
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -4458,6 +4609,14 @@ private fun MapLayersButton(onClick: () -> Unit, modifier: Modifier = Modifier) 
         }
     }
 }
+
+internal fun shouldAutoLaunchGeneratedRoute(
+    autoStartPending: Boolean,
+    state: RouteGenerationState,
+): Boolean = autoStartPending && state.target != null && !state.running && state.selected != null
+
+internal val MapSidePanelWidth = 380.dp
+internal val MapSidePanelFootprint = MapSidePanelWidth + OverlayScreenPadding
 
 /** Die Blaetter, die am unteren Kartenrand andocken — eines zur Zeit. */
 private enum class DockedSheet { VORSCHLAEGE, ORT, PLANUNG, TOUR, VERLAUF, RUNDE, ERKUNDEN }

@@ -11,8 +11,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -29,9 +27,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.Eyebrow
-import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.theme.LocalSignalColors
 
 /**
@@ -80,7 +80,7 @@ fun IndoorWorldScreen(
                 is IndoorWorldUi.Plan -> {
                     // Waehrend der Server baut, nicht zugleich auf dem Geraet bauen.
                     if (!serverBusy) {
-                        Button(onClick = onLoad, modifier = Modifier.fillMaxWidth()) {
+                        TrailscapePrimaryButton(onClick = onLoad, modifier = Modifier.fillMaxWidth()) {
                             Text(
                                 stringResource(
                                     if (ui.resumable) R.string.indoor_app_world_resume_action else R.string.indoor_app_world_load_action,
@@ -88,12 +88,12 @@ fun IndoorWorldScreen(
                             )
                         }
                     }
-                    NeutralButton(onClick = onRideWithoutWorld, modifier = Modifier.fillMaxWidth()) {
+                    TrailscapeSecondaryButton(onClick = onRideWithoutWorld, modifier = Modifier.fillMaxWidth()) {
                         Text(withoutWorldLabel ?: stringResource(R.string.indoor_app_world_without_action))
                     }
                 }
                 is IndoorWorldUi.Building -> {
-                    NeutralButton(
+                    TrailscapeSecondaryButton(
                         onClick = onCancel,
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !ui.cancelling,
@@ -107,22 +107,22 @@ fun IndoorWorldScreen(
                     }
                 }
                 is IndoorWorldUi.Ready -> {
-                    Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
+                    TrailscapePrimaryButton(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
                         Text(continueLabel ?: stringResource(R.string.indoor_app_world_ride_action))
                     }
                 }
                 is IndoorWorldUi.Failed -> {
                     if (ui.canRetry) {
-                        Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
+                        TrailscapePrimaryButton(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
                             Text(stringResource(R.string.indoor_app_action_retry))
                         }
                     }
-                    NeutralButton(onClick = onRideWithoutWorld, modifier = Modifier.fillMaxWidth()) {
+                    TrailscapeSecondaryButton(onClick = onRideWithoutWorld, modifier = Modifier.fillMaxWidth()) {
                         Text(withoutWorldLabel ?: stringResource(R.string.indoor_app_world_without_action))
                     }
                 }
                 is IndoorWorldUi.RouteUnavailable -> {
-                    NeutralButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+                    TrailscapeSecondaryButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.indoor_app_world_other_route_action))
                     }
                 }
@@ -169,7 +169,7 @@ private fun PlanContent(plan: IndoorWorldUi.Plan) {
     Text(text = plan.routeName, style = MaterialTheme.typography.titleLarge)
     MutedText(stringResource(R.string.indoor_app_world_plan_intro))
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             LabelValueRow(
                 label = stringResource(R.string.indoor_app_world_plan_length),
@@ -220,7 +220,7 @@ private fun PlanContent(plan: IndoorWorldUi.Plan) {
     )
     if (details) {
         Eyebrow(stringResource(R.string.indoor_app_world_plan_hosts_eyebrow))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        AtlasCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (plan.hosts.isEmpty()) {
                     MutedText(stringResource(R.string.indoor_app_world_plan_hosts_none))
@@ -264,7 +264,7 @@ private fun AdvancedServer(
 @Composable
 private fun BuildingContent(building: IndoorWorldUi.Building) {
     Text(text = stringResource(R.string.indoor_app_world_building_title), style = MaterialTheme.typography.titleLarge)
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             LinearProgressIndicator(
                 progress = { building.fraction.coerceIn(0f, 1f) },
@@ -305,7 +305,7 @@ private fun ReadyContent(ready: IndoorWorldUi.Ready) {
         )
     }
     Eyebrow(stringResource(R.string.indoor_app_attribution_eyebrow))
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(IndoorCardPadding)) {
             AttributionList(ready.attribution)
         }

@@ -6,13 +6,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,11 +28,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.trailscape.app.R
 import de.trailscape.app.ui.components.PillSegments
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.RouteProfile
 import kotlin.math.roundToInt
@@ -85,13 +87,17 @@ internal fun RoundTripSetupSheet(
     onClose: () -> Unit,
     bottomInset: Dp,
     modifier: Modifier = Modifier,
+    inSidePanel: Boolean = false,
 ) {
     StaticSheet(
         modifier = modifier,
         bottomInset = bottomInset,
+        inSidePanel = inSidePanel,
     ) {
         Column(
-            modifier = Modifier.padding(start = CardPadding, end = CardPadding, bottom = 16.dp),
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(start = CardPadding, end = CardPadding, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -157,10 +163,16 @@ internal fun RoundTripSetupSheet(
                 onCheckedChange = onConsiderWindChange,
             )
 
-            Button(
+            TrailscapePrimaryButton(
                 onClick = onShowSuggestions,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-            ) { Text(stringResource(R.string.map_round_trip_show_action)) }
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = stringResource(R.string.map_round_trip_show_action),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

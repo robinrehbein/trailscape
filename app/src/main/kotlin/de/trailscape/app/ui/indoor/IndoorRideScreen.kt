@@ -6,6 +6,7 @@ import android.content.ContextWrapper
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -32,7 +33,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -68,6 +68,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import de.trailscape.app.R
@@ -75,7 +76,13 @@ import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.map.KeepScreenOn
+import de.trailscape.app.ui.theme.CockpitTheme
+import de.trailscape.app.ui.theme.LocalCockpitColors
 import de.trailscape.app.ui.theme.LocalSignalColors
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
+import de.trailscape.app.ui.theme.TabletScreenPadding
+import de.trailscape.app.ui.theme.WindowLayoutClass
+import de.trailscape.app.ui.theme.windowLayoutClassFor
 import de.trailscape.core.indoor.DayRideEnd
 import de.trailscape.core.indoor.IndoorMode
 import de.trailscape.core.indoor.IndoorPhase
@@ -148,92 +155,121 @@ fun IndoorRideScreen(
     onReleaseStart: () -> Unit = {},
     onDismissDayEnd: () -> Unit = {},
 ) {
-    val session = ui.session
-    if (session == null) {
-        RideStartFailed(ui = ui, onBack = onBack)
-        return
-    }
-
-    KeepScreenOn()
-    LightSystemBarIcons()
-    var showDevices by rememberSaveable { mutableStateOf(false) }
-    // „Fahrt beenden" in der Pause ist ein einfacher Tipp — deshalb eine
-    // Rueckfrage, denn aus der Auswertung fuehrt kein Weg zurueck in die Fahrt.
-    // (Der runde Knopf beendet nur gedrueckt gehalten, ohne Rueckfrage.)
-    var confirmFinish by rememberSaveable { mutableStateOf(false) }
-    var chromeHidden by rememberSaveable { mutableStateOf(initialChromeHidden) }
-    val showWorld = ui.render is IndoorRenderUi.Ready || ui.render is IndoorRenderUi.Loading
-
-    val actions = HudActions(
-        onShift = onShift,
-        onTogglePause = onTogglePause,
-        onFinish = onFinish,
-        onCameraChange = onCameraChange,
-        onDemoPower = onDemoPower,
-        onDemoCadence = onDemoCadence,
-        onErgAdjust = onErgAdjust,
-        onDismissNotice = onDismissNotice,
-        onRideWithoutWorld = onRideWithoutWorld,
-        onShowDevices = { showDevices = true },
-        onFinishFromPause = { confirmFinish = true },
-        onMoveStart = onMoveStart,
-        onNudgeStart = onNudgeStart,
-        onReleaseStart = onReleaseStart,
-        onDismissDayEnd = onDismissDayEnd,
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(if (showWorld) Modifier.background(Color.Black) else Modifier.background(HudColors.backdrop)),
-    ) {
-        if (showWorld) {
-            worldSurface(Modifier.fillMaxSize())
+    CockpitTheme {
+        val session = ui.session
+        if (session == null) {
+            RideStartFailed(ui = ui, onBack = onBack)
+            return@CockpitTheme
         }
-        // Ein Tipp irgendwo auf die Welt (nicht auf ein Bedienelement) blendet
-        // die Nebensachen aus bzw. ein. Liegt unter dem HUD: Knoepfe gehen vor.
-        val toggleLabel = stringResource(
-            if (chromeHidden) R.string.indoor_app_hud_chrome_show_cd else R.string.indoor_app_hud_chrome_hide_cd,
+
+        KeepScreenOn()
+        LightSystemBarIcons()
+        var showDevices by rememberSaveable { mutableStateOf(false) }
+        // „Fahrt beenden" in der Pause ist ein einfacher Tipp — deshalb eine
+        // Rueckfrage, denn aus der Auswertung fuehrt kein Weg zurueck in die Fahrt.
+        // (Der runde Knopf beendet nur gedrueckt gehalten, ohne Rueckfrage.)
+        var confirmFinish by rememberSaveable { mutableStateOf(false) }
+        var chromeHidden by rememberSaveable { mutableStateOf(initialChromeHidden) }
+        val showWorld = ui.render is IndoorRenderUi.Ready || ui.render is IndoorRenderUi.Loading
+        val cockpit = LocalCockpitColors.current
+
+        val actions = HudActions(
+            onShift = onShift,
+            onTogglePause = onTogglePause,
+            onFinish = onFinish,
+            onCameraChange = onCameraChange,
+            onDemoPower = onDemoPower,
+            onDemoCadence = onDemoCadence,
+            onErgAdjust = onErgAdjust,
+            onDismissNotice = onDismissNotice,
+            onRideWithoutWorld = onRideWithoutWorld,
+            onShowDevices = { showDevices = true },
+            onFinishFromPause = { confirmFinish = true },
+            onMoveStart = onMoveStart,
+            onNudgeStart = onNudgeStart,
+            onReleaseStart = onReleaseStart,
+            onDismissDayEnd = onDismissDayEnd,
         )
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClickLabel = toggleLabel,
-                ) { chromeHidden = !chromeHidden }
-                .semantics { contentDescription = toggleLabel },
-        )
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            if (maxWidth > maxHeight) {
-                LandscapeHud(ui, session, showWorld, chromeHidden, actions)
-            } else {
-                PortraitHud(ui, session, showWorld, chromeHidden, actions)
+                .then(
+                    if (showWorld) {
+                        Modifier.background(Color.Black)
+                    } else {
+                        Modifier.background(cockpit.background)
+                    },
+                ),
+        ) {
+            if (showWorld) {
+                worldSurface(Modifier.fillMaxSize())
+            }
+            // Ein Tipp irgendwo auf die Welt (nicht auf ein Bedienelement) blendet
+            // die Nebensachen aus bzw. ein. Liegt unter dem HUD: Knoepfe gehen vor.
+            val toggleLabel = stringResource(
+                if (chromeHidden) R.string.indoor_app_hud_chrome_show_cd else R.string.indoor_app_hud_chrome_hide_cd,
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClickLabel = toggleLabel,
+                    ) { chromeHidden = !chromeHidden }
+                    .semantics { contentDescription = toggleLabel },
+            )
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val layoutClass = maxOf(
+                    LocalWindowLayoutClass.current,
+                    windowLayoutClassFor(maxWidth.value.toInt()),
+                )
+                val isLandscape = maxWidth > maxHeight
+                val isTabletLandscape = layoutClass == WindowLayoutClass.Expanded && maxHeight >= 560.dp
+                if (isLandscape) {
+                    LandscapeHud(
+                        ui = ui,
+                        session = session,
+                        showWorld = showWorld,
+                        chromeHidden = chromeHidden,
+                        isTabletLandscape = isTabletLandscape,
+                        actions = actions,
+                    )
+                } else {
+                    PortraitHud(
+                        ui = ui,
+                        session = session,
+                        showWorld = showWorld,
+                        chromeHidden = chromeHidden,
+                        layoutClass = layoutClass,
+                        actions = actions,
+                    )
+                }
             }
         }
-    }
 
-    if (showDevices) {
-        DevicesDialog(ui = ui, onDismiss = { showDevices = false })
-    }
-    if (confirmFinish) {
-        OneUiDialog(
-            onDismissRequest = { confirmFinish = false },
-            title = { Text(stringResource(R.string.indoor_app_flow_leave_title)) },
-            text = { Text(stringResource(R.string.indoor_app_flow_leave_body)) },
-            dismissButton = {
-                TextButton(onClick = { confirmFinish = false }) { Text(stringResource(R.string.indoor_app_action_cancel)) }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmFinish = false
-                        onFinish()
-                    },
-                ) { Text(stringResource(R.string.indoor_app_flow_leave_finish)) }
-            },
-        )
+        if (showDevices) {
+            DevicesDialog(ui = ui, onDismiss = { showDevices = false })
+        }
+        if (confirmFinish) {
+            OneUiDialog(
+                onDismissRequest = { confirmFinish = false },
+                title = { Text(stringResource(R.string.indoor_app_flow_leave_title)) },
+                text = { Text(stringResource(R.string.indoor_app_flow_leave_body)) },
+                dismissButton = {
+                    TextButton(onClick = { confirmFinish = false }) { Text(stringResource(R.string.indoor_app_action_cancel)) }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            confirmFinish = false
+                            onFinish()
+                        },
+                    ) { Text(stringResource(R.string.indoor_app_flow_leave_finish)) }
+                },
+            )
+        }
     }
 }
 
@@ -366,41 +402,77 @@ private fun PortraitHud(
     session: IndoorSessionState,
     showWorld: Boolean,
     chromeHidden: Boolean,
+    layoutClass: WindowLayoutClass,
     actions: HudActions,
 ) {
+    val cockpit = LocalCockpitColors.current
+    val isCompact = layoutClass == WindowLayoutClass.Compact
+    val horizontalPad = if (isCompact) 12.dp else TabletScreenPadding
+    val buttonSize = if (isCompact) HudRoundButtonSize else 56.dp
+
     Column(modifier = Modifier.fillMaxSize()) {
-        // Oben: Kernwerte auf dem Schleier, der unter die Statusleiste reicht.
+        // Oben: kantige Cockpit-Metrikleiste (2 Zeilen auf Smartphone, 5-Zellen-Leiste auf Tablet).
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(HudColors.topScrim)
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+                .padding(start = horizontalPad, end = horizontalPad, top = 8.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            HudMetrics(session = session, powerColor = powerColor(session))
-            HudGradeLine(session = session)
+            if (isCompact) {
+                CompactCockpitMetrics(session = session, powerColor = powerColor(session))
+            } else {
+                WideCockpitMetricsBar(session = session, powerColor = powerColor(session))
+            }
             TopExtras(ui = ui, session = session, chromeHidden = chromeHidden, actions = actions)
         }
 
         // Mitte: die Welt (bzw. die Ersatzanzeige), unten rechts die Knoepfe.
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = horizontalPad),
         ) {
+            val verticalButtons = maxHeight >= 260.dp
             if (showWorld) {
-                Row(
-                    modifier = Modifier.align(Alignment.BottomEnd).fillMaxWidth(),
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    Box(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        DemoPanel(ui = ui, chromeHidden = chromeHidden, actions = actions)
+                if (verticalButtons) {
+                    Row(
+                        modifier = Modifier.align(Alignment.BottomEnd).fillMaxWidth(),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        Box(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            DemoPanel(ui = ui, chromeHidden = chromeHidden, actions = actions)
+                        }
+                        ChromeVisibility(visible = !chromeHidden) {
+                            HudButtons(
+                                ui = ui,
+                                session = session,
+                                showCamera = true,
+                                vertical = true,
+                                buttonSize = buttonSize,
+                                actions = actions,
+                            )
+                        }
                     }
-                    ChromeVisibility(visible = !chromeHidden) {
-                        HudButtons(ui = ui, session = session, showCamera = true, vertical = true, actions = actions)
+                } else {
+                    Column(
+                        modifier = Modifier.align(Alignment.BottomEnd).fillMaxWidth(),
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        DemoPanel(ui = ui, chromeHidden = chromeHidden, actions = actions)
+                        ChromeVisibility(visible = !chromeHidden) {
+                            HudButtons(
+                                ui = ui,
+                                session = session,
+                                showCamera = true,
+                                vertical = false,
+                                buttonSize = buttonSize,
+                                actions = actions,
+                            )
+                        }
                     }
                 }
             } else {
@@ -421,7 +493,14 @@ private fun PortraitHud(
                             DemoPanel(ui = ui, chromeHidden = chromeHidden, actions = actions)
                         }
                         ChromeVisibility(visible = !chromeHidden, modifier = Modifier.padding(start = 12.dp)) {
-                            HudButtons(ui = ui, session = session, showCamera = false, vertical = true, actions = actions)
+                            HudButtons(
+                                ui = ui,
+                                session = session,
+                                showCamera = false,
+                                vertical = true,
+                                buttonSize = buttonSize,
+                                actions = actions,
+                            )
                         }
                     }
                 }
@@ -442,16 +521,15 @@ private fun PortraitHud(
             }
         }
 
-        // Unten: Gang bzw. Zielleistung, darunter das schmale Hoehenprofil.
+        // Unten: 72×72-dp-Schalttasten an den Ecken, dazwischen Gang/ERG, darunter Hoehenprofil.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(HudColors.bottomScrim)
                 .windowInsetsPadding(
                     WindowInsets.navigationBars.union(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
                 )
-                .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(start = horizontalPad, end = horizontalPad, top = 8.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             // Vor dem ersten Tritt und in der Pause: Startpunkt waehlen statt Gang und Profil.
             if (!StartPanelIfAny(ui = ui, session = session, actions = actions, compact = false)) {
@@ -460,9 +538,17 @@ private fun PortraitHud(
                 }
                 if (showWorld && ui.profile != null) {
                     ChromeVisibility(visible = !chromeHidden) {
-                        Column(modifier = Modifier.padding(horizontal = 4.dp)) {
-                            HudProfileHeader(ui = ui, session = session)
-                            HudProfileCanvas(ui = ui, session = session, height = PROFILE_STRIP_HEIGHT)
+                        Surface(
+                            color = cockpit.hudBar,
+                            shape = MaterialTheme.shapes.medium,
+                            border = BorderStroke(1.dp, cockpit.border),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                                HudProfileHeader(ui = ui, session = session)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                HudProfileCanvas(ui = ui, session = session, height = PROFILE_STRIP_HEIGHT)
+                            }
                         }
                     }
                 }
@@ -472,7 +558,7 @@ private fun PortraitHud(
 }
 
 // ---------------------------------------------------------------------------
-// Querformat
+// Querformat (Tablet-Cockpit & kompaktes Querformat)
 // ---------------------------------------------------------------------------
 
 @Composable
@@ -481,98 +567,183 @@ private fun LandscapeHud(
     session: IndoorSessionState,
     showWorld: Boolean,
     chromeHidden: Boolean,
+    isTabletLandscape: Boolean,
     actions: HudActions,
 ) {
+    val cockpit = LocalCockpitColors.current
+    val horizontalPad = if (isTabletLandscape) TabletScreenPadding else 12.dp
+    val verticalPad = if (isTabletLandscape) 12.dp else 6.dp
+    val buttonSize = if (isTabletLandscape) 56.dp else HudRoundButtonSize
+
     Column(modifier = Modifier.fillMaxSize()) {
-        // Oben links die Kernwerte, oben rechts die Knoepfe in einer Reihe.
+        // Oben: volle Cockpit-Leiste (ohne Breitenkappe) + grosse Tasten rechts.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(HudColors.topScrim)
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-                .padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 20.dp),
+                .padding(horizontal = horizontalPad, vertical = verticalPad),
             verticalAlignment = Alignment.Top,
         ) {
-            Column(
-                modifier = Modifier.weight(1f).widthIn(max = 560.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+            WideCockpitMetricsBar(
+                session = session,
+                powerColor = powerColor(session),
+                compactHeight = !isTabletLandscape,
+                modifier = Modifier.weight(1f),
+            )
+            ChromeVisibility(
+                visible = !chromeHidden,
+                modifier = Modifier.padding(start = if (isTabletLandscape) 16.dp else 12.dp),
             ) {
-                HudMetrics(session = session, powerColor = powerColor(session), modifier = Modifier.widthIn(max = 520.dp))
-                HudGradeLine(session = session)
-                TopExtras(ui = ui, session = session, chromeHidden = chromeHidden, actions = actions)
-            }
-            ChromeVisibility(visible = !chromeHidden, modifier = Modifier.padding(start = 16.dp)) {
-                HudButtons(ui = ui, session = session, showCamera = showWorld, vertical = false, actions = actions)
+                HudButtons(
+                    ui = ui,
+                    session = session,
+                    showCamera = showWorld,
+                    vertical = false,
+                    buttonSize = buttonSize,
+                    actions = actions,
+                )
             }
         }
 
+        // Mitte: freie 3D-Welt, Zusatzinfos sauber unter der Top-Leiste, Pause-/Tageskarte mittig.
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = horizontalPad),
         ) {
-            if (showWorld) {
-                Box(modifier = Modifier.align(Alignment.BottomStart).widthIn(max = 340.dp)) {
-                    DemoPanel(ui = ui, chromeHidden = chromeHidden, actions = actions)
+            if (isTabletLandscape) {
+                if (showWorld) {
+                    Column(
+                        modifier = Modifier.align(Alignment.TopStart).padding(top = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        TopExtras(ui = ui, session = session, chromeHidden = chromeHidden, actions = actions)
+                    }
+                    Box(modifier = Modifier.align(Alignment.BottomStart).widthIn(max = 340.dp)) {
+                        DemoPanel(ui = ui, chromeHidden = chromeHidden, actions = actions)
+                    }
+                } else {
+                    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TopExtras(ui = ui, session = session, chromeHidden = chromeHidden, actions = actions)
+                        RenderFailedCard(ui = ui, actions = actions)
+                        Row(
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.Bottom,
+                        ) {
+                            BigProfilePanel(ui = ui, session = session, modifier = Modifier.weight(1f).fillMaxHeight())
+                            if (ui.demoPowerW != null || ui.demoCadenceRpm != null) {
+                                Box(modifier = Modifier.width(300.dp)) {
+                                    DemoPanel(ui = ui, chromeHidden = chromeHidden, actions = actions)
+                                }
+                            }
+                        }
+                    }
+                }
+                if (ui.start == null) {
+                    val dayEnd = ui.dayEnd
+                    if (dayEnd != null) {
+                        DayEndCard(dayEnd = dayEnd, actions = actions, modifier = Modifier.align(Alignment.Center))
+                    } else {
+                        PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = Modifier.align(Alignment.Center), onFinish = actions.onFinishFromPause)
+                    }
+                }
+            } else if (showWorld) {
+                // Auf niedrigen Smartphone-Querformaten (< 560 dp) TopExtras ueber der
+                // Pause-/Tageskarte stapeln, damit Hinweisbanner und Karte nie kollidieren.
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TopExtras(ui = ui, session = session, chromeHidden = chromeHidden, actions = actions)
+                    }
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        Box(modifier = Modifier.align(Alignment.BottomStart).widthIn(max = 340.dp)) {
+                            DemoPanel(ui = ui, chromeHidden = chromeHidden, actions = actions)
+                        }
+                        if (ui.start == null) {
+                            val dayEnd = ui.dayEnd
+                            if (dayEnd != null) {
+                                DayEndCard(dayEnd = dayEnd, actions = actions, modifier = Modifier.align(Alignment.Center))
+                            } else {
+                                PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = Modifier.align(Alignment.Center), onFinish = actions.onFinishFromPause)
+                            }
+                        }
+                    }
                 }
             } else {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TopExtras(ui = ui, session = session, chromeHidden = chromeHidden, actions = actions)
                     RenderFailedCard(ui = ui, actions = actions)
-                    Row(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.Bottom,
-                    ) {
-                        BigProfilePanel(ui = ui, session = session, modifier = Modifier.weight(1f).fillMaxHeight())
-                        if (ui.demoPowerW != null || ui.demoCadenceRpm != null) {
-                            Box(modifier = Modifier.width(300.dp)) {
-                                DemoPanel(ui = ui, chromeHidden = chromeHidden, actions = actions)
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.Bottom,
+                        ) {
+                            BigProfilePanel(ui = ui, session = session, modifier = Modifier.weight(1f).fillMaxHeight())
+                            if (ui.demoPowerW != null || ui.demoCadenceRpm != null) {
+                                Box(modifier = Modifier.width(300.dp)) {
+                                    DemoPanel(ui = ui, chromeHidden = chromeHidden, actions = actions)
+                                }
+                            }
+                        }
+                        if (ui.start == null) {
+                            val dayEnd = ui.dayEnd
+                            if (dayEnd != null) {
+                                DayEndCard(dayEnd = dayEnd, actions = actions, modifier = Modifier.align(Alignment.Center))
+                            } else {
+                                PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = Modifier.align(Alignment.Center), onFinish = actions.onFinishFromPause)
                             }
                         }
                     }
                 }
             }
-            if (ui.start == null) {
-                val dayEnd = ui.dayEnd
-                if (dayEnd != null) {
-                    DayEndCard(dayEnd = dayEnd, actions = actions, modifier = Modifier.align(Alignment.Center))
-                } else {
-                    PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = Modifier.align(Alignment.Center), onFinish = actions.onFinishFromPause)
-                }
-            }
         }
 
-        // Unten: −/+ an den Raendern, dazwischen Gang und Hoehenprofil.
+        // Unten: 72×72-dp-Tasten −/+ an den Ecken, dazwischen Gang/ERG + breites Hoehenprofil.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(HudColors.bottomScrim)
                 .windowInsetsPadding(
                     WindowInsets.navigationBars.union(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
                 )
-                .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
+                .padding(horizontal = horizontalPad, vertical = verticalPad),
         ) {
             val startShown = StartPanelIfAny(
                 ui = ui,
                 session = session,
                 actions = actions,
                 compact = true,
-                modifier = Modifier.align(Alignment.Center).widthIn(max = 760.dp),
+                modifier = Modifier.align(Alignment.Center).widthIn(max = if (isTabletLandscape) 820.dp else 760.dp),
             )
             if (!startShown) ShiftRow(ui = ui, session = session, actions = actions) { pill ->
-                Column(
+                Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.Center,
                 ) {
                     pill()
                     if (showWorld && ui.profile != null) {
-                        ChromeVisibility(visible = !chromeHidden) {
-                            Column {
-                                HudProfileHeader(ui = ui, session = session)
-                                HudProfileCanvas(ui = ui, session = session, height = 44.dp)
+                        ChromeVisibility(
+                            visible = !chromeHidden,
+                            modifier = Modifier.weight(1f, fill = false),
+                        ) {
+                            Surface(
+                                color = cockpit.hudBar,
+                                shape = MaterialTheme.shapes.medium,
+                                border = BorderStroke(1.dp, cockpit.border),
+                                modifier = Modifier.padding(start = 12.dp).fillMaxWidth(),
+                            ) {
+                                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                                    HudProfileHeader(ui = ui, session = session)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    HudProfileCanvas(
+                                        ui = ui,
+                                        session = session,
+                                        height = if (isTabletLandscape) 42.dp else 32.dp,
+                                    )
+                                }
                             }
                         }
                     }
@@ -587,12 +758,14 @@ private fun LandscapeHud(
 // ---------------------------------------------------------------------------
 
 /** Im ERG-Modus faerbt die Naehe zum Ziel die Leistung gruen — ruhig, ohne Alarm. */
+@Composable
 private fun powerColor(session: IndoorSessionState): Color {
+    val cockpit = LocalCockpitColors.current
     val erg = session.erg
     val watts = session.powerW
-    if (erg == null || erg.done || watts == null) return HudColors.ink
+    if (erg == null || erg.done || watts == null) return cockpit.ink
     val diff = kotlin.math.abs(watts - erg.targetW)
-    return if (diff <= maxOf(erg.targetW / 20, 5)) HudColors.accent else HudColors.ink
+    return if (diff <= maxOf(erg.targetW / 20, 5)) cockpit.good else cockpit.ink
 }
 
 /** Unter den Kernwerten: Geist (ausblendbar), Laden der Welt, Bergwertung, Hinweis. */
@@ -656,7 +829,7 @@ private fun ShiftRow(
         }
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
             middle {
-                if (ergMode && erg != null) {
+                if (ergMode) {
                     HudErgPill(
                         title = ui.ergTitle,
                         targetW = erg.targetW,
@@ -695,8 +868,8 @@ private fun devicesHaveProblem(ui: IndoorRideUi): Boolean =
         ui.shifter == ShifterConnection.UNSUPPORTED
 
 /**
- * Die runden Symbolknoepfe: Geraete, Kamera (nur mit 3D-Welt), Pause/Weiter,
- * Beenden (gedrueckt halten). [vertical] = Spalte am rechten Rand, sonst Reihe.
+ * Die kantigen Cockpit-Symbolknoepfe: Geraete, Kamera (nur mit 3D-Welt),
+ * Beenden (gedrueckt halten), Pause/Weiter. [vertical] = Spalte am rechten Rand, sonst Reihe.
  */
 @Composable
 private fun HudButtons(
@@ -705,7 +878,9 @@ private fun HudButtons(
     showCamera: Boolean,
     vertical: Boolean,
     actions: HudActions,
+    buttonSize: Dp = HudRoundButtonSize,
 ) {
+    val cockpit = LocalCockpitColors.current
     // Beschriftung und Aktion aus derselben Bedingung (IndoorFlowScreen setzt
     // nur bei PAUSED fort): Bei Auto-Pause pausiert ein Tipp.
     val paused = session.phase == IndoorPhase.PAUSED
@@ -718,8 +893,9 @@ private fun HudButtons(
                     if (problem) R.string.indoor_app_hud_devices_problem_cd else R.string.indoor_app_hud_devices_cd,
                 ),
                 onClick = actions.onShowDevices,
-                container = if (problem) HudColors.warning else HudColors.panelStrong,
-                tint = if (problem) Color.Black else HudColors.ink,
+                container = if (problem) cockpit.warning else cockpit.panel,
+                tint = if (problem) cockpit.onAction else cockpit.ink,
+                size = buttonSize,
             )
         }
         if (showCamera) {
@@ -729,10 +905,13 @@ private fun HudButtons(
                     icon = Icons.Filled.Videocam,
                     contentDescription = stringResource(R.string.indoor_app_hud_camera_cd, cameraName),
                     onClick = { actions.onCameraChange(nextCamera(ui.camera)) },
+                    container = cockpit.panel,
+                    tint = cockpit.ink,
+                    size = buttonSize,
                 )
             }
         }
-        add { HudHoldToFinishButton(onFinish = actions.onFinish) }
+        add { HudHoldToFinishButton(onFinish = actions.onFinish, size = buttonSize) }
         add {
             HudRoundButton(
                 icon = if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
@@ -740,6 +919,9 @@ private fun HudButtons(
                     if (paused) R.string.indoor_app_ride_resume_action else R.string.indoor_app_ride_pause_action,
                 ),
                 onClick = actions.onTogglePause,
+                container = if (paused) cockpit.action else cockpit.panel,
+                tint = if (paused) cockpit.onAction else cockpit.ink,
+                size = buttonSize,
             )
         }
     }
@@ -786,15 +968,21 @@ private fun PhaseCard(
     modifier: Modifier = Modifier,
     onFinish: (() -> Unit)? = null,
 ) {
+    val cockpit = LocalCockpitColors.current
     val phase = phaseLabel(session.phase) ?: return
-    Surface(color = HudColors.panelStrong, shape = RoundedCornerShape(24.dp), modifier = modifier.widthIn(max = 320.dp)) {
+    Surface(
+        color = cockpit.panel,
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(1.dp, cockpit.border),
+        modifier = modifier.widthIn(max = 320.dp),
+    ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
         ) {
             Text(
                 text = phase,
-                style = hudStyle(MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)),
+                style = hudStyle(MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), cockpit.ink),
                 textAlign = TextAlign.Center,
             )
             if (session.phase == IndoorPhase.PAUSED) {
@@ -807,12 +995,13 @@ private fun PhaseCard(
                     // In der Pause ein einfacher Tipp zum Beenden (danach: speichern oder verwerfen).
                     if (onFinish != null) {
                         TextButton(onClick = onFinish) {
-                            Text(stringResource(R.string.indoor_app_start_finish_action), color = HudColors.ink)
+                            Text(stringResource(R.string.indoor_app_start_finish_action), color = cockpit.ink)
                         }
                     }
                     Button(
                         onClick = onTogglePause,
-                        colors = ButtonDefaults.buttonColors(containerColor = HudColors.ink, contentColor = Color.Black),
+                        shape = MaterialTheme.shapes.small,
+                        colors = ButtonDefaults.buttonColors(containerColor = cockpit.action, contentColor = cockpit.onAction),
                     ) {
                         Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -832,15 +1021,21 @@ private fun PhaseCard(
  */
 @Composable
 private fun DayEndCard(dayEnd: IndoorDayEndUi, actions: HudActions, modifier: Modifier = Modifier) {
+    val cockpit = LocalCockpitColors.current
     val done = dayEnd.kind == DayRideEnd.WORKOUT_DONE
-    Surface(color = HudColors.panelStrong, shape = RoundedCornerShape(24.dp), modifier = modifier.widthIn(max = 340.dp)) {
+    Surface(
+        color = cockpit.panel,
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(1.dp, cockpit.border),
+        modifier = modifier.widthIn(max = 340.dp),
+    ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
         ) {
             Text(
                 text = stringResource(if (done) R.string.indoor_app_day_end_done_title else R.string.indoor_app_day_end_route_title),
-                style = hudStyle(MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)),
+                style = hudStyle(MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), cockpit.ink),
                 textAlign = TextAlign.Center,
             )
             Spacer(modifier = Modifier.height(4.dp))
@@ -850,7 +1045,7 @@ private fun DayEndCard(dayEnd: IndoorDayEndUi, actions: HudActions, modifier: Mo
                 } else {
                     stringResource(R.string.indoor_app_day_end_route_body, dayEnd.remainingMin)
                 },
-                style = hudStyle(MaterialTheme.typography.bodyMedium),
+                style = hudStyle(MaterialTheme.typography.bodyMedium, cockpit.ink),
                 textAlign = TextAlign.Center,
             )
             Spacer(modifier = Modifier.height(10.dp))
@@ -858,11 +1053,17 @@ private fun DayEndCard(dayEnd: IndoorDayEndUi, actions: HudActions, modifier: Mo
                 if (done) {
                     Button(
                         onClick = actions.onDismissDayEnd,
-                        colors = ButtonDefaults.buttonColors(containerColor = HudColors.ink, contentColor = Color.Black),
+                        shape = MaterialTheme.shapes.small,
+                        colors = ButtonDefaults.buttonColors(containerColor = cockpit.action, contentColor = cockpit.onAction),
                     ) { Text(stringResource(R.string.indoor_app_day_end_cooldown_action)) }
                 }
-                OutlinedButton(onClick = actions.onFinish) {
-                    Text(stringResource(R.string.indoor_app_day_end_finish_action), color = HudColors.ink)
+                OutlinedButton(
+                    onClick = actions.onFinish,
+                    shape = MaterialTheme.shapes.small,
+                    border = BorderStroke(1.dp, cockpit.border),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = cockpit.ink),
+                ) {
+                    Text(stringResource(R.string.indoor_app_day_end_finish_action), color = cockpit.ink)
                 }
             }
         }
@@ -872,10 +1073,12 @@ private fun DayEndCard(dayEnd: IndoorDayEndUi, actions: HudActions, modifier: Mo
 /** Hinweis oben: antippen schliesst ihn; er verschwindet auch von selbst (Sache des ViewModels). */
 @Composable
 private fun NoticeBanner(notice: IndoorNotice, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    val cockpit = LocalCockpitColors.current
     val signals = LocalSignalColors.current
     Surface(
-        color = MaterialTheme.colorScheme.surface,
+        color = cockpit.panel,
         shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(1.dp, cockpit.border),
         modifier = modifier.fillMaxWidth().clickable(onClick = onDismiss),
     ) {
         NoticeBox(
@@ -892,9 +1095,14 @@ private fun NoticeBanner(notice: IndoorNotice, onDismiss: () -> Unit, modifier: 
 /** Statt der 3D-Flaeche bei einem Fehler der Darstellung: Meldung und Hinweis, dass es weitergeht. */
 @Composable
 private fun RenderFailedCard(ui: IndoorRideUi, actions: HudActions) {
+    val cockpit = LocalCockpitColors.current
     val render = ui.render as? IndoorRenderUi.Failed ?: return
     val onWithout = actions.onRideWithoutWorld
-    Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large) {
+    Surface(
+        color = cockpit.panel,
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(1.dp, cockpit.border),
+    ) {
         Column(modifier = Modifier.padding(4.dp)) {
             NoticeBox(
                 icon = Icons.Filled.Warning,
@@ -925,11 +1133,17 @@ private fun RenderFailedCard(ui: IndoorRideUi, actions: HudActions) {
  */
 @Composable
 private fun BigProfilePanel(ui: IndoorRideUi, session: IndoorSessionState, modifier: Modifier = Modifier) {
+    val cockpit = LocalCockpitColors.current
     if (ui.profile == null) {
         Spacer(modifier = modifier)
         return
     }
-    Surface(color = HudColors.panel, shape = RoundedCornerShape(24.dp), modifier = modifier.fillMaxWidth()) {
+    Surface(
+        color = cockpit.panel,
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(1.dp, cockpit.border),
+        modifier = modifier.fillMaxWidth(),
+    ) {
         BoxWithConstraints {
             val roomy = maxHeight >= 160.dp
             val chrome = if (roomy) 88.dp else 48.dp
@@ -941,7 +1155,7 @@ private fun BigProfilePanel(ui: IndoorRideUi, session: IndoorSessionState, modif
                 if (roomy) {
                     Text(
                         text = stringResource(R.string.indoor_app_ride_profile_title),
-                        style = hudStyle(MaterialTheme.typography.labelLarge, HudColors.inkMuted),
+                        style = hudStyle(MaterialTheme.typography.labelLarge, cockpit.inkMuted),
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }

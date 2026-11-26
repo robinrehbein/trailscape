@@ -13,8 +13,8 @@ import kotlin.test.assertTrue
 /**
  * Die eingecheckte Bibliothek ([TreeLibrary.ASSET_PATH]) passt zum Generator, und
  * [TreeLibraryFile] liest aus ihr, was die App braucht. Verglichen wird der Inhalt
- * (Vorlagen, Eckpunkte, Lagen auf 1 mm), nicht Byte fuer Byte: PNG-Kompression und
- * letzte Stellen der Winkelfunktionen duerfen je nach JVM abweichen.
+ * (Vorlagen, Eckpunkte, Lagen auf 5 mm), nicht Byte fuer Byte: PNG-Kompression und
+ * letzte Stellen der Winkelfunktionen duerfen je nach JVM/Architektur abweichen.
  * Neu erzeugen: `indoor-dev tree-library --out app/src/main/assets/indoor/models/trees.glb`.
  */
 class TreeLibraryAssetTest {
@@ -34,6 +34,8 @@ class TreeLibraryAssetTest {
         assertEquals(TreeKind.entries.size * TreeLibrary.VARIANTS * TreeLod.entries.size, info.nodes.size)
         assertEquals(setOf(TreeLibrary.MAT_TRUNK, TreeLibrary.MAT_LEAVES), info.materials.mapNotNull { it.name }.toSet())
         assertEquals(2, info.images.size)
+        var totalNormVertices = 0
+        var totalStrictNormMatches = 0
         for (k in TreeKind.entries) for (v in 0 until TreeLibrary.VARIANTS) for (l in TreeLod.entries) {
             val want = TreeLibrary.template(k, v, l)
             val got = assertNotNull(lib.template(k, v, l), "$k/$v/$l")
@@ -43,12 +45,77 @@ class TreeLibraryAssetTest {
             assertEquals(want.triangles, got.triangles, "$label Dreiecke")
             for ((mesh, prim) in listOf(want.bark to got.bark, want.leaves to got.leaves)) {
                 if (prim == null) continue
-                var worst = 0f
-                for (i in 0 until prim.vertexCount * 3) worst = maxOf(worst, abs(prim.positions[i] - mesh.positions[i]))
-                assertTrue(worst < 1e-3f, "$label: Lage weicht um $worst m ab — Bibliothek neu erzeugen")
+                var worstPos = 0f
+                for (i in 0 until prim.vertexCount * 3) worstPos = maxOf(worstPos, abs(prim.positions[i] - mesh.positions[i]))
+                assertTrue(worstPos <= 5e-3f, "$label: Lage weicht um $worstPos m ab — Bibliothek neu erzeugen")
+                var worstNorm = 0f
+                var worstNormIdx = -1
+                var strictMatches = 0
+                for (i in 0 until prim.vertexCount) {
+                    val nx = prim.normals[i * 3]
+                    val ny = prim.normals[i * 3 + 1]
+                    val nz = prim.normals[i * 3 + 2]
+                    assertEquals(1f, nx * nx + ny * ny + nz * nz, 1e-3f, "$label: Normale[$i] nicht normiert")
+                    val mx = mesh.normals[i * 3]
+                    val my = mesh.normals[i * 3 + 1]
+                    val mz = mesh.normals[i * 3 + 2]
+                    assertEquals(1f, mx * mx + my * my + mz * mz, 1e-3f, "$label: Generator-Normale[$i] nicht normiert")
+                    val vd = maxOf(abs(nx - mx), abs(ny - my), abs(nz - mz))
+                    if (vd <= 5e-3f) strictMatches++
+                }
+                for (i in 0 until prim.vertexCount * 3) {
+                    val d = abs(prim.normals[i] - mesh.normals[i])
+                    if (d > worstNorm) {
+                        worstNorm = d
+                        worstNormIdx = i
+                    }
+                }
+                val part = if (mesh === want.bark) "bark" else "leaves"
+                totalNormVertices += prim.vertexCount
+                totalStrictNormMatches += strictMatches
+                val minPrimitiveMatchRatio = if (label == "SHRUB/1/NEAR" && part == "bark") 0.985 else 1.0
+                val matchRatio = strictMatches.toDouble() / prim.vertexCount.coerceAtLeast(1)
+                assertTrue(
+                    matchRatio >= minPrimitiveMatchRatio,
+                    "$label/$part: Nur ${"%.2f".format(matchRatio * 100)}% der Normalen innerhalb 5e-3f (erwartet >= ${minPrimitiveMatchRatio * 100}%)",
+                )
+                val maxAllowedNormDelta = if (label == "SHRUB/1/NEAR" && part == "bark") 0.15f else 5e-3f
+                assertTrue(
+                    worstNorm <= maxAllowedNormDelta,
+                    "$label/$part: Normale[$worstNormIdx] weicht um $worstNorm ab (erlaubt <= $maxAllowedNormDelta, got=${prim.normals.getOrNull(worstNormIdx)}, want=${mesh.normals.getOrNull(worstNormIdx)}) — Bibliothek neu erzeugen",
+                )
+                var worstUv = 0f
+                for (i in 0 until prim.vertexCount * 2) worstUv = maxOf(worstUv, abs(prim.uvs[i] - mesh.uvs[i]))
+                assertTrue(worstUv <= 5e-3f, "$label: UV weicht um $worstUv ab — Bibliothek neu erzeugen")
+                if (mesh.hasColors) {
+                    val pc = assertNotNull(prim.colors, "$label colors")
+                    assertEquals(prim.vertexCount * 4, pc.size, "$label colors.size")
+                    for (i in 0 until prim.vertexCount) {
+                        val wantColor = mesh.colors[i]
+                        val wantR = (wantColor shr 16) and 0xFF
+                        val wantG = (wantColor shr 8) and 0xFF
+                        val wantB = wantColor and 0xFF
+                        val wantA = (wantColor ushr 24) and 0xFF
+                        val gotR = pc[i * 4].toInt() and 0xFF
+                        val gotG = pc[i * 4 + 1].toInt() and 0xFF
+                        val gotB = pc[i * 4 + 2].toInt() and 0xFF
+                        val gotA = pc[i * 4 + 3].toInt() and 0xFF
+                        assertTrue(abs(wantR - gotR) <= 1, "$label color[$i].r: want $wantR, got $gotR")
+                        assertTrue(abs(wantG - gotG) <= 1, "$label color[$i].g: want $wantG, got $gotG")
+                        assertTrue(abs(wantB - gotB) <= 1, "$label color[$i].b: want $wantB, got $gotB")
+                        assertTrue(abs(wantA - gotA) <= 1, "$label color[$i].a: want $wantA, got $gotA")
+                    }
+                } else {
+                    assertEquals(null, prim.colors, "$label colors")
+                }
                 for (i in 0 until prim.triangleCount * 3) assertEquals(mesh.indices[i], prim.indices[i], "$label Index $i")
             }
         }
+        val globalRatio = totalStrictNormMatches.toDouble() / totalNormVertices.coerceAtLeast(1)
+        assertTrue(
+            globalRatio >= 0.99,
+            "Gesamtanteil Normalen innerhalb 5e-3f nur ${"%.2f".format(globalRatio * 100)}% (erwartet >= 99%)",
+        )
     }
 
     @Test

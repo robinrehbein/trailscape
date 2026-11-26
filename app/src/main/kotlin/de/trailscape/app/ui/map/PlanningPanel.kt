@@ -58,9 +58,10 @@ import de.trailscape.app.i18n.LocalAppLanguage
 import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.i18n.UiText
 import de.trailscape.app.i18n.asString
-import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.PillSegments
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.PlannedRoute
@@ -205,6 +206,7 @@ internal fun PlanningSheet(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp,
+    inSidePanel: Boolean = false,
 ) {
     val hasRoute = route != null && route.points.size >= 2
 
@@ -221,6 +223,19 @@ internal fun PlanningSheet(
         },
         halfStop = true,
         modifier = modifier,
+        inSidePanel = inSidePanel,
+        footer = if (hasRoute) {
+            {
+                PlanningActionFooter(
+                    showSave = expanded || inSidePanel,
+                    enabled = !busy && !locating,
+                    onSave = onSave,
+                    onNavigate = onNavigate,
+                )
+            }
+        } else {
+            null
+        },
         peek = {
             PlanningHeader(
                 title = planningTitle(waypoints, route, generated, roundTrip).asString(),
@@ -250,8 +265,15 @@ internal fun PlanningSheet(
         body = {
             Column(
                 modifier = Modifier
-                    .heightIn(max = maxHeight)
-                    .verticalScroll(rememberScrollState())
+                    .then(
+                        if (inSidePanel) {
+                            Modifier
+                        } else {
+                            Modifier
+                                .heightIn(max = maxHeight)
+                                .verticalScroll(rememberScrollState())
+                        },
+                    )
                     .padding(start = CardPadding, end = CardPadding, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -320,38 +342,9 @@ internal fun PlanningSheet(
                     )
                 }
 
-                // Eine Hauptaktion, und erst wenn es etwas zu tun gibt: Vorher
-                // standen „Route speichern" und „Losfahren" ausgegraut da und
-                // nahmen dem Blatt ein Viertel seiner Hoehe.
-                // „Verwerfen" als sichtbarer Knopf (docs/ux/seitenkarte.md,
-                // Befund 8): Eine Planung, die man nicht mehr will, wird man
-                // hier los — nicht nur ueber das ✕ im Kopf oder das ⋮.
                 val discard = onDiscard.takeIf { waypoints.isNotEmpty() || route != null }
-                if (hasRoute) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        NeutralButton(
-                            onClick = onSave,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text(stringResource(R.string.map_planning_save_action), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        PrimaryButton(
-                            text = stringResource(R.string.map_planning_start_action),
-                            onClick = onNavigate,
-                            modifier = Modifier.weight(1.4f),
-                            leading = {
-                                Icon(
-                                    Icons.Filled.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            },
-                        )
-                    }
-                }
                 if (discard != null) {
-                    NeutralButton(
+                    TrailscapeSecondaryButton(
                         onClick = discard,
                         destructive = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -362,6 +355,48 @@ internal fun PlanningSheet(
             }
         },
     )
+}
+
+@Composable
+private fun PlanningActionFooter(
+    showSave: Boolean,
+    enabled: Boolean,
+    onSave: () -> Unit,
+    onNavigate: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = CardPadding, end = CardPadding, top = 4.dp, bottom = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (showSave) {
+            TrailscapeSecondaryButton(
+                onClick = onSave,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(stringResource(R.string.map_planning_save_action), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(Modifier.width(8.dp))
+        }
+        TrailscapePrimaryButton(
+            onClick = onNavigate,
+            enabled = enabled,
+            modifier = if (showSave) Modifier.weight(1.4f) else Modifier.fillMaxWidth(),
+        ) {
+            Icon(
+                Icons.Filled.PlayArrow,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = stringResource(R.string.map_planning_start_action),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 /**
@@ -394,7 +429,7 @@ private fun PlanningHeader(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.titleMedium,
             )
@@ -632,7 +667,7 @@ private fun IconBadge(icon: androidx.compose.ui.graphics.vector.ImageVector) {
         modifier = Modifier
             .size(BadgeSize)
             .background(
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                color = MaterialTheme.colorScheme.surfaceContainer,
                 shape = CircleShape,
             ),
         contentAlignment = Alignment.Center,

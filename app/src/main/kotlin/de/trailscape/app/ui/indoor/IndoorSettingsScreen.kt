@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -15,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.more.SettingsNavRow
 import de.trailscape.app.ui.more.SettingsSwitchRow
@@ -76,7 +76,7 @@ fun IndoorSettingsScreen(
             onReset = onResetFeel,
         )
         if (onStartCalibration != null) {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            AtlasCard(modifier = Modifier.fillMaxWidth()) {
                 SettingsNavRow(
                     title = stringResource(R.string.indoor_feel_calibrate_title),
                     status = stringResource(
@@ -89,7 +89,7 @@ fun IndoorSettingsScreen(
 
         Eyebrow(stringResource(R.string.indoor_app_settings_section_view))
         TimeOfDayCard(selected = ui.timeOfDay, onChange = onTimeOfDayChange)
-        Card(modifier = Modifier.fillMaxWidth()) {
+        AtlasCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(vertical = 4.dp)) {
                 SettingsSwitchRow(
                     title = stringResource(R.string.indoor_app_pair_other_riders_title),
@@ -105,7 +105,7 @@ fun IndoorSettingsScreen(
         GraphicsCard(selected = ui.graphics, onChange = onGraphicsChange)
 
         Eyebrow(stringResource(R.string.indoor_app_settings_section_advanced))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        AtlasCard(modifier = Modifier.fillMaxWidth()) {
             Column {
                 SettingsNavRow(
                     title = stringResource(R.string.indoor_app_worlds_title),
@@ -139,7 +139,7 @@ fun IndoorSettingsScreen(
             }
         }
         if (onOpenProtocols != null) {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            AtlasCard(modifier = Modifier.fillMaxWidth()) {
                 SettingsNavRow(
                     title = stringResource(R.string.indoor_feel_protocols_title),
                     status = stringResource(R.string.indoor_feel_protocols_body),

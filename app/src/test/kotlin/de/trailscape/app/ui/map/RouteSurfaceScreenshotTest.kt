@@ -100,7 +100,7 @@ class RouteSurfaceScreenshotTest {
         val context = compose.activity
         compose.onNodeWithText(context.getString(R.string.map_generation_title)).assertExists()
         compose.onNodeWithText(context.getString(R.string.map_generation_apply_action)).assertExists()
-        compose.onNodeWithText("46.2 km · 540 m ↑").assertExists()
+        compose.onNodeWithText("46.2 km · 540 m\u00A0↑").assertExists()
     }
 
     /** Das Planungsblatt mit fertiger Route auf Englisch. */

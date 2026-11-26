@@ -102,9 +102,9 @@ data class SignalColors(
  */
 internal val LightSignalColors = SignalColors(
     good = TrailscapeSeed,
-    caution = Color(0xFFA55D00),
-    warning = Color(0xFFB45100),
-    danger = Color(0xFFD32F2F),
+    caution = Color(0xFF915100),
+    warning = Color(0xFF9E4600),
+    danger = Color(0xFFB72424),
     accentGreen = Color(0xFF367D39),
     accentBlue = Color(0xFF1972B9),
     accentRed = Color(0xFFCC382D),

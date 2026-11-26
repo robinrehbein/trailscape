@@ -97,3 +97,18 @@ val RideModeActionHeight = 88.dp
  * immer noch weit ueber einem Symbolknopf, damit er im Stand sicher trifft.
  */
 val RideModeExitHeight = 56.dp
+
+/** Aussenabstand auf Tablets (ab [MEDIUM_WIDTH_DP]). */
+val TabletScreenPadding = 24.dp
+
+/** Abstand zwischen zwei Karten oder Spalten auf Tablets. */
+val TabletCardGap = 16.dp
+
+/** Breite der linken Navigationsleiste auf Tablets. */
+val NavRailWidth = 92.dp
+
+/** Mindesthoehe fuer die eine orangefarbene Hauptaktion je Bildschirm. */
+val PrimaryButtonMinHeight = 52.dp
+
+/** Kantenlaenge der grossen Schalt-/ERG-Tasten im Cockpit auf der Rolle. */
+val CockpitShiftButtonSize = 72.dp

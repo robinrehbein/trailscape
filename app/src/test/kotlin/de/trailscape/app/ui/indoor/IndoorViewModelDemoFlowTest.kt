@@ -169,12 +169,12 @@ class IndoorViewModelDemoFlowTest {
         assertEquals(IndoorStage.ROUTE, vm.stage.value)
         assertEquals(IndoorRouteOption.TestWorld, vm.route.value.selected)
 
-        // Jetzt geht es: Testwelt ist bereit.
+        // Jetzt geht es: Testwelt ist bereit und startet direkt in die Fahrt.
         vm.continueFromRoute()
-        assertEquals(IndoorStage.WORLD, vm.stage.value)
-        assertIs<IndoorWorldUi.Ready>(vm.world.value)
-        // Zurueck von „Strecke vorbereiten" → Startseite; von dort verlaesst Zurueck den Ablauf.
-        assertTrue(vm.back())
+        assertEquals(IndoorStage.RIDE, vm.stage.value)
+        assertNotNull(vm.renderer.value)
+        vm.finishRide()
+        vm.startOver()
         assertEquals(IndoorStage.ROUTE, vm.stage.value)
         assertFalse(vm.back(), "Zurueck auf der Startseite verlaesst den Ablauf")
     }
@@ -202,13 +202,8 @@ class IndoorViewModelDemoFlowTest {
         vm.selectRoute(IndoorRouteOption.TestWorld)
         assertTrue(vm.route.value.canContinue)
         vm.continueFromRoute()
-        assertEquals(IndoorStage.WORLD, vm.stage.value)
-        val ready = assertIs<IndoorWorldUi.Ready>(vm.world.value)
-        assertEquals("Teststrecke", ready.routeName)
-        assertTrue(File(worlds.testWorldDir(), "manifest.json").isFile, "Testwelt liegt unter indoor/worlds/testwelt")
-
-        vm.startRide(withWorld = true)
         assertEquals(IndoorStage.RIDE, vm.stage.value)
+        assertTrue(File(worlds.testWorldDir(), "manifest.json").isFile, "Testwelt liegt unter indoor/worlds/testwelt")
         assertNotNull(vm.renderer.value, "mit Welt gibt es eine Darstellung")
         vm.rideFor(95)
 
@@ -642,7 +637,7 @@ class IndoorViewModelDemoFlowTest {
         val vm = viewModel(FakeIndoorParts())
         vm.pairWithDemo()
         vm.selectRoute(IndoorRouteOption.TestWorld)
-        vm.continueFromRoute()
+        vm.prepareWorld(autoStart = false)
         vm.startRide(withWorld = false)
         assertEquals(IndoorRenderUi.NoWorld, assertNotNull(vm.ride.value).render)
         assertNull(vm.renderer.value)

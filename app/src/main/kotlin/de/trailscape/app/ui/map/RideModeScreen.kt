@@ -5,8 +5,10 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,11 +19,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -30,14 +36,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -49,19 +58,27 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.i18n.asString
-import de.trailscape.app.record.RecordingRepository
+import de.trailscape.app.ui.components.CockpitMetricTile
 import de.trailscape.app.ui.components.HoldToEndButton
-import de.trailscape.core.LiveSensorAnzeige
+import de.trailscape.app.ui.components.TwoPaneLayout
 import de.trailscape.app.ui.theme.CardGap
+import de.trailscape.app.ui.theme.CockpitTheme
+import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.theme.LocalCockpitColors
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
 import de.trailscape.app.ui.theme.RideModeActionHeight
 import de.trailscape.app.ui.theme.RideModeExitHeight
 import de.trailscape.app.ui.theme.ScreenPadding
+import de.trailscape.app.ui.theme.TabletCardGap
+import de.trailscape.app.ui.theme.TabletScreenPadding
+import de.trailscape.app.ui.theme.WindowLayoutClass
+import de.trailscape.app.ui.theme.tabular
+import de.trailscape.app.ui.theme.windowLayoutClassFor
+import de.trailscape.core.LiveSensorAnzeige
 import de.trailscape.core.TurnRichtung
 import de.trailscape.core.ZielZeile
 import de.trailscape.core.formatDuration
@@ -203,155 +220,499 @@ internal fun RideModeScreen(
     // `null` = keine. Klein unter den Hoehenmetern: Sie aendert sich traege
     // und ist zum Nachdenken da, nicht zum Reagieren.
     zielZeile: ZielZeile? = null,
+    useDialog: Boolean = true,
+    mapContent: (@Composable (Modifier) -> Unit)? = null,
 ) {
-    Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(
-            // Volle Fensterbreite und -hoehe statt der Dialog-Standardbreite.
-            usePlatformDefaultWidth = false,
-            // Zurueck wird unten selbst behandelt (BackHandler).
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false,
-        ),
+    val currentLayoutClass = LocalWindowLayoutClass.current
+    val configWidthDp = LocalConfiguration.current.screenWidthDp
+    val layoutClass = if (currentLayoutClass != WindowLayoutClass.Compact) {
+        currentLayoutClass
+    } else {
+        windowLayoutClassFor(configWidthDp)
+    }
+
+    CockpitTheme {
+        CompositionLocalProvider(LocalWindowLayoutClass provides layoutClass) {
+            if (useDialog) {
+                Dialog(
+                    onDismissRequest = onClose,
+                    properties = DialogProperties(
+                        // Volle Fensterbreite und -hoehe statt der Dialog-Standardbreite.
+                        usePlatformDefaultWidth = false,
+                        // Zurueck wird unten selbst behandelt (BackHandler).
+                        dismissOnBackPress = false,
+                        dismissOnClickOutside = false,
+                    ),
+                ) {
+                    KeepScreenOn()
+                    BackHandler { onClose() }
+                    RideModeContent(
+                        speedKmh = speedKmh,
+                        distanceKm = distanceKm,
+                        elapsedS = elapsedS,
+                        ascentM = ascentM,
+                        paused = paused,
+                        autoPaused = autoPaused,
+                        navigation = navigation,
+                        sensoren = sensoren,
+                        zielZeile = zielZeile,
+                        layoutClass = layoutClass,
+                        onTogglePause = onTogglePause,
+                        onStop = onStop,
+                        onShowMap = onShowMap,
+                        mapContent = mapContent,
+                    )
+                }
+            } else {
+                KeepScreenOn()
+                BackHandler { onClose() }
+                RideModeContent(
+                    speedKmh = speedKmh,
+                    distanceKm = distanceKm,
+                    elapsedS = elapsedS,
+                    ascentM = ascentM,
+                    paused = paused,
+                    autoPaused = autoPaused,
+                    navigation = navigation,
+                    sensoren = sensoren,
+                    zielZeile = zielZeile,
+                    layoutClass = layoutClass,
+                    onTogglePause = onTogglePause,
+                    onStop = onStop,
+                    onShowMap = onShowMap,
+                    mapContent = mapContent,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RideModeContent(
+    speedKmh: Double?,
+    distanceKm: Double,
+    elapsedS: Int,
+    ascentM: Double,
+    paused: Boolean,
+    autoPaused: Boolean,
+    navigation: RideModeNavigation?,
+    sensoren: LiveSensorAnzeige,
+    zielZeile: ZielZeile?,
+    layoutClass: WindowLayoutClass,
+    onTogglePause: () -> Unit,
+    onStop: () -> Unit,
+    onShowMap: () -> Unit,
+    mapContent: (@Composable (Modifier) -> Unit)?,
+) {
+    val cockpit = LocalCockpitColors.current
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = cockpit.background,
+        contentColor = cockpit.ink,
     ) {
-        KeepScreenOn()
+        when (layoutClass) {
+            WindowLayoutClass.Expanded -> RideModeExpandedContent(
+                speedKmh = speedKmh,
+                distanceKm = distanceKm,
+                elapsedS = elapsedS,
+                ascentM = ascentM,
+                paused = paused,
+                autoPaused = autoPaused,
+                navigation = navigation,
+                sensoren = sensoren,
+                zielZeile = zielZeile,
+                onTogglePause = onTogglePause,
+                onStop = onStop,
+                onShowMap = onShowMap,
+                mapContent = mapContent,
+            )
 
-        BackHandler { onClose() }
+            WindowLayoutClass.Medium -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .safeDrawingPadding()
+                    .padding(TabletScreenPadding),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                RideModeSingleColumnContent(
+                    speedKmh = speedKmh,
+                    distanceKm = distanceKm,
+                    elapsedS = elapsedS,
+                    ascentM = ascentM,
+                    paused = paused,
+                    autoPaused = autoPaused,
+                    navigation = navigation,
+                    sensoren = sensoren,
+                    zielZeile = zielZeile,
+                    compact = false,
+                    onTogglePause = onTogglePause,
+                    onStop = onStop,
+                    onShowMap = onShowMap,
+                    modifier = Modifier
+                        .widthIn(max = ContentMaxWidth)
+                        .fillMaxSize(),
+                )
+            }
 
-        Surface(
+            WindowLayoutClass.Compact -> RideModeSingleColumnContent(
+                speedKmh = speedKmh,
+                distanceKm = distanceKm,
+                elapsedS = elapsedS,
+                ascentM = ascentM,
+                paused = paused,
+                autoPaused = autoPaused,
+                navigation = navigation,
+                sensoren = sensoren,
+                zielZeile = zielZeile,
+                compact = true,
+                onTogglePause = onTogglePause,
+                onStop = onStop,
+                onShowMap = onShowMap,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .safeDrawingPadding()
+                    .padding(ScreenPadding),
+            )
+        }
+    }
+}
+
+@Composable
+private fun RideModeSingleColumnContent(
+    speedKmh: Double?,
+    distanceKm: Double,
+    elapsedS: Int,
+    ascentM: Double,
+    paused: Boolean,
+    autoPaused: Boolean,
+    navigation: RideModeNavigation?,
+    sensoren: LiveSensorAnzeige,
+    zielZeile: ZielZeile?,
+    compact: Boolean,
+    onTogglePause: () -> Unit,
+    onStop: () -> Unit,
+    onShowMap: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val dense = compact && LocalDensity.current.fontScale > 1.15f
+    val gap = when {
+        dense -> 6.dp
+        compact -> CompactCardGap
+        else -> TabletCardGap
+    }
+    Column(
+        modifier = modifier.swipeToMap(onShowMap),
+    ) {
+        RideModeHeader(paused = paused, autoPaused = autoPaused, onShowMap = onShowMap)
+
+        if (navigation != null) {
+            Spacer(Modifier.height(gap))
+            NavigationPanel(navigation = navigation, compact = compact, dense = dense)
+        }
+
+        Spacer(Modifier.height(gap))
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            RideModeMetricsGrid(
+                speedKmh = speedKmh,
+                distanceKm = distanceKm,
+                elapsedS = elapsedS,
+                ascentM = ascentM,
+                sensoren = sensoren,
+                zielZeile = zielZeile,
+                compact = compact,
+                dense = dense,
+                twoColumnSensors = compact,
+                heroMaxSize = when {
+                    dense -> DenseCompactHeroSpeedSize
+                    compact -> CompactHeroSpeedSize
+                    else -> MediumHeroSpeedSize
+                },
+            )
+        }
+
+        Spacer(Modifier.height(gap))
+
+        RideModeBottomActions(
+            paused = paused,
+            compact = compact,
+            onTogglePause = onTogglePause,
+            onStop = onStop,
+        )
+    }
+}
+
+@Composable
+private fun RideModeExpandedContent(
+    speedKmh: Double?,
+    distanceKm: Double,
+    elapsedS: Int,
+    ascentM: Double,
+    paused: Boolean,
+    autoPaused: Boolean,
+    navigation: RideModeNavigation?,
+    sensoren: LiveSensorAnzeige,
+    zielZeile: ZielZeile?,
+    onTogglePause: () -> Unit,
+    onStop: () -> Unit,
+    onShowMap: () -> Unit,
+    mapContent: (@Composable (Modifier) -> Unit)?,
+) {
+    val cockpit = LocalCockpitColors.current
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .safeDrawingPadding()
+            .padding(TabletScreenPadding),
+    ) {
+        TwoPaneLayout(
+            primaryWeight = 0.46f,
+            gap = TabletCardGap,
             modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.surface,
+            primary = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .swipeToMap(onShowMap),
+                ) {
+                    RideModeHeader(paused = paused, autoPaused = autoPaused, onShowMap = onShowMap)
+
+                    Spacer(Modifier.height(TabletCardGap))
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        RideModeMetricsGrid(
+                            speedKmh = speedKmh,
+                            distanceKm = distanceKm,
+                            elapsedS = elapsedS,
+                            ascentM = ascentM,
+                            sensoren = sensoren,
+                            zielZeile = zielZeile,
+                            compact = false,
+                            dense = false,
+                            twoColumnSensors = false,
+                            heroMaxSize = ExpandedHeroSpeedSize,
+                        )
+                    }
+
+                    Spacer(Modifier.height(TabletCardGap))
+
+                    RideModeBottomActions(
+                        paused = paused,
+                        compact = false,
+                        onTogglePause = onTogglePause,
+                        onStop = onStop,
+                    )
+                }
+            },
+            secondary = {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = MaterialTheme.shapes.large,
+                    color = cockpit.panel,
+                    contentColor = cockpit.ink,
+                    border = BorderStroke(1.dp, cockpit.border),
+                ) {
+                    if (mapContent != null) {
+                        Box(modifier = Modifier.fillMaxSize().testTag("ride_mode_map_content")) {
+                            mapContent(Modifier.fillMaxSize())
+                            if (navigation != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                ) {
+                                    NavigationPanel(navigation = navigation, compact = false)
+                                }
+                            }
+                        }
+                    } else {
+                        RideModeRightPaneFallback(
+                            navigation = navigation,
+                            paused = paused,
+                            autoPaused = autoPaused,
+                            zielZeile = zielZeile,
+                            onShowMap = onShowMap,
+                        )
+                    }
+                }
+            },
+        )
+    }
+}
+
+private fun Modifier.swipeToMap(onShowMap: () -> Unit): Modifier = pointerInput(Unit) {
+    var gesamtX = 0f
+    detectHorizontalDragGestures(
+        onDragStart = { gesamtX = 0f },
+        onDragEnd = {
+            if (kotlin.math.abs(gesamtX) > SwipeZurKarteSchwelle.toPx()) {
+                onShowMap()
+            }
+        },
+    ) { _, dragAmount -> gesamtX += dragAmount }
+}
+
+@Composable
+private fun RideModeRightPaneFallback(
+    navigation: RideModeNavigation?,
+    paused: Boolean,
+    autoPaused: Boolean,
+    zielZeile: ZielZeile?,
+    onShowMap: () -> Unit,
+) {
+    val cockpit = LocalCockpitColors.current
+    val formats = LocalAppFormats.current
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("ride_mode_right_pane_fallback")
+            .padding(TabletScreenPadding),
+        verticalArrangement = Arrangement.spacedBy(TabletCardGap),
+    ) {
+        if (navigation != null) {
+            NavigationPanel(navigation = navigation, compact = false)
+        }
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            shape = MaterialTheme.shapes.medium,
+            color = cockpit.background,
+            contentColor = cockpit.ink,
+            border = BorderStroke(1.dp, cockpit.border),
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    // Erst die Systemleisten aussparen (das Fenster ist
-                    // randlos), dann der normale Bildschirmrand.
-                    .safeDrawingPadding()
-                    .padding(ScreenPadding)
-                    // Horizontales Wischen wechselt zur Kartenseite — die
-                    // Datenseite hat selbst keine horizontalen Gesten, die
-                    // Geste ist also konfliktfrei (der `verticalScroll` des
-                    // Koerpers laeuft quer dazu). Zurueck von der Karte geht
-                    // es bewusst NUR ueber den „Daten"-Knopf der
-                    // Kompaktleiste: Dort haetten Kartengesten Vorrang.
-                    .pointerInput(Unit) {
-                        var gesamtX = 0f
-                        detectHorizontalDragGestures(
-                            onDragStart = { gesamtX = 0f },
-                            onDragEnd = {
-                                if (kotlin.math.abs(gesamtX) > SwipeZurKarteSchwelle.toPx()) {
-                                    onShowMap()
-                                }
-                            },
-                        ) { _, dragAmount -> gesamtX += dragAmount }
-                    },
+                    .padding(TabletScreenPadding),
+                verticalArrangement = Arrangement.SpaceBetween,
             ) {
-                RideModeHeader(paused = paused, autoPaused = autoPaused, onShowMap = onShowMap)
-
-                // Die Fuehrung steht abgesetzt ganz oben, als farbige Flaeche:
-                // Sie ist das, wonach man im Fahren handelt, und darf nicht
-                // zwischen den Zahlen untergehen (siehe [NavigationPanel]).
-                if (navigation != null) {
-                    Spacer(Modifier.height(CardGap))
-                    NavigationPanel(navigation)
-                }
-
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        // Nur Notausgang: Auf sehr kleinen oder stark
-                        // vergroesserten Bildschirmen passen die grossen Zahlen
-                        // sonst nicht mehr untereinander. Im Normalfall gibt es
-                        // hier nichts zu scrollen — im Fahren scrollt niemand.
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    val formats = LocalAppFormats.current
-                    BigValue(
-                        value = speedKmh?.let { formats.decimal(it, 1) } ?: "–",
-                        label = "km/h",
-                        size = SpeedValueSize,
-                        spoken = speedKmh
-                            ?.let { stringResource(R.string.map_ride_speed_cd, formats.decimal(it, 1)) }
-                            ?: stringResource(R.string.map_ride_speed_unknown_cd),
-                    )
-                    Spacer(Modifier.height(CardGap))
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        BigValue(
-                            modifier = Modifier.weight(1f),
-                            value = formats.km(distanceKm),
-                            label = stringResource(R.string.map_ride_distance_label),
-                            size = SecondaryValueSize,
-                            spoken = stringResource(R.string.map_ride_distance_cd, formats.km(distanceKm)),
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (navigation != null) {
+                                Icons.Filled.Navigation
+                            } else if (paused) {
+                                Icons.Filled.Pause
+                            } else {
+                                Icons.Filled.FiberManualRecord
+                            },
+                            contentDescription = null,
+                            tint = when {
+                                navigation?.offRoute == true -> cockpit.danger
+                                paused -> cockpit.caution
+                                else -> cockpit.good
+                            },
+                            modifier = Modifier.size(if (navigation != null || paused) 22.dp else 14.dp),
                         )
-                        BigValue(
-                            modifier = Modifier.weight(1f),
-                            value = formatDuration(elapsedS),
-                            label = stringResource(R.string.map_ride_time_label),
-                            size = SecondaryValueSize,
-                            spoken = stringResource(R.string.map_ride_time_cd, formatDuration(elapsedS)),
+                        Text(
+                            text = when {
+                                navigation != null -> stringResource(R.string.map_ride_card_navigating_label)
+                                paused && autoPaused -> stringResource(R.string.map_live_status_auto_paused)
+                                paused -> stringResource(R.string.map_live_status_paused)
+                                else -> stringResource(R.string.map_live_status_recording)
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            color = cockpit.inkMuted,
                         )
                     }
-                    // Feste Stelle der Sensorzeile (siehe Klassendoc): nach
-                    // Distanz/Fahrzeit, vor den Hoehenmetern.
-                    if (sensoren.anzahl > 0) {
-                        Spacer(Modifier.height(CardGap))
-                        LiveSensorRow(
-                            sensoren = sensoren,
-                            groesse = if (sensoren.anzahl <= 2) SecondaryValueSize else ThreeUpValueSize,
+
+                    if (navigation != null) {
+                        Text(
+                            text = navigation.label,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = cockpit.ink,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Row(
+                            verticalAlignment = Alignment.Bottom,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = formats.km(navigation.remainingKm),
+                                style = MaterialTheme.typography.displayMedium.tabular(),
+                                fontWeight = FontWeight.Bold,
+                                color = if (navigation.offRoute) cockpit.danger else cockpit.good,
+                            )
+                            Text(
+                                text = "km",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = cockpit.inkMuted,
+                                modifier = Modifier.padding(bottom = 8.dp),
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = when {
+                                paused && autoPaused -> stringResource(R.string.map_ride_status_auto_paused)
+                                paused -> stringResource(R.string.map_ride_status_paused)
+                                else -> stringResource(R.string.map_ride_status_recording)
+                            },
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = cockpit.ink,
                         )
                     }
-                    Spacer(Modifier.height(CardGap))
-                    BigValue(
-                        value = "${ascentM.roundToInt()}",
-                        label = stringResource(R.string.map_ride_ascent_label),
-                        size = SmallValueSize,
-                        spoken = stringResource(R.string.map_ride_ascent_cd, ascentM.roundToInt()),
-                    )
+
                     if (zielZeile != null) {
-                        Spacer(Modifier.height(CardGap))
-                        LiveZielZeile(zielZeile, style = MaterialTheme.typography.titleMedium)
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.small,
+                            color = cockpit.panel,
+                            border = BorderStroke(1.dp, cockpit.border),
+                        ) {
+                            LiveZielZeile(
+                                zielZeile,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                style = MaterialTheme.typography.titleMedium.tabular(),
+                            )
+                        }
                     }
                 }
 
-                Spacer(Modifier.height(CardGap))
-
-                Row(modifier = Modifier.fillMaxWidth()) {
-                        RideModeAction(
-                            modifier = Modifier.weight(1f),
-                            label = if (paused) {
-                                stringResource(R.string.map_ride_resume_action)
-                            } else {
-                                stringResource(R.string.map_ride_pause_action)
-                            },
-                            // Pause ist folgenlos und wirkt deshalb sofort —
-                            // anders als das Beenden daneben, das erst noch
-                            // durch die Rueckfrage muss.
-                            description = if (paused) {
-                                stringResource(R.string.map_ride_resume_cd)
-                            } else {
-                                stringResource(R.string.map_ride_pause_cd)
-                            },
-                            icon = if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                            container = MaterialTheme.colorScheme.primary,
-                            content = MaterialTheme.colorScheme.onPrimary,
-                            onClick = onTogglePause,
+                val showMapCd = stringResource(R.string.map_ride_show_map_cd)
+                Surface(
+                    onClick = onShowMap,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(RideModeExitHeight)
+                        .semantics { contentDescription = showMapCd },
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    border = BorderStroke(1.dp, cockpit.border),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.map_ride_show_map_action),
+                            maxLines = 1,
+                            style = MaterialTheme.typography.titleMedium,
                         )
-                        Spacer(Modifier.width(CardGap))
-                        // Beenden nur durch Halten — derselbe Knopf wie auf
-                        // der Karte und in der Kompaktleiste.
-                        HoldToEndButton(
-                            onEnd = onStop,
-                            modifier = Modifier.weight(1f),
-                            minHeight = RideModeActionHeight,
-                            label = stringResource(R.string.map_ride_end_action),
-                            holdHint = stringResource(R.string.map_ride_end_hold_hint),
-                            icon = Icons.Filled.Stop,
-                            iconSize = RideModeActionIconSize,
-                            textStyle = MaterialTheme.typography.headlineSmall,
-                        )
+                    }
                 }
             }
         }
@@ -373,59 +734,55 @@ internal data class RideModeNavigation(
 /**
  * Kopfzeile: links der Zustand der Aufzeichnung, rechts der Wechsel zur
  * Kartenseite.
- *
- * Der Knopf ist bewusst beschriftet und kein blosses X-Symbol: Wer den
- * Fahrmodus zum ersten Mal sieht, soll ohne Probieren erkennen, dass
- * dahinter die Karte liegt — und nicht das Ende der Aufzeichnung. Seit der
- * Kartenseite des Fahrmodus wechselt er dorthin (Kompaktleiste statt
- * Live-Leiste, KeepScreenOn bleibt an), statt den Fahrmodus zu verlassen;
- * ganz heraus fuehrt weiterhin die Zurueck-Geste.
  */
 @Composable
 private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onShowMap: () -> Unit) {
+    val cockpit = LocalCockpitColors.current
     Row(
         modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Status-Chip und „Karte" sind gleich hoch und gleich gebaut (Symbol
-        // plus Wort in `titleMedium`) — nur der Karte-Knopf ist antippbar
-        // und traegt deshalb die Knopf-Farbe `secondaryContainer`.
+        val statusColor = if (paused) cockpit.caution else cockpit.ink
+        val statusText = when {
+            paused && autoPaused -> stringResource(R.string.map_ride_status_auto_paused)
+            paused -> stringResource(R.string.map_ride_status_paused)
+            else -> stringResource(R.string.map_ride_status_recording)
+        }
         Surface(
-            modifier = Modifier.height(RideModeExitHeight),
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .padding(end = 8.dp)
+                .height(RideModeExitHeight),
             shape = MaterialTheme.shapes.small,
-            color = if (paused) {
-                MaterialTheme.colorScheme.tertiaryContainer
-            } else {
-                MaterialTheme.colorScheme.primaryContainer
-            },
-            contentColor = if (paused) {
-                MaterialTheme.colorScheme.onTertiaryContainer
-            } else {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            },
+            color = cockpit.panel,
+            contentColor = statusColor,
+            border = BorderStroke(1.dp, if (paused) cockpit.caution else cockpit.border),
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     imageVector = if (paused) Icons.Filled.Pause else Icons.Filled.FiberManualRecord,
                     contentDescription = null,
-                    modifier = Modifier.size(if (paused) 28.dp else 16.dp),
+                    tint = if (paused) cockpit.caution else cockpit.good,
+                    modifier = Modifier.size(if (paused) 24.dp else 14.dp),
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    text = when {
-                        paused && autoPaused -> stringResource(R.string.map_ride_status_auto_paused)
-                        paused -> stringResource(R.string.map_ride_status_paused)
-                        else -> stringResource(R.string.map_ride_status_recording)
-                    },
+                BasicText(
+                    text = statusText,
                     maxLines = 1,
-                    style = MaterialTheme.typography.titleMedium,
+                    softWrap = false,
+                    autoSize = TextAutoSize.StepBased(
+                        minFontSize = 12.sp,
+                        maxFontSize = 16.sp,
+                        stepSize = 1.sp,
+                    ),
+                    style = MaterialTheme.typography.titleMedium.copy(color = statusColor),
                 )
             }
         }
-        Spacer(Modifier.weight(1f))
         val showMapCd = stringResource(R.string.map_ride_show_map_cd)
         Surface(
             onClick = onShowMap,
@@ -435,12 +792,13 @@ private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onShowMap: () -
             shape = MaterialTheme.shapes.small,
             color = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            border = BorderStroke(1.dp, cockpit.border),
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(28.dp))
+                Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = stringResource(R.string.map_ride_show_map_action),
@@ -452,105 +810,334 @@ private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onShowMap: () -
     }
 }
 
-/**
- * Ein Wert mit Beschriftung — dieselbe Rolle wie [Metric] in der Live-Leiste,
- * nur in Fahr-Groesse.
- *
- * Die Groesse kommt als Parameter statt aus `MaterialTheme.typography`: Selbst
- * `displayLarge` bleibt bei 57 sp, und die Rangfolge der Werte (Tempo >
- * Distanz/Zeit > Hoehenmeter) soll aus dem Groessenverhaeltnis sofort ablesbar
- * sein — nicht aus drei aehnlich grossen Typo-Stufen.
- *
- * @param spoken Vorlesetext. Eine nackte „24,3" hilft niemandem; TalkBack liest
- *   deshalb Bedeutung, Wert und Einheit als einen Satz — die getrennten
- *   Textknoten werden dafuer mit [clearAndSetSemantics] ersetzt.
- */
 @Composable
-private fun BigValue(
-    value: String,
-    label: String,
-    size: TextUnit,
-    spoken: String,
-    modifier: Modifier = Modifier,
+private fun RideModeMetricsGrid(
+    speedKmh: Double?,
+    distanceKm: Double,
+    elapsedS: Int,
+    ascentM: Double,
+    sensoren: LiveSensorAnzeige,
+    zielZeile: ZielZeile?,
+    compact: Boolean,
+    dense: Boolean,
+    twoColumnSensors: Boolean,
+    heroMaxSize: TextUnit,
 ) {
-    Column(
-        modifier = modifier.clearAndSetSemantics { contentDescription = spoken },
+    val formats = LocalAppFormats.current
+    val cockpit = LocalCockpitColors.current
+    val gap = when {
+        dense -> 6.dp
+        compact -> CompactCardGap
+        else -> CardGap
+    }
+
+    CockpitSpeedHero(
+        value = speedKmh?.let { formats.decimal(it, 1) } ?: "–",
+        spoken = speedKmh
+            ?.let { stringResource(R.string.map_ride_speed_cd, formats.decimal(it, 1)) }
+            ?: stringResource(R.string.map_ride_speed_unknown_cd),
+        maxFontSize = heroMaxSize,
+        compact = compact,
+        dense = dense,
+    )
+
+    Spacer(Modifier.height(gap))
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(gap),
     ) {
-        Text(
-            text = value,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            fontSize = size,
-            // Ohne eigene Zeilenhoehe behaelt der Stil seine kleine bei und
-            // schneidet Ober-/Unterlaengen der grossen Ziffern ab.
-            lineHeight = size * 1.1f,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
+        val tileVertical = if (dense) 6.dp else 12.dp
+        CockpitMetricTile(
+            value = formats.km(distanceKm),
+            unit = "",
+            label = stringResource(R.string.map_ride_distance_label),
+            modifier = Modifier.weight(1f),
+            verticalPadding = tileVertical,
         )
-        Text(
-            text = label,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        CockpitMetricTile(
+            value = formatDuration(elapsedS),
+            unit = "",
+            label = stringResource(R.string.map_ride_time_label),
+            modifier = Modifier.weight(1f),
+            verticalPadding = tileVertical,
         )
     }
-}
 
-/**
- * Die Sensorzeile des Fahrmodus: je vorhandener Quelle eine gleich breite
- * [BigValue]-Kachel, immer in der Reihenfolge Puls · Leistung ·
- * Trittfrequenz. Mit nur einer Kachel sieht sie aus wie die fruehere
- * Puls-Kachel.
- */
-@Composable
-private fun LiveSensorRow(sensoren: LiveSensorAnzeige, groesse: TextUnit) {
-    Row(modifier = Modifier.fillMaxWidth()) {
+    val sensorItems = buildList {
         sensoren.puls?.let { kachel ->
-            val t = sensorKachelText(SensorKachelArt.PULS, kachel, stringResource(R.string.ble_ride_hr_label))
-            BigValue(Modifier.weight(1f), t, groesse)
+            add(sensorKachelText(SensorKachelArt.PULS, kachel, stringResource(R.string.ble_ride_hr_label)))
         }
         sensoren.leistung?.let { kachel ->
-            val t = sensorKachelText(SensorKachelArt.LEISTUNG, kachel, stringResource(R.string.ble_ride_power_label))
-            BigValue(Modifier.weight(1f), t, groesse)
+            add(sensorKachelText(SensorKachelArt.LEISTUNG, kachel, stringResource(R.string.ble_ride_power_label)))
         }
         sensoren.trittfrequenz?.let { kachel ->
-            val t = sensorKachelText(
-                SensorKachelArt.TRITTFREQUENZ,
-                kachel,
-                stringResource(R.string.ble_ride_cadence_label),
+            add(sensorKachelText(SensorKachelArt.TRITTFREQUENZ, kachel, stringResource(R.string.ble_ride_cadence_label)))
+        }
+    }
+
+    val ascentValue = "${ascentM.roundToInt()}"
+    val ascentLabel = stringResource(R.string.map_ride_ascent_label)
+    val ascentSpoken = stringResource(R.string.map_ride_ascent_cd, ascentM.roundToInt())
+
+    Spacer(Modifier.height(gap))
+
+    if (twoColumnSensors) {
+        when (sensorItems.size) {
+            0 -> CockpitDataTile(
+                value = ascentValue,
+                label = ascentLabel,
+                spoken = ascentSpoken,
+                dense = dense,
+                modifier = Modifier.fillMaxWidth(),
             )
-            BigValue(Modifier.weight(1f), t, groesse)
+
+            1 -> Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(gap),
+            ) {
+                SensorDataTile(sensorItems[0], dense = dense, modifier = Modifier.weight(1f))
+                CockpitDataTile(
+                    value = ascentValue,
+                    label = ascentLabel,
+                    spoken = ascentSpoken,
+                    dense = dense,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            2 -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(gap),
+                ) {
+                    SensorDataTile(sensorItems[0], dense = dense, modifier = Modifier.weight(1f))
+                    SensorDataTile(sensorItems[1], dense = dense, modifier = Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(gap))
+                CockpitDataTile(
+                    value = ascentValue,
+                    label = ascentLabel,
+                    spoken = ascentSpoken,
+                    dense = dense,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            else -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(gap),
+                ) {
+                    SensorDataTile(sensorItems[0], dense = dense, modifier = Modifier.weight(1f))
+                    SensorDataTile(sensorItems[1], dense = dense, modifier = Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(gap))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(gap),
+                ) {
+                    SensorDataTile(sensorItems[2], dense = dense, modifier = Modifier.weight(1f))
+                    CockpitDataTile(
+                        value = ascentValue,
+                        label = ascentLabel,
+                        spoken = ascentSpoken,
+                        dense = dense,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    } else {
+        if (sensorItems.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(gap),
+            ) {
+                sensorItems.forEach { item ->
+                    SensorDataTile(item, dense = dense, modifier = Modifier.weight(1f))
+                }
+            }
+            Spacer(Modifier.height(gap))
+        }
+        CockpitDataTile(
+            value = ascentValue,
+            label = ascentLabel,
+            spoken = ascentSpoken,
+            dense = dense,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+
+    if (zielZeile != null) {
+        Spacer(Modifier.height(gap))
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.small,
+            color = cockpit.panel,
+            border = BorderStroke(1.dp, cockpit.border),
+        ) {
+            LiveZielZeile(
+                zeile = zielZeile,
+                modifier = Modifier.padding(
+                    horizontal = 14.dp,
+                    vertical = when {
+                        dense -> 6.dp
+                        compact -> 8.dp
+                        else -> 10.dp
+                    },
+                ),
+                style = MaterialTheme.typography.titleSmall.tabular(),
+            )
         }
     }
 }
 
 @Composable
-private fun BigValue(modifier: Modifier, text: SensorKachelText, size: TextUnit) {
-    BigValue(value = text.wert, label = text.label, size = size, spoken = text.spoken, modifier = modifier)
+private fun CockpitSpeedHero(
+    value: String,
+    spoken: String,
+    maxFontSize: TextUnit,
+    compact: Boolean,
+    dense: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val cockpit = LocalCockpitColors.current
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics { contentDescription = spoken },
+        shape = MaterialTheme.shapes.large,
+        color = cockpit.panel,
+        border = BorderStroke(1.dp, cockpit.border),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = 18.dp,
+                    vertical = when {
+                        dense -> 6.dp
+                        compact -> 10.dp
+                        else -> 14.dp
+                    },
+                ),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            BasicText(
+                text = value,
+                maxLines = 1,
+                softWrap = false,
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = if (dense) 40.sp else 48.sp,
+                    maxFontSize = maxFontSize,
+                    stepSize = 2.sp,
+                ),
+                style = MaterialTheme.typography.displayLarge.copy(
+                    fontSize = maxFontSize,
+                    lineHeight = TextUnit.Unspecified,
+                    fontWeight = FontWeight.Bold,
+                    color = cockpit.ink,
+                ).tabular(),
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Text(
+                text = "km/h",
+                style = MaterialTheme.typography.titleLarge,
+                color = cockpit.inkMuted,
+                maxLines = 1,
+                modifier = Modifier.padding(
+                    bottom = when {
+                        dense -> 6.dp
+                        compact -> 8.dp
+                        else -> 10.dp
+                    },
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SensorDataTile(text: SensorKachelText, dense: Boolean = false, modifier: Modifier = Modifier) {
+    val cockpit = LocalCockpitColors.current
+    CockpitDataTile(
+        value = text.wert,
+        label = text.label,
+        spoken = text.spoken,
+        valueColor = if (text.wert == "–") cockpit.inkMuted else cockpit.ink,
+        dense = dense,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun CockpitDataTile(
+    value: String,
+    label: String,
+    spoken: String,
+    modifier: Modifier = Modifier,
+    valueColor: Color = LocalCockpitColors.current.ink,
+    dense: Boolean = false,
+) {
+    val cockpit = LocalCockpitColors.current
+    Surface(
+        modifier = modifier.clearAndSetSemantics { contentDescription = spoken },
+        shape = MaterialTheme.shapes.medium,
+        color = cockpit.panel,
+        border = BorderStroke(1.dp, cockpit.border),
+    ) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = 12.dp,
+                vertical = if (dense) 6.dp else 10.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(if (dense) 2.dp else 4.dp),
+        ) {
+            BasicText(
+                text = label,
+                maxLines = 1,
+                softWrap = false,
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = 10.sp,
+                    maxFontSize = 12.sp,
+                    stepSize = 1.sp,
+                ),
+                style = MaterialTheme.typography.labelMedium.copy(color = cockpit.inkMuted),
+            )
+            BasicText(
+                text = value,
+                maxLines = 1,
+                softWrap = false,
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = 20.sp,
+                    maxFontSize = if (dense) 30.sp else 38.sp,
+                    stepSize = 2.sp,
+                ),
+                style = MaterialTheme.typography.displaySmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = valueColor,
+                    lineHeight = TextUnit.Unspecified,
+                ).tabular(),
+            )
+        }
+    }
 }
 
 /**
  * Die Fuehrung des Fahrmodus als eigene, farbige Flaeche direkt unter der
- * Kopfzeile: gross die naechste Kurve (Pfeil plus gerundete Distanz — dieselbe
- * Auskunft wie im Navigations-HUD auf der Karte, `NavigationHud.kt`), darunter
- * klein Restdistanz und Routenname. Abgesetzt in `primary`, weil man danach im
- * Fahren handelt; die uebrigen Werte darunter sind Auskunft.
- *
- * Die Flaeche steht an FESTER Position (immer, wenn navigiert wird): Ohne
- * Kurve in Sicht zeigt sie den Geradeaus-Pfeil, statt zu verschwinden — die
- * Werte darunter sollen beim Naeherkommen einer Kurve nicht springen (dieselbe
- * Regel wie bei der Puls-Kachel, siehe Klassen-KDoc). Abseits der Route tritt
- * die Warnflaeche an ihre Stelle: Eine Kurvenauskunft auf fremdem Weg waere
- * eine Falschauskunft.
+ * Kopfzeile: gross die naechste Kurve (Pfeil plus gerundete Distanz), darunter
+ * Restdistanz und Routenname. Abseits der Route tritt [OffRouteWarning] an
+ * ihre Stelle.
  */
 @Composable
-private fun NavigationPanel(navigation: RideModeNavigation) {
+private fun NavigationPanel(navigation: RideModeNavigation, compact: Boolean = false, dense: Boolean = false) {
     if (navigation.offRoute) {
-        OffRouteWarning(navigation)
+        OffRouteWarning(navigation = navigation, compact = compact, dense = dense)
         return
     }
+    val cockpit = LocalCockpitColors.current
     val richtung = navigation.naechsteKurve
     val abstandM = navigation.naechsteKurveM
     val remainingKm = LocalAppFormats.current.km(navigation.remainingKm)
@@ -569,29 +1156,55 @@ private fun NavigationPanel(navigation: RideModeNavigation) {
             .fillMaxWidth()
             .clearAndSetSemantics { contentDescription = spoken },
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = cockpit.ink,
+        border = BorderStroke(1.5.dp, cockpit.good),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = if (compact) 16.dp else 20.dp,
+                vertical = when {
+                    dense -> 8.dp
+                    compact -> 12.dp
+                    else -> 14.dp
+                },
+            ),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = turnRichtungIcon(richtung),
                     contentDescription = null,
-                    modifier = Modifier.size(64.dp),
+                    tint = cockpit.ink,
+                    modifier = Modifier.size(
+                        when {
+                            dense -> 40.dp
+                            compact -> 48.dp
+                            else -> 60.dp
+                        },
+                    ),
                 )
-                Spacer(Modifier.width(16.dp))
-                Column {
-                    Text(
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    val turnMaxSize = if (dense) 34.sp else 40.sp
+                    BasicText(
                         text = if (richtung != null && abstandM != null) {
                             kurveAbstandKurzText(abstandM).asString()
                         } else {
                             stringResource(R.string.map_nav_straight_label)
                         },
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        fontSize = SecondaryValueSize,
-                        lineHeight = SecondaryValueSize * 1.1f,
-                        fontWeight = FontWeight.Bold,
+                        softWrap = false,
+                        autoSize = TextAutoSize.StepBased(
+                            minFontSize = 22.sp,
+                            maxFontSize = turnMaxSize,
+                            stepSize = 2.sp,
+                        ),
+                        style = MaterialTheme.typography.displaySmall.copy(
+                            fontSize = turnMaxSize,
+                            lineHeight = TextUnit.Unspecified,
+                            fontWeight = FontWeight.Bold,
+                            color = cockpit.ink,
+                        ).tabular(),
                     )
                     Text(
                         text = if (richtung != null) {
@@ -601,12 +1214,17 @@ private fun NavigationPanel(navigation: RideModeNavigation) {
                         },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = if (compact) {
+                            MaterialTheme.typography.titleMedium
+                        } else {
+                            MaterialTheme.typography.titleLarge
+                        },
                         fontWeight = FontWeight.SemiBold,
+                        color = cockpit.ink,
                     )
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(if (dense) 4.dp else 8.dp))
             RemainingLine(navigation)
         }
     }
@@ -621,22 +1239,18 @@ private fun RemainingLine(navigation: RideModeNavigation) {
             LocalAppFormats.current.km(navigation.remainingKm),
             navigation.label,
         ),
-        maxLines = 1,
+        maxLines = 2,
         overflow = TextOverflow.Ellipsis,
-        style = MaterialTheme.typography.titleMedium,
+        style = MaterialTheme.typography.titleSmall.tabular(),
     )
 }
 
 /**
- * Abweichungswarnung.
- *
- * Als gefuellte Flaeche statt als roter Text: Farbe allein ist bei Sonne und
- * Vibration zu wenig, die Flaeche faellt auch im Augenwinkel auf. Ob abseits
- * der Route gefahren wird, entscheidet die Hysterese im `RouteNavigator`
- * (`:core`) — hier wird das Ergebnis nur gezeigt.
+ * Abweichungswarnung als gefuellte Flaeche mit deutlichem Gefahr-Rahmen.
  */
 @Composable
-private fun OffRouteWarning(navigation: RideModeNavigation) {
+private fun OffRouteWarning(navigation: RideModeNavigation, compact: Boolean = false, dense: Boolean = false) {
+    val cockpit = LocalCockpitColors.current
     val spoken = stringResource(
         R.string.map_ride_nav_off_route_cd,
         LocalAppFormats.current.km(navigation.remainingKm),
@@ -649,33 +1263,97 @@ private fun OffRouteWarning(navigation: RideModeNavigation) {
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        border = BorderStroke(1.5.dp, cockpit.danger),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = if (compact) 16.dp else 20.dp,
+                vertical = when {
+                    dense -> 8.dp
+                    compact -> 12.dp
+                    else -> 14.dp
+                },
+            ),
+        ) {
             Text(
                 text = stringResource(R.string.map_nav_off_route_title),
-                fontSize = SmallValueSize,
-                lineHeight = SmallValueSize * 1.1f,
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             RemainingLine(navigation)
         }
     }
 }
 
+@Composable
+private fun RideModeBottomActions(
+    paused: Boolean,
+    compact: Boolean,
+    onTogglePause: () -> Unit,
+    onStop: () -> Unit,
+) {
+    val cockpit = LocalCockpitColors.current
+    val pauseWeight = if (compact) 0.86f else 1f
+    val endWeight = if (compact) 1.14f else 1f
+    val endIconSize = if (compact) 22.dp else 28.dp
+    val pauseIconSize = if (compact) 22.dp else 28.dp
+    val endTextStyle = if (compact) {
+        MaterialTheme.typography.titleMedium
+    } else {
+        MaterialTheme.typography.headlineSmall
+    }
+
+    Row(modifier = Modifier.fillMaxWidth()) {
+        RideModeAction(
+            modifier = Modifier.weight(pauseWeight),
+            label = if (paused) {
+                stringResource(R.string.map_ride_resume_action)
+            } else {
+                stringResource(R.string.map_ride_pause_action)
+            },
+            description = if (paused) {
+                stringResource(R.string.map_ride_resume_cd)
+            } else {
+                stringResource(R.string.map_ride_pause_cd)
+            },
+            icon = if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+            iconSize = pauseIconSize,
+            maxFontSize = if (compact) 18.sp else 22.sp,
+            container = if (paused) cockpit.action else MaterialTheme.colorScheme.secondaryContainer,
+            content = if (paused) cockpit.onAction else MaterialTheme.colorScheme.onSecondaryContainer,
+            border = if (paused) null else BorderStroke(1.dp, cockpit.border),
+            onClick = onTogglePause,
+        )
+        Spacer(Modifier.width(CardGap))
+        HoldToEndButton(
+            onEnd = onStop,
+            modifier = Modifier.weight(endWeight),
+            minHeight = RideModeActionHeight,
+            label = stringResource(R.string.map_ride_end_action),
+            holdHint = stringResource(R.string.map_ride_end_hold_hint),
+            icon = Icons.Filled.Stop,
+            iconSize = endIconSize,
+            textStyle = endTextStyle,
+        )
+    }
+}
+
 /**
- * Daumengrosse Bedienflaeche: [RideModeActionHeight] hoch, ueber die halbe
- * Breite, Beschriftung und Symbol in Fahr-Groesse. Die Pille erbt sie vom
- * Theme (`shapes.small`); die Hoehe bleibt die dokumentierte
- * Sicherheitsentscheidung und wird von keiner Rundung aufgeweicht.
+ * Daumengrosse Bedienflaeche: [RideModeActionHeight] hoch, scharfkantiges
+ * Cockpit-Rechteck (`CockpitShapes.small`) und automatisch skalierende
+ * Beschriftung, damit auch bei 360 dp und 1,3× Schrift nichts abschneidet.
  */
 @Composable
 private fun RideModeAction(
     label: String,
     description: String,
     icon: ImageVector?,
+    iconSize: androidx.compose.ui.unit.Dp,
+    maxFontSize: TextUnit,
     container: Color,
     content: Color,
+    border: BorderStroke?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -687,22 +1365,32 @@ private fun RideModeAction(
         shape = MaterialTheme.shapes.small,
         color = container,
         contentColor = content,
+        border = border,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp),
+            modifier = Modifier.padding(horizontal = 10.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (icon != null) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(RideModeActionIconSize))
-                Spacer(Modifier.width(8.dp))
+                Icon(icon, contentDescription = null, modifier = Modifier.size(iconSize))
+                Spacer(Modifier.width(6.dp))
             }
-            Text(
+            BasicText(
                 text = label,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
+                softWrap = false,
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = 12.sp,
+                    maxFontSize = maxFontSize,
+                    stepSize = 1.sp,
+                ),
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontSize = maxFontSize,
+                    lineHeight = TextUnit.Unspecified,
+                    fontWeight = FontWeight.Bold,
+                    color = content,
+                ),
             )
         }
     }
@@ -757,20 +1445,11 @@ private fun Context.findActivity(): Activity? {
     return null
 }
 
-/**
- * Schriftgroessen der drei Rangstufen. In `sp`, also der Systemschrift-
- * Einstellung folgend — die Groesse hier ist die Untergrenze fuer „Blick aus
- * einem Meter", nicht eine feste Bildpunktzahl.
- */
-private val SpeedValueSize = 96.sp
-private val SecondaryValueSize = 52.sp
-private val SmallValueSize = 30.sp
-
-/** Drei Sensorkacheln nebeneinander: eine Stufe unter [SecondaryValueSize], damit „215" und „142" passen. */
-private val ThreeUpValueSize = 40.sp
-
-/** Symbolgroesse beider Bedienflaechen — Pause/Weiter und Beenden gleich. */
-private val RideModeActionIconSize = 36.dp
+private val DenseCompactHeroSpeedSize = 56.sp
+private val CompactHeroSpeedSize = 76.sp
+private val MediumHeroSpeedSize = 88.sp
+private val ExpandedHeroSpeedSize = 84.sp
+private val CompactCardGap = 8.dp
 
 /**
  * Mindest-Wischstrecke fuer den Wechsel zur Kartenseite. Deutlich ueber dem

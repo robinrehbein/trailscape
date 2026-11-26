@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -18,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.indoor.climb.ClimbEffort
@@ -35,7 +35,7 @@ internal fun IndoorTrailClimbs(climbs: List<ClimbEffort>) {
     if (climbs.isEmpty()) return
     val showLap = climbs.any { it.lap > 1 }
     Eyebrow(stringResource(R.string.trail_summary_title))
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             climbs.forEachIndexed { i, e ->
                 if (i > 0) HorizontalDivider()

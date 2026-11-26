@@ -322,6 +322,7 @@
     <string name="more_profile_hr_max_learn_more">The estimate is 208 − 0.7 × age. A max HR field test is more accurate: after a good warm-up, a hard 3–5 minute climb with an all-out finish.</string>
     <string name="more_profile_hr_max_label">Max HR (bpm, optional)</string>
     <string name="more_profile_lthr_label">Threshold heart rate (LTHR, bpm, optional)</string>
+    <string name="more_profile_lthr_hint">The highest heart rate you can hold steadily for about an hour.</string>
     <string name="more_profile_resting_hr_label">Resting heart rate (bpm, optional)</string>
     <string name="more_profile_resting_hr_hint">Empty: the value measured from your vitals.</string>
     <string name="more_profile_ftp_label">Threshold power (FTP, watts, optional)</string>

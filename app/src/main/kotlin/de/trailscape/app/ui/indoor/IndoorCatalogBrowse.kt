@@ -14,11 +14,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,6 +37,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.AppFormats
+import de.trailscape.app.ui.components.AtlasCard
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.RideSummary
 import de.trailscape.core.indoor.SurfaceKind
@@ -243,7 +243,7 @@ internal fun CatalogFilterBar(
     initiallyOpen: Boolean = false,
 ) {
     var open by rememberSaveable { mutableStateOf(initiallyOpen) }
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val toggleCd = stringResource(if (open) R.string.indoor_i10_filter_close else R.string.indoor_i10_filter_open)
             Row(
@@ -305,7 +305,7 @@ internal fun CatalogFilterBar(
                     }
                 }
                 if (filter.isActive) {
-                    OutlinedButton(onClick = { onChange(filter.cleared()) }) {
+                    TrailscapeSecondaryButton(onClick = { onChange(filter.cleared()) }) {
                         Text(stringResource(R.string.indoor_i10_reset))
                     }
                 }
@@ -381,11 +381,11 @@ private fun sortLabel(s: CatalogSort): String = stringResource(
 /** Kein Treffer: ein klarer Satz und der Weg zurueck. */
 @Composable
 internal fun CatalogNoMatch(onReset: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.indoor_i10_empty_title), style = MaterialTheme.typography.titleMedium)
             MutedText(stringResource(R.string.indoor_i10_empty_body))
-            OutlinedButton(onClick = onReset) { Text(stringResource(R.string.indoor_i10_reset)) }
+            TrailscapeSecondaryButton(onClick = onReset) { Text(stringResource(R.string.indoor_i10_reset)) }
         }
     }
 }

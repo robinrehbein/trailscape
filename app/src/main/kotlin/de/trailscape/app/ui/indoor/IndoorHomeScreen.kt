@@ -6,15 +6,29 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsBike
 import androidx.compose.material.icons.filled.Add
@@ -29,22 +43,20 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,12 +70,24 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.Eyebrow
+import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.PillSegments
-import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.components.RouteCard
+import de.trailscape.app.ui.components.ScreenHeader
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
+import de.trailscape.app.ui.components.TwoPaneLayout
 import de.trailscape.app.ui.theme.LocalSignalColors
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
+import de.trailscape.app.ui.theme.TabletCardGap
+import de.trailscape.app.ui.theme.TabletScreenPadding
+import de.trailscape.app.ui.theme.useTwoPaneLayout
 import de.trailscape.core.indoor.IndoorMode
+import de.trailscape.core.indoor.catalog.CatalogRider
+import de.trailscape.core.indoor.catalog.estimateCatalogRideSeconds
 
 /** Schrittweite der Vergleichsleistung in Watt. */
 private const val GHOST_WATTS_STEP = 10
@@ -141,6 +165,7 @@ fun IndoorHomeScreen(
     title: String = stringResource(R.string.indoor_app_route_title),
     headerExtra: (@Composable () -> Unit)? = null,
     onOpenGarage: (() -> Unit)? = null,
+    onLoadPreview: (suspend (String) -> List<Float>)? = null,
 ) {
     val lang = LocalAppFormats.current.language.tag
     val readiness = indoorRouteReadiness(
@@ -152,43 +177,202 @@ fun IndoorHomeScreen(
     val canRide = indoorCanRide(trainerIssue, route, readiness)
     // Die Tageskarte traegt die Hauptaktion, solange unten nichts gewaehlt ist.
     val dayLeads = readiness == IndoorRouteReadiness.NoRoute && (day as? IndoorDayUi.Offer)?.startable == true
+    val twoPane = useTwoPaneLayout(LocalWindowLayoutClass.current)
+    val ownOptions = remember(route.options) { route.options.filter { it !is IndoorRouteOption.Catalog } }
+    val actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
+        // Garage: Fahrer und Rad anpassen (docs/indoor/garage.md) — der eine
+        // Einstieg, nur im Tab; im gepushten Ablauf ist [onOpenGarage] `null`.
+        if (onOpenGarage != null) {
+            IconButton(onClick = onOpenGarage) {
+                Icon(Icons.Outlined.Palette, contentDescription = stringResource(R.string.garage_home_cd))
+            }
+        }
+        IconButton(onClick = onOpenSettings) {
+            Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.indoor_app_home_settings_cd))
+        }
+    }
+
+    if (twoPane) {
+        val systemBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val bottomSpace = maxOf(LocalFloatingNavigationBarSpace.current, systemBottom)
+        val filter by CatalogBrowseSession.filter.collectAsState()
+        val rows = remember(catalog.items, catalogExtras) { catalogRows(catalog.items, catalogExtras) }
+        val shown = remember(rows, filter, lang) { rows.filteredBy(filter) { it.item.name.pick(lang) } }
+        var detailId by rememberSaveable { mutableStateOf(initialCatalogDetailId) }
+
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                    .padding(bottom = bottomSpace)
+                    .padding(horizontal = TabletScreenPadding),
+            ) {
+                ScreenHeader(
+                    title = title,
+                    backLabel = if (onBack != null) stringResource(R.string.indoor_app_action_back) else null,
+                    onBack = onBack,
+                    actions = actions,
+                )
+                TwoPaneLayout(
+                    primaryWeight = 0.45f,
+                    gap = TabletCardGap,
+                    modifier = Modifier.weight(1f),
+                    primary = {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                headerExtra?.invoke()
+                                TrainerCard(pair = pair, issue = trainerIssue, onOpenPair = onOpenPair)
+                                day?.let {
+                                    IndoorDayCard(
+                                        ui = it,
+                                        onRide = { onDayRide() },
+                                        onNext = onDayNext,
+                                        onRideGenerated = onDayGenerated,
+                                        onPathChange = onDayPath,
+                                        primary = dayLeads,
+                                    )
+                                }
+                                OptionsCard(
+                                    route = route,
+                                    onModeChange = onModeChange,
+                                    onGhostChange = onGhostChange,
+                                    initiallyOpen = initialOptionsOpen,
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                            if (!(dayLeads && trainerIssue == null)) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    ReadinessLines(
+                                        trainerIssue = trainerIssue,
+                                        readiness = readiness,
+                                        showNoRoute = !dayLeads,
+                                        onOpenPair = onOpenPair,
+                                        onDownload = onCatalogDownload,
+                                        onCancel = onCatalogCancel,
+                                        onDiscard = onCatalogDiscard,
+                                    )
+                                    if (!dayLeads) {
+                                        TrailscapePrimaryButton(
+                                            onClick = onRide,
+                                            enabled = canRide,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(22.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(stringResource(R.string.indoor_app_home_ride_action), style = MaterialTheme.typography.titleMedium)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    secondary = {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(TabletCardGap),
+                            verticalArrangement = Arrangement.spacedBy(TabletCardGap),
+                        ) {
+                            item(span = { GridItemSpan(2) }) {
+                                Eyebrow(stringResource(R.string.indoor_app_route_tab_own))
+                            }
+                            items(ownOptions, key = { it.key }) { option ->
+                                OwnRouteCard(
+                                    option = option,
+                                    selected = route.selected?.key == option.key,
+                                    rider = catalogExtras.rider,
+                                    catalog = catalog,
+                                    onLoadPreview = onLoadPreview,
+                                    onSelect = { onSelect(option) },
+                                )
+                            }
+                            if (route.loadingOptions) {
+                                item(span = { GridItemSpan(2) }) {
+                                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                    }
+                                }
+                            } else if (ownOptions.size <= 1) {
+                                item(span = { GridItemSpan(2) }) {
+                                    MutedText(stringResource(R.string.indoor_app_route_no_saved))
+                                }
+                            }
+                            item(span = { GridItemSpan(2) }) {
+                                Eyebrow(stringResource(R.string.indoor_app_route_tab_catalog))
+                            }
+                            item(span = { GridItemSpan(2) }) {
+                                MutedText(stringResource(R.string.indoor_app_catalog_intro))
+                            }
+                            indoorCatalogGridItems(
+                                catalog = catalog,
+                                rows = rows,
+                                shown = shown,
+                                filter = filter,
+                                selectedKey = route.selected?.key,
+                                onSelect = onSelect,
+                                onOpenDetail = { detailId = it },
+                                initialFilterOpen = initialCatalogFilterOpen,
+                            )
+                        }
+                    },
+                )
+            }
+        }
+        val detail = rows.firstOrNull { it.item.id == detailId }
+        if (detail != null) {
+            CatalogDetailDialog(
+                row = detail,
+                selected = route.selected?.key == "catalog:${detail.item.id}",
+                canRide = trainerIssue == null && pair.canContinue,
+                onSelect = onSelect,
+                onRide = onRide,
+                onDownload = onCatalogDownload,
+                onCancel = onCatalogCancel,
+                onDiscard = onCatalogDiscard,
+                onDismiss = { detailId = null },
+            )
+        }
+        return
+    }
+
     IndoorPage(
         title = title,
         onBack = onBack,
         headerExtra = headerExtra,
-        actions = {
-            // Garage: Fahrer und Rad anpassen (docs/indoor/garage.md) — der eine
-            // Einstieg, nur im Tab; im gepushten Ablauf ist [onOpenGarage] `null`.
-            if (onOpenGarage != null) {
-                IconButton(onClick = onOpenGarage) {
-                    Icon(Icons.Outlined.Palette, contentDescription = stringResource(R.string.garage_home_cd))
-                }
-            }
-            IconButton(onClick = onOpenSettings) {
-                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.indoor_app_home_settings_cd))
-            }
-        },
+        actions = actions,
         // Mit der Tageskarte als Hauptaktion bleibt unten nur, was am Trainer fehlt.
         bottomBar = if (dayLeads && trainerIssue == null) null else {
             {
-            ReadinessLines(
-                trainerIssue = trainerIssue,
-                readiness = readiness,
-                showNoRoute = !dayLeads,
-                onOpenPair = onOpenPair,
-                onDownload = onCatalogDownload,
-                onCancel = onCatalogCancel,
-                onDiscard = onCatalogDiscard,
-            )
-            if (!dayLeads) Button(
-                onClick = onRide,
-                enabled = canRide,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-            ) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(22.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(stringResource(R.string.indoor_app_home_ride_action), style = MaterialTheme.typography.titleMedium)
-            }
+                ReadinessLines(
+                    trainerIssue = trainerIssue,
+                    readiness = readiness,
+                    showNoRoute = !dayLeads,
+                    onOpenPair = onOpenPair,
+                    onDownload = onCatalogDownload,
+                    onCancel = onCatalogCancel,
+                    onDiscard = onCatalogDiscard,
+                )
+                if (!dayLeads) {
+                    TrailscapePrimaryButton(
+                        onClick = onRide,
+                        enabled = canRide,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(22.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.indoor_app_home_ride_action), style = MaterialTheme.typography.titleMedium)
+                    }
+                }
             }
         },
     ) {
@@ -197,8 +381,11 @@ fun IndoorHomeScreen(
         // Training des Tages: eine passende Strecke ohne weitere Auswahl.
         day?.let {
             IndoorDayCard(
-                ui = it, onRide = { onDayRide() }, onNext = onDayNext,
-                onRideGenerated = onDayGenerated, onPathChange = onDayPath,
+                ui = it,
+                onRide = { onDayRide() },
+                onNext = onDayNext,
+                onRideGenerated = onDayGenerated,
+                onPathChange = onDayPath,
                 primary = dayLeads,
             )
         }
@@ -206,33 +393,31 @@ fun IndoorHomeScreen(
         OptionsCard(route = route, onModeChange = onModeChange, onGhostChange = onGhostChange, initiallyOpen = initialOptionsOpen)
 
         Eyebrow(stringResource(R.string.indoor_app_route_tab_own))
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column {
-                route.options.filter { it !is IndoorRouteOption.Catalog }.forEachIndexed { i, option ->
-                    if (i > 0) HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    RouteOptionRow(
-                        option = option,
-                        selected = route.selected?.key == option.key,
-                        onSelect = { onSelect(option) },
-                    )
-                }
-                if (route.loadingOptions) {
-                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                    }
-                } else if (route.options.size <= 1) {
-                    MutedText(
-                        text = stringResource(R.string.indoor_app_route_no_saved),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    )
-                }
+        ownOptions.forEach { option ->
+            OwnRouteCard(
+                option = option,
+                selected = route.selected?.key == option.key,
+                rider = catalogExtras.rider,
+                catalog = catalog,
+                onLoadPreview = onLoadPreview,
+                onSelect = { onSelect(option) },
+            )
+        }
+        if (route.loadingOptions) {
+            Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
             }
+        } else if (ownOptions.size <= 1) {
+            MutedText(
+                text = stringResource(R.string.indoor_app_route_no_saved),
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
         }
 
         // Bekannte Strecken: eingeklappt, damit die Seite kurz bleibt — offen, sobald eine davon gewaehlt ist.
         val catalogSelected = route.selected is IndoorRouteOption.Catalog
         var catalogOpen by rememberSaveable { mutableStateOf(catalogSelected || initialCatalogOpen) }
-        Card(modifier = Modifier.fillMaxWidth()) {
+        AtlasCard(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -317,7 +502,7 @@ private fun TrainerCard(pair: IndoorPairUi, issue: IndoorTrainerIssue?, onOpenPa
             stringResource(R.string.indoor_app_home_trainer_change_action), strong = false,
         )
     }
-    Card(
+    AtlasCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(role = Role.Button, onClickLabel = look.action, onClick = onOpenPair),
@@ -344,7 +529,7 @@ private fun TrainerCard(pair: IndoorPairUi, issue: IndoorTrainerIssue?, onOpenPa
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 if (look.strong) {
-                    FilledTonalButton(onClick = onOpenPair) { Text(look.action) }
+                    TrailscapeSecondaryButton(onClick = onOpenPair) { Text(look.action) }
                 } else {
                     TextButton(onClick = onOpenPair) { Text(look.action) }
                 }
@@ -379,7 +564,7 @@ private fun ReadinessLines(
             ),
             warning = true,
         ) {
-            OutlinedButton(onClick = onOpenPair) {
+            TrailscapeSecondaryButton(onClick = onOpenPair) {
                 Text(
                     stringResource(
                         if (trainerIssue == IndoorTrainerIssue.NOT_PAIRED) {
@@ -400,7 +585,7 @@ private fun ReadinessLines(
                 if (trainerIssue == null) StatusLine(stringResource(R.string.indoor_app_home_ready, readiness.name), good = true)
             } else {
                 StatusLine(stringResource(R.string.indoor_app_home_update, readiness.name), stacked = true) {
-                    OutlinedButton(onClick = { onDownload(update.id) }) {
+                    TrailscapeSecondaryButton(onClick = { onDownload(update.id) }) {
                         Text(
                             if (update.packageBytes > 0) {
                                 stringResource(R.string.indoor_app_catalog_update, formats.indoorBytes(update.packageBytes))
@@ -435,12 +620,12 @@ private fun CatalogLines(
                 stringResource(R.string.indoor_app_home_need_download_unknown, name)
             },
         ) {
-            FilledTonalButton(onClick = { onDownload(item.id) }) { Text(stringResource(R.string.indoor_app_home_download_action)) }
+            TrailscapeSecondaryButton(onClick = { onDownload(item.id) }) { Text(stringResource(R.string.indoor_app_home_download_action)) }
         }
         is IndoorCatalogState.Paused -> {
             StatusLine(stringResource(R.string.indoor_app_home_paused, name), stacked = true) {
                 TextButton(onClick = { onDiscard(item.id) }) { Text(stringResource(R.string.indoor_app_catalog_discard)) }
-                FilledTonalButton(onClick = { onDownload(item.id) }) { Text(stringResource(R.string.indoor_app_catalog_resume)) }
+                TrailscapeSecondaryButton(onClick = { onDownload(item.id) }) { Text(stringResource(R.string.indoor_app_catalog_resume)) }
             }
             CatalogProgressLine(s.doneBytes, s.totalBytes, indeterminate = false)
         }
@@ -550,7 +735,7 @@ private fun OptionsCard(
             is IndoorGhostOption.Challenge -> g.label
         },
     ).joinToString(" · ")
-    Card(modifier = Modifier.fillMaxWidth().animateContentSize()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth().animateContentSize()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -607,63 +792,112 @@ private fun OptionsCard(
 // Eigene Strecken
 // ---------------------------------------------------------------------------
 
+private val TEST_WORLD_LOOP_PREVIEW = listOf(
+    0.22f, 0.72f,
+    0.16f, 0.52f,
+    0.24f, 0.28f,
+    0.48f, 0.18f,
+    0.76f, 0.26f,
+    0.84f, 0.52f,
+    0.72f, 0.76f,
+    0.45f, 0.82f,
+    0.22f, 0.72f,
+)
+
 @Composable
-private fun RouteOptionRow(option: IndoorRouteOption, selected: Boolean, onSelect: () -> Unit) {
+private fun OwnRouteCard(
+    option: IndoorRouteOption,
+    selected: Boolean,
+    rider: CatalogRider,
+    catalog: IndoorCatalogUi,
+    onLoadPreview: (suspend (String) -> List<Float>)?,
+    onSelect: () -> Unit,
+) {
     val formats = LocalAppFormats.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RadioButton(selected = selected, onClick = null)
-        Column(modifier = Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            when (option) {
-                IndoorRouteOption.TestWorld -> {
-                    Text(
-                        text = stringResource(R.string.indoor_app_route_testworld_title),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Text(
-                        text = stringResource(R.string.indoor_app_route_testworld_body),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                is IndoorRouteOption.Catalog -> Text(text = option.name, style = MaterialTheme.typography.titleSmall)
-                is IndoorRouteOption.Generated -> Text(text = option.name, style = MaterialTheme.typography.titleSmall)
-                is IndoorRouteOption.Saved -> {
-                    Text(
-                        text = option.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 2,
-                    )
-                    Text(
-                        text = stringResource(
-                            R.string.indoor_app_route_meta,
-                            formats.km(option.distanceKm),
-                            formats.indoorAscent(option.ascentM),
-                        ) + " · " + stringResource(
-                            if (option.planned) R.string.indoor_app_route_kind_planned else R.string.indoor_app_route_kind_ride,
-                            formats.dateShort(option.createdAt),
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+    val selectModifier = Modifier.selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
+    when (option) {
+        IndoorRouteOption.TestWorld -> {
+            val title = stringResource(R.string.indoor_app_route_testworld_title)
+            val estS = remember(rider) {
+                estimateCatalogRideSeconds(3000.0, 45.0, null, emptyMap(), rider) ?: 420
+            }
+            RouteCard(
+                title = title,
+                subtitle = stringResource(R.string.indoor_app_route_testworld_body),
+                distanceText = stringResource(R.string.indoor_app_value_km, formats.km(3.0)),
+                ascentText = stringResource(R.string.indoor_app_value_elevation, formats.indoorAscent(45.0)),
+                durationText = catalogDuration(estS),
+                statusLabel = stringResource(R.string.indoor_app_home_status_ready),
+                selected = selected,
+                modifier = selectModifier,
+                media = { IndoorTrackMedia(points = TEST_WORLD_LOOP_PREVIEW, routeName = title) },
+            )
+        }
+        is IndoorRouteOption.Saved -> {
+            val loadedPoints by produceState(option.previewPoints, option.rideId, onLoadPreview) {
+                if (value.isEmpty() && onLoadPreview != null) {
+                    value = onLoadPreview(option.rideId)
                 }
             }
-            val ready = option is IndoorRouteOption.TestWorld || (option is IndoorRouteOption.Saved && option.hasWorld)
-            if (ready) {
-                TagPill(
-                    text = stringResource(R.string.indoor_app_home_status_ready),
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            } else {
-                TagPill(text = stringResource(R.string.indoor_app_home_status_prepare), modifier = Modifier.padding(top = 4.dp))
+            val durationS = option.durationS
+                ?: remember(option.distanceKm, option.ascentM, rider) {
+                    estimateCatalogRideSeconds(option.distanceKm * 1000.0, option.ascentM, null, emptyMap(), rider) ?: 60
+                }
+            RouteCard(
+                title = option.name,
+                subtitle = stringResource(
+                    if (option.planned) R.string.indoor_app_route_kind_planned else R.string.indoor_app_route_kind_ride,
+                    formats.dateShort(option.createdAt),
+                ),
+                distanceText = stringResource(R.string.indoor_app_value_km, formats.km(option.distanceKm)),
+                ascentText = stringResource(R.string.indoor_app_value_elevation, formats.indoorAscent(option.ascentM)),
+                durationText = catalogDuration(durationS),
+                statusLabel = stringResource(
+                    if (option.hasWorld) R.string.indoor_app_home_status_ready else R.string.indoor_app_home_status_prepare,
+                ),
+                selected = selected,
+                modifier = selectModifier,
+                media = { IndoorTrackMedia(points = loadedPoints, routeName = option.name) },
+            )
+        }
+        is IndoorRouteOption.Catalog -> {
+            val catalogItem = remember(catalog.items, option.catalogId) {
+                catalog.items.firstOrNull { it.id == option.catalogId }
             }
+            val elevM = remember(catalogItem) {
+                catalogItem?.profile?.elevM?.map { it.toFloat() }.orEmpty()
+            }
+            val estS = remember(option.distanceKm, option.ascentM, rider) {
+                estimateCatalogRideSeconds(option.distanceKm * 1000.0, option.ascentM, null, emptyMap(), rider) ?: 60
+            }
+            RouteCard(
+                title = option.name,
+                distanceText = stringResource(R.string.indoor_app_value_km, formats.km(option.distanceKm)),
+                ascentText = stringResource(R.string.indoor_app_value_elevation, formats.indoorAscent(option.ascentM)),
+                durationText = catalogDuration(estS),
+                statusLabel = stringResource(R.string.indoor_app_home_status_ready),
+                selected = selected,
+                modifier = selectModifier,
+                media = { IndoorElevationMedia(elevM = elevM, routeName = option.name) },
+            )
+        }
+        is IndoorRouteOption.Generated -> {
+            val ascentM = remember(option.profile) {
+                option.profile.legs.filter { it.gradePct > 0 }.sumOf { it.lengthM * it.gradePct / 100.0 }
+            }
+            val elevM = remember(option.profile) { sampleGeneratedElevProfile(option.profile) }
+            val estS = remember(option.distanceKm, ascentM, rider) {
+                estimateCatalogRideSeconds(option.distanceKm * 1000.0, ascentM, null, emptyMap(), rider) ?: 60
+            }
+            RouteCard(
+                title = option.name,
+                distanceText = stringResource(R.string.indoor_app_value_km, formats.km(option.distanceKm)),
+                ascentText = stringResource(R.string.indoor_app_value_elevation, formats.indoorAscent(ascentM)),
+                durationText = catalogDuration(estS),
+                selected = selected,
+                modifier = selectModifier,
+                media = { IndoorElevationMedia(elevM = elevM, routeName = option.name) },
+            )
         }
     }
 }

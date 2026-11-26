@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.map
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -45,6 +46,8 @@ import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.i18n.UiText
 import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.LocalAtlasColors
+import de.trailscape.app.ui.theme.tabular
 import de.trailscape.core.ANSAGE_ANNAHME_KMH
 import de.trailscape.core.ANSAGE_GLEICH_M
 import de.trailscape.core.TurnRichtung
@@ -118,6 +121,9 @@ internal fun NavigationHud(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        border = BorderStroke(1.dp, LocalAtlasColors.current.cardBorder),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         // Oben die Fuehrung als eigene, farbige Flaeche — sie ist das, wonach
@@ -155,7 +161,7 @@ internal fun NavigationHud(
                     text = navRestZeile(remainingKm, tempoKmh, language).asString(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMedium.tabular(),
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -167,7 +173,7 @@ internal fun NavigationHud(
                     },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelMedium.tabular(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -242,7 +248,7 @@ private fun TurnRow(richtung: TurnRichtung?, abstandM: Double?) {
                     },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.headlineMedium.tabular(),
                     fontWeight = FontWeight.Bold,
                 )
                 Text(

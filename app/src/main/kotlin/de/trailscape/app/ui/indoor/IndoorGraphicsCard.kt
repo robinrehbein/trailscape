@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -17,6 +16,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.core.indoor.world.IndoorGraphics
 
@@ -26,7 +26,7 @@ import de.trailscape.core.indoor.world.IndoorGraphics
  */
 @Composable
 internal fun GraphicsCard(selected: IndoorGraphics, onChange: (IndoorGraphics) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 12.dp)) {
             Eyebrow(stringResource(R.string.render2_graphics_title), modifier = Modifier.padding(horizontal = 16.dp))
             Text(

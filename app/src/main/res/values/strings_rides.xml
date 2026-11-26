@@ -112,8 +112,20 @@
     <string name="rides_list_meta_no_duration">%1$s · %2$s km</string>
     <!-- %1$s = km, %2$d = Hoehenmeter, %3$s = Erstelldatum („24.09.") -->
     <string name="rides_list_planned_meta">%1$s km · %2$d Hm · erstellt %3$s</string>
+    <!-- %1$s = Erstelldatum („24.09.") -->
+    <string name="rides_list_planned_created">erstellt %1$s</string>
+    <!-- %1$s = km („32,4" / „58") -->
+    <string name="rides_list_distance_value">%1$s km</string>
+    <!-- %1$d = Hoehenmeter -->
+    <string name="rides_list_ascent_value">%1$d hm</string>
+    <!-- %1$s = Dauer („1:24") -->
+    <string name="rides_list_duration_value">%1$s h</string>
+    <!-- %1$s = geschaetzte Dauer („3:14") -->
+    <string name="rides_list_estimated_duration_value">~%1$s h</string>
 
     <!-- RideDetailScreen.kt -->
+    <string name="rides_detail_empty_title">Tour auswählen</string>
+    <string name="rides_detail_empty_body">Tippe links auf eine Tour oder Planung, um Werte, Profil und Aktionen hier zu sehen.</string>
     <string name="rides_detail_back_label">Verlauf</string>
     <!-- %1$s = Wochentag und Datum, %2$s = Uhrzeit -->
     <string name="rides_detail_date_line">%1$s · %2$s</string>

@@ -60,6 +60,8 @@ import de.trailscape.app.routing.describeSegmentOffer
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.components.OneUiTextField
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.map.currentLocation
 import de.trailscape.app.ui.map.hasLocationPermission
 import de.trailscape.app.ui.map.missingPermissions
@@ -127,7 +129,10 @@ import kotlinx.coroutines.withContext
  * (siehe `MoreScreen.kt`).
  */
 @Composable
-fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
+fun OfflineRoutingCardContent(
+    appViewModel: AppViewModel,
+    onSegmentsChanged: () -> Unit = {},
+) {
     val coreTexts = LocalCoreTexts.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -180,6 +185,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
             outdated = emptySet()
             updateCheckDone = false
             reloadToken++
+            onSegmentsChanged()
         }
     }
 
@@ -339,10 +345,10 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
     // ------------------------------------------------------------ Aktionen
     Spacer(Modifier.height(12.dp))
     FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        SettingsSecondaryButton(
+        TrailscapePrimaryButton(
             enabled = !busy && running == null,
             onClick = {
                 val missing = missingPermissions(context, forRecording = false)
@@ -359,7 +365,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
         }
 
         if (segments.isNotEmpty()) {
-            SettingsSecondaryButton(
+            TrailscapeSecondaryButton(
                 enabled = !busy && running == null,
                 onClick = {
                     busy = true
@@ -541,6 +547,8 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
                             val ok = withContext(Dispatchers.IO) { inventory.delete(target) }
                             if (!ok) {
                                 appViewModel.showMessage(UiText.Res(R.string.more_offline_routing_delete_error))
+                            } else {
+                                onSegmentsChanged()
                             }
                             reloadToken++
                         }

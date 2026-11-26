@@ -11,6 +11,7 @@ import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -307,5 +308,63 @@ class RideListLogicTest {
             de.resolve(plannedRouteMeta(LocalDateTime.of(2026, 9, 24, 21, 5), stats, AppLanguage.DE)),
             plannedRouteMeta(LocalDateTime.of(2026, 9, 24, 21, 5), stats),
         )
+    }
+
+    // --------------------------------------------------------- Atlas-Zeilen
+
+    @Test
+    fun `geschaetzte Planungsdauer aus Distanz und Planungsgeschwindigkeit`() {
+        // 54 km bei 18 km/h = 3:00 h (10800 s).
+        assertEquals(10_800, estimatedPlannedDurationS(54.0, 18.0))
+        // Sehr kurze positive Strecken fallen mindestens auf 1 Minute.
+        assertEquals(60, estimatedPlannedDurationS(0.05, 18.0))
+        // Ohne gueltige Distanz oder Geschwindigkeit gibt es keine Schaetzung.
+        assertNull(estimatedPlannedDurationS(0.0, 18.0))
+        assertNull(estimatedPlannedDurationS(-5.0, 18.0))
+        assertNull(estimatedPlannedDurationS(20.0, 0.0))
+        assertNull(estimatedPlannedDurationS(Double.NaN, 18.0))
+    }
+
+    @Test
+    fun `Atlas-Listenzeilen liefern Bild-Kennzahlen auf Deutsch und Englisch`() {
+        val at = LocalDateTime.of(2026, 9, 22, 18, 12)
+        assertEquals("Di 22.9.", rideRowDateText(at, AppLanguage.DE))
+        assertEquals("Tue 22 Sept", rideRowDateText(at, AppLanguage.EN))
+
+        assertEquals("erstellt 22.09.", de.resolve(plannedRowDateText(at, AppLanguage.DE)))
+        assertEquals("created 22 Sept", en.resolve(plannedRowDateText(at, AppLanguage.EN)))
+
+        assertEquals("32,4 km", de.resolve(rideRowDistanceText(32.4, AppLanguage.DE)))
+        assertEquals("58 km", de.resolve(rideRowDistanceText(58.3, AppLanguage.DE, integerFrom10Km = true)))
+        assertEquals("2,4 km", de.resolve(rideRowDistanceText(2.4, AppLanguage.DE, integerFrom10Km = true)))
+        assertEquals("32.4 km", en.resolve(rideRowDistanceText(32.4, AppLanguage.EN)))
+
+        assertEquals("640 hm", de.resolve(rideRowAscentText(640.4)))
+        assertEquals("640 m", en.resolve(rideRowAscentText(640.4)))
+
+        assertEquals("1:24 h", de.resolve(rideRowDurationText(5074, estimated = false)))
+        assertEquals("~3:14 h", de.resolve(rideRowDurationText(11_660, estimated = true)))
+        assertEquals("–", de.resolve(rideRowDurationText(null, estimated = true)))
+    }
+
+    @Test
+    fun `firstDisplayRideId bevorzugt sichtbare Planung dann erste Monatsfahrt`() {
+        val mixed = listOf(
+            summary("r1", LocalDateTime.of(2026, 9, 23, 18, 0)),
+            plan("p1", LocalDateTime.of(2026, 9, 20, 9, 0)),
+        )
+        val mixedSections = splitHistory(mixed, "", today, utc, AppLanguage.DE)
+        assertEquals("p1", firstDisplayRideId(mixedSections))
+
+        val riddenOnly = listOf(
+            summary("r1", LocalDateTime.of(2026, 9, 23, 18, 0)),
+            summary("r2", LocalDateTime.of(2026, 8, 10, 8, 0)),
+        )
+        val riddenSections = splitHistory(riddenOnly, "", today, utc, AppLanguage.DE)
+        assertEquals("r1", firstDisplayRideId(riddenSections))
+
+        val emptySearchSections = splitHistory(mixed, "gibtsnicht", today, utc, AppLanguage.DE)
+        assertNull(firstDisplayRideId(emptySearchSections))
+        assertEquals("r1", firstDisplayRideId(emptySearchSections, mixed))
     }
 }

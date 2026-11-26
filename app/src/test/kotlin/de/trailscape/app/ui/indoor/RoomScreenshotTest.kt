@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.dp
@@ -24,9 +25,12 @@ import de.trailscape.app.challenge.ChallengeAvailability
 import de.trailscape.app.room.TEST_INVITE_LINK
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
+import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.components.SectionEyebrow
 import de.trailscape.app.ui.map.ProvideTestLanguage
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
 import de.trailscape.app.ui.theme.TrailscapeTheme
+import de.trailscape.app.ui.theme.windowLayoutClassFor
 import de.trailscape.core.indoor.catalog.CatalogText
 import de.trailscape.core.room.RoomRoute
 import org.junit.Assume.assumeTrue
@@ -62,10 +66,15 @@ class RoomScreenshotTest {
 
     private fun shot(name: String, content: @Composable () -> Unit) {
         compose.setContent {
+            val widthDp = LocalConfiguration.current.screenWidthDp
             TrailscapeTheme {
                 ProvideTestLanguage {
-                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                        content()
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        LocalWindowLayoutClass provides windowLayoutClassFor(widthDp),
+                    ) {
+                        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                            content()
+                        }
                     }
                 }
             }
@@ -372,5 +381,82 @@ class RoomScreenshotTest {
         }
         compose.onNodeWithText("Waiting for the start").assertExists()
         compose.onNodeWithText("Anna · 12 m ahead · 240 W").assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_LANDSCAPE_DE)
+    fun gemeinsamTabS11LandscapeDe() {
+        val challengeItems = listOf(
+            IndoorChallengeUi(
+                id = "0123456789abcdef",
+                name = "Anna",
+                date = "2026-11-20",
+                routeKey = "catalog:alpe-dhuez",
+                catalogId = "alpe-dhuez",
+                routeName = CatalogText("Alpe d'Huez", "Alpe d'Huez"),
+                availability = ChallengeAvailability.READY,
+                distanceKm = 15.1,
+                durationS = 3_412,
+            ),
+            IndoorChallengeUi(
+                id = "1123456789abcdef",
+                name = "Ben",
+                date = null,
+                routeKey = "catalog:sa-calobra",
+                catalogId = "sa-calobra",
+                routeName = CatalogText("Sa Calobra", "Sa Calobra"),
+                availability = ChallengeAvailability.DOWNLOAD,
+                distanceKm = 9.4,
+                durationS = 2_130,
+            ),
+        )
+        shot("m3-indoor-together-tab-s11-landscape-de") {
+            IndoorTogetherScreen(
+                title = "Indoor",
+                tabHeader = {
+                    PillSegments(
+                        options = listOf("Strecken", "Plan", "Gemeinsam"),
+                        selectedIndex = 2,
+                        onSelect = {},
+                    )
+                },
+                onOpenSettings = {},
+                roomBlock = {
+                    SectionEyebrow("Raum")
+                    IndoorRoomSection(
+                        ui = lobby(host = true),
+                        server = RoomServerUi("sync.example.org"),
+                        createRoute = RoomRoute("catalog:alpe-dhuez", 15_100.0, version = "3", name = "Alpe d'Huez"),
+                        savedName = "Ben",
+                        savedSharePower = false,
+                        pendingInvite = null,
+                        onInviteConsumed = {},
+                        onCreate = { _, _ -> },
+                        onJoin = { _, _, _ -> true },
+                        onLeave = {},
+                        onEnd = {},
+                        onStartCountdown = {},
+                        onSharePower = {},
+                        onRide = {},
+                        onDownload = {},
+                        onDismissNotice = {},
+                        onOpenSettings = {},
+                        onChooseRoute = {},
+                    )
+                },
+                challengeBlock = {
+                    SectionEyebrow("Herausforderungen")
+                    IndoorChallengeSection(
+                        ui = IndoorChallengesUi(items = challengeItems, selectedId = "0123456789abcdef"),
+                        onRide = { _, _ -> },
+                        onDownload = {},
+                        onDelete = {},
+                        onImport = {},
+                    )
+                },
+            )
+        }
+        compose.onNodeWithText("Raum auf sync.example.org").assertExists()
+        compose.onNodeWithText("Gegen Anna fahren").assertExists()
     }
 }

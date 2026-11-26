@@ -1,12 +1,23 @@
 package de.trailscape.app.ui.indoor
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -48,8 +59,15 @@ import de.trailscape.app.data.AppServices
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.decideToday
+import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.OneUiDialog
+import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.SectionEyebrow
+import de.trailscape.app.ui.components.TwoPaneLayout
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
+import de.trailscape.app.ui.theme.TabletCardGap
+import de.trailscape.app.ui.theme.TabletScreenPadding
+import de.trailscape.app.ui.theme.useTwoPaneLayout
 import de.trailscape.core.TrainingSession
 import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.i18n.sessionTitle
@@ -131,9 +149,10 @@ fun IndoorFlowScreen(
     onOpenGarage: (() -> Unit)? = null,
     roomInvite: String? = null,
     onRoomInviteConsumed: () -> Unit = {},
+    vmOverride: IndoorViewModel? = null,
 ) {
     val context = LocalContext.current
-    val vm: IndoorViewModel = viewModel(
+    val vm: IndoorViewModel = vmOverride ?: viewModel(
         factory = remember(appViewModel) {
             IndoorViewModel.factory(
                 context = context,
@@ -166,11 +185,16 @@ fun IndoorFlowScreen(
             appViewModel.requestRouteGeneration(target)
         }
     }
+    val (bluetoothOn, permissionGranted) = rememberBluetoothState()
+    LaunchedEffect(vm, bluetoothOn, permissionGranted) {
+        vm.updateBluetoothState(bluetoothOn, permissionGranted)
+    }
+
     // Die Vorwahlen gelten nur dem gepushten Ablauf: Der Tab und die
     // Einstellungsseite duerfen sie nicht wegnehmen.
     if (mode == IndoorFlowMode.PUSHED) {
-        // Von „Heute" gewaehlter Vorschlag der Einheit des Tages.
-        LaunchedEffect(vm) { appViewModel.consumeIndoorDayPick()?.let(vm::preferDaySuggestion) }
+        // Von „Heute" gewaehlter Vorschlag der Einheit des Tages — startet direkt.
+        LaunchedEffect(vm) { appViewModel.consumeIndoorDayPick()?.let(vm::startDaySuggestion) }
         // „Indoor fahren" aus der Tourdetailansicht: diese Strecke vorauswaehlen.
         LaunchedEffect(vm) { appViewModel.consumeIndoorRidePick()?.let(vm::preferRide) }
         // „In 3D ansehen" im Tourdetail: direkt in die Vorschau (Idee 4, docs/indoor/vorschau.md).
@@ -236,6 +260,8 @@ fun IndoorFlowScreen(
             } else {
                 HomeStage(
                     vm = vm,
+                    bluetoothOn = bluetoothOn,
+                    permissionGranted = permissionGranted,
                     onExit = null,
                     onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
                     title = stringResource(R.string.indoor_app_tab_title),
@@ -243,7 +269,13 @@ fun IndoorFlowScreen(
                     onOpenGarage = onOpenGarage,
                 )
             }
-            IndoorFlowMode.PUSHED -> HomeStage(vm = vm, onExit = onExit, onOpenSettings = vm::openSettings)
+            IndoorFlowMode.PUSHED -> HomeStage(
+                vm = vm,
+                bluetoothOn = bluetoothOn,
+                permissionGranted = permissionGranted,
+                onExit = onExit,
+                onOpenSettings = vm::openSettings,
+            )
             // Die Einstellungsseite ist geschlossen: zurueck in die Einstellungen der App.
             IndoorFlowMode.SETTINGS -> {
                 // Leere Flaeche in Hintergrundfarbe, solange die Seite hinausfaehrt.
@@ -337,12 +369,14 @@ private fun PreviewStage(vm: IndoorViewModel, onExit: () -> Unit) {
 @Composable
 private fun PairStage(vm: IndoorViewModel) {
     val ui by vm.pair.collectAsStateWithLifecycle()
+    val fromRideFlow by vm.pairFromRideFlow.collectAsStateWithLifecycle()
+    val trainerReady = indoorTrainerIssue(ui, ui.bluetoothOn, ui.permissionGranted) == null
     BackHandler { vm.closeSubPage() }
     IndoorPairScreen(
         ui = ui,
         devicesSection = { IndoorDevicesSection() },
         onDemoChange = vm::setDemoTrainer,
-        onDone = vm::closeSubPage,
+        onDone = if (fromRideFlow && trainerReady) vm::continueFromPair else vm::closeSubPage,
         onBack = vm::closeSubPage,
     )
 }
@@ -443,6 +477,8 @@ private fun rememberBluetoothState(): Pair<Boolean, Boolean> {
 @Composable
 private fun HomeStage(
     vm: IndoorViewModel,
+    bluetoothOn: Boolean,
+    permissionGranted: Boolean,
     onExit: (() -> Unit)?,
     onOpenSettings: () -> Unit,
     title: String = stringResource(R.string.indoor_app_route_title),
@@ -454,7 +490,6 @@ private fun HomeStage(
     val catalog by vm.catalog.collectAsStateWithLifecycle()
     val catalogExtras by vm.catalogExtras.collectAsStateWithLifecycle()
     val day by vm.day.collectAsStateWithLifecycle()
-    val (bluetoothOn, permissionGranted) = rememberBluetoothState()
     BackHandler(enabled = onExit != null) { onExit?.invoke() }
     // Eine geladene Strecke ändert, ob eine Herausforderung fahrbar ist (Mitfahrer-Pille).
     LaunchedEffect(catalog) { vm.refreshChallenges() }
@@ -482,6 +517,7 @@ private fun HomeStage(
         onCatalogDiscard = vm::discardCatalogDownload,
         catalogExtras = catalogExtras,
         onOpenGarage = onOpenGarage,
+        onLoadPreview = vm::routePreviewPoints,
     )
 }
 
@@ -525,57 +561,129 @@ private fun TogetherStage(
         onSave = vm::confirmChallengeImport,
         onDismiss = vm::dismissChallengeImport,
     )
-    IndoorPage(
+    val roomTitle = stringResource(R.string.raum_section_title)
+    val challengesTitle = stringResource(R.string.indoor_app_tab_segment_challenges)
+    IndoorTogetherScreen(
         title = title,
-        onBack = null,
-        headerExtra = tabHeader,
-        actions = {
-            IconButton(onClick = onOpenSettings) {
-                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.indoor_app_home_settings_cd))
-            }
+        tabHeader = tabHeader,
+        onOpenSettings = onOpenSettings,
+        roomBlock = {
+            SectionEyebrow(roomTitle)
+            IndoorRoomSection(
+                ui = room,
+                server = roomServer,
+                createRoute = createRoute,
+                savedName = remember(room is IndoorRoomUi.Closed) { vm.roomSavedName() },
+                savedSharePower = remember(room is IndoorRoomUi.Closed) { vm.roomSavedSharePower() },
+                pendingInvite = roomInvite,
+                onInviteConsumed = onRoomInviteConsumed,
+                onCreate = vm::createRoom,
+                onJoin = vm::joinRoom,
+                onLeave = vm::leaveRoom,
+                onEnd = vm::endRoom,
+                onStartCountdown = vm::startRoomCountdown,
+                onSharePower = vm::setRoomSharePower,
+                onRide = { routeName -> if (!vm.rideRoomRoute(routeName)) onShowRoutes() },
+                onDownload = { id ->
+                    vm.downloadCatalog(id)
+                    onShowRoutes()
+                },
+                onDismissNotice = vm::dismissRoomNotice,
+                onOpenSettings = onOpenSettings,
+                onChooseRoute = onShowRoutes,
+            )
         },
-    ) {
-        SectionEyebrow(stringResource(R.string.raum_section_title))
-        IndoorRoomSection(
-            ui = room,
-            server = roomServer,
-            createRoute = createRoute,
-            savedName = remember(room is IndoorRoomUi.Closed) { vm.roomSavedName() },
-            savedSharePower = remember(room is IndoorRoomUi.Closed) { vm.roomSavedSharePower() },
-            pendingInvite = roomInvite,
-            onInviteConsumed = onRoomInviteConsumed,
-            onCreate = vm::createRoom,
-            onJoin = vm::joinRoom,
-            onLeave = vm::leaveRoom,
-            onEnd = vm::endRoom,
-            onStartCountdown = vm::startRoomCountdown,
-            onSharePower = vm::setRoomSharePower,
-            onRide = { routeName -> if (!vm.rideRoomRoute(routeName)) onShowRoutes() },
-            onDownload = { id ->
-                vm.downloadCatalog(id)
-                onShowRoutes()
+        challengeBlock = {
+            SectionEyebrow(challengesTitle)
+            IndoorChallengeSection(
+                ui = IndoorChallengesUi(
+                    items = challenges,
+                    selectedId = (ui.ghost as? IndoorGhostOption.Challenge)?.challengeId,
+                ),
+                onRide = { id, routeName ->
+                    vm.useChallenge(id, routeName)
+                    onShowRoutes()
+                },
+                onDownload = { id ->
+                    vm.downloadCatalog(id)
+                    onShowRoutes()
+                },
+                onDelete = vm::deleteChallenge,
+                onImport = vm::importChallengeFile,
+            )
+        },
+    )
+}
+
+@Composable
+internal fun IndoorTogetherScreen(
+    title: String,
+    tabHeader: (@Composable () -> Unit)?,
+    onOpenSettings: () -> Unit,
+    roomBlock: @Composable () -> Unit,
+    challengeBlock: @Composable () -> Unit,
+) {
+    if (useTwoPaneLayout(LocalWindowLayoutClass.current)) {
+        val systemBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val bottomSpace = maxOf(LocalFloatingNavigationBarSpace.current, systemBottom)
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                    .padding(bottom = bottomSpace)
+                    .padding(horizontal = TabletScreenPadding),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ScreenHeader(
+                    title = title,
+                    onBack = null,
+                    actions = {
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.indoor_app_home_settings_cd))
+                        }
+                    },
+                )
+                tabHeader?.invoke()
+                TwoPaneLayout(
+                    primaryWeight = 0.5f,
+                    gap = TabletCardGap,
+                    modifier = Modifier.weight(1f),
+                    primary = {
+                        Column(
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            roomBlock()
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    },
+                    secondary = {
+                        Column(
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            challengeBlock()
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    },
+                )
+            }
+        }
+    } else {
+        IndoorPage(
+            title = title,
+            onBack = null,
+            headerExtra = tabHeader,
+            actions = {
+                IconButton(onClick = onOpenSettings) {
+                    Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.indoor_app_home_settings_cd))
+                }
             },
-            onDismissNotice = vm::dismissRoomNotice,
-            onOpenSettings = onOpenSettings,
-            onChooseRoute = onShowRoutes,
-        )
-        SectionEyebrow(stringResource(R.string.indoor_app_tab_segment_challenges))
-        IndoorChallengeSection(
-            ui = IndoorChallengesUi(
-                items = challenges,
-                selectedId = (ui.ghost as? IndoorGhostOption.Challenge)?.challengeId,
-            ),
-            onRide = { id, routeName ->
-                vm.useChallenge(id, routeName)
-                onShowRoutes()
-            },
-            onDownload = { id ->
-                vm.downloadCatalog(id)
-                onShowRoutes()
-            },
-            onDelete = vm::deleteChallenge,
-            onImport = vm::importChallengeFile,
-        )
+        ) {
+            roomBlock()
+            challengeBlock()
+        }
     }
 }
 

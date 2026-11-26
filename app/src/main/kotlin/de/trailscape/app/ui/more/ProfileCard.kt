@@ -215,6 +215,8 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
     NumberField(ProfileField.HR_MAX, stringResource(R.string.more_profile_hr_max_label), Modifier.fillMaxWidth())
     Spacer(modifier = Modifier.height(12.dp))
     NumberField(ProfileField.LTHR, stringResource(R.string.more_profile_lthr_label), Modifier.fillMaxWidth())
+    Spacer(modifier = Modifier.height(4.dp))
+    SettingsHint(stringResource(R.string.more_profile_lthr_hint))
     Spacer(modifier = Modifier.height(12.dp))
     NumberField(
         ProfileField.RESTING_HR,

@@ -11,8 +11,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,12 +25,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.components.Fact
-import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.theme.LocalSignalColors
 
 /** Unter dieser Dauer wird eine Fahrt nicht gespeichert (docs/indoor.md 10.1). */
@@ -70,20 +70,20 @@ fun IndoorSummaryScreen(
         bottomBar = {
             when {
                 saved && onOpenTour != null -> {
-                    Button(onClick = onOpenTour, modifier = Modifier.fillMaxWidth()) {
+                    TrailscapePrimaryButton(onClick = onOpenTour, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.indoor_app_summary_open_tour_action))
                     }
-                    NeutralButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
+                    TrailscapeSecondaryButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.indoor_app_action_done))
                     }
                 }
                 saved || ui.tooShort || ui.recordMissing -> {
-                    Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
+                    TrailscapePrimaryButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.indoor_app_action_done))
                     }
                 }
                 else -> {
-                    Button(onClick = onSave, enabled = !ui.saving, modifier = Modifier.fillMaxWidth()) {
+                    TrailscapePrimaryButton(onClick = onSave, enabled = !ui.saving, modifier = Modifier.fillMaxWidth()) {
                         if (ui.saving) {
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                             Text(
@@ -94,7 +94,7 @@ fun IndoorSummaryScreen(
                             Text(stringResource(R.string.indoor_app_summary_save_action))
                         }
                     }
-                    NeutralButton(
+                    TrailscapeSecondaryButton(
                         onClick = { confirmDiscard = true },
                         enabled = !ui.saving,
                         destructive = true,
@@ -229,7 +229,7 @@ private fun SummaryFacts(ui: IndoorSummaryUi) {
             add(stringResource(R.string.indoor_app_summary_laps) to ui.laps.toString())
         }
     }
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             facts.chunked(2).forEach { pair ->
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -247,7 +247,7 @@ private fun GhostComparison(ui: IndoorSummaryUi) {
     val gap = ui.ghostGapS ?: return
     val name = ui.ghostLabel ?: stringResource(R.string.indoor_app_hud_ghost_default)
     Eyebrow(stringResource(R.string.indoor_app_summary_ghost_eyebrow))
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(IndoorCardPadding), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(text = name, style = MaterialTheme.typography.titleSmall)
             val time = formatIndoorGapSeconds(gap)

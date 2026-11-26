@@ -2,14 +2,19 @@ package de.trailscape.app.ui
 
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -17,6 +22,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import de.trailscape.app.R
@@ -24,11 +30,20 @@ import de.trailscape.app.data.AppServices
 import de.trailscape.app.i18n.LocalAppLanguage
 import de.trailscape.app.i18n.languageOf
 import de.trailscape.app.testing.TestLocales
+import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.CoachCard
+import de.trailscape.app.ui.components.CockpitMetricTile
 import de.trailscape.app.ui.components.HoldToEndButton
+import de.trailscape.app.ui.components.MetricBlock
+import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.components.RecButtonState
 import de.trailscape.app.ui.components.RecCapsuleButton
+import de.trailscape.app.ui.components.RouteCard
+import de.trailscape.app.ui.components.TrailscapePrimaryButton
+import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.map.LocalMapRenderingAvailable
+import de.trailscape.app.ui.theme.CockpitTheme
+import de.trailscape.app.ui.theme.LocalCockpitColors
 import de.trailscape.app.ui.theme.TrailscapeTheme
 import de.trailscape.core.i18n.AppLanguage
 import org.junit.Assert.assertEquals
@@ -174,6 +189,161 @@ class ShellScreenshotTest {
         compose.onAllNodesWithContentDescription(context.getString(R.string.shell_rec_route_cd))[0].assertExists()
         compose.onAllNodesWithContentDescription(context.getString(R.string.shell_rec_paused_cd))[0].assertExists()
         shot("82-knoepfe-en")
+    }
+
+    /** Galaxy Tab S11 quer: linke Navigationsleiste (Rail) mit Fahren-Knopf und Zahnrad. */
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_LANDSCAPE_DE)
+    fun huelleTabS11Quer() {
+        TestLocales.assertTestLocale(AppLanguage.DE)
+        startApp(onboardingDone = true)
+        listOf("Heute", "Karte", "Indoor", "Verlauf").forEach { label ->
+            compose.onAllNodesWithText(label)[0].assertExists()
+        }
+        compose.onAllNodesWithContentDescription(compose.activity.getString(R.string.common_settings_cd))[0].assertExists()
+        shot("83-huelle-tab-s11-quer")
+    }
+
+    /** Galaxy Tab S11 quer auf Englisch. */
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_LANDSCAPE_EN)
+    fun huelleTabS11QuerEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        startApp(onboardingDone = true)
+        val context = compose.activity
+        listOf(
+            R.string.shell_nav_today_label to "Today",
+            R.string.shell_nav_map_label to "Map",
+            R.string.shell_nav_indoor_label to "Indoor",
+            R.string.shell_nav_history_label to "History",
+        ).forEach { (id, expected) ->
+            assertEquals(expected, context.getString(id))
+            compose.onAllNodesWithText(expected)[0].assertExists()
+        }
+        shot("83-huelle-tab-s11-quer-en")
+    }
+
+    /** Galaxy Tab S11 hochkant: linke Navigationsleiste (Rail). */
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_PORTRAIT_DE)
+    fun huelleTabS11Hochkant() {
+        TestLocales.assertTestLocale(AppLanguage.DE)
+        startApp(onboardingDone = true)
+        listOf("Heute", "Karte", "Indoor", "Verlauf").forEach { label ->
+            compose.onAllNodesWithText(label)[0].assertExists()
+        }
+        shot("84-huelle-tab-s11-hochkant")
+    }
+
+    /** Atlas- und Cockpit-Bausteine im direkten Vergleich. */
+    @Test
+    fun bausteineAtlasCockpit() {
+        TestLocales.assertTestLocale(AppLanguage.DE)
+        compose.setContent {
+            CompositionLocalProvider(LocalAppLanguage provides AppLanguage.DE) {
+                TrailscapeTheme {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            RouteCard(
+                                title = "Ammersee-Schotterrunde",
+                                subtitle = "Asphalt & feiner Schotter",
+                                distanceText = "42,3 km",
+                                ascentText = "310 hm",
+                                durationText = "1:25 h",
+                                statusLabel = "Bereit",
+                                media = {
+                                    Box(modifier = Modifier.fillMaxSize())
+                                },
+                                action = {
+                                    TrailscapePrimaryButton(onClick = {}, modifier = Modifier.fillMaxWidth()) {
+                                        Text("Fahren")
+                                    }
+                                },
+                            )
+                            AtlasCard {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                ) {
+                                    MetricBlock(value = "112", unit = "km", label = "Diese Woche", modifier = Modifier.weight(1f))
+                                    TrailscapeSecondaryButton(onClick = {}) { Text("Details") }
+                                }
+                            }
+                            CockpitTheme {
+                                Surface(
+                                    color = LocalCockpitColors.current.background,
+                                    shape = MaterialTheme.shapes.large,
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        CockpitMetricTile(
+                                            value = "248",
+                                            unit = "W",
+                                            label = "Leistung",
+                                            valueColor = LocalCockpitColors.current.good,
+                                            prominent = true,
+                                            modifier = Modifier.weight(1.2f),
+                                        )
+                                        CockpitMetricTile(
+                                            value = "34,2",
+                                            unit = "km/h",
+                                            label = "Tempo",
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        settle()
+        shot("85-bausteine-atlas-cockpit")
+    }
+
+    /** Segmente bei 360 dp Breite und 130 % Schrift: „Gemeinsam“ & „Fortschritt“ komplett lesbar. */
+    @Test
+    @Config(qualifiers = TestLocales.PHONE_NARROW_DE)
+    fun segmenteSchmalGrosseSchrift() {
+        TestLocales.assertTestLocale(AppLanguage.DE)
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(
+                LocalAppLanguage provides AppLanguage.DE,
+                LocalDensity provides Density(density.density, fontScale = 1.3f),
+            ) {
+                TrailscapeTheme {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            PillSegments(
+                                options = listOf("Strecken", "Plan", "Gemeinsam"),
+                                selectedIndex = 0,
+                                onSelect = {},
+                            )
+                            PillSegments(
+                                options = listOf("Touren", "Fortschritt", "Erfolge"),
+                                selectedIndex = 1,
+                                onSelect = {},
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        settle()
+        listOf("Strecken", "Plan", "Gemeinsam", "Touren", "Fortschritt", "Erfolge").forEach { label ->
+            compose.onAllNodesWithText(label)[0].assertExists()
+        }
+        shot("86-segmente-schmal")
     }
 
     private fun knoepfeSetzen() {
