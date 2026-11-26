@@ -17,6 +17,7 @@
 material {
     name : TrailscapeFoliage,
     requires : [ uv0, color ],
+    variables : [ worldRel ],
     parameters : [
         { type : sampler2d, name : baseColorMap },
         { type : float4, name : baseColorFactor },
@@ -31,7 +32,12 @@ material {
         { type : float2, name : windDir },
         { type : float, name : windStrength },
         { type : float, name : windRange },
-        { type : float, name : atlasMode }
+        { type : float, name : atlasMode },
+        { type : float, name : fadeMode },
+        { type : float4, name : fadeRange },
+        { type : float3, name : fadeTintDark },
+        { type : float3, name : fadeTintLight },
+        { type : float2, name : fadeTintLuma }
     ],
     shadingModel : lit,
     blending : masked,
@@ -62,9 +68,9 @@ vertex {
         return vec2(1.2 * t * t, 0.8 * t);
     }
 
-    void materialVertex(inout MaterialVertexInputs material) {
+    void sway(inout MaterialVertexInputs material) {
         float strength = materialParams.windStrength;
-        if (strength <= 0.0) return;
+        if (strength <= 0.0 || materialParams.atlasMode > 1.5) return;
         highp vec3 wp = material.worldPosition.xyz;
         float dist = length(wp - getWorldCameraPosition());
         float range = materialParams.windRange;
@@ -82,23 +88,56 @@ vertex {
                + vec3(0.6, 0.35, 0.6) * (0.018 * w.y * flutter);
         material.worldPosition.xyz += d * (strength * fade);
     }
+
+    // Weltlage (Filament: auf die Kamera des Bilds bezogen) als eigene Groesse an den Fragment-Shader:
+    // im Schattendurchgang kennt der die Weltlage sonst nicht (`getWorldPosition()` ist dort unbestimmt).
+    void materialVertex(inout MaterialVertexInputs material) {
+        sway(material);
+        material.worldRel = vec4(material.worldPosition.xyz, 1.0);
+    }
 }
 
 fragment {
     void material(inout MaterialInputs material) {
         prepareMaterial(material);
         vec4 c = texture(materialParams_baseColorMap, getUV0()) * materialParams.baseColorFactor * getColor();
-        if (materialParams.atlasMode > 0.5) {
+        if (materialParams.atlasMode > 0.5 && materialParams.atlasMode < 1.5) {
             // Karten, die man fast auf der Kante sieht, ausblenden: Ihr Motiv war dort zu langen Strichen
             // verzerrt („Federn" in nahen Kronen, Streifen an Grasbuescheln und Kreuzbildern). Die Normale
             // der Ebene aus den Ableitungen der Weltlage — die Vertexnormale ist fuer das Licht gebogen.
             // Das Kronendach (atlasMode 0) sieht man flach von weitem und bleibt, wie es ist.
-            highp vec3 wp = getWorldPosition();
+            // Im Schattendurchgang ist die „Kamera" die des Lichts: dort entfallen Karten auf Kante zur Sonne.
+            highp vec3 wp = variable_worldRel.xyz;
             highp vec3 fn = cross(dFdx(wp), dFdy(wp));
             float fl = length(fn);
             if (fl > 1e-12) {
                 float facing = abs(dot(fn / fl, normalize(getWorldCameraPosition() - wp)));
                 c.a *= smoothstep(0.10, 0.32, facing);
+            }
+        }
+        if (materialParams.fadeMode != 0.0) {
+            // Wechsel gebackener Baum <-> Bibliotheksbaum (TreeInstancer, docs/indoor/baeume.md): im Ring
+            // fadeRange.xy (m, waagrecht um die Kamera des Bilds — auch im Schattendurchgang) zeigt ein
+            // festes Bildschirmraster je Bildpunkt genau eine der beiden Darstellungen: fadeMode +1 die
+            // nahe (Bibliothek), −1 die ferne (gebacken).
+            float d = length((getUserWorldFromWorldMatrix() * vec4(variable_worldRel.xyz, 0.0)).xz);
+            float far = smoothstep(materialParams.fadeRange.x, materialParams.fadeRange.y, d);
+            float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+            if (materialParams.fadeMode > 0.0 ? n < far : n >= far) c.a = 0.0;
+            if (materialParams.fadeMode < 0.0) {
+                // Die ferne Darstellung nimmt bis zum Ring den Ton der nahen an (hinter fadeRange.z wieder
+                // ihren eigenen). Ein Abschnitt hat fuer alle Arten nur ein Material, deshalb zwei Faktoren,
+                // „dunkel" und „hell", nach der Helligkeit der Vertexfarbe: Fichtenkegel gegen Laubkronen,
+                // gewoehnliche Staemme gegen Birken. Nadelzweige und Nadelbaum-Kreuzbilder (ihre Felder im
+                // Atlas von FoliageAtlas, atlasMode 1) sind immer „dunkel".
+                float w = 1.0 - smoothstep(materialParams.fadeRange.y, materialParams.fadeRange.z, d);
+                float light = smoothstep(materialParams.fadeTintLuma.x, materialParams.fadeTintLuma.y,
+                        dot(getColor().rgb, vec3(0.2126, 0.7152, 0.0722)));
+                if (materialParams.atlasMode > 0.5 && materialParams.atlasMode < 1.5) {
+                    vec2 uv = getUV0();
+                    if (uv.y < 0.5 ? uv.x >= 0.5 : (uv.x >= 0.25 && uv.x < 0.5)) light = 0.0;
+                }
+                c.rgb *= mix(vec3(1.0), mix(materialParams.fadeTintDark, materialParams.fadeTintLight, light), w);
             }
         }
         material.baseColor = c;

@@ -603,6 +603,8 @@ private fun TopExtras(ui: IndoorRideUi, session: IndoorSessionState, chromeHidde
             HudGhostChip(ghost = ghost, label = ui.ghostLabel, modifier = Modifier.padding(top = 4.dp), showPower = ui.ghostOutdoor)
         }
     }
+    // Raum fuer Gruppenfahrten (IndoorRoomHud.kt): die anderen mit Abstand, Zustand der Verbindung.
+    ui.room?.let { room -> HudRoomChips(room = room, modifier = Modifier.padding(top = 4.dp)) }
     (ui.render as? IndoorRenderUi.Loading)?.let { loading ->
         HudLoadingChip(loading = loading, modifier = Modifier.padding(top = 4.dp))
     }

@@ -22,13 +22,14 @@ Zahnrad           auf allen vier Tabs, immer dieselbe Seite „Einstellungen“
 
 Heute             Tagesform, Empfehlung, Woche, Ziel
 Karte             Blatt „Wohin?“: Suche · Route planen · Runde bauen · Zahnrad
-Indoor            Segmente  Strecken | Plan | Herausforderungen   [ | Raum ]
+Indoor            Segmente  Strecken | Plan | Gemeinsam
+                  „Gemeinsam“ hat zwei Abschnitte: Raum, Herausforderungen
                   Kopfzeile der Sicht „Strecken“: Garage-Symbol neben dem Zahnrad
 Verlauf           Segmente  Touren | Fortschritt | Erfolge
 Einstellungen     Du · Geräte · Fahren · Daten · App
 ```
 
-In eckigen Klammern steht der eine Platz, der festgelegt, aber unsichtbar ist, bis es eine Oberfläche dafür gibt (Raum für Gruppenfahrten). „Erfolge“ fehlt, wenn „Erfolge anzeigen“ ausgeschaltet ist.
+Der Raum für Gruppenfahrten hat seit dem 25.11.2026 eine Oberfläche; er teilt sich mit den Herausforderungen das Segment „Gemeinsam“ (Begründung unter „Raum für Gruppenfahrten“). „Erfolge“ fehlt, wenn „Erfolge anzeigen“ ausgeschaltet ist.
 
 Wo die Regeln stehen:
 
@@ -43,7 +44,8 @@ Wo die Regeln stehen:
 | Tipp auf die Karte, Rückgängig | `app/…/ui/map/MapTapPlanning.kt`, getestet in `MapTapPlanningTest` |
 | Blatt „Nochmal fahren“ | `app/…/ui/rides/RideAgain.kt`, getestet in `RideAgainOptionsTest` |
 | Sicht „Erfolge“ im Verlauf | `app/…/ui/erfolge/ErfolgeScreen.kt` (`ErfolgeHistoryContent`) |
-| Sicht „Herausforderungen“ im Indoor-Tab | `app/…/ui/indoor/IndoorFlowScreen.kt` (`ChallengesStage`), Inhalt `IndoorChallengeSection.kt` |
+| Sicht „Gemeinsam“ im Indoor-Tab | `app/…/ui/indoor/IndoorFlowScreen.kt` (`TogetherStage`), Abschnitte `IndoorRoomSection.kt` und `IndoorChallengeSection.kt` |
+| Raum für Gruppenfahrten | Zustandslogik `app/…/ui/indoor/IndoorRoomController.kt` (getestet in `IndoorRoomControllerTest`, `IndoorRoomFlowTest`), Fahransicht `IndoorRoomHud.kt`, Einladungslink von außen `app/…/room/RoomInviteActivity.kt` |
 | „Herausforderung teilen“ im Blatt „Teilen“ | `app/…/ui/rides/ChallengeShareRow.kt`, Ablage `app/…/challenge/ChallengeDraftStore.kt` (getestet in `ChallengeDraftStoreTest`, `IndoorChallengeFlowTest`) |
 | Garage | `app/…/ui/indoor/garage/`, Route `AppRoutes.INDOOR_GARAGE` |
 
@@ -218,13 +220,15 @@ Die vier Branches sind in dieser Reihenfolge gemergt: Erfolge, Herausforderung, 
 | Erfolge | Sicht „Erfolge“ (Stufe, Wochenserie mit Pausenwochen, Abzeichen, „Kommt bald“) | Verlauf → Erfolge |
 | Erfolge | Schalter „Erfolge anzeigen“ | Einstellungen → Erinnerungen & Motivation |
 | Erfolge | Abzeichen-Zeile nach der Fahrt | Tourblatt auf der Karte und Abschluss auf der Uhr, von selbst |
-| Herausforderung | Liste, „Gegen … fahren“, „Strecke herunterladen“, Löschen, „Datei wählen“ mit Vorschau | Indoor → Herausforderungen |
-| Herausforderung | Vorschau beim Öffnen von außen (`ChallengeImportActivity`) | „Öffnen mit“ / „Teilen“ auf die Datei; „Trailscape öffnen“ landet auf Indoor → Herausforderungen |
+| Herausforderung | Liste, „Gegen … fahren“, „Strecke herunterladen“, Löschen, „Datei wählen“ mit Vorschau | Indoor → Gemeinsam, Abschnitt „Herausforderungen“ |
+| Herausforderung | Vorschau beim Öffnen von außen (`ChallengeImportActivity`) | „Öffnen mit“ / „Teilen“ auf die Datei; „Trailscape öffnen“ landet auf Indoor → Gemeinsam |
 | Herausforderung | Pille „Herausforderung“ bei „Mitfahrer“ | Indoor → Strecken → Optionen, sobald eine gewählt ist |
 | Herausforderung | Ergebnis „x s vor/hinter Name“ | Auswertung nach der Fahrt |
 | Herausforderung | „Herausforderung teilen“ / „Als Antwort teilen“ (Name, Datum, Vorschau) | Tourdetail → Teilen-Symbol; ebenso „Teilen“ an der Tourkarte. Die Auswertung führt mit „Tour ansehen“ dorthin und sagt es in einem Satz |
 | Garage | Seite „Garage“ | Indoor → Strecken → Paletten-Symbol in der Kopfzeile |
-| Raum | – | keine Oberfläche, Platz unsichtbar |
+| Raum | „Raum anlegen“, „Raum beitreten“, Teilnehmer mit „Bereit“, Strecke, gemeinsamer Start, „Einladung teilen“, „Raum verlassen“ | Indoor → Gemeinsam, Abschnitt „Raum“ |
+| Raum | Dialog „Raum beitreten“ mit vorausgefülltem Link | Einladungslink antippen (`trailscape://room…`); landet auf Indoor → Gemeinsam |
+| Raum | „Warten auf den Start“, Countdown, die anderen mit Abstand | Fahransicht, von selbst, solange die Fahrt zum Raum gehört |
 
 ### Erfolge (`origin/claude/spiel-1-erfolge`)
 
@@ -238,8 +242,8 @@ Die vier Branches sind in dieser Reihenfolge gemergt: Erfolge, Herausforderung, 
 
 ### Herausforderung (`origin/claude/spiel-3-herausforderung`)
 
-- `ui/AppNavigation.kt`: `shippedIndoorSegments()` liefert Strecken · Plan · Herausforderungen (`INDOOR_CHALLENGES_AVAILABLE = true`). `shownIndoorSegment` hält während einer Aufgabe „Strecken“ fest.
-- Die Sicht lebt im Indoor-Ablauf (`IndoorFlowScreen`, Parameter `challengesSegment`), weil sie denselben `IndoorViewModel` braucht wie die Startseite: `ChallengesStage` zeichnet Kopfzeile, Segmente und `IndoorChallengeSection`. Der Abschnitt zwischen den Strecken, den der Branch auf der Startseite zeichnete, ist entfallen.
+- `ui/AppNavigation.kt`: `INDOOR_CHALLENGES_AVAILABLE = true`. Seit der Oberfläche des Raums liefert `shippedIndoorSegments()` Strecken · Plan · Gemeinsam; die Herausforderungen sind der zweite Abschnitt dieser Sicht (siehe „Raum für Gruppenfahrten“). `shownIndoorSegment` hält während einer Aufgabe „Strecken“ fest.
+- Die Sicht lebt im Indoor-Ablauf (`IndoorFlowScreen`, Parameter `togetherSegment`), weil sie denselben `IndoorViewModel` braucht wie die Startseite: `TogetherStage` zeichnet Kopfzeile, Segmente, `IndoorRoomSection` und `IndoorChallengeSection`. Der Abschnitt zwischen den Strecken, den der Branch auf der Startseite zeichnete, ist entfallen.
 - „Gegen … fahren“ setzt Strecke und Mitfahrer und wechselt auf „Strecken“, wo „Fahren“ startet. „Strecke herunterladen“ wechselt ebenfalls dorthin, weil Voranschlag und Fortschritt dort stehen.
 - Von außen: `ChallengeImportActivity` gibt `EXTRA_OPEN_CHALLENGES` mit, `MainActivity` ruft `AppViewModel.requestChallenges()`.
 - Teilen: Zeile `ChallengeShareRow` im Blatt „Teilen“ (`RideShareDialog(extraRows = …)`, aufgerufen im Tourdetail und an der Tourkarte). Der Block und der Knopf in der Auswertung sind entfallen; `ChallengeResultCard` zeigt nur noch das Ergebnis.
@@ -253,16 +257,34 @@ Die vier Branches sind in dieser Reihenfolge gemergt: Erfolge, Herausforderung, 
 - Freischaltungen: weiter ungeschaltet (`progress = null`, alles frei). Gesperrtes zeigte nur „ab Stufe N“ ohne Weg zu den Erfolgen; die Kopplung an die Erfolge ist eine eigene Entscheidung (siehe `docs/indoor/garage.md`).
 - Backup: `avatar` steht neben `climbBests` und `progress`.
 
-### Raum für Gruppenfahrten (`origin/claude/spiel-5-raum`)
+### Raum für Gruppenfahrten (`origin/claude/spiel-5-raum`, Oberfläche `claude/spiel-5-raum-ui`)
 
-Gemergt sind Protokoll (`core/…/room`), Client (`app/…/room`) und der Server-Teil. Der Branch hat **keine Oberfläche**; nichts in der App ruft den Client auf, es gibt keine neue Netzabfrage. Sein Platz bleibt unsichtbar (`INDOOR_ROOM_AVAILABLE = false`). Für die kommende Oberfläche gilt weiter:
+Protokoll (`core/…/room`), Client (`app/…/room`) und Server-Teil waren gemergt; die Oberfläche ist am 25.11.2026 dazugekommen. Wie sie das Protokoll benutzt und was dabei das Gerät verlässt, steht in `docs/raum-protokoll.md`, Abschnitt 14; die Prüfung mit zwei Geräten in `docs/raum-pruefliste.md`.
 
-1. `ui/AppNavigation.kt`: `INDOOR_ROOM_AVAILABLE = true`; in `IndoorTabScreen.kt` den Zweig `IndoorSegment.ROOM` füllen: „Raum anlegen“ (nur mit eingetragenem eigenen Server, siehe Einstellungen → Sync mit eigenem Server) und „Raum beitreten“ (Einladungslink).
-2. Der Raum braucht eine Strecke: Die Wahl im Raum setzt wie eine Herausforderung Strecke und Modus im `IndoorViewModel` des Tabs und startet über den Knopf „Fahren“ der Sicht „Strecken“ – also wie die Herausforderungen als Sicht im Indoor-Ablauf (`indoorSegmentUsesFlow`).
-3. Ein Einladungslink von außen landet wie die Herausforderung über eine eigene `requestRoom()`-Funktion auf dem Segment.
-4. Ob vier Segmente auf 320 dp nebeneinander passen, ist offen – schon bei dreien mit dem langen Wort „Herausforderungen“ ist es nur auf dem Gerät zu klären. Wenn nicht, werden „Herausforderungen“ und „Raum“ zu einem Segment „Gemeinsam“ mit zwei Abschnitten.
+**Die Platzfrage: „Gemeinsam“ statt eines vierten Segments.** Die Segmente sind gleich breit (`PillSegments`, `weight(1f)`), einzeilig, mit Auslassungspunkten. Auf 360 dp bleiben bei vier Segmenten je rund 66 dp für den Text, auf 320 dp rund 56 dp. „Herausforderungen“ braucht bei 14 sp rund 125 dp – das Wort war schon bei **drei** Segmenten auf jedem üblichen Telefon abgeschnitten (rund 93 dp auf 360 dp, 110 dp auf 411 dp). Ein viertes Segment hätte das verschärft und „Raum“ neben ein unlesbares Wort gestellt. Deshalb der hier vorgesehene Ausweg: **Strecken · Plan · Gemeinsam**, und „Gemeinsam“ zeigt zwei beschriftete Abschnitte untereinander, „Raum“ und „Herausforderungen“. Drei kurze Wörter passen auch auf 320 dp und mit großer Schrift. Der Preis: „Herausforderungen“ steht nicht mehr in der Segmentzeile, sondern eine Ebene tiefer als Abschnittsüberschrift; der Name der Sache bleibt derselbe (Glossar).
 
-Der Raum bringt die erste Netzverbindung zu einem selbst gewählten Server während der Fahrt mit sich; das ist Sache seiner Oberfläche, nicht dieses Einhängens.
+Die vier festgelegten Schritte, wie sie umgesetzt sind:
+
+1. `ui/AppNavigation.kt`: `INDOOR_ROOM_AVAILABLE = true`, dazu `INDOOR_TOGETHER_MERGED = true` und das Segment `IndoorSegment.TOGETHER`. `indoorSegmentTarget` lenkt Wünsche nach `ROOM` und `CHALLENGES` dorthin. `IndoorTabScreen.kt` zeigt für `TOGETHER` (und für die beiden Einzelsegmente, falls sie je zurückkämen) den Ablauf mit `togetherSegment = true`.
+   - „Raum anlegen“ ist nur bedienbar, wenn unter Einstellungen → Sync mit eigenem Server Adresse **und** Token stehen. Sonst steht darunter die Zeile, wohin man dafür muss, mit dem Knopf „Einstellungen öffnen“ (er öffnet die Einstellungsseite; einen Sprung direkt auf die Unterseite gibt es in der App nicht).
+   - „Raum beitreten“ geht immer: Einladungslink einfügen, Name, „Leistung zeigen“, bestätigen.
+2. Strecke und Start wie bei den Herausforderungen über den `IndoorViewModel` des Tabs: „Zum Start“ wählt die Strecke des Raums (freie Fahrt, ohne Mitfahrer) und geht **direkt weiter** zu „Strecke vorbereiten“ und in die Fahrt. Abweichung vom Wortlaut dieses Schritts („startet über den Knopf ‚Fahren‘ der Sicht ‚Strecken‘“): Der Umweg über eine zweite Sicht und einen zweiten Knopf wäre ein Schritt mehr ohne Gewinn. Geht es nicht weiter – kein Trainer gekoppelt –, wechselt der Tab doch auf „Strecken“, wo Trainer-Karte und „Fahren“ stehen. Fehlt die Strecke, führt „Strecke herunterladen“ wie bei einer Herausforderung dorthin.
+   - „Raum anlegen“ nimmt die unter „Strecken“ gewählte Strecke, wenn sie eine bekannte Strecke auf dem Gerät oder die Teststrecke ist. Sonst sagt der Dialog das und bietet „Zu den Strecken“ an.
+3. Einladungslink von außen: `RoomInviteActivity` (Trampolin für `trailscape://room…`, prüft nur) → `MainActivity` → `AppViewModel.requestRoom(link)` → Segment „Gemeinsam“, Dialog „Raum beitreten“ mit dem Link. Verbunden wird erst nach „Beitreten“. Läuft gerade eine Fahrt, wartet der Wunsch wie jeder andere, bis sie zu Ende ist.
+4. Platz: siehe oben.
+
+Was es im Raum gibt:
+
+- Karte „Raum auf <Server>“: Strecke mit Länge und dem passenden Knopf, gemeinsamer Start, Teilnehmer (man selbst zuerst, „Gastgeber“ als Marke, darunter „Bereit“ / „Noch nicht am Start“ / „Fährt · x km“), „Leistung zeigen“, „Einladung teilen“, „Raum verlassen“, für den Gastgeber „Raum für alle beenden“ (mit Rückfrage).
+- „Bereit“ ist, wer am Start steht (Fahransicht mit geladener Strecke offen) – kein Schalter, sondern der wirkliche Zustand; ein Satz unter der Liste sagt das.
+- Gemeinsamer Start: Der Gastgeber drückt „Start in 10 Sekunden“ – im Raum oder, wenn er selbst schon am Start steht, auf der Karte „Warten auf den Start“ in der Fahransicht. Bei allen läuft derselbe Countdown; zum Start wird die gehaltene Fahrt frei.
+- In der Fahrt: unter den Kernwerten die drei nächsten Fahrer als Zeilen „Anna · 12 m vor dir“ (mit Watt, wenn sie ihre Leistung zeigt), ausgegraut, wenn von jemandem seit über 3 s nichts kam.
+- Verbindung: Im Raum ein Hinweis „Verbindung unterbrochen. Neuer Versuch in n s. Dein Platz bleibt kurz frei.“, in der Fahrt die Zeile „Verbindung zum Raum unterbrochen“. Die Fahrt läuft dabei weiter. Endet der Raum (Gastgeber, Ablauf, Server) oder schlägt der Beitritt fehl, steht der Grund als ein Satz im Abschnitt, bis man ihn mit „OK“ wegnimmt.
+- Verlassen: „Raum verlassen“ im Abschnitt; vor dem Start auch „Raum verlassen und allein fahren“ in der Fahransicht. Der Ablauf verlässt den Raum von selbst, wenn er abgebaut wird.
+
+Die erste Netzverbindung zu einem selbst gewählten Server während der Fahrt: Sie besteht nur, solange ein Raum offen ist; ohne eingetragenen Server und ohne Netz ändert sich an der übrigen App nichts (`IndoorRoomFlowTest`: eine Fahrt ohne Raum öffnet keinen Socket).
+
+Bewusst nicht gebaut: Kurzcode, Figuren der anderen in der 3D-Ansicht, Windschatten, Hintergrunddienst, Rangliste (Liste und Gründe in `docs/raum-protokoll.md`, 14.5).
 
 ## Abweichungen von der Seitenkarte
 
@@ -292,7 +314,8 @@ Die Screenshot-Tests laufen nur mit `-Pscreenshots` und schreiben nach `build/ou
 
 | Test | Änderung |
 |---|---|
-| `ScreenshotTest.tabs` | `03-training` entfällt; neu `02b-verlauf-fortschritt`, `03-indoor`, `03b-indoor-plan`. Mit dem Einhängen: neu `02c-verlauf-erfolge`, `03c-indoor-herausforderungen`, `03d-indoor-garage` (Weg über das Symbol in der Kopfzeile, zurück mit der Zurück-Taste); `03-indoor` zeigt das Garage-Symbol, alle Verlauf- und Indoor-Bilder das dritte Segment. |
+| `ScreenshotTest.tabs` | `03-training` entfällt; neu `02b-verlauf-fortschritt`, `03-indoor`, `03b-indoor-plan`. Mit dem Einhängen: neu `02c-verlauf-erfolge`, `03c-indoor-herausforderungen`, `03d-indoor-garage` (Weg über das Symbol in der Kopfzeile, zurück mit der Zurück-Taste); `03-indoor` zeigt das Garage-Symbol, alle Verlauf- und Indoor-Bilder das dritte Segment. Mit dem Raum: `03c-indoor-herausforderungen` → `03c-indoor-gemeinsam` (Klick auf „Gemeinsam“); alle Indoor-Bilder zeigen „Gemeinsam“ als drittes Segment. |
+| `RoomScreenshotTest` (neu) | `spiel5-01` bis `-04` Abschnitt ohne Raum (mit und ohne Server, Hinweis, Verbinden), `-05`/`-06` Inhalte der Dialoge, `-07` bis `-11` im Raum (Gast, Gastgeber, Strecke fehlt, Countdown, Verbindung unterbrochen), `-12`/`-13` Englisch, `-14` bis `-16` Fahransicht (Warten auf den Start, Abstände, Englisch). |
 | `ErfolgeScreenshotTest` | `einstiegskarte` / `einstiegskarteEnglisch` (die entfallene Karte) → `abzeichenZeile` / `abzeichenZeileEnglisch`, Bilder `erfolge-abzeichenzeile(-en)`; geprüft wird weiter der Text der Abzeichen-Zeile. Die Bilder der Sicht (`ErfolgeContent`) sind unverändert. |
 | `ChallengeScreenshotTest` | `spiel3-01-startseite-liste`, `spiel3-02-startseite-leer` → `spiel3-01-segment-liste`, `spiel3-02-segment-leer` (Inhalt des Segments); neu `spiel3-02b-strecken-mitfahrer` (Pille bei „Mitfahrer“) und `spiel3-09-teilen-zeile`. `spiel3-05` bis `-08`: Ergebnis ohne Teilen-Knopf, Auswertung mit dem Hinweis auf „Tour ansehen → Teilen“. |
 | `MoreScreenshotTest` (Einhängen) | `74-erinnerungen-*`: Titel „Erinnerungen & Motivation“, zweiter Abschnitt mit „Erfolge anzeigen“. |
@@ -311,10 +334,16 @@ Die Screenshot-Tests laufen nur mit `-Pscreenshots` und schreiben nach `build/ou
 
 - **Ungebaut (Umbau-Session).** Weder `:core:test` noch `:app:testDebugUnitTest` liefen in der Umbau-Session. Der Kotlin-Code ist ohne Compiler geschrieben und von Hand gegengelesen.
 - **Ungebaut (Einhängen).** Auch die Session, die die vier Funktionen eingehängt hat, konnte nicht bauen (ein Versuch, Maven Central antwortete mit HTTP 429). Die vier Merges, ihre Konfliktauflösungen und der neue Code (`ErfolgeHistoryContent`, `ChallengesStage`, `ChallengeShareRow`, `ChallengeDraftStore`, die Garage-Route) sind ohne Compiler geschrieben und von Hand gegengelesen; die neuen und angepassten Tests (`AppNavigationTest`, `ChallengeDraftStoreTest`, `IndoorChallengeFlowTest`, die Screenshot-Tests) sind nicht gelaufen.
+- **Ungebaut (Oberfläche des Raums, 25.11.2026).** In der Umgebung dieser Session fehlt das Android-SDK; `./gradlew :core:test :app:testDebugUnitTest` bricht deshalb vor dem Übersetzen von `:app` ab („SDK location not found“). Der neue Code (`IndoorRoomController`, `IndoorRoomSection`, `IndoorRoomHud`, `IndoorRoomUi`, `RoomInviteActivity`, die Änderungen an `IndoorViewModel`, `IndoorFlowScreen`, `IndoorTabScreen`, `AppNavigation`, `AppViewModel`) ist ohne Compiler geschrieben und von Hand gegengelesen; die neuen und angepassten Tests (`IndoorRoomControllerTest`, `IndoorRoomFlowTest`, `RoomScreenshotTest`, `AppNavigationTest`, `StringResourceParityTest`, `ScreenshotTest.tabs`) sind nicht gelaufen. `:core` ist unverändert.
 - Die Screenshot-Tests sind in den Klickwegen angepasst, aber nicht ausgeführt. `ScreenshotTest` öffnet dabei erstmals den Indoor-Tab in der ganzen App unter Robolectric (echtes `IndoorViewModel`); ob das dort durchläuft, zeigt erst ein Lauf.
 - Zwei unabhängige Gegenlesungen des ganzen Diffs („sei der Compiler“) fanden keinen Build-Fehler; drei Logikfehler daraus sind behoben. Das ersetzt keinen Build.
 
 Nur auf einem echten Gerät prüfbar:
+
+- Der Raum für Gruppenfahrten als Ganzes braucht zwei Geräte und einen Server: `docs/raum-pruefliste.md`. Ohne das ist nichts davon gegen einen echten Server gelaufen – weder der WebSocket über OkHttp durch einen Reverse-Proxy noch der Uhrenabgleich für den gemeinsamen Start.
+- Ob die Karte „Warten auf den Start“ und die Zeilen der anderen Fahrer in der Fahransicht Platz haben (hoch und quer, mit Bergwertung und Hinweisen darunter).
+- Ob ein angetippter Einladungslink (`trailscape://room…`) in den üblichen Messengern als Link erkannt wird; sonst bleibt Kopieren und Einfügen.
+- Ob drei Segmente Strecken · Plan · Gemeinsam auf 320 dp und mit großer Schrift ungekürzt bleiben (die Rechnung sagt ja).
 
 - Ob drei Segmente im Indoor-Tab (Strecken · Plan · Herausforderungen) und im Verlauf (Touren · Fortschritt · Erfolge) auf 320 dp und mit großer Schrift einzeilig bleiben.
 - Ob Garage-Symbol und Zahnrad nebeneinander in die Kopfzeile der Sicht „Strecken“ passen.

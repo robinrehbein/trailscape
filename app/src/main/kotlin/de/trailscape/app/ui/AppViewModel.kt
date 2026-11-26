@@ -165,7 +165,20 @@ enum class HistorySegment { TOURS, PROGRESS, ACHIEVEMENTS }
  * und den Raum fuer Gruppenfahrten (`docs/ux/umbau.md`); [indoorSegments]
  * liefert sie erst, wenn es die Funktion gibt.
  */
-enum class IndoorSegment { ROUTES, PLAN, CHALLENGES, ROOM }
+enum class IndoorSegment {
+    ROUTES,
+    PLAN,
+    CHALLENGES,
+    ROOM,
+
+    /**
+     * „Gemeinsam": der eine Platz fuer [ROOM] und [CHALLENGES] zusammen (zwei
+     * Abschnitte einer Sicht), weil vier Segmente nicht in die Zeile passen
+     * (`docs/ux/umbau.md`, „Platzfrage"). Wuensche nach [ROOM] oder
+     * [CHALLENGES] landen hier ([indoorSegmentTarget]).
+     */
+    TOGETHER,
+}
 
 /**
  * Die gepushten Indoor-Ziele im `NavHost` (siehe `TrailscapeApp.kt`), alle
@@ -467,6 +480,32 @@ class AppViewModel(
      */
     fun requestChallenges() {
         _pendingIndoorSegment.value = IndoorSegment.CHALLENGES
+        requestTab(AppTab.INDOOR)
+    }
+
+    private val _pendingRoomInvite = MutableStateFlow<String?>(null)
+
+    /**
+     * Ein von aussen geoeffneter Einladungslink zu einem Raum (`trailscape://room?…`),
+     * bis ihn der Abschnitt „Raum" uebernommen hat ([consumeRoomInvite]). Er wird
+     * nur vorgemerkt: Verbunden wird erst, wenn der Nutzer im Dialog „Raum
+     * beitreten" bestaetigt. Nie gespeichert, nie protokolliert (er enthaelt das
+     * Raum-Geheimnis).
+     */
+    val pendingRoomInvite: StateFlow<String?> = _pendingRoomInvite.asStateFlow()
+
+    fun consumeRoomInvite() {
+        _pendingRoomInvite.value = null
+    }
+
+    /**
+     * Oeffnet den Raum fuer Gruppenfahrten: Tab „Indoor", Segment „Gemeinsam",
+     * Abschnitt „Raum" — mit [inviteLink] gleich der Dialog „Raum beitreten".
+     * Das Ziel eines Einladungslinks von aussen (`MainActivity`).
+     */
+    fun requestRoom(inviteLink: String? = null) {
+        if (inviteLink != null) _pendingRoomInvite.value = inviteLink
+        _pendingIndoorSegment.value = IndoorSegment.ROOM
         requestTab(AppTab.INDOOR)
     }
 

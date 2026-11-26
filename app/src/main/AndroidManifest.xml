@@ -309,6 +309,29 @@
             </intent-filter>
         </activity>
 
+        <!-- Einladungslink zu einem Raum fuer Gruppenfahrten
+             (trailscape://room?server=…&room=…#Geheimnis, docs/raum-protokoll.md):
+             durchsichtiges Trampolin (room/RoomInviteActivity). Es prueft den
+             Link und oeffnet die App im Tab Indoor → Gemeinsam mit dem Dialog
+             „Raum beitreten"; verbunden wird erst nach der Bestaetigung dort.
+             Exportiert und BROWSABLE, weil Messenger und Browser den Link
+             aufrufen. Keine neue Berechtigung. -->
+        <activity
+            android:name=".room.RoomInviteActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="trailscape" android:host="room" />
+            </intent-filter>
+        </activity>
+
         <!-- Ruecksprung der Strava-Anmeldung (trailscape://strava-callback,
              siehe strava/StravaAuthActivity): durchsichtiges Trampolin wie
              die ImportActivity. Exportiert, weil der Browser sie aufrufen

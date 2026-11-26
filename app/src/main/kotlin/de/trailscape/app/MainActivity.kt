@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
         importIfRequested(intent)
         planRecipeIfRequested(intent)
         challengesIfRequested(intent)
+        roomInviteIfRequested(intent)
         setContent {
             TrailscapeTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -85,6 +86,7 @@ class MainActivity : ComponentActivity() {
         importIfRequested(intent)
         planRecipeIfRequested(intent)
         challengesIfRequested(intent)
+        roomInviteIfRequested(intent)
     }
 
     /**
@@ -97,6 +99,19 @@ class MainActivity : ComponentActivity() {
         if (intent?.getBooleanExtra(de.trailscape.app.challenge.EXTRA_OPEN_CHALLENGES, false) != true) return
         intent.removeExtra(de.trailscape.app.challenge.EXTRA_OPEN_CHALLENGES)
         ViewModelProvider(this)[AppViewModel::class.java].requestChallenges()
+    }
+
+    /**
+     * Ein Einladungslink zu einem Raum wurde von aussen geoeffnet
+     * ([de.trailscape.app.room.RoomInviteActivity]): zum Tab „Indoor", Segment
+     * „Gemeinsam", mit dem Dialog „Raum beitreten". Verbunden wird erst nach
+     * der Bestaetigung dort. Das Extra wird entfernt, damit eine Drehung nichts
+     * doppelt tut.
+     */
+    private fun roomInviteIfRequested(intent: Intent?) {
+        val link = intent?.getStringExtra(de.trailscape.app.room.EXTRA_ROOM_INVITE) ?: return
+        intent?.removeExtra(de.trailscape.app.room.EXTRA_ROOM_INVITE)
+        ViewModelProvider(this)[AppViewModel::class.java].requestRoom(link)
     }
 
     /**

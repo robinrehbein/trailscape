@@ -146,11 +146,17 @@ static mat4f translation(float3 p) { return mat4f::translation(p); }
 // stehen dort Vorlagen aus `trees.glb` (ein Vertexpuffer je Vorlage, ein
 // Renderable je Baum mit denselben Puffern und Materialinstanzen, automatische
 // Instanzierung), und der gebackene Abschnitt `x_trees_bin_<abschnitt>` ist aus.
-// Szene: "trees": {"library": "<trees.glb>", "detail": 1|2}.
+// Der Wechsel ist ein Ring um die Kamera (TreeInstancePlanner.selectFading): foliage.mat
+// rastert dort beide Darstellungen ineinander (`fadeMode` +1 Bibliothek, −1 gebackene
+// Abschnitte ueber Kopien ihrer Materialinstanzen) und toent die gebackenen auf den Ton
+// der Bibliothek (TreeFadeLook).
+// Szene: "trees": {"library": "<trees.glb>", "detail": 1|2}; nur fuer Versuche:
+// "midM", "bandM", "tintM", "tint": false, "leafDark"/"leafLight"/"barkDark"/"barkLight": [r,g,b].
 // ---------------------------------------------------------------------------
 
 struct TreeStats {
-    size_t nearCount = 0, midCount = 0, triangles = 0, templates = 0, binsHidden = 0;
+    size_t nearCount = 0, midCount = 0, triangles = 0, templates = 0, binsHidden = 0, fadeMaterials = 0;
+    double fadeStart = 0, fadeEnd = 0;  // Wechselring (m um die Kamera)
 };
 
 struct TreeGlb {
@@ -284,7 +290,7 @@ struct TreeTemplate {
 struct TreeSpot {
     std::string kind;  // art_variante, z. B. "beech_2"
     mat4f world;
-    double dist = 0;
+    double dist = 0, reach = 0, edge = 0;
     int lod = -1;      // 0 nah, 1 mittel, -1 gebacken
 };
 
@@ -296,16 +302,54 @@ struct TreeBinSpots {
     bool active = false;
 };
 
+// Waagrechte Ausladung einer Vorlage um ihren Fusspunkt, die groessere beider Stufen
+// (TreeLibraryFile.reachM in `:core`).
+static double treeReach(const TreeGlb& g, const std::map<std::string, int>& nodeByName, const std::string& kind) {
+    double best = 0;
+    for (const char* lod : { "_near", "_mid" }) {
+        auto it = nodeByName.find("x_tree_" + kind + lod);
+        if (it == nodeByName.end()) continue;
+        const json& mesh = g.j["meshes"][g.j["nodes"][it->second]["mesh"].get<int>()];
+        for (const auto& prim : mesh["primitives"]) {
+            TreeAccessor pos = treeAccessor(g, prim["attributes"]["POSITION"].get<int>());
+            for (size_t i = 0; i < pos.count; i++) {
+                float p[3];
+                memcpy(p, pos.p + i * pos.stride, 12);
+                best = std::max(best, (double)p[0] * p[0] + (double)p[2] * p[2]);
+            }
+        }
+    }
+    return best > 0 ? std::sqrt(best) : 19.0;  // TreePlace.DEFAULT_REACH_M
+}
+
 static TreeStats placeLibraryTrees(Engine* engine, Scene* scene, gltfio::AssetLoader* loader, gltfio::ResourceLoader* res,
         const std::vector<Loaded>& tiles, const std::vector<float3>& tilePos, const json& T, double3 eye, bool shadows) {
     TreeStats st;
     const int detail = opt(T, "detail", 2);
     if (detail <= 0) return st;
     // TreeInstanceBudget.forDetail
-    const double nearM = detail == 1 ? 18.0 : 25.0, midM = detail == 1 ? 45.0 : 60.0;
+    const double nearM = detail == 1 ? 18.0 : 25.0, midM = opt(T, "midM", detail == 1 ? 45.0 : 60.0);
     const size_t maxNear = detail == 1 ? 10 : 16, maxTotal = detail == 1 ? 40 : 56;
+    const double bandM = opt(T, "bandM", 10.0), bandShare = 0.5, bakedExtra = 3.0, tintM = opt(T, "tintM", 30.0);
+    // TreeFadeLook (`:core`): Ton der gebackenen Baeume am Ring; "tint": false = aus (Vergleichsbilder)
+    const bool tintOn = opt(T, "tint", true);
+    auto vec3of = [&](const char* key, float3 def) {
+        if (!T.contains(key)) return def;
+        return float3{ T[key][0].get<float>(), T[key][1].get<float>(), T[key][2].get<float>() };
+    };
+    const float3 one3{ 1.f };
+    const float3 leafDark = tintOn ? vec3of("leafDark", { 0.7f, 0.96f, 0.8f }) : one3, leafLight = tintOn ? vec3of("leafLight", { 1.9f, 1.35f, 2.0f }) : one3;
+    const float3 barkDark = tintOn ? vec3of("barkDark", { 0.44f, 0.47f, 0.56f }) : one3, barkLight = tintOn ? vec3of("barkLight", { 1.67f, 1.69f, 2.0f }) : one3;
+    const float2 leafLuma{ 0.022f, 0.045f }, barkLuma{ 0.45f, 0.60f };
     auto& tm = engine->getTransformManager();
     auto& rm = engine->getRenderableManager();
+
+    // Bibliothek: Netze selbst, Materialien ueber gltfio (derselbe Tausch wie bei den Kacheln)
+    const std::string path = T["library"].get<std::string>();
+    const TreeGlb g = parseTreeGlb(readFile(path));
+    std::map<std::string, int> nodeByName;
+    for (size_t i = 0; i < g.j["nodes"].size(); i++) nodeByName[g.j["nodes"][i]["name"].get<std::string>()] = (int)i;
+    std::map<std::string, double> reachOf;
 
     // Instanzknoten je Kachel und Abschnitt einsammeln
     std::map<std::pair<size_t, std::string>, TreeBinSpots> bins;
@@ -327,35 +371,38 @@ static TreeStats placeLibraryTrees(Engine* engine, Scene* scene, gltfio::AssetLo
             spot.world = mat4f::translation(tilePos[ti]) * tm.getTransform(tm.getInstance(es[i]));
             const double dx = spot.world[3][0] - eye.x, dz = spot.world[3][2] - eye.z;
             spot.dist = std::sqrt(dx * dx + dz * dz);
+            if (!reachOf.count(spot.kind)) reachOf[spot.kind] = treeReach(g, nodeByName, spot.kind);
+            const double scale = length(spot.world[0].xyz);
+            spot.reach = reachOf[spot.kind] * scale;
+            spot.edge = std::max(0.0, spot.dist - spot.reach);
             TreeBinSpots& b = bins[{ ti, node }];
             b.tile = ti;
             b.node = node;
-            b.dist = std::min(b.dist, spot.dist);
             b.trees.push_back(spot);
         }
     }
-    // TreeInstancePlanner.select (ein Bild: ohne Hysterese)
-    std::vector<TreeBinSpots*> order;
-    for (auto& [k, b] : bins) if (b.dist <= midM) order.push_back(&b);
-    std::sort(order.begin(), order.end(), [](const TreeBinSpots* a, const TreeBinSpots* b) { return a->dist < b->dist; });
+    // TreeInstancePlanner.selectFading (ein Bild: ohne Hysterese, Ring ausgewachsen)
+    std::vector<TreeSpot*> all;
+    for (auto& [k, b] : bins) for (auto& t : b.trees) all.push_back(&t);
+    if (all.empty()) return st;
+    std::sort(all.begin(), all.end(), [](const TreeSpot* a, const TreeSpot* b) { return a->edge < b->edge; });
+    double end = midM;
+    if (all.size() > maxTotal) end = std::min(end, all[maxTotal]->edge);
+    const double start = end - std::min(bandM, end * bandShare);
     std::vector<TreeSpot*> shown;
-    size_t total = 0;
-    for (size_t i = 0; i < order.size(); i++) {
-        if (i > 0 && total + order[i]->trees.size() > maxTotal) continue;
-        total += order[i]->trees.size();
-        order[i]->active = true;
-        for (auto& t : order[i]->trees) shown.push_back(&t);
-    }
+    for (size_t i = 0; i < all.size() && i < maxTotal; i++) if (all[i]->edge <= end) shown.push_back(all[i]);
     std::sort(shown.begin(), shown.end(), [](const TreeSpot* a, const TreeSpot* b) { return a->dist < b->dist; });
     size_t nearUsed = 0;
     for (TreeSpot* t : shown) {
         if (nearUsed < maxNear && t->dist <= nearM) { t->lod = 0; nearUsed++; } else t->lod = 1;
     }
-    if (shown.empty()) return st;
+    for (auto& [k, b] : bins) {
+        b.active = true;
+        for (auto& t : b.trees) if (t.lod < 0 || t.dist + t.reach + bakedExtra > start) b.active = false;
+    }
+    st.fadeStart = start;
+    st.fadeEnd = end;
 
-    // Bibliothek: Netze selbst, Materialien ueber gltfio (derselbe Tausch wie bei den Kacheln)
-    const std::string path = T["library"].get<std::string>();
-    const TreeGlb g = parseTreeGlb(readFile(path));
     Loaded lib = loadAsset(engine, loader, res, path);
     MaterialInstance* barkMi = nullptr;
     MaterialInstance* leafMi = nullptr;
@@ -366,8 +413,37 @@ static TreeStats placeLibraryTrees(Engine* engine, Scene* scene, gltfio::AssetLo
         if (nm == "x_mat_tree_cards") leafMi = mis[i];
     }
     if (!barkMi || !leafMi) { fprintf(stderr, "filarender: Materialien der Baumbibliothek fehlen\n"); exit(3); }
-    std::map<std::string, int> nodeByName;
-    for (size_t i = 0; i < g.j["nodes"].size(); i++) nodeByName[g.j["nodes"][i]["name"].get<std::string>()] = (int)i;
+    // Ueberblenden: Instanzen sichtbar bis zum Ring (fadeMode +1), gebackene Abschnitte ab dem Ring (−1).
+    // Die Abschnitte bekommen dafuer je Kachel eine Kopie ihrer Materialinstanzen — die uebrigen
+    // Baeume und das Gras der Kachel teilen die Originale und blenden nicht.
+    for (MaterialInstance* mi : { barkMi, leafMi }) {
+        if (!mi->getMaterial()->hasParameter("fadeMode")) { fprintf(stderr, "filarender: foliage.filamat ohne fadeMode (Rinde: settings.barkFoliage)\n"); exit(3); }
+        mi->setParameter("fadeMode", 1.f);
+        mi->setParameter("fadeRange", float4{ (float)start, (float)end, (float)(end + tintM), 0.f });
+    }
+    for (size_t ti = 0; ti < tiles.size(); ti++) {
+        std::map<const MaterialInstance*, MaterialInstance*> copies;
+        for (auto& [e, cat] : tiles[ti].category) {
+            if (cat.rfind("x_trees_bin_", 0) != 0 || !bins.count({ ti, cat })) continue;
+            auto r = rm.getInstance(e);
+            for (size_t p = 0; p < rm.getPrimitiveCount(r); p++) {
+                MaterialInstance* mi = rm.getMaterialInstanceAt(r, p);
+                if (!mi->getMaterial()->hasParameter("fadeMode")) { fprintf(stderr, "filarender: Abschnitt %s mit Material ohne fadeMode\n", cat.c_str()); exit(3); }
+                MaterialInstance*& c = copies[mi];
+                if (!c) {
+                    c = MaterialInstance::duplicate(mi, mi->getName());
+                    const bool bark = std::string(mi->getName()) == "mat_tree_trunk";
+                    c->setParameter("fadeMode", -1.f);
+                    c->setParameter("fadeRange", float4{ (float)start, (float)end, (float)(end + tintM), 0.f });
+                    c->setParameter("fadeTintDark", bark ? barkDark : leafDark);
+                    c->setParameter("fadeTintLight", bark ? barkLight : leafLight);
+                    c->setParameter("fadeTintLuma", bark ? barkLuma : leafLuma);
+                    st.fadeMaterials++;
+                }
+                rm.setMaterialInstanceAt(r, p, c);
+            }
+        }
+    }
     std::map<std::string, TreeTemplate> templates;
     auto templ = [&](const std::string& name) -> TreeTemplate* {
         auto it = templates.find(name);
@@ -402,7 +478,7 @@ static TreeStats placeLibraryTrees(Engine* engine, Scene* scene, gltfio::AssetLo
         if (s->lod == 0) st.nearCount++; else st.midCount++;
     }
     st.templates = templates.size();
-    // Gebackene Abschnitte ausblenden, an deren Stelle jetzt Instanzen stehen
+    // Gebackene Abschnitte, die ganz innerhalb des Rings liegen, abschalten (dort zeichnete ihr Material nichts)
     for (auto& [k, b] : bins) {
         if (!b.active) continue;
         st.binsHidden++;
@@ -437,7 +513,7 @@ static Material* loadMaterial(Engine* engine, const std::string& path) {
 }
 
 // Wie WorldMaterialProvider/WorldMaterialRules der App: `mat_terrain` → terrain.mat, Laub
-// (`x_mat_tree_cards`, `mat_tree_leaves`) → foliage.mat, Belaege und Randstreifen →
+// (`x_mat_tree_cards`, `mat_tree_leaves`) und Rinde (`mat_tree_trunk`) → foliage.mat, Belaege und Randstreifen →
 // surface.mat, ihre Auslaeufe → surface_blend.mat; alles andere der Ubershader. gltfio setzt
 // danach dieselben Parameter (baseColorFactor …) und bindet die Textur an `baseColorMap`.
 enum Kind { UBER = 0, TERRAIN = 1, FOLIAGE = 2, SURFACE = 3, SURFACE_BLEND = 4 };
@@ -448,12 +524,17 @@ static bool endsWith(const std::string& s, const char* p) {
     return s.size() >= n && s.compare(s.size() - n, n, p) == 0;
 }
 
+// `settings.barkFoliage` = false: Rinde ueber den Ubershader wie vor dem Ueberblenden (nur fuer Vergleichsbilder).
+static bool gBarkFoliage = true;
+
 // Spiegel von WorldMaterialRules.kindFor (Kotlin, getestet).
 static Kind kindFor(const std::string& l, gltfio::AlphaMode a, bool tex, bool unlit) {
     if (!tex || unlit) return UBER;
     using gltfio::AlphaMode;
     if (l == "mat_terrain") return a == AlphaMode::OPAQUE ? TERRAIN : UBER;
     if (l == "x_mat_tree_cards" || l == "mat_tree_leaves") return a == AlphaMode::MASK ? FOLIAGE : UBER;
+    // Rinde: dasselbe Material ohne Wind (atlasMode 2), damit Staemme mit ueberblenden koennen
+    if (l == "mat_tree_trunk") return a == AlphaMode::OPAQUE && gBarkFoliage ? FOLIAGE : UBER;
     if (a == AlphaMode::OPAQUE && (startsWith(l, "mat_route_") || (startsWith(l, "x_mat_road_") && !endsWith(l, "_edge")) ||
             (startsWith(l, "x_mat_route_verge_") && !endsWith(l, "_fade")) || l == "x_mat_route_shoulder" || l == "x_mat_route_sidewalk"))
         return SURFACE;
@@ -514,6 +595,8 @@ struct WorldProvider : public gltfio::MaterialProvider {
         gltfio::constrainMaterial(config, uvmap);
         MaterialInstance* mi = mats[kind]->createInstance(label);
         if (kind == FOLIAGE && !config->doubleSided) mi->setDoubleSided(false);
+        // Rinde ist geschlossen: Rueckseiten weg wie beim Ubershader
+        if (kind == FOLIAGE && l == "mat_tree_trunk") mi->setCullingMode(backend::CullingMode::BACK);
         counts[kind]++;
         if (setup) setup(mi, kind, l);
         return mi;
@@ -546,6 +629,7 @@ int main(int argc, char** argv) {
     const json K = readJson(skyDir + "/sky.json");
     const json L = K.contains("look") ? K["look"] : json::object();  // neue Stimmung (fehlt = alter Stand)
     const json settings = S.contains("settings") ? S["settings"] : json::object();
+    gBarkFoliage = opt(settings, "barkFoliage", true);
     const bool shadows = opt(settings, "shadows", true);
     const bool fogOn = opt(settings, "fog", true);
     const bool skyOn = opt(settings, "sky", true);
@@ -1054,7 +1138,7 @@ int main(int argc, char** argv) {
             setParams(mi, L["foliage"]);
             if (!wind) mi->setParameter("windStrength", 0.f);
             mi->setParameter("time", float(timeS));
-            mi->setParameter("atlasMode", label == "x_mat_tree_cards" ? 1.f : 0.f);
+            mi->setParameter("atlasMode", label == "x_mat_tree_cards" ? 1.f : label == "mat_tree_trunk" ? 2.f : 0.f);
         }
     };
     utils::NameComponentManager names(utils::EntityManager::get());
@@ -1217,9 +1301,9 @@ int main(int argc, char** argv) {
     auto tEnd = std::chrono::steady_clock::now();
     auto ms = [](auto a, auto b) { return (long)std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count(); };
     printf("{\"renderables\": %zu, \"primitives\": %zu, \"waterPrimitives\": %zu, \"terrainMi\": %zu, \"foliageMi\": %zu, \"surfaceMi\": %zu, \"uberMi\": %zu, "
-           "\"treeNear\": %zu, \"treeMid\": %zu, \"treeTriangles\": %zu, \"treeTemplates\": %zu, \"treeBinsHidden\": %zu, \"loadMs\": %ld, \"renderMs\": %ld}\n",
+           "\"treeNear\": %zu, \"treeMid\": %zu, \"treeTriangles\": %zu, \"treeTemplates\": %zu, \"treeBinsHidden\": %zu, \"treeFadeStart\": %.1f, \"treeFadeEnd\": %.1f, \"treeFadeMaterials\": %zu, \"loadMs\": %ld, \"renderMs\": %ld}\n",
         renderables, primitives, waterPrims, wp->counts[TERRAIN], wp->counts[FOLIAGE], wp->counts[SURFACE] + wp->counts[SURFACE_BLEND], wp->counts[UBER],
-        treeStats.nearCount, treeStats.midCount, treeStats.triangles, treeStats.templates, treeStats.binsHidden, ms(t0, tLoad), ms(tLoad, tEnd));
+        treeStats.nearCount, treeStats.midCount, treeStats.triangles, treeStats.templates, treeStats.binsHidden, treeStats.fadeStart, treeStats.fadeEnd, treeStats.fadeMaterials, ms(t0, tLoad), ms(tLoad, tEnd));
     fflush(stdout);
     // Aufraeumen ueberlassen wir dem Prozessende (Werkzeug, kein Dauerlauf).
     _exit(0);
