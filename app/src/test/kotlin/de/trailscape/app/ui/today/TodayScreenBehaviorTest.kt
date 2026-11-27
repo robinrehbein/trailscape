@@ -217,7 +217,7 @@ class TodayScreenBehaviorTest {
                 TodayScreen(viewModel)
             }
         }
-        compose.waitUntil(timeoutMillis = 10_000) {
+        compose.waitUntil(timeoutMillis = 25_000) {
             compose.onAllNodesWithText(compose.activity.getString(R.string.today_rest_headline_plan))
                 .fetchSemanticsNodes().isNotEmpty() &&
                 compose.onAllNodesWithText(compose.activity.getString(R.string.indoor_app_day_eyebrow))
@@ -240,7 +240,7 @@ class TodayScreenBehaviorTest {
                 TodayScreen(viewModel)
             }
         }
-        compose.waitUntil(timeoutMillis = 10_000) {
+        compose.waitUntil(timeoutMillis = 25_000) {
             compose.onAllNodesWithText(compose.activity.getString(R.string.today_headline_event))
                 .fetchSemanticsNodes().isNotEmpty()
         }

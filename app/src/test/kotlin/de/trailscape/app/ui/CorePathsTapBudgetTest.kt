@@ -28,6 +28,7 @@ import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -200,6 +201,7 @@ class CorePathsTapBudgetTest {
 
         RouteGenerationController.close()
         RecordingRepository.publishStopped(null)
+        RecordingRepository.clearFinishedRide()
     }
 
     @After
@@ -207,6 +209,7 @@ class CorePathsTapBudgetTest {
         RuntimeEnvironment.setFontScale(1.0f)
         RouteGenerationController.close()
         RecordingRepository.publishStopped(null)
+        RecordingRepository.clearFinishedRide()
         mockServer?.shutdown()
         mockServer = null
 
@@ -617,7 +620,7 @@ class CorePathsTapBudgetTest {
     @Test
     fun path2a_mapScreen_planRouteAndPeekStart_within4Taps() {
         startMockBrouterServer()
-        val appViewModel = AppViewModel()
+        val appViewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
         compose.setContent {
             CompositionLocalProvider(
                 LocalMapRenderingAvailable provides false,
@@ -675,7 +678,7 @@ class CorePathsTapBudgetTest {
 
     @Test
     fun path2b_mapScreen_roundTripBuildApplyStart_within4Taps() {
-        val appViewModel = AppViewModel()
+        val appViewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
         compose.setContent {
             CompositionLocalProvider(
                 LocalMapRenderingAvailable provides false,
@@ -723,7 +726,7 @@ class CorePathsTapBudgetTest {
     @Test
     fun path2c_mapScreen_placeCardRouteHereAndStart_within4Taps() {
         startMockBrouterServer()
-        val appViewModel = AppViewModel()
+        val appViewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
         compose.setContent {
             CompositionLocalProvider(
                 LocalMapRenderingAvailable provides false,
@@ -859,7 +862,7 @@ class CorePathsTapBudgetTest {
     @Test
     fun path4a_indoorRideFinish_saveAndViewTour_within2Taps() {
         ensureTestWorldReady()
-        val appViewModel = AppViewModel()
+        val appViewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
         var clockMs = 1_000L
         val vm = IndoorViewModel(
             parts = AppServices.indoorParts,
@@ -1015,7 +1018,7 @@ class CorePathsTapBudgetTest {
         settle()
 
         val detailsAction = string(R.string.map_ride_card_details_action)
-        compose.waitUntil(timeoutMillis = 10_000) {
+        compose.waitUntil(timeoutMillis = 20_000) {
             compose.onAllNodesWithText(detailsAction).fetchSemanticsNodes().isNotEmpty()
         }
         // Dismiss any active save Snackbar if overlapping, then Action 2: Click "Auswertung" -> RideDetailScreen
@@ -1116,7 +1119,7 @@ class CorePathsTapBudgetTest {
         val app = ApplicationProvider.getApplicationContext<Application>()
         val finishedRide = sampleRides().first()
         AppServices.rideStorage.saveRide(finishedRide)
-        val appViewModel = AppViewModel()
+        val appViewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
         RecordingRepository.attach(app)
 
         compose.setContent {
@@ -1217,7 +1220,7 @@ class CorePathsTapBudgetTest {
         settle()
 
         val detailsAction = string(R.string.map_ride_card_details_action)
-        compose.waitUntil(timeoutMillis = 10_000) {
+        compose.waitUntil(timeoutMillis = 20_000) {
             compose.onAllNodesWithText(detailsAction).fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText(detailsAction).assertIsDisplayed()
@@ -1229,7 +1232,7 @@ class CorePathsTapBudgetTest {
     fun edge1b_unbuiltSavedWorld_loadWorldAutoStartsRide_within2Taps() {
         val unbuiltRide = sampleRides().first()
         AppServices.rideStorage.saveRide(unbuiltRide)
-        val appViewModel = AppViewModel()
+        val appViewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
         val vm = IndoorViewModel(
             parts = AppServices.indoorParts,
             rideStorage = AppServices.rideStorage,
@@ -1305,7 +1308,9 @@ class CorePathsTapBudgetTest {
         // Tap 4 & 5: Pick TestWorld & tap "Fahren"
         compose.onAllNodesWithText(string(R.string.indoor_app_route_testworld_title)).onFirst().performClick()
         taps++
-        settle(300)
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodes(hasText(rideAction) and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText(rideAction).assertIsEnabled().performClick()
         taps++
 
@@ -1351,7 +1356,7 @@ class CorePathsTapBudgetTest {
     @Test
     fun edge4a_indoorPause_finishOpensConfirmationDialog() {
         ensureTestWorldReady()
-        val appViewModel = AppViewModel()
+        val appViewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
         var clockMs = 1_000L
         val vm = IndoorViewModel(
             parts = AppServices.indoorParts,

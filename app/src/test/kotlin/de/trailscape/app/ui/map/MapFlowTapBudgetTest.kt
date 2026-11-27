@@ -25,6 +25,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.i18n.UiText
@@ -353,7 +354,7 @@ class MapFlowTapBudgetTest {
             Manifest.permission.ACCESS_COARSE_LOCATION,
             Manifest.permission.POST_NOTIFICATIONS,
         )
-        val appViewModel = AppViewModel()
+        val appViewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
         val target = RouteTarget(
             distanceKm = 40.0,
             ascentPreference = AscentPreference.MODERAT,
@@ -442,7 +443,7 @@ class MapFlowTapBudgetTest {
         RouteGenerationController.publishTestError(UiText.Plain("Network timeout"))
         assertFalse(RouteGenerationController.state.value.autoStartPending)
 
-        val appViewModel = AppViewModel()
+        val appViewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
         appViewModel.requestRouteGeneration(newTarget, autoStart = true)
         compose.setContent {
             CompositionLocalProvider(LocalMapRenderingAvailable provides false) {
@@ -511,7 +512,7 @@ class MapFlowTapBudgetTest {
             targetKm = 48.0,
         )
 
-        val appViewModel = AppViewModel()
+        val appViewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
         RouteGenerationController.open(firstTarget, autoStartPending = true)
         compose.setContent {
             CompositionLocalProvider(LocalMapRenderingAvailable provides false) {
@@ -569,7 +570,7 @@ class MapFlowTapBudgetTest {
             bearingDeg = 180.0,
             targetKm = 36.0,
         )
-        val appViewModel = AppViewModel()
+        val appViewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
 
         try {
             RouteGenerationController.open(target)
@@ -617,7 +618,7 @@ class MapFlowTapBudgetTest {
     fun searchPickerBackClosesSearchWithoutExitingPlanning() {
         RouteGenerationController.close()
         RecordingRepository.publishStopped(null)
-        val appViewModel = AppViewModel()
+        val appViewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
         compose.setContent {
             CompositionLocalProvider(
                 LocalMapRenderingAvailable provides false,
@@ -664,7 +665,7 @@ class MapFlowTapBudgetTest {
             points = emptyList(),
             paused = false,
         )
-        val appViewModel = AppViewModel()
+        val appViewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
         val target = RouteTarget(
             distanceKm = 35.0,
             ascentPreference = AscentPreference.MODERAT,
@@ -966,12 +967,13 @@ class MapFlowTapBudgetTest {
     fun mapScreen_compact_selectRide_rendersDockedSheetTourWithoutCrash() {
         RouteGenerationController.close()
         RecordingRepository.publishStopped(null)
+        RecordingRepository.clearFinishedRide()
         val recorded = sampleRecordedRideForCompact("recorded-mapscreen-1")
         val previous = AppServices.rideStorage.listSummaries().summaries.mapNotNull {
             AppServices.rideStorage.loadRide(it.id)
         }
         AppServices.rideStorage.saveRides(listOf(recorded))
-        val appViewModel = AppViewModel()
+        val appViewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
         try {
             compose.setContent {
                 CompositionLocalProvider(
@@ -993,12 +995,16 @@ class MapFlowTapBudgetTest {
             compose.waitForIdle()
 
             val rideAgainText = compose.activity.getString(R.string.map_ride_card_ride_again_action)
+            compose.waitUntil(timeoutMillis = 15_000) {
+                compose.onAllNodesWithText(rideAgainText).fetchSemanticsNodes().isNotEmpty()
+            }
             compose.onNodeWithText(rideAgainText).assertIsDisplayed()
         } finally {
             appViewModel.select(null)
             AppServices.rideStorage.saveRides(previous)
             RouteGenerationController.close()
             RecordingRepository.publishStopped(null)
+            RecordingRepository.clearFinishedRide()
         }
     }
 

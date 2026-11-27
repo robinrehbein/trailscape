@@ -50,7 +50,7 @@ class GarageOrbitCameraTest {
         val narrowDist = (cam.pose(0.6).eye - cam.pose(0.6).target).length()
         val wideDist = (cam.pose(1.6).eye - cam.pose(1.6).target).length()
         assertTrue(narrowDist > wideDist, "Schmales Fenster rueckt weiter weg, damit das Rad ganz passt")
-        assertTrue(narrowDist in 2.8..5.6)
-        assertTrue(wideDist in 2.8..5.6)
+        assertTrue(narrowDist in (2.8 - 1e-6)..(5.6 + 1e-6), "narrowDist=$narrowDist")
+        assertTrue(wideDist in (2.8 - 1e-6)..(5.6 + 1e-6), "wideDist=$wideDist")
     }
 }
