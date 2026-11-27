@@ -265,14 +265,6 @@ private fun OutdoorSuggestRouteCard(
         durationText = metrics.durationText,
         statusLabel = metrics.statusLabel,
         modifier = modifier,
-        media = {
-            TodayRoutePreview(
-                ascentPreference = target.ascentPreference,
-                spokenSummary = "${metrics.distanceText}, ${metrics.ascentText}, ${metrics.durationText}",
-                showStatusBadge = false,
-                modifier = Modifier.matchParentSize(),
-            )
-        },
         action = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 extraReasons.forEach { bullet ->

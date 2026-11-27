@@ -10,7 +10,8 @@
     <!-- GarageScreen.kt -->
     <string name="garage_title">Garage</string>
     <string name="garage_preview_cd">Preview of your rider in the chosen colours</string>
-    <string name="garage_preview_hint">Preview as a drawing. You’ll ride like this in the 3D view from the next time you start a route.</string>
+    <string name="garage_preview_hint">Drag to rotate · Double-tap to reset the view.</string>
+    <string name="garage_preview_fallback_hint">2D fallback preview (3D preview unavailable on this device). Your chosen colours still apply during rides.</string>
     <string name="garage_section_rider">Rider</string>
     <string name="garage_section_kit">Kit</string>
     <string name="garage_section_bike">Bike</string>

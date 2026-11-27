@@ -67,15 +67,17 @@ die offene Frage aus Konzept 2.6/8 für diesen Schlüssel beantwortet.
 - Hat das Modell keine Zonen (eingebauter Ersatzfahrer `AvatarModel`), bekommt
   nur dessen `x_mat_kit` die Trikotfarbe.
 
-## 2D- statt 3D-Vorschau
+## 3D-Vorschau (mit 2D-Rückfall)
 
-Die Vorschau ist eine **gezeichnete Seitenansicht** (`GaragePreview`) mit
-denselben Feldern wie das Modell. Eine 3D-Vorschau hätte eine zweite
-Filament-Darstellung außerhalb der Fahrt gebraucht (eigene Engine oder eine
-Szene ohne Strecke) — ein weiterer nativer Pfad, der auf manchen Geräten den
-Prozess beenden kann, und die parallel entstehende 3D-Vorschau ist noch nicht
-da. Sobald es sie gibt und sie einen Fahrer allein zeigen kann, lässt sich die
-Zeichnung ersetzen; `RiderTint.apply(asset, avatar)` passt dafür unverändert.
+Die Vorschau zeigt `rider.glb` (oder `AvatarModel`) auf einem Studio-Podest in
+einer eigenen Filament-`TextureView` (`GarageStageRenderer` /
+`GarageRider3DPreview`): waagerecht um 360° drehbar, Doppeltipp setzt die
+Ansicht zurück, Farben wechseln live über `RiderTint.apply(asset, avatar)` (im
+sicheren Grafikmodus durch Neuladen über `RiderTint.prepare`). Beim Verlassen
+der Garage wird die Studio-Engine vollständig abgebaut (`destroy()`). Steht auf
+einem Gerät kein OpenGL ES 3.0 oder keine native Bibliothek bereit (z. B. im
+JVM-Test), schaltet die Vorschau automatisch auf die gezeichnete 2D-Ansicht
+(`GaragePreview`) zurück.
 
 ## Freischaltungen (vorbereitet, noch ohne Wirkung)
 
@@ -139,4 +141,3 @@ ist das **nicht** (siehe unten).
   gibt es keine GPU.
 - Radtyp, Ärmel, Haarfarbe, Socken aus dem Konzept 3.6 sind nicht umgesetzt;
   das Format überliest sie und lässt Platz dafür.
-- Die Vorschau ist 2D (siehe oben).

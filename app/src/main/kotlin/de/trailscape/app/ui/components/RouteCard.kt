@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,9 +32,10 @@ private val RouteMediaShape = RoundedCornerShape(14.dp)
 /**
  * Einheitliche Streckenkarte im Atlas-Stil.
  *
- * Zeigt immer Bild/Vorschau, **Laenge**, **Hoehenmeter** und **Dauer**
- * (Regel aus `HANDOFF-antigravity.md`), optional Status-Chip auf dem Bild
- * sowie eine untergeordnete oder primaere Aktion.
+ * Zeigt optional eine echte Vorschau (`media`, nur wenn Track-Linie,
+ * Hoehenprofil oder Foto vorliegt), **Laenge**, **Hoehenmeter** und **Dauer**
+ * (Regel aus `HANDOFF-antigravity.md`), optional Status-Chip auf der Vorschau
+ * bzw. als Pille neben dem Titel sowie eine untergeordnete oder primaere Aktion.
  */
 @Composable
 fun RouteCard(
@@ -41,7 +43,7 @@ fun RouteCard(
     distanceText: String,
     ascentText: String,
     durationText: String,
-    media: @Composable BoxScope.() -> Unit,
+    media: (@Composable BoxScope.() -> Unit)? = null,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     statusLabel: String? = null,
@@ -63,29 +65,31 @@ fun RouteCard(
         containerColor = container,
         borderColor = border,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 10.dp, end = 10.dp, top = 10.dp)
-                .aspectRatio(16f / 10f)
-                .clip(RouteMediaShape)
-                .background(MaterialTheme.colorScheme.surfaceContainer),
-        ) {
-            Box(modifier = Modifier.fillMaxSize(), content = media)
-            if (statusLabel != null) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(10.dp),
-                    shape = CircleShape,
-                    color = atlas.routeMediaScrim,
-                ) {
-                    Text(
-                        text = statusLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    )
+        if (media != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 10.dp, end = 10.dp, top = 10.dp)
+                    .aspectRatio(16f / 10f)
+                    .clip(RouteMediaShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainer),
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), content = media)
+                if (statusLabel != null) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(10.dp),
+                        shape = CircleShape,
+                        color = atlas.routeMediaScrim,
+                    ) {
+                        Text(
+                            text = statusLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        )
+                    }
                 }
             }
         }
@@ -93,7 +97,22 @@ fun RouteCard(
             modifier = Modifier.padding(CardPadding),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(text = title, style = MaterialTheme.typography.titleMedium)
+            if (media == null && statusLabel != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TagPill(text = statusLabel)
+                }
+            } else {
+                Text(text = title, style = MaterialTheme.typography.titleMedium)
+            }
             if (subtitle != null) {
                 Text(
                     text = subtitle,

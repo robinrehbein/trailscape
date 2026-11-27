@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,7 +28,9 @@ import de.trailscape.app.R
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
 import de.trailscape.app.ui.map.ProvideTestLanguage
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
 import de.trailscape.app.ui.theme.TrailscapeTheme
+import de.trailscape.app.ui.theme.WindowLayoutClass
 import de.trailscape.core.garage.GaragePalettes
 import de.trailscape.core.garage.GarageProgress
 import de.trailscape.core.garage.JerseyPattern
@@ -160,5 +163,27 @@ class GarageScreenshotTest {
                 )
             }
         }
+    }
+
+    /** Galaxy Tab S11 quer: links fest verankerte Vorschau, rechts scrollbare Optionen. */
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_LANDSCAPE_DE)
+    fun tabS11Quer() = shot("garage-07-tab-s11-quer") {
+        CompositionLocalProvider(LocalWindowLayoutClass provides WindowLayoutClass.Expanded) {
+            GarageScreen(avatar = RiderAvatar.DEFAULT, onChange = {}, onBack = {})
+        }
+    }
+
+    /** Galaxy Tab S11 quer auf Englisch. */
+    @Test
+    @Config(qualifiers = TestLocales.TAB_S11_LANDSCAPE_EN)
+    fun tabS11QuerEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        shot("garage-07-tab-s11-quer-en") {
+            CompositionLocalProvider(LocalWindowLayoutClass provides WindowLayoutClass.Expanded) {
+                GarageScreen(avatar = RiderAvatar.DEFAULT, onChange = {}, onBack = {})
+            }
+        }
+        compose.onNodeWithText(str(R.string.garage_section_rider)).assertExists()
     }
 }

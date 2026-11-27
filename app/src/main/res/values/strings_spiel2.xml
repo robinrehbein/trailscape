@@ -10,7 +10,8 @@
     <!-- GarageScreen.kt -->
     <string name="garage_title">Garage</string>
     <string name="garage_preview_cd">Vorschau deines Fahrers mit den gewählten Farben</string>
-    <string name="garage_preview_hint">Vorschau als Zeichnung. In der 3D-Ansicht fährst du so ab dem nächsten Start einer Strecke.</string>
+    <string name="garage_preview_hint">Zum Drehen wischen · Doppeltippen setzt die Ansicht zurück.</string>
+    <string name="garage_preview_fallback_hint">2D-Ersatzansicht (3D-Vorschau auf diesem Gerät nicht verfügbar). In der Fahrt gelten deine gewählten Farben.</string>
     <string name="garage_section_rider">Fahrer</string>
     <string name="garage_section_kit">Kleidung</string>
     <string name="garage_section_bike">Rad</string>

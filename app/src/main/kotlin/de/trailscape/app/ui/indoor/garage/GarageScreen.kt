@@ -7,13 +7,26 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
@@ -21,8 +34,13 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -35,11 +53,17 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
+import de.trailscape.app.indoor.render.GarageRider3DPreview
 import de.trailscape.app.ui.components.AtlasCard
 import de.trailscape.app.ui.components.Eyebrow
+import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.TrailscapeSecondaryButton
 import de.trailscape.app.ui.indoor.IndoorPage
 import de.trailscape.app.ui.indoor.MutedText
+import de.trailscape.app.ui.theme.LocalWindowLayoutClass
+import de.trailscape.app.ui.theme.TabletCardGap
+import de.trailscape.app.ui.theme.TabletScreenPadding
+import de.trailscape.app.ui.theme.useTwoPaneLayout
 import de.trailscape.core.garage.GarageColor
 import de.trailscape.core.garage.GaragePalettes
 import de.trailscape.core.garage.GarageProgress
@@ -52,10 +76,12 @@ import de.trailscape.core.garage.RiderAvatar
 /**
  * # Garage: Fahrer und Rad anpassen (docs/indoor/garage.md)
  *
- * Oben die gezeichnete Vorschau ([GaragePreview]), darunter drei Abschnitte —
- * **Fahrer** (Hautton, Helm), **Kleidung** (Trikot, Muster, Akzentfarbe, Hose,
- * Schuhe), **Rad** (Rahmen, Rahmen-Akzent, Lenkerband) — jeweils aus
- * kuratierten Paletten ([GaragePalettes]). Rein kosmetisch.
+ * Oben (bzw. auf Tablets quer links fest verankert) die drehbare 3D-Vorschau
+ * ([GarageRider3DPreview] mit automatischem 2D-Rueckfall auf [GaragePreview]),
+ * darunter bzw. rechts drei Abschnitte — **Fahrer** (Hautton, Helm),
+ * **Kleidung** (Trikot, Muster, Akzentfarbe, Hose, Schuhe), **Rad** (Rahmen,
+ * Rahmen-Akzent, Lenkerband) — jeweils aus kuratierten Paletten
+ * ([GaragePalettes]). Rein kosmetisch.
  *
  * Zustandslos: jede Wahl geht als neuer [RiderAvatar] an [onChange].
  * [progress] kommt spaeter aus den Erfolgen; `null` heisst „alles frei"
@@ -69,61 +95,158 @@ fun GarageScreen(
     progress: GarageProgress? = null,
     safeMode: Boolean = false,
 ) {
-    IndoorPage(title = stringResource(R.string.garage_title), onBack = onBack) {
-        AtlasCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                GaragePreview(
-                    avatar = avatar,
-                    description = stringResource(R.string.garage_preview_cd),
-                    modifier = Modifier.fillMaxWidth().height(190.dp),
+    val twoPane = useTwoPaneLayout(LocalWindowLayoutClass.current)
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    if (twoPane) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+                    .padding(horizontal = TabletScreenPadding),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ScreenHeader(
+                    title = stringResource(R.string.garage_title),
+                    backLabel = stringResource(R.string.indoor_app_action_back),
+                    onBack = onBack,
                 )
-                MutedText(stringResource(R.string.garage_preview_hint))
-            }
-        }
-        if (safeMode) MutedText(stringResource(R.string.garage_safe_mode_hint))
-
-        Eyebrow(stringResource(R.string.garage_section_rider))
-        GarageCard {
-            SkinRow(selected = avatar.skin, onSelect = { onChange(avatar.copy(skin = it)) })
-            Divider()
-            ColorRow(R.string.garage_slot_helmet, GarageSlot.HELMET, avatar.helmet, progress) { onChange(avatar.copy(helmet = it)) }
-        }
-
-        Eyebrow(stringResource(R.string.garage_section_kit))
-        GarageCard {
-            ColorRow(R.string.garage_slot_jersey, GarageSlot.JERSEY, avatar.jersey, progress) { onChange(avatar.copy(jersey = it)) }
-            Divider()
-            PatternRow(selected = avatar.pattern, progress = progress, onSelect = { onChange(avatar.copy(pattern = it)) })
-            if (avatar.pattern != JerseyPattern.SOLID) {
-                Divider()
-                ColorRow(R.string.garage_slot_jersey_accent, GarageSlot.JERSEY_ACCENT, avatar.jerseyAccent, progress) {
-                    onChange(avatar.copy(jerseyAccent = it))
+                Row(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(TabletCardGap),
+                ) {
+                    Column(
+                        modifier = Modifier.weight(0.46f).fillMaxHeight(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        GaragePreviewCard(
+                            avatar = avatar,
+                            safeMode = safeMode,
+                            darkTheme = darkTheme,
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            previewModifier = Modifier.fillMaxWidth().weight(1f).heightIn(min = 300.dp),
+                        )
+                        if (safeMode) MutedText(stringResource(R.string.garage_safe_mode_hint))
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(0.54f)
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        GarageOptionsContent(
+                            avatar = avatar,
+                            onChange = onChange,
+                            progress = progress,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
                 }
             }
-            Divider()
-            ColorRow(R.string.garage_slot_bibs, GarageSlot.BIBS, avatar.bibs, progress) { onChange(avatar.copy(bibs = it)) }
-            Divider()
-            ColorRow(R.string.garage_slot_shoes, GarageSlot.SHOES, avatar.shoes, progress) { onChange(avatar.copy(shoes = it)) }
         }
-
-        Eyebrow(stringResource(R.string.garage_section_bike))
-        GarageCard {
-            ColorRow(R.string.garage_slot_frame, GarageSlot.FRAME, avatar.frame, progress) { onChange(avatar.copy(frame = it)) }
-            Divider()
-            ColorRow(R.string.garage_slot_frame_accent, GarageSlot.FRAME_ACCENT, avatar.frameAccent, progress) {
-                onChange(avatar.copy(frameAccent = it))
-            }
-            Divider()
-            ColorRow(R.string.garage_slot_bar_tape, GarageSlot.BAR_TAPE, avatar.barTape, progress) { onChange(avatar.copy(barTape = it)) }
+    } else {
+        IndoorPage(title = stringResource(R.string.garage_title), onBack = onBack) {
+            GaragePreviewCard(
+                avatar = avatar,
+                safeMode = safeMode,
+                darkTheme = darkTheme,
+                modifier = Modifier.fillMaxWidth(),
+                previewModifier = Modifier.fillMaxWidth().height(240.dp),
+            )
+            if (safeMode) MutedText(stringResource(R.string.garage_safe_mode_hint))
+            GarageOptionsContent(
+                avatar = avatar,
+                onChange = onChange,
+                progress = progress,
+            )
         }
-
-        MutedText(stringResource(R.string.garage_cosmetic_note))
-        TrailscapeSecondaryButton(
-            onClick = { onChange(RiderAvatar.DEFAULT) },
-            enabled = avatar != RiderAvatar.DEFAULT,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(stringResource(R.string.garage_reset_action)) }
     }
+}
+
+@Composable
+private fun GaragePreviewCard(
+    avatar: RiderAvatar,
+    safeMode: Boolean,
+    darkTheme: Boolean,
+    modifier: Modifier = Modifier,
+    previewModifier: Modifier = Modifier,
+) {
+    var usingFallback by remember { mutableStateOf(false) }
+    val previewCd = stringResource(R.string.garage_preview_cd)
+    AtlasCard(modifier = modifier) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            GarageRider3DPreview(
+                avatar = avatar,
+                safeMode = safeMode,
+                darkTheme = darkTheme,
+                description = previewCd,
+                modifier = previewModifier,
+                onFallbackChanged = { usingFallback = it },
+            ) { fallbackModifier ->
+                GaragePreview(
+                    avatar = avatar,
+                    description = previewCd,
+                    modifier = fallbackModifier,
+                )
+            }
+            MutedText(
+                stringResource(
+                    if (usingFallback) R.string.garage_preview_fallback_hint else R.string.garage_preview_hint,
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.GarageOptionsContent(
+    avatar: RiderAvatar,
+    onChange: (RiderAvatar) -> Unit,
+    progress: GarageProgress?,
+) {
+    Eyebrow(stringResource(R.string.garage_section_rider))
+    GarageCard {
+        SkinRow(selected = avatar.skin, onSelect = { onChange(avatar.copy(skin = it)) })
+        Divider()
+        ColorRow(R.string.garage_slot_helmet, GarageSlot.HELMET, avatar.helmet, progress) { onChange(avatar.copy(helmet = it)) }
+    }
+
+    Eyebrow(stringResource(R.string.garage_section_kit))
+    GarageCard {
+        ColorRow(R.string.garage_slot_jersey, GarageSlot.JERSEY, avatar.jersey, progress) { onChange(avatar.copy(jersey = it)) }
+        Divider()
+        PatternRow(selected = avatar.pattern, progress = progress, onSelect = { onChange(avatar.copy(pattern = it)) })
+        if (avatar.pattern != JerseyPattern.SOLID) {
+            Divider()
+            ColorRow(R.string.garage_slot_jersey_accent, GarageSlot.JERSEY_ACCENT, avatar.jerseyAccent, progress) {
+                onChange(avatar.copy(jerseyAccent = it))
+            }
+        }
+        Divider()
+        ColorRow(R.string.garage_slot_bibs, GarageSlot.BIBS, avatar.bibs, progress) { onChange(avatar.copy(bibs = it)) }
+        Divider()
+        ColorRow(R.string.garage_slot_shoes, GarageSlot.SHOES, avatar.shoes, progress) { onChange(avatar.copy(shoes = it)) }
+    }
+
+    Eyebrow(stringResource(R.string.garage_section_bike))
+    GarageCard {
+        ColorRow(R.string.garage_slot_frame, GarageSlot.FRAME, avatar.frame, progress) { onChange(avatar.copy(frame = it)) }
+        Divider()
+        ColorRow(R.string.garage_slot_frame_accent, GarageSlot.FRAME_ACCENT, avatar.frameAccent, progress) {
+            onChange(avatar.copy(frameAccent = it))
+        }
+        Divider()
+        ColorRow(R.string.garage_slot_bar_tape, GarageSlot.BAR_TAPE, avatar.barTape, progress) { onChange(avatar.copy(barTape = it)) }
+    }
+
+    MutedText(stringResource(R.string.garage_cosmetic_note))
+    TrailscapeSecondaryButton(
+        onClick = { onChange(RiderAvatar.DEFAULT) },
+        enabled = avatar != RiderAvatar.DEFAULT,
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text(stringResource(R.string.garage_reset_action)) }
 }
 
 @Composable

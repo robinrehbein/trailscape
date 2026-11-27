@@ -194,7 +194,6 @@ internal fun HeroCard(
         }
         else -> null
     }
-    val previewAscent = offer?.target?.ascentPreference ?: AscentPreference.MODERAT
 
     AtlasCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -245,16 +244,6 @@ internal fun HeroCard(
             }
 
             if (routeMetrics != null) {
-                TodayRoutePreview(
-                    ascentPreference = previewAscent,
-                    restDay = offer?.restDay == true,
-                    isEvent = offer == null && validGoalDistanceKm != null,
-                    statusLabel = routeMetrics.statusLabel,
-                    spokenSummary = "${routeMetrics.distanceText}, ${routeMetrics.ascentText}, ${routeMetrics.durationText}",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(if (expanded) 144.dp else 88.dp),
-                )
                 if (expanded) {
                     Row(
                         modifier = Modifier
