@@ -10,9 +10,10 @@ package de.trailscape.core.indoor.world
  *  * [HIGH]: Umgebungsverdeckung, Bloom, Spiegelungs-Umgebungslicht,
  *    Weissabgleich je Tageszeit, nah an der Strecke Baeume mit echter
  *    Astgeometrie aus der Bibliothek (docs/indoor/baeume.md).
- *  * [ULTRA]: dazu zeitliche Kantenglaettung, hoehere Effektguete, Gelaende wirft
+ *  * [ULTRA]: dazu hoehere Effektguete (SSAO), Gelaende wirft
  *    Schatten (4 Kaskaden bis 800 m), dezente Vignette, mehr und weiter
- *    reichende Bibliotheksbaeume — fuer starke Geraete.
+ *    reichende Bibliotheksbaeume (4× MSAA wie Hoch, ohne TAA wegen
+ *    Magenta-Rand rechts) — fuer starke Geraete.
  */
 enum class IndoorGraphics {
     STANDARD,
@@ -55,7 +56,9 @@ object RenderTiers {
 
     /** Stufe Ultra. */
     fun ultra(): RenderSettings = high().copy(
-        temporalAA = true,
+        // Kein TAA auf Ultra: zusammen mit dyn. Aufloesung und Bloom erzeugt Filament 1.75.1
+        // auf echten Geraeten einen hellen Magenta-Saum am rechten Bildrand; 4x MSAA bleibt sauber.
+        temporalAA = false,
         effectQuality = 2,
         shadowCascades = 4,
         shadowFarM = ULTRA_SHADOW_FAR_M,

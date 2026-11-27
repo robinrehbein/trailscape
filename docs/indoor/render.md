@@ -729,10 +729,10 @@ Stufe ist von der Paketqualität getrennt (kein neuer Weltbau nötig).
 |---|---|---|---|---|
 | Spiegelungs-Umgebungslicht aus dem Himmelsmodell | – | ✓ | ✓ | `core/…/sky/SkyReflections.kt`, `RenderQuality.buildReflections` |
 | SSAO | – | ✓ (Güte MITTEL, Radius 0,5) | ✓ (Güte HOCH, Radius 0,55) | `RenderQuality.applyAmbientOcclusion` |
-| Bloom | – | ✓ (MITTEL) | ✓ (HOCH) | `RenderQuality.applyBloom` |
-| Hochskalierung der dyn. Auflösung | bilinear | FSR (MITTEL) | FSR (HOCH) | `RenderQuality.applyDynamicResolution` |
+| Bloom | – | ✓ (MITTEL) | ✓ (MITTEL) | `RenderQuality.applyBloom` |
+| Hochskalierung der dyn. Auflösung | bilinear | FSR (MITTEL) | FSR (MITTEL) | `RenderQuality.applyDynamicResolution` |
 | Weißabgleich je Tageszeit | – | ✓ | ✓ | `core/…/sky/PhotoGrade.kt` |
-| Kantenglättung | 4× MSAA | 4× MSAA | **TAA** (Varianz-Box, Schärfe 0,25) | `RenderQuality.applyTemporalAA` |
+| Kantenglättung | 4× MSAA | 4× MSAA | 4× MSAA (TAA einzeln in Diagnose; in Ultra aus wegen Magenta-Rand rechts bei dyn. Auflösung + Bloom) | `RenderQuality.applyTemporalAA` |
 | Schatten | PCF, 3 Kaskaden, 300 m | wie Standard | **4 Kaskaden (8/30/100 m), 800 m** | `RenderQuality.shadowOptions`, `FilamentCore.ensureSunShadows` |
 | Gelände wirft Schatten | – | – | ✓ | `FilamentAssets.applyShadows`, `TileStreamer` |
 | Vignette | – | – | sehr dezent | `RenderQuality.applyVignette` |

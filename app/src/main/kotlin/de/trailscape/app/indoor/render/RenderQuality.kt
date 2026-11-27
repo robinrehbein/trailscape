@@ -31,6 +31,14 @@ internal object RenderQuality {
         else -> View.QualityLevel.LOW
     }
 
+    /** Bloom-Guete: maximal MEDIUM (HIGH nutzt bicubisches Upsampling, das am dynamischen Viewport-Rand Artefakte verstaerkt). */
+    fun bloomQuality(effectQuality: Int): View.QualityLevel =
+        if (effectQuality >= 1) View.QualityLevel.MEDIUM else View.QualityLevel.LOW
+
+    /** FSR-Guete der dynamischen Aufloesung: maximal MEDIUM (EASU ohne RCAS-Randueberschwinger). */
+    fun dynamicResolutionQuality(effectQuality: Int): View.QualityLevel =
+        if (effectQuality >= 1) View.QualityLevel.MEDIUM else View.QualityLevel.LOW
+
     /**
      * Umgebungsverdeckung: ab Guete 1 bessere Filter und etwas groesserer Radius.
      * Abgestimmt im Referenzrenderer (Alpe d'Huez abends): Guete 2 mit Staerke 1,0
@@ -62,32 +70,32 @@ internal object RenderQuality {
         view.bloomOptions = view.bloomOptions.apply {
             enabled = s.bloom
             strength = 0.08f
-            quality = if (s.effectQuality >= 1) level(s.effectQuality) else View.QualityLevel.LOW
+            quality = bloomQuality(s.effectQuality)
         }
     }
 
-    /** Dynamische Aufloesung: ab Guete 1 mit FSR-Hochskalierung statt bilinear (Filament MEDIUM/HIGH). */
+    /** Dynamische Aufloesung: ab Guete 1 mit FSR-Hochskalierung statt bilinear (maximal MEDIUM). */
     fun applyDynamicResolution(view: View, s: RenderSettings) {
         view.dynamicResolutionOptions = view.dynamicResolutionOptions.apply {
             enabled = s.dynamicResolution
             minScale = s.dynamicResolutionMinScale.coerceIn(0.5, 1.0).toFloat()
             maxScale = 1.0f
-            quality = if (s.effectQuality >= 1) level(s.effectQuality) else View.QualityLevel.LOW
+            quality = dynamicResolutionQuality(s.effectQuality)
         }
     }
 
     /**
-     * Zeitliche Kantenglaettung statt 4× MSAA: glaettet auch die Raender der
-     * Laubkarten (Alpha-Maske, die MSAA nicht erfasst) und das Flimmern feiner
-     * Texturen bei Fahrt. Varianz-Box gegen Schlieren, leicht geschaerft.
-     * `true`, wenn TAA wirklich an ist.
+     * Zeitliche Kantenglaettung statt 4× MSAA (in Diagnose einzeln schaltbar):
+     * AABB-Box ohne Nachschaerfung reduziert Randueberschwinger, bleibt aber
+     * auf Ultra deaktiviert, da dyn. Aufloesung + Bloom sonst einen Magenta-Rand
+     * erzeugen koennen. `true`, wenn TAA wirklich an ist.
      */
     fun applyTemporalAA(view: View, enabled: Boolean): Boolean = runCatching {
         view.temporalAntiAliasingOptions = view.temporalAntiAliasingOptions.apply {
             this.enabled = enabled
             feedback = 0.1f
-            boxType = View.TemporalAntiAliasingOptions.BoxType.AABB_VARIANCE
-            sharpness = 0.25f
+            boxType = View.TemporalAntiAliasingOptions.BoxType.AABB
+            sharpness = 0f
         }
         enabled
     }.getOrDefault(false)
